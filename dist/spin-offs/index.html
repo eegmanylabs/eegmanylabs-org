@@ -13,9 +13,13 @@
 
     <title>eegmanylabs</title>
 </head>
-<body><nav id="menu">
+<body>
+  <nav id="menu">
     <a id="logo" href="/"><img id="logo" src="/assets/images/logo.png"></a>
-    <ul class="collapsed">
+    <a href="javascript:void(0);" class="icon" onclick="showResponsiveMenu()">
+      <sl-icon library="fa" name="fas-bars"></sl-icon>
+    </a>
+    <ul class="topnav" id="myTopnav">
     
         
             <li><a href="/replications/">replications</a></li>
@@ -36,12 +40,10 @@
         
     
     </ul>
-    <a id="main-hamburger">
-        <i class="fa fa-bars"></i>
-    </a>
-</nav><div id="body-container">
-<div id="content">
-
+  </nav>
+  <div id="body-container">
+    <div id="content">
+      
 
 <article id="spin-offs">
 
@@ -49,6 +51,15 @@
         <h1>Spin-offs</h1>
 <p>EEGManyLabs has inspired a number of spin-off projects</p>
     </p>
+
+    <div class="card-filter">
+        <sl-dropdown style="display:none;">
+            <sl-button slot="trigger" caret>Filter</sl-button>
+            <sl-menu>
+                <sl-menu-item value="none">None</sl-menu-item>
+            </sl-menu>
+        </sl-dropdown>
+    </div>
 
     <div class="card-grid">
     
@@ -58,8 +69,13 @@
 
 <sl-card id="eeg100">
   
-  <div slot="header">
-    100 years of EEG (1924-2024)
+  <div slot="header" id="card-header">
+    <div id="title">
+      100 years of EEG (1924-2024)
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -108,8 +124,13 @@ Much has happened since then and in light of ongoing developments on hardware, s
 
 <sl-card id="automation">
   
-  <div slot="header">
-    Automation
+  <div slot="header" id="card-header">
+    <div id="title">
+      Automation
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -157,8 +178,13 @@ Much has happened since then and in light of ongoing developments on hardware, s
 
 <sl-card id="resting-state">
   
-  <div slot="header">
-    Resting State
+  <div slot="header" id="card-header">
+    <div id="title">
+      Resting State
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -206,8 +232,13 @@ Much has happened since then and in light of ongoing developments on hardware, s
 
 <sl-card id="asymmetry">
   
-  <div slot="header">
-    Asymmetry and personality traits
+  <div slot="header" id="card-header">
+    <div id="title">
+      Asymmetry and personality traits
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -255,8 +286,13 @@ Much has happened since then and in light of ongoing developments on hardware, s
 
 <sl-card id="prediction-markets">
   
-  <div slot="header">
-    Prediction Markets
+  <div slot="header" id="card-header">
+    <div id="title">
+      Prediction Markets
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -303,10 +339,11 @@ Much has happened since then and in light of ongoing developments on hardware, s
 </article>
 
 
-</div>
-</div><footer>
+    </div>
+  </div>
+  <footer>
     <span id="copyright-reference">&copy; 2024 eegmanylabs</span>
-</footer>
+  </footer>
 
 
 <script type="module">
@@ -322,6 +359,16 @@ Much has happened since then and in light of ongoing developments on hardware, s
     },
     mutator: svg => svg.setAttribute('fill', 'currentColor')
   });
+</script>
+<script>
+function showResponsiveMenu() {
+  var x = document.getElementById("myTopnav");
+  if (x.className === "topnav") {
+    x.className += " responsive";
+  } else {
+    x.className = "topnav";
+  }
+}
 </script>
 
 </body>

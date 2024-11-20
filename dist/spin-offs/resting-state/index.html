@@ -13,9 +13,13 @@
 
     <title>eegmanylabs</title>
 </head>
-<body><nav id="menu">
+<body>
+  <nav id="menu">
     <a id="logo" href="/"><img id="logo" src="/assets/images/logo.png"></a>
-    <ul class="collapsed">
+    <a href="javascript:void(0);" class="icon" onclick="showResponsiveMenu()">
+      <sl-icon library="fa" name="fas-bars"></sl-icon>
+    </a>
+    <ul class="topnav" id="myTopnav">
     
         
             <li><a href="/replications/">replications</a></li>
@@ -36,12 +40,10 @@
         
     
     </ul>
-    <a id="main-hamburger">
-        <i class="fa fa-bars"></i>
-    </a>
-</nav><div id="body-container">
-<div id="content">
-
+  </nav>
+  <div id="body-container">
+    <div id="content">
+      
 
 <article id="resting-state">
 
@@ -73,6 +75,15 @@
 </ol>
     </p>
 
+    <div class="card-filter">
+        <sl-dropdown style="display:none;">
+            <sl-button slot="trigger" caret>Filter</sl-button>
+            <sl-menu>
+                <sl-menu-item value="none">None</sl-menu-item>
+            </sl-menu>
+        </sl-dropdown>
+    </div>
+
     <div class="card-grid">
     
     </div>
@@ -80,10 +91,11 @@
 </article>
 
 
-</div>
-</div><footer>
+    </div>
+  </div>
+  <footer>
     <span id="copyright-reference">&copy; 2024 eegmanylabs</span>
-</footer>
+  </footer>
 
 
 <script type="module">
@@ -99,6 +111,16 @@
     },
     mutator: svg => svg.setAttribute('fill', 'currentColor')
   });
+</script>
+<script>
+function showResponsiveMenu() {
+  var x = document.getElementById("myTopnav");
+  if (x.className === "topnav") {
+    x.className += " responsive";
+  } else {
+    x.className = "topnav";
+  }
+}
 </script>
 
 </body>

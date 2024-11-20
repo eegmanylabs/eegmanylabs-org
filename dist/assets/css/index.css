@@ -14,7 +14,9 @@ img {
 
 img#logo {
     height: 6vw;
+    min-height: 40px;
     max-height: 60px;
+    padding: 8px;
 }
 
 /* these sometimes appear in html from markdown */
@@ -37,7 +39,6 @@ div#content {
 nav#menu {
     min-height: 40px;
     width:100%;
-    padding: 8px;
     overflow: visible; /* if the floating menu wraps around, extend this nav */
     z-index: 1;     /* always on top */
     position: fixed;  /* attached to the top */
@@ -46,6 +47,7 @@ nav#menu {
     font-weight: normal;
     background-color: #F7F7F7;;
 }
+
 nav#menu a {
     color: #666666;
     text-decoration: none;
@@ -53,15 +55,44 @@ nav#menu a {
 nav#menu a:hover {
     color: black;
 }
-nav#menu ul {
+
+nav#menu .icon {
+    display: none;
+}
+
+.topnav {
 	float: right;
 	margin: 0;
-	padding: 8px 8px 0 0;
+	padding: 16px 8px 0 0;
 	list-style-type: none;
 }
-nav#menu li {
+
+.topnav li {
 	display: inline;
 	margin: 0 1em 0 0;
+}
+
+@media screen and (max-width: 600px) {
+    nav#menu a.icon {
+        float: right;
+        display: block;
+        padding: 1em 1em 0 0;
+    }
+    nav#menu a sl-icon {
+        height: 25px;
+        width: auto;
+    }
+
+    .topnav {
+        display: contents;
+        text-align: right;
+    }
+
+    .topnav li {
+        display: none;
+        margin-bottom: 8px;
+    }
+    .topnav.responsive li{display: block;}
 }
 
 h1 {
@@ -105,7 +136,7 @@ article > p {
     grid-auto-rows: auto;
     column-gap: 10px;
     row-gap: 10px;
-    justify-content: space-evenly;
+    justify-content: space-between;
 }
 
 .preview-grid {
@@ -123,6 +154,14 @@ article > p {
 
 sl-tag::part(base):hover {
     background: rgb(186, 186, 186);
+}
+
+sl-menu-item::part(label) {
+    text-transform: capitalize;
+}
+
+.card-filter {
+    margin-bottom: 20px;
 }
 
 /* finer grid for people */
@@ -219,6 +258,28 @@ sl-card a[href^="https://eeg100"] {
     margin: 2px;
     text-decoration: none;
     color: teal;
+}
+
+#spin-offs img {
+	height: 270px
+}
+
+#spin-offs sl-card::part(header) {
+	 flex-grow: 0
+}
+
+#spin-offs sl-card::part(body) {
+	display: flex;
+	flex-direction: column;
+	flex-grow: 1
+}
+
+#spin-offs sl-card p:first-of-type {
+	flex-grow: 1
+}
+
+#spin-offs sl-card::part(footer) {
+	padding: 0
 }
 
 /*  
@@ -356,3 +417,33 @@ a[href^="https://scholar.google.com/citations?user=ueMcfOcAAAAJ"] {
 #publications sl-tag.published::part(base) {
     background-color: rgb(81, 187, 160);
 }
+
+#publications img {
+    height: 300px;
+}
+
+#publications #authors{
+    padding-top: 20px;
+    font-size: 14px;
+}
+
+/* CSS for equal sized but reactive cards */
+
+sl-card {
+    display:grid;
+}
+
+sl-card::part(header){
+    display: flex;
+    flex-grow: 1;
+}
+
+div#card-header {
+    display: flex;
+    flex-direction: column;
+}
+
+div#title {
+    flex-grow: 1;
+}
+

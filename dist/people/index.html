@@ -13,9 +13,13 @@
 
     <title>eegmanylabs</title>
 </head>
-<body><nav id="menu">
+<body>
+  <nav id="menu">
     <a id="logo" href="/"><img id="logo" src="/assets/images/logo.png"></a>
-    <ul class="collapsed">
+    <a href="javascript:void(0);" class="icon" onclick="showResponsiveMenu()">
+      <sl-icon library="fa" name="fas-bars"></sl-icon>
+    </a>
+    <ul class="topnav" id="myTopnav">
     
         
             <li><a href="/replications/">replications</a></li>
@@ -36,18 +40,25 @@
         
     
     </ul>
-    <a id="main-hamburger">
-        <i class="fa fa-bars"></i>
-    </a>
-</nav><div id="body-container">
-<div id="content">
-
+  </nav>
+  <div id="body-container">
+    <div id="content">
+      
 
 <article id="people">
 
     <p>
         <h1>People</h1>
     </p>
+
+    <div class="card-filter">
+        <sl-dropdown style="display:none;">
+            <sl-button slot="trigger" caret>Filter</sl-button>
+            <sl-menu>
+                <sl-menu-item value="none">None</sl-menu-item>
+            </sl-menu>
+        </sl-dropdown>
+    </div>
 
     <div class="card-grid">
     
@@ -57,8 +68,13 @@
 
 <sl-card id="fmushtaq">
   
-  <div slot="header">
-    Faisal Mushtaq
+  <div slot="header" id="card-header">
+    <div id="title">
+      Faisal Mushtaq
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -121,8 +137,13 @@
 
 <sl-card id="ypavlov">
   
-  <div slot="header">
-    Yuri Pavlov
+  <div slot="header" id="card-header">
+    <div id="title">
+      Yuri Pavlov
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -183,8 +204,13 @@
 
 <sl-card id="dcruse">
   
-  <div slot="header">
-    Damian Cruse
+  <div slot="header" id="card-header">
+    <div id="title">
+      Damian Cruse
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -245,8 +271,13 @@
 
 <sl-card id="mgamer">
   
-  <div slot="header">
-    Matthias Gamer
+  <div slot="header" id="card-header">
+    <div id="title">
+      Matthias Gamer
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -303,8 +334,13 @@
 
 <sl-card id="gganis">
   
-  <div slot="header">
-    Giorgio Ganis
+  <div slot="header" id="card-header">
+    <div id="title">
+      Giorgio Ganis
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -361,8 +397,13 @@
 
 <sl-card id="sgregory">
   
-  <div slot="header">
-    Samantha Gregory
+  <div slot="header" id="card-header">
+    <div id="title">
+      Samantha Gregory
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -423,8 +464,13 @@
 
 <sl-card id="chassall">
   
-  <div slot="header">
-    Cameron Hassall
+  <div slot="header" id="card-header">
+    <div id="title">
+      Cameron Hassall
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -485,8 +531,13 @@
 
 <sl-card id="kgloy">
   
-  <div slot="header">
-    Kilian Gloy
+  <div slot="header" id="card-header">
+    <div id="title">
+      Kilian Gloy
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -539,8 +590,13 @@
 
 <sl-card id="jkaiser">
   
-  <div slot="header">
-    Jakob Kaiser
+  <div slot="header" id="card-header">
+    <div id="title">
+      Jakob Kaiser
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -597,8 +653,13 @@
 
 <sl-card id="akeil">
   
-  <div slot="header">
-    Andreas Keil
+  <div slot="header" id="card-header">
+    <div id="title">
+      Andreas Keil
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -659,8 +720,13 @@
 
 <sl-card id="nlanger">
   
-  <div slot="header">
-    Nicolas Langer
+  <div slot="header" id="card-header">
+    <div id="title">
+      Nicolas Langer
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -717,8 +783,13 @@
 
 <sl-card id="hliesefeld">
   
-  <div slot="header">
-    Heinrich Liesefeld
+  <div slot="header" id="card-header">
+    <div id="title">
+      Heinrich Liesefeld
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -775,8 +846,13 @@
 
 <sl-card id="dwelke">
   
-  <div slot="header">
-    Dominik Welke
+  <div slot="header" id="card-header">
+    <div id="title">
+      Dominik Welke
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -833,8 +909,13 @@
 
 <sl-card id="amacnamara">
   
-  <div slot="header">
-    Annmarie MacNamara
+  <div slot="header" id="card-header">
+    <div id="title">
+      Annmarie MacNamara
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -895,8 +976,13 @@
 
 <sl-card id="wmarinovic">
   
-  <div slot="header">
-    Welber Marinovic
+  <div slot="header" id="card-header">
+    <div id="title">
+      Welber Marinovic
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -957,8 +1043,13 @@
 
 <sl-card id="rnaar">
   
-  <div slot="header">
-    Richard Naar
+  <div slot="header" id="card-header">
+    <div id="title">
+      Richard Naar
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1015,8 +1106,13 @@
 
 <sl-card id="gniso">
   
-  <div slot="header">
-    Guiomar Niso
+  <div slot="header" id="card-header">
+    <div id="title">
+      Guiomar Niso
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1077,8 +1173,13 @@
 
 <sl-card id="gpourtois">
   
-  <div slot="header">
-    Gilles Pourtois
+  <div slot="header" id="card-header">
+    <div id="title">
+      Gilles Pourtois
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1139,8 +1240,13 @@
 
 <sl-card id="msenderecka">
   
-  <div slot="header">
-    Magdalena Senderecka
+  <div slot="header" id="card-header">
+    <div id="title">
+      Magdalena Senderecka
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1197,8 +1303,13 @@
 
 <sl-card id="mruzzoli">
   
-  <div slot="header">
-    Manuela Ruzzoli
+  <div slot="header" id="card-header">
+    <div id="title">
+      Manuela Ruzzoli
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1255,8 +1366,13 @@
 
 <sl-card id="aschaefer">
   
-  <div slot="header">
-    Alexandre Schaefer
+  <div slot="header" id="card-header">
+    <div id="title">
+      Alexandre Schaefer
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1313,8 +1429,13 @@
 
 <sl-card id="nsrinivasan">
   
-  <div slot="header">
-    Narayanan Srinivasan
+  <div slot="header" id="card-header">
+    <div id="title">
+      Narayanan Srinivasan
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1375,8 +1496,13 @@
 
 <sl-card id="mvandermolen">
   
-  <div slot="header">
-    Melle van der Molen 
+  <div slot="header" id="card-header">
+    <div id="title">
+      Melle van der Molen 
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1437,8 +1563,13 @@
 
 <sl-card id="jvandenbosch">
   
-  <div slot="header">
-    Jasper van den Bosch
+  <div slot="header" id="card-header">
+    <div id="title">
+      Jasper van den Bosch
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1495,8 +1626,13 @@
 
 <sl-card id="everona">
   
-  <div slot="header">
-    Edelyn Verona
+  <div slot="header" id="card-header">
+    <div id="title">
+      Edelyn Verona
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1553,8 +1689,13 @@
 
 <sl-card id="socklenburg">
   
-  <div slot="header">
-    Sebastian Ocklenburg
+  <div slot="header" id="card-header">
+    <div id="title">
+      Sebastian Ocklenburg
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1609,8 +1750,13 @@
 
 <sl-card id="cpernet">
   
-  <div slot="header">
-    Cyril Pernet
+  <div slot="header" id="card-header">
+    <div id="title">
+      Cyril Pernet
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1671,8 +1817,13 @@
 
 <sl-card id="rbendall">
   
-  <div slot="header">
-    Robert Bendall
+  <div slot="header" id="card-header">
+    <div id="title">
+      Robert Bendall
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1733,8 +1884,13 @@
 
 <sl-card id="mrausch">
   
-  <div slot="header">
-    Manuel Rausch
+  <div slot="header" id="card-header">
+    <div id="title">
+      Manuel Rausch
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1791,8 +1947,13 @@
 
 <sl-card id="krobbins">
   
-  <div slot="header">
-    Kay Robbins
+  <div slot="header" id="card-header">
+    <div id="title">
+      Kay Robbins
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1849,8 +2010,13 @@
 
 <sl-card id="abland">
   
-  <div slot="header">
-    Amy Bland
+  <div slot="header" id="card-header">
+    <div id="title">
+      Amy Bland
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1909,8 +2075,13 @@
 
 <sl-card id="marvaneh">
   
-  <div slot="header">
-    Mahnaz Arvaneh
+  <div slot="header" id="card-header">
+    <div id="title">
+      Mahnaz Arvaneh
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1967,8 +2138,13 @@
 
 <sl-card id="xhe">
   
-  <div slot="header">
-    Xun He
+  <div slot="header" id="card-header">
+    <div id="title">
+      Xun He
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -2027,8 +2203,13 @@
 
 <sl-card id="roostenveld">
   
-  <div slot="header">
-    Robert Oostenveld
+  <div slot="header" id="card-header">
+    <div id="title">
+      Robert Oostenveld
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -2085,8 +2266,13 @@
 
 <sl-card id="dbradford">
   
-  <div slot="header">
-    Daniel Bradford
+  <div slot="header" id="card-header">
+    <div id="title">
+      Daniel Bradford
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -2143,8 +2329,13 @@
 
 <sl-card id="achatard">
   
-  <div slot="header">
-    Armand Chatard
+  <div slot="header" id="card-header">
+    <div id="title">
+      Armand Chatard
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -2200,10 +2391,11 @@
 </article>
 
 
-</div>
-</div><footer>
+    </div>
+  </div>
+  <footer>
     <span id="copyright-reference">&copy; 2024 eegmanylabs</span>
-</footer>
+  </footer>
 
 
 <script type="module">
@@ -2219,6 +2411,16 @@
     },
     mutator: svg => svg.setAttribute('fill', 'currentColor')
   });
+</script>
+<script>
+function showResponsiveMenu() {
+  var x = document.getElementById("myTopnav");
+  if (x.className === "topnav") {
+    x.className += " responsive";
+  } else {
+    x.className = "topnav";
+  }
+}
 </script>
 
 </body>
