@@ -13,9 +13,13 @@
 
     <title>eegmanylabs</title>
 </head>
-<body><nav id="menu">
+<body>
+  <nav id="menu">
     <a id="logo" href="/"><img id="logo" src="/assets/images/logo.png"></a>
-    <ul class="collapsed">
+    <a href="javascript:void(0);" class="icon" onclick="showResponsiveMenu()">
+      <sl-icon library="fa" name="fas-bars"></sl-icon>
+    </a>
+    <ul class="topnav" id="myTopnav">
     
         
             <li><a href="/replications/">replications</a></li>
@@ -36,12 +40,10 @@
         
     
     </ul>
-    <a id="main-hamburger">
-        <i class="fa fa-bars"></i>
-    </a>
-</nav><div id="body-container">
-<div id="content">
-
+  </nav>
+  <div id="body-container">
+    <div id="content">
+      
 
 <article id="prediction-markets">
 
@@ -52,6 +54,15 @@
 Participating researchers will be endowed with USD 50 to start with and can earn more or less depending on their prediction performance. Contracts, representing the selected studies, will be worth USD 1 if the study replicates and USD 0 if the study fails to replicate according to this criterion. Prediction market prices are interpreted as the probability that the prediction markets assign the studies successfully replicating. For a given price of a contract, a participant who believes that the study has a higher probability of replicating than this price can buy contracts in this study, making the price increase, whereas a participant who believes that the study’s probability of replicating is lower than this price can short-sell the contract, making the price go down. When participants trade these contracts, they thus reveal their own beliefs about the probability that studies will replicate, and they can also learn what others believe based on prediction market prices. In the analysis, we will interpret final prediction market prices above 50 as the market predicting that the specific studies will replicate. We will also include a survey to measure peer beliefs prior to the markets, with the same participants. At the end of this project we will be able to examine how closely internally held beliefs in the EEG community map on to the replication results.</p>
     </p>
 
+    <div class="card-filter">
+        <sl-dropdown style="display:none;">
+            <sl-button slot="trigger" caret>Filter</sl-button>
+            <sl-menu>
+                <sl-menu-item value="none">None</sl-menu-item>
+            </sl-menu>
+        </sl-dropdown>
+    </div>
+
     <div class="card-grid">
     
     </div>
@@ -59,10 +70,11 @@ Participating researchers will be endowed with USD 50 to start with and can earn
 </article>
 
 
-</div>
-</div><footer>
+    </div>
+  </div>
+  <footer>
     <span id="copyright-reference">&copy; 2024 eegmanylabs</span>
-</footer>
+  </footer>
 
 
 <script type="module">
@@ -78,6 +90,16 @@ Participating researchers will be endowed with USD 50 to start with and can earn
     },
     mutator: svg => svg.setAttribute('fill', 'currentColor')
   });
+</script>
+<script>
+function showResponsiveMenu() {
+  var x = document.getElementById("myTopnav");
+  if (x.className === "topnav") {
+    x.className += " responsive";
+  } else {
+    x.className = "topnav";
+  }
+}
 </script>
 
 </body>

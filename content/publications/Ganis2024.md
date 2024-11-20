@@ -1,7 +1,8 @@
 +++
 SequenceNumber = "20240115"
 Anchor = "Ganis2024"
-Title = "Ganis et al (2024) The contribution of stimulus frequency and atte..."
+Title = "The contribution of stimulus frequency and attention to the N2 and P3 in Go/Nogo: A multilab replication and new analyses"
+AuthorShort = "Ganis et al (2024)"
 Image = "previews/Ganis2024.pdf.png"
 PublicationId = "Ganis2024"
 Authors = "None"

@@ -1,7 +1,8 @@
 +++
 SequenceNumber = "20231212"
 Anchor = "Ruzzoli2023"
-Title = "Ruzzoli et al (2023) An #EEGManyLabs study to test the role of the a..."
+Title = "An #EEGManyLabs study to test the role of the alpha phase on visual perception (a replication and new evidence)"
+AuthorShort = "Ruzzoli et al (2023)"
 Image = "previews/Ruzzoli2023.pdf.png"
 PublicationId = "Ruzzoli2023"
 Authors = "Ruzzoli M,Molinaro N,Benwell C,Berkowitz DH,et al."

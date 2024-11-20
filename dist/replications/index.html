@@ -13,9 +13,13 @@
 
     <title>eegmanylabs</title>
 </head>
-<body><nav id="menu">
+<body>
+  <nav id="menu">
     <a id="logo" href="/"><img id="logo" src="/assets/images/logo.png"></a>
-    <ul class="collapsed">
+    <a href="javascript:void(0);" class="icon" onclick="showResponsiveMenu()">
+      <sl-icon library="fa" name="fas-bars"></sl-icon>
+    </a>
+    <ul class="topnav" id="myTopnav">
     
         
             <li><a href="/replications/">replications</a></li>
@@ -36,18 +40,25 @@
         
     
     </ul>
-    <a id="main-hamburger">
-        <i class="fa fa-bars"></i>
-    </a>
-</nav><div id="body-container">
-<div id="content">
-
+  </nav>
+  <div id="body-container">
+    <div id="content">
+      
 
 <article id="replications">
 
     <p>
         <h1>Replications</h1>
     </p>
+
+    <div class="card-filter">
+        <sl-dropdown style="display:none;">
+            <sl-button slot="trigger" caret>Filter</sl-button>
+            <sl-menu>
+                <sl-menu-item value="none">None</sl-menu-item>
+            </sl-menu>
+        </sl-dropdown>
+    </div>
 
     <div class="card-grid">
     
@@ -57,8 +68,13 @@
 
 <sl-card id="Boksem2006">
   
-  <div slot="header">
-    Mental fatigue, motivation and action monitoring
+  <div slot="header" id="card-header">
+    <div id="title">
+      Mental fatigue, motivation and action monitoring
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -123,8 +139,13 @@
 
 <sl-card id="Carretie2004">
   
-  <div slot="header">
-    Spatial Selective Attention Affects Early Extrastriate Bu...
+  <div slot="header" id="card-header">
+    <div id="title">
+      Spatial Selective Attention Affects Early Extrastriate Bu...
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -189,8 +210,13 @@
 
 <sl-card id="DelCul2007">
   
-  <div slot="header">
-    Brain Dynamics Underlying the Nonlinear Threshold for Acc...
+  <div slot="header" id="card-header">
+    <div id="title">
+      Brain Dynamics Underlying the Nonlinear Threshold for Acc...
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -255,8 +281,13 @@
 
 <sl-card id="Eimer1993">
   
-  <div slot="header">
-    Effects of attention and stimulus probability on ERPs in ...
+  <div slot="header" id="card-header">
+    <div id="title">
+      Effects of attention and stimulus probability on ERPs in ...
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -321,8 +352,13 @@
 
 <sl-card id="Eimer1996">
   
-  <div slot="header">
-    The N2pc component as an indicator of attentional selecti...
+  <div slot="header" id="card-header">
+    <div id="title">
+      The N2pc component as an indicator of attentional selecti...
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -387,8 +423,13 @@
 
 <sl-card id="Eimer2003">
   
-  <div slot="header">
-    The role of spatial attention in the processing of facial...
+  <div slot="header" id="card-header">
+    <div id="title">
+      The role of spatial attention in the processing of facial...
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -453,8 +494,13 @@
 
 <sl-card id="Frank2005">
   
-  <div slot="header">
-    Error-Related Negativity Predicts Reinforcement Learning ...
+  <div slot="header" id="card-header">
+    <div id="title">
+      Error-Related Negativity Predicts Reinforcement Learning ...
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -519,8 +565,13 @@
 
 <sl-card id="Hajcak2003">
   
-  <div slot="header">
-    Anxiety and error-related brain activity
+  <div slot="header" id="card-header">
+    <div id="title">
+      Anxiety and error-related brain activity
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -585,8 +636,13 @@
 
 <sl-card id="Hajcak2006">
   
-  <div slot="header">
-    The feedback-related negativity reflects the binary evalu...
+  <div slot="header" id="card-header">
+    <div id="title">
+      The feedback-related negativity reflects the binary evalu...
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -651,8 +707,13 @@
 
 <sl-card id="HajcakHolroyd2005">
   
-  <div slot="header">
-    Brain potentials associated with expected and unexpected ...
+  <div slot="header" id="card-header">
+    <div id="title">
+      Brain potentials associated with expected and unexpected ...
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -717,8 +778,13 @@
 
 <sl-card id="HajcakMoser2005">
   
-  <div slot="header">
-    On the ERN and the significance of errors
+  <div slot="header" id="card-header">
+    <div id="title">
+      On the ERN and the significance of errors
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -783,8 +849,13 @@
 
 <sl-card id="Inzlicht2009">
   
-  <div slot="header">
-    Neural Markers of Religious Conviction
+  <div slot="header" id="card-header">
+    <div id="title">
+      Neural Markers of Religious Conviction
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -849,8 +920,13 @@
 
 <sl-card id="HajcakFoti2008">
   
-  <div slot="header">
-    Errors Are Aversive: Defensive Motivation and the Error-R...
+  <div slot="header" id="card-header">
+    <div id="title">
+      Errors Are Aversive: Defensive Motivation and the Error-R...
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -915,8 +991,13 @@
 
 <sl-card id="Mathewson2009">
   
-  <div slot="header">
-    To See or Not to See: Prestimulus Phase Predicts Visual Awareness
+  <div slot="header" id="card-header">
+    <div id="title">
+      To See or Not to See: Prestimulus Phase Predicts Visual Awareness
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -981,8 +1062,13 @@
 
 <sl-card id="Miltner1999">
   
-  <div slot="header">
-    Coherence of gamma-band EEG activity as a basis for assoc...
+  <div slot="header" id="card-header">
+    <div id="title">
+      Coherence of gamma-band EEG activity as a basis for assoc...
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1047,8 +1133,13 @@
 
 <sl-card id="Muller2003">
   
-  <div slot="header">
-    Sustained division of the attentional spotlight
+  <div slot="header" id="card-header">
+    <div id="title">
+      Sustained division of the attentional spotlight
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1113,8 +1204,13 @@
 
 <sl-card id="Onton2005">
   
-  <div slot="header">
-    Frontal midline EEG dynamics during working memory
+  <div slot="header" id="card-header">
+    <div id="title">
+      Frontal midline EEG dynamics during working memory
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1179,8 +1275,13 @@
 
 <sl-card id="Vidal2000">
   
-  <div slot="header">
-    Is the ‘error negativity’ specific to errors?
+  <div slot="header" id="card-header">
+    <div id="title">
+      Is the ‘error negativity’ specific to errors?
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1245,8 +1346,13 @@
 
 <sl-card id="VogelMachizawa2004">
   
-  <div slot="header">
-    Neural activity predicts individual differences in visual...
+  <div slot="header" id="card-header">
+    <div id="title">
+      Neural activity predicts individual differences in visual...
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1311,8 +1417,13 @@
 
 <sl-card id="YeungSanfey2004">
   
-  <div slot="header">
-    Independent Coding of Reward Magnitude and Valence in the...
+  <div slot="header" id="card-header">
+    <div id="title">
+      Independent Coding of Reward Magnitude and Valence in the...
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1377,8 +1488,13 @@
 
 <sl-card id="Luck1996">
   
-  <div slot="header">
-    Word meanings can be accessed but not reported during the...
+  <div slot="header" id="card-header">
+    <div id="title">
+      Word meanings can be accessed but not reported during the...
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1443,8 +1559,13 @@
 
 <sl-card id="Sergent2005">
   
-  <div slot="header">
-    Timing of the brain events underlying access to conscious...
+  <div slot="header" id="card-header">
+    <div id="title">
+      Timing of the brain events underlying access to conscious...
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1509,8 +1630,13 @@
 
 <sl-card id="DonkersvanBoxtel2004">
   
-  <div slot="header">
-    The N2 in go/no-go tasks reflects conflict monitoring not...
+  <div slot="header" id="card-header">
+    <div id="title">
+      The N2 in go/no-go tasks reflects conflict monitoring not...
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1575,8 +1701,13 @@
 
 <sl-card id="AmodioJost2007">
   
-  <div slot="header">
-    Neurocognitive correlates of liberalism and conservatism
+  <div slot="header" id="card-header">
+    <div id="title">
+      Neurocognitive correlates of liberalism and conservatism
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1641,8 +1772,13 @@
 
 <sl-card id="AmodioMaster2008">
   
-  <div slot="header">
-    Neurocognitive components of the behavioral inhibition an...
+  <div slot="header" id="card-header">
+    <div id="title">
+      Neurocognitive components of the behavioral inhibition an...
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1707,8 +1843,13 @@
 
 <sl-card id="BuschVanRullen2010">
   
-  <div slot="header">
-    Spontaneous EEG oscillations reveal periodic sampling of ...
+  <div slot="header" id="card-header">
+    <div id="title">
+      Spontaneous EEG oscillations reveal periodic sampling of ...
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1773,8 +1914,13 @@
 
 <sl-card id="ClarkHillyard1996">
   
-  <div slot="header">
-    Spatial Selective Attention Affects Early Extrastriate Bu...
+  <div slot="header" id="card-header">
+    <div id="title">
+      Spatial Selective Attention Affects Early Extrastriate Bu...
+    </div>
+    <div id="authors">
+      
+    </div>
   </div>
 
   <img
@@ -1838,10 +1984,11 @@
 </article>
 
 
-</div>
-</div><footer>
+    </div>
+  </div>
+  <footer>
     <span id="copyright-reference">&copy; 2024 eegmanylabs</span>
-</footer>
+  </footer>
 
 
 <script type="module">
@@ -1857,6 +2004,16 @@
     },
     mutator: svg => svg.setAttribute('fill', 'currentColor')
   });
+</script>
+<script>
+function showResponsiveMenu() {
+  var x = document.getElementById("myTopnav");
+  if (x.className === "topnav") {
+    x.className += " responsive";
+  } else {
+    x.className = "topnav";
+  }
+}
 </script>
 
 </body>

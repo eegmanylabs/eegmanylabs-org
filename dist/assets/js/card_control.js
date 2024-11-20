@@ -1,27 +1,36 @@
 // Get all the cards and tags on the page
-const allCards = document.querySelectorAll("sl-card")
-const allTags = document.querySelectorAll("sl-tag")
+const allCards = document.querySelectorAll("sl-card");
+const allTags = document.querySelectorAll("sl-tag");
+const dropDown = document.querySelector("sl-dropdown");
+const ddMenu = document.querySelector("sl-menu");
 
-// Add the buttonPress function as an onClick event listener
-allTags.forEach(item => item.addEventListener("click", function() { buttonPress(this) }))
+let search_term;
 
-/**
- * Show all the cards on the page.
- * Attached to a button to reset filtering.
- */
-function resetButton(){
-    allCards.forEach(showCard)
+if (allTags.length > 0) {
+    let tags = new Set();
+
+    for (node of allTags) {
+        tags.add(node.innerText);
+    }
+
+    for (let tag of tags) {
+        item = document.createElement("sl-menu-item");
+        item.value = tag;
+        item.innerText = tag;
+        ddMenu.appendChild(item);
+    }
+    dropDown.style.display = '';
 }
 
-/**
- * Hides cards that do not have tags with the same value as this tag.
- * Attached to a tag to filter other elements.
- * @param {object} element - The tag element clicked on.
- */
-function buttonPress(element){
-    search_term = element.innerText
-    allCards.forEach(hideCard)
-}
+dropDown.addEventListener('sl-select', event => {
+    const selectedItem = event.detail.item;
+    search_term = selectedItem.value;
+    if (search_term === "none"){
+        allCards.forEach(showCard);
+    } else {
+        allCards.forEach(hideCard);
+    }
+});
 
 /**
  * Checks whether a card should be hidden based on the contents of a clicked tag.
@@ -35,7 +44,7 @@ function hideCard(el) {
     
     // If yes then show, if no then hide
     if (contains){
-        showCard(el)
+        showCard(el);
     } else {
         el.style.display = 'none';
     }
