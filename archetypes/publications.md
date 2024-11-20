@@ -1,7 +1,8 @@
 +++
 SequenceNumber = "{{ DatePublishedNumber }}"
 Anchor = "{{ PublicationId }}"
-Title = "{{ AuthorsShort }} ({{ PublicationYear }}) {{ Title|truncate(50, True) }}"
+Title = "{{ Title }}"
+AuthorShort = "{{ AuthorsShort }} ({{ PublicationYear }})"
 Image = "previews/{{ PublicationId }}.pdf.png"
 PublicationId = "{{ PublicationId }}"
 Authors = "{{ Authors }}"

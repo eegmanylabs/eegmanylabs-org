@@ -4,8 +4,13 @@
 
 <sl-card id="{{ leaf.name }}">
   
-  <div slot="header">
-    {{ leaf.front['Title'] }}
+  <div slot="header" id="card-header">
+    <div id="title">
+      {{ leaf.front['Title'] }}
+    </div>
+    <div id="authors">
+      {{ leaf.front['AuthorShort'] }}
+    </div>
   </div>
 
   <img
