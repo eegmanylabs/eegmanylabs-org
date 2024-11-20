@@ -1,7 +1,8 @@
 +++
 SequenceNumber = "20231120"
 Anchor = "Strzelczyk2023"
-Title = "Strzelczyk et al (2023) Contralateral delay activity as a marker of vis..."
+Title = "Contralateral delay activity as a marker of visual working memory capacity: a multi-site registered replication"
+AuthorShort = "Strzelczyk et al (2023)"
 Image = "previews/Strzelczyk2023.pdf.png"
 PublicationId = "Strzelczyk2023"
 Authors = "Strzelczyk D,Clayson PE,Sigurdardottir HM,Mushtaq F,Pavlov YG,Devillez H,Lukashevich A,Rocha HA,Chung YH,Ortego KM,al. E"

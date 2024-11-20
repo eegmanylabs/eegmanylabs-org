@@ -1,7 +1,8 @@
 +++
 SequenceNumber = "20230426"
 Anchor = "Verona2023"
-Title = "Verona et al (2023) Fear, Anxiety, and the Error-Related Negativity..."
+Title = "Fear, Anxiety, and the Error-Related Negativity: A Registered Report of a Multi-Site Replication Study"
+AuthorShort = "Verona et al (2023)"
 Image = "previews/Verona2023.pdf.png"
 PublicationId = "Verona2023"
 Authors = "None"

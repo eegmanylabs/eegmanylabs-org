@@ -1,7 +1,8 @@
 +++
 SequenceNumber = "20210309"
 Anchor = "Pavlov2021"
-Title = "Pavlov et al (2021) #EEGManyLabs: Investigating the replicability o..."
+Title = "#EEGManyLabs: Investigating the replicability of influential EEG experiments"
+AuthorShort = "Pavlov et al (2021)"
 Image = "previews/Pavlov2021.pdf.png"
 PublicationId = "Pavlov2021"
 Authors = "Pavlov YG,Adamian N,Appelhoff S,Arvaneh M,et al."
