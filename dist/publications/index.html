@@ -13,9 +13,13 @@
 
     <title>eegmanylabs</title>
 </head>
-<body><nav id="menu">
+<body>
+  <nav id="menu">
     <a id="logo" href="/"><img id="logo" src="/assets/images/logo.png"></a>
-    <ul class="collapsed">
+    <a href="javascript:void(0);" class="icon" onclick="showResponsiveMenu()">
+      <sl-icon library="fa" name="fas-bars"></sl-icon>
+    </a>
+    <ul class="topnav" id="myTopnav">
     
         
             <li><a href="/replications/">replications</a></li>
@@ -36,12 +40,10 @@
         
     
     </ul>
-    <a id="main-hamburger">
-        <i class="fa fa-bars"></i>
-    </a>
-</nav><div id="body-container">
-<div id="content">
-
+  </nav>
+  <div id="body-container">
+    <div id="content">
+      
 
 <article id="publications">
 
@@ -49,6 +51,15 @@
         <h1>Publications</h1>
 <p><a href="https://scholar.google.com/citations?user=ueMcfOcAAAAJ">Google Scholar project page</a></p>
     </p>
+
+    <div class="card-filter">
+        <sl-dropdown style="display:none;">
+            <sl-button slot="trigger" caret>Filter</sl-button>
+            <sl-menu>
+                <sl-menu-item value="none">None</sl-menu-item>
+            </sl-menu>
+        </sl-dropdown>
+    </div>
 
     <div class="card-grid">
     
@@ -58,8 +69,13 @@
 
 <sl-card id="Pavlov2021">
   
-  <div slot="header">
-    Pavlov et al (2021) #EEGManyLabs: Investigating the replicability o...
+  <div slot="header" id="card-header">
+    <div id="title">
+      #EEGManyLabs: Investigating the replicability of influential EEG experiments
+    </div>
+    <div id="authors">
+      Pavlov et al (2021)
+    </div>
   </div>
 
   <img
@@ -93,6 +109,9 @@
 
   
   
+
+  
+  
     <sl-tooltip content="Open Manuscript">
         <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href="https://dx.doi.org/10.1016/j.cortex.2021.03.013" target="_blank"></sl-icon-button>
     </sl-tooltip>
@@ -116,8 +135,13 @@
 
 <sl-card id="Shuermann2022">
   
-  <div slot="header">
-    Niklas Schürmann (2022) Enabling #EEGManyLabs: Quality in Automatically...
+  <div slot="header" id="card-header">
+    <div id="title">
+      Enabling #EEGManyLabs: Quality in Automatically Preprocessed EEG Data and Psychopathological Associations of Frontal Alpha Asymmetry
+    </div>
+    <div id="authors">
+      Niklas Schürmann (2022)
+    </div>
   </div>
 
   <img
@@ -151,6 +175,9 @@
 
   
   
+
+  
+  
     <sl-tooltip content="Open Manuscript">
         <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href="https://dx.doi.org/10.31219/osf.io/g8udv" target="_blank"></sl-icon-button>
     </sl-tooltip>
@@ -174,8 +201,13 @@
 
 <sl-card id="Schneider2022">
   
-  <div slot="header">
-    Schneider et al (2022) Manual or Automatic? Putting standardized EEG-P...
+  <div slot="header" id="card-header">
+    <div id="title">
+      Manual or Automatic? Putting standardized EEG-Preprocessing to the Test with the Alpha-Asymmetries of Personality
+    </div>
+    <div id="authors">
+      Schneider et al (2022)
+    </div>
   </div>
 
   <img
@@ -209,6 +241,9 @@
 
   
   
+
+  
+  
     <sl-tooltip content="Open Manuscript">
         <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href="https://dx.doi.org/10.31234/osf.io/vc3zg" target="_blank"></sl-icon-button>
     </sl-tooltip>
@@ -232,8 +267,13 @@
 
 <sl-card id="Paul2022">
   
-  <div slot="header">
-    Paul et al (2022) Revisiting the electrophysiological correlates ...
+  <div slot="header" id="card-header">
+    <div id="title">
+      Revisiting the electrophysiological correlates of valence and expectancy in reward processing – A Multi-lab replication
+    </div>
+    <div id="authors">
+      Paul et al (2022)
+    </div>
   </div>
 
   <img
@@ -267,6 +307,13 @@
 
   
   
+    <sl-tooltip content="Data">
+        <sl-icon-button library="fa" name="fas-database" href="https://gin.g-node.org/katpa/Paul_et_al_Cortex_ManyLabs_Hajcak05" target="_blank"></sl-icon-button>
+    </sl-tooltip>
+  
+
+  
+  
     <sl-tooltip content="Open Manuscript">
         <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href="https://dx.doi.org/10.31234/osf.io/4uy2c" target="_blank"></sl-icon-button>
     </sl-tooltip>
@@ -290,8 +337,13 @@
 
 <sl-card id="Verona2023">
   
-  <div slot="header">
-    Verona et al (2023) Fear, Anxiety, and the Error-Related Negativity...
+  <div slot="header" id="card-header">
+    <div id="title">
+      Fear, Anxiety, and the Error-Related Negativity: A Registered Report of a Multi-Site Replication Study
+    </div>
+    <div id="authors">
+      Verona et al (2023)
+    </div>
   </div>
 
   <img
@@ -329,6 +381,9 @@
 
   
   
+
+  
+  
     <sl-tooltip content="Open Manuscript">
         <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href="https://dx.doi.org/10.31234/osf.io/8q4ks" target="_blank"></sl-icon-button>
     </sl-tooltip>
@@ -352,8 +407,13 @@
 
 <sl-card id="Constant2023">
   
-  <div slot="header">
-    Constant et al (2023) A multilab investigation into the N2pc as an in...
+  <div slot="header" id="card-header">
+    <div id="title">
+      A multilab investigation into the N2pc as an indicator of attentional selectivity: Direct replication of Eimer (1996)
+    </div>
+    <div id="authors">
+      Constant et al (2023)
+    </div>
   </div>
 
   <img
@@ -387,6 +447,9 @@
 
   
   
+
+  
+  
     <sl-tooltip content="Open Manuscript">
         <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href="https://dx.doi.org/10.31234/osf.io/3472y" target="_blank"></sl-icon-button>
     </sl-tooltip>
@@ -410,8 +473,13 @@
 
 <sl-card id="Strzelczyk2023">
   
-  <div slot="header">
-    Strzelczyk et al (2023) Contralateral delay activity as a marker of vis...
+  <div slot="header" id="card-header">
+    <div id="title">
+      Contralateral delay activity as a marker of visual working memory capacity: a multi-site registered replication
+    </div>
+    <div id="authors">
+      Strzelczyk et al (2023)
+    </div>
   </div>
 
   <img
@@ -449,6 +517,9 @@
 
   
   
+
+  
+  
     <sl-tooltip content="Open Manuscript">
         <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href="https://dx.doi.org/10.31234/osf.io/shdea" target="_blank"></sl-icon-button>
     </sl-tooltip>
@@ -472,8 +543,13 @@
 
 <sl-card id="Ruzzoli2023">
   
-  <div slot="header">
-    Ruzzoli et al (2023) An #EEGManyLabs study to test the role of the a...
+  <div slot="header" id="card-header">
+    <div id="title">
+      An #EEGManyLabs study to test the role of the alpha phase on visual perception (a replication and new evidence)
+    </div>
+    <div id="authors">
+      Ruzzoli et al (2023)
+    </div>
   </div>
 
   <img
@@ -507,6 +583,9 @@
 
   
   
+
+  
+  
     <sl-tooltip content="Open Manuscript">
         <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href="https://dx.doi.org/10.31234/osf.io/3dhpx" target="_blank"></sl-icon-button>
     </sl-tooltip>
@@ -530,8 +609,13 @@
 
 <sl-card id="Gloy2023">
   
-  <div slot="header">
-    Gloy et al (2023) Revisiting the Neurocognitive Correlates of the...
+  <div slot="header" id="card-header">
+    <div id="title">
+      Revisiting the Neurocognitive Correlates of the Behavioral Inhibition and Activation Systems
+    </div>
+    <div id="authors">
+      Gloy et al (2023)
+    </div>
   </div>
 
   <img
@@ -565,6 +649,9 @@
 
   
   
+
+  
+  
     <sl-tooltip content="Open Manuscript">
         <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href="https://dx.doi.org/10.31234/osf.io/hrtgc" target="_blank"></sl-icon-button>
     </sl-tooltip>
@@ -588,8 +675,13 @@
 
 <sl-card id="Marzuki2023">
   
-  <div slot="header">
-    Marzuki et al (2023) Error- and inhibitory-related brain activity as...
+  <div slot="header" id="card-header">
+    <div id="title">
+      Error- and inhibitory-related brain activity associated with political ideology: A multi-site replication study
+    </div>
+    <div id="authors">
+      Marzuki et al (2023)
+    </div>
   </div>
 
   <img
@@ -627,6 +719,9 @@
 
   
   
+
+  
+  
     <sl-tooltip content="Open Manuscript">
         <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href="https://dx.doi.org/10.31234/osf.io/39vqj" target="_blank"></sl-icon-button>
     </sl-tooltip>
@@ -650,8 +745,13 @@
 
 <sl-card id="Ganis2024">
   
-  <div slot="header">
-    Ganis et al (2024) The contribution of stimulus frequency and atte...
+  <div slot="header" id="card-header">
+    <div id="title">
+      The contribution of stimulus frequency and attention to the N2 and P3 in Go/Nogo: A multilab replication and new analyses
+    </div>
+    <div id="authors">
+      Ganis et al (2024)
+    </div>
   </div>
 
   <img
@@ -685,6 +785,9 @@
 
   
   
+
+  
+  
     <sl-tooltip content="Open Manuscript">
         <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href="https://dx.doi.org/10.31234/osf.io/nyj3f" target="_blank"></sl-icon-button>
     </sl-tooltip>
@@ -707,10 +810,11 @@
 </article>
 
 
-</div>
-</div><footer>
+    </div>
+  </div>
+  <footer>
     <span id="copyright-reference">&copy; 2024 eegmanylabs</span>
-</footer>
+  </footer>
 
 
 <script type="module">
@@ -726,6 +830,16 @@
     },
     mutator: svg => svg.setAttribute('fill', 'currentColor')
   });
+</script>
+<script>
+function showResponsiveMenu() {
+  var x = document.getElementById("myTopnav");
+  if (x.className === "topnav") {
+    x.className += " responsive";
+  } else {
+    x.className = "topnav";
+  }
+}
 </script>
 
 </body>
