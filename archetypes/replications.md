@@ -12,7 +12,7 @@ SignupUrl = "{{ SignupUrl }}"
 Tags = ["{{ StageName|title }}", "{{ Theme }}"]
 DOI = "{{ Doi }}"
 DoiUrl = "https://dx.doi.org/{{ Doi }}"
-ReplicationId = "{{ ReplicationId }}"
+PublicationId = "{{ PublicationId }}"
 +++
 
 Lead by [{{ LeadFullName }}](/people/#{{ PersonId }})

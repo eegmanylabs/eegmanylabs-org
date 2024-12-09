@@ -12,7 +12,7 @@ SignupUrl = "done"
 Tags = ["Registration", "Emotion"]
 DOI = "10.3758/CABN.3.2.97"
 DoiUrl = "https://dx.doi.org/10.3758/CABN.3.2.97"
-ReplicationId = ""
+PublicationId = "None"
 +++
 
 Lead by [Xun He](/people/#xhe)

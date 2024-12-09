@@ -12,7 +12,7 @@ SignupUrl = "https://forms.gle/CuEbtTJH9PUGJbND8"
 Tags = ["Recruiting", "Emotion"]
 DOI = "10.1162/jocn.1996.8.5.387"
 DoiUrl = "https://dx.doi.org/10.1162/jocn.1996.8.5.387"
-ReplicationId = ""
+PublicationId = "None"
 +++
 
 Lead by [Robert Bendall](/people/#rbendall)
