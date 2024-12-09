@@ -11,6 +11,8 @@ Year = "2022"
 DOI = "10.31234/osf.io/vc3zg"
 DoiUrl = "https://dx.doi.org/10.31234/osf.io/vc3zg"
 OsfUrl = "None"
+DataUrl = "None"
+ReplicationId = "None"
 Pdf = "/assets/pdfs/Schneider2022.pdf"
 Tags = ["preprint"]
 +++

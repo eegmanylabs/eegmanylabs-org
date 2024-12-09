@@ -11,6 +11,8 @@ Year = "2023"
 DOI = "10.31234/osf.io/3dhpx"
 DoiUrl = "https://dx.doi.org/10.31234/osf.io/3dhpx"
 OsfUrl = "None"
+DataUrl = "None"
+ReplicationId = "Mathewson2009"
 Pdf = "/assets/pdfs/Ruzzoli2023.pdf"
 Tags = ["pre-registered"]
 +++

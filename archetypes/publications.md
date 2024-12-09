@@ -11,6 +11,8 @@ Year = "{{ PublicationYear }}"
 DOI = "{{ DOI }}"
 DoiUrl = "https://dx.doi.org/{{ DOI }}"
 OsfUrl = "{{ OSF }}"
+DataUrl = "{{ DataUrl }}"
+ReplicationId = "{{ ReplicationId }}"
 Pdf = "/assets/pdfs/{{ PublicationId }}.pdf"
 Tags = ["{{ Status }}"]
 +++

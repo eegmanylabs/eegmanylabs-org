@@ -11,6 +11,8 @@ Year = "2023"
 DOI = "10.31234/osf.io/3472y"
 DoiUrl = "https://dx.doi.org/10.31234/osf.io/3472y"
 OsfUrl = "None"
+DataUrl = "None"
+ReplicationId = "Eimer1996"
 Pdf = "/assets/pdfs/Constant2023.pdf"
 Tags = ["pre-registered"]
 +++

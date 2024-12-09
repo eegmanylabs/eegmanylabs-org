@@ -11,6 +11,8 @@ Year = "2024"
 DOI = "10.31234/osf.io/nyj3f"
 DoiUrl = "https://dx.doi.org/10.31234/osf.io/nyj3f"
 OsfUrl = "None"
+DataUrl = "None"
+ReplicationId = "Eimer1993"
 Pdf = "/assets/pdfs/Ganis2024.pdf"
 Tags = ["preprint"]
 +++

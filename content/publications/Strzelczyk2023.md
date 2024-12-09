@@ -11,6 +11,8 @@ Year = "2023"
 DOI = "10.31234/osf.io/shdea"
 DoiUrl = "https://dx.doi.org/10.31234/osf.io/shdea"
 OsfUrl = "https://osf.io/pbr8c/"
+DataUrl = "None"
+ReplicationId = "VogelMachizawa2004"
 Pdf = "/assets/pdfs/Strzelczyk2023.pdf"
 Tags = ["pre-registered"]
 +++

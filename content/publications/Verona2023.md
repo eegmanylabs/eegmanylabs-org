@@ -11,6 +11,8 @@ Year = "2023"
 DOI = "10.31234/osf.io/8q4ks"
 DoiUrl = "https://dx.doi.org/10.31234/osf.io/8q4ks"
 OsfUrl = "https://osf.io/6suf8/"
+DataUrl = "None"
+ReplicationId = "Hajcak2003"
 Pdf = "/assets/pdfs/Verona2023.pdf"
 Tags = ["preprint"]
 +++
