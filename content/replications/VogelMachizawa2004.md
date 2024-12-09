@@ -12,7 +12,7 @@ SignupUrl = "done"
 Tags = ["Recording", "Memory"]
 DOI = "10.1038/nature02447"
 DoiUrl = "https://dx.doi.org/10.1038/nature02447"
-ReplicationId = ""
+PublicationId = "Strzelczyk2023"
 +++
 
 Lead by [Nicolas Langer](/people/#nlanger)

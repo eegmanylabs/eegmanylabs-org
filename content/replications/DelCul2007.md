@@ -12,7 +12,7 @@ SignupUrl = "done"
 Tags = ["Registration", "Consciousness"]
 DOI = "10.1371/journal.pbio.0050260"
 DoiUrl = "https://dx.doi.org/10.1371/journal.pbio.0050260"
-ReplicationId = ""
+PublicationId = "None"
 +++
 
 Lead by [Manuel Rausch](/people/#mrausch)
