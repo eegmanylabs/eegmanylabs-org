@@ -12,6 +12,7 @@ SignupUrl = "done"
 Tags = ["Registration", "Attention"]
 DOI = "10.1162/jocn.1996.8.5.387"
 DoiUrl = "https://dx.doi.org/10.1162/jocn.1996.8.5.387"
+ReplicationId = ""
 +++
 
 Lead by [Andreas Keil](/people/#akeil)

@@ -12,6 +12,7 @@ SignupUrl = "https://docs.google.com/forms/d/e/1FAIpQLSdo9rk0V5OWYi0TB9T9JouxFQ1
 Tags = ["Recruiting", "Conflict"]
 DOI = "10.1016/j.bandc.2004.04.005"
 DoiUrl = "https://dx.doi.org/10.1016/j.bandc.2004.04.005"
+ReplicationId = ""
 +++
 
 Lead by [Welber Marinovic](/people/#wmarinovic)

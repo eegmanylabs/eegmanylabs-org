@@ -12,6 +12,7 @@ SignupUrl = "done"
 Tags = ["Recruiting", "Feedback"]
 DOI = "10.1016/j.neuron.2005.06.020"
 DoiUrl = "https://dx.doi.org/10.1016/j.neuron.2005.06.020"
+ReplicationId = ""
 +++
 
 Lead by [Armand Chatard](/people/#achatard)

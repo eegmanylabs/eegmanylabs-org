@@ -12,6 +12,7 @@ SignupUrl = "done"
 Tags = ["Recruiting", "Memory"]
 DOI = "10.1016/j.neuroimage.2005.04.014"
 DoiUrl = "https://dx.doi.org/10.1016/j.neuroimage.2005.04.014"
+ReplicationId = ""
 +++
 
 Lead by [Samantha Gregory](/people/#sgregory)
