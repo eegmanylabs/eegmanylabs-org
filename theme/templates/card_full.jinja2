@@ -26,16 +26,20 @@
   {% endfor %}
 
   <div slot="footer">
-  {{ IconButton.render(leaf.front['ScholarUrl'], "Google Scholar profile", "fab-google-scholar") }}
-  {{ IconButton.render(leaf.front['UniUrl'], "University profile page", "fas-building-columns") }}
-  {{ IconButton.render(leaf.front['LabUrl'], "Lab website", "fas-flask") }}
+  {% if index.name == 'publications' %}
+    {{ IconButton.render(leaf.front['DoiUrl'], "Open Manuscript", "fas-arrow-up-right-from-square") }}   
+    {{ IconButton.render(leaf.front['Pdf'], "Open PDF", "far-file-pdf") }}
+    {{ IconButton.render(leaf.front['OsfUrl'], "OSF Material", "fas-recycle") }}
+    {{ IconButton.render(leaf.front['DataUrl'], "Data", "fas-database") }}
+  {% elif index.name == 'replications' %}
+    {{ ActionButton.render(leaf.front['SignupUrl'], "Sign up as participating lab", "fas-user-plus") }}
+    {{ IconButton.render(leaf.front['DoiUrl'], "Open Manuscript", "fas-arrow-up-right-from-square") }}   
+  {% elif index.name == 'people' %}
+    {{ IconButton.render(leaf.front['ScholarUrl'], "Google Scholar profile", "fab-google-scholar") }}
+    {{ IconButton.render(leaf.front['UniUrl'], "University profile page", "fas-building-columns") }}
+    {{ IconButton.render(leaf.front['LabUrl'], "Lab website", "fas-flask") }}
+  {% endif %}
 
-  {{ ActionButton.render(leaf.front['SignupUrl'], "Sign up as participating lab", "fas-user-plus") }}
-  {{ IconButton.render(leaf.front['OsfUrl'], "OSF Material", "fas-recycle") }}
-  {{ IconButton.render(leaf.front['DataUrl'], "Data", "fas-database") }}
-  {{ IconButton.render(leaf.front['DoiUrl'], "Open Manuscript", "fas-arrow-up-right-from-square") }}
-  
-  {{ IconButton.render(leaf.front['Pdf'], "Open PDF", "far-file-pdf") }}
   </div>
 
 </sl-card>
