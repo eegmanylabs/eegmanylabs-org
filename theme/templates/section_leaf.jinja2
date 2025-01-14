@@ -1,11 +1,9 @@
 
 <section id="{{ leaf.name }}">
 
-    <h2>{{ leaf.title }}</h2>
+    <h2>{{ leaf.name|title }}</h2>
 
-    <p>
-        {{ leaf.content_html|safe }}
-    </p>
+    {{ leaf.content_html|safe }}
 
 </section>
 
