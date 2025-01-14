@@ -34,6 +34,14 @@
     {{ IconButton.render(leaf.front['Pdf'], "Open PDF", "far-file-pdf") }}
     {{ IconButton.render(leaf.front['OsfUrl'], "OSF Material", "fas-recycle") }}
     {{ IconButton.render(leaf.front['DataUrl'], "Data", "fas-database") }}
+
+    {% set ReplicationUrl = leaf.front['ReplicationId'] %}
+    {% if ReplicationUrl != "None" %}
+      {% set ReplicationUrl = "/replications/#" ~ ReplicationUrl %}
+    {% endif %}
+
+    {{ IconButton.render(ReplicationUrl, "Go to Replication Page", "fas-book-open", false) }}
+
   {% elif index.name == 'replications' %}
     {% set PublicationUrl = leaf.front['PublicationId'] %}
     {% if PublicationUrl != "None" %}
