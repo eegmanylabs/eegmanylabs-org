@@ -1,0 +1,15 @@
+{% macro external_link(external) %}
+  {% if external %}
+    "_blank"
+  {% else %}
+    "_top"
+  {% endif %}
+{% endmacro %}
+
+
+{% macro add_tag(leaf, name) %}
+  {% if leaf.front[name] %}
+    <p>{{ name }}: <sl-tag size="small" class="{{ name }} {{leaf.front[name]}}">{{ leaf.front[name] }}</sl-tag></p>
+  {% endif %}
+{% endmacro %}
+
