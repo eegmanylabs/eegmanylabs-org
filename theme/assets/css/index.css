@@ -143,7 +143,7 @@ article > p {
     display: grid;
     grid-template-columns: repeat(auto-fit, 300px);
     grid-auto-rows: auto;
-    column-gap: 10px;
+    column-gap: 20px;
     row-gap: 10px;
 }
 
@@ -183,10 +183,6 @@ sl-menu-item::part(label) {
 #front img[slot="image"] {
     object-fit: cover;
     height: 300px;
-}
-
-#front h3 {
-    min-height: 3.5em;
 }
 
 a.see-all {
@@ -331,12 +327,12 @@ sl-card::part(footer) {
     width: 350px;
 }
 
-#people sl-card::part(body) {
+article#people sl-card::part(body) {
     padding: var(--sl-spacing-small) var(--padding);
     height: 48px;
 }
 
-#people sl-card::part(footer) {
+article#people sl-card::part(footer) {
     padding: var(--sl-spacing-small) var(--padding);
     height: 56px;
 }
@@ -377,9 +373,6 @@ sl-card::part(footer) {
     PUBLICATIONS PAGE
 */
 
-#publications h2 {
-    min-height: 4em;
-}
 
 a[href^="https://scholar.google.com/citations?user=ueMcfOcAAAAJ"] {
     padding: 5px;
@@ -447,3 +440,13 @@ div#title {
     flex-grow: 1;
 }
 
+article#front {
+
+    section > p {
+        padding-bottom: 1.5em;
+    }
+    
+    sl-card::part(header) {
+        display: none;
+    }
+}
