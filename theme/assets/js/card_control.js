@@ -4,6 +4,8 @@ const allTags = document.querySelectorAll("sl-tag");
 const allSelectors = document.querySelectorAll("sl-select")
 const allSections = document.querySelectorAll("section")
 
+const NfrontPageCards = 4;
+
 let search_terms;
 
 // Setup select elements
@@ -15,6 +17,9 @@ if (allTags.length == 0) {
         add_select_options(el);
     })
 }
+
+// Sample cards for front page
+allSections.forEach((el) => sample_cards(el))
 
 /**
  * Adds the tags present on the page to the corresponding select element
@@ -81,3 +86,24 @@ function showCard(el) {
     el.style.display = '';
 }
 
+/**
+ * Display a random sample of cards for a section on the front page
+ * @param {object} el - Section element contaning cards
+ */
+function sample_cards(el) {
+    let cards = Array.from(el.querySelectorAll(".preview"))
+    shuffleArray(cards)
+
+    cards.slice(0, NfrontPageCards).forEach((el) => el.style = "display: grid")
+}
+
+/**
+ * Shuffles an array
+ * @param {array} array 
+ */
+function shuffleArray(array) {
+    for (let i = array.length - 1; i >= 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+}
