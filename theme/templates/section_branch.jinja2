@@ -4,7 +4,7 @@
     <h2>{{ branch.name|replace("_", " ")|title }}</h2>
 
     <div class="preview-grid">
-    {% for leaf in branch.leaves[:3] %}
+    {% for leaf in branch.leaves %}
         {% include 'card_preview.jinja2' %}
     {% endfor %}
     </div>
