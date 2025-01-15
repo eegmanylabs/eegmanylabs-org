@@ -6,12 +6,14 @@
 
     {{ index.content_html|safe }}
 
-    {% if index.name == "replications" %}
-    <sl-select class="Stage" placeholder="Replication Stage" value="" multiple clearable></sl-select>
-    <sl-select class="Theme" placeholder="Themes" value="" multiple clearable></sl-select>
-    {% else %}
-    <sl-select class="Tag" placeholder="Tags" value="" multiple clearable></sl-select>
-    {% endif %}
+    <div class="select-container" style="display: none">
+        {% if index.name == "replications" %}
+        <sl-select class="Stage" placeholder="Replication Stage" value="" multiple clearable></sl-select>
+        <sl-select class="Theme" placeholder="Themes" value="" multiple clearable></sl-select>
+        {% else %}
+        <sl-select class="Tag" placeholder="Tags" value="" multiple clearable></sl-select>
+        {% endif %}
+    </div>
 
 
     <div class="card-grid">

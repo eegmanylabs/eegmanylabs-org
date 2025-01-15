@@ -8,18 +8,19 @@ const NfrontPageCards = 4;
 
 let search_terms;
 
-// Setup select elements
-if (allTags.length == 0) {
-    allSelectors.forEach((el) => el.style = "display: none")
-} else {
-    allSelectors.forEach((el) => {
-        el.addEventListener('sl-change', update_cards);
-        add_select_options(el);
-    })
-}
+window.addEventListener("load", () => {
+    // Setup select elements
+    if (allTags.length > 0) {
+        allSelectors.forEach((el) => {
+            el.addEventListener('sl-change', update_cards);
+            add_select_options(el);
+        })
+        document.querySelector("div.select-container").style = "display:block"
+    }
 
-// Sample cards for front page
-allSections.forEach((el) => sample_cards(el))
+    // Sample cards for front page
+    allSections.forEach((el) => sample_cards(el))
+})
 
 /**
  * Adds the tags present on the page to the corresponding select element
