@@ -440,6 +440,10 @@ div#title {
     flex-grow: 1;
 }
 
+sl-select {
+    margin-bottom: 10px;
+}
+
 article#front {
 
     section > p {
