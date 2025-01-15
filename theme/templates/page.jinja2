@@ -4,18 +4,15 @@
 
 <article id="{{ index.name }}">
 
-    <p>
-        {{ index.content_html|safe }}
-    </p>
+    {{ index.content_html|safe }}
 
-    <div class="card-filter">
-        <sl-dropdown style="display:none;">
-            <sl-button slot="trigger" caret>Filter</sl-button>
-            <sl-menu>
-                <sl-menu-item value="none">None</sl-menu-item>
-            </sl-menu>
-        </sl-dropdown>
-    </div>
+    {% if index.name == "replications" %}
+    <sl-select class="Stage" placeholder="Replication Stage" value="" multiple clearable></sl-select>
+    <sl-select class="Theme" placeholder="Themes" value="" multiple clearable></sl-select>
+    {% else %}
+    <sl-select class="Tag" placeholder="Tags" value="" multiple clearable></sl-select>
+    {% endif %}
+
 
     <div class="card-grid">
     {% for leaf in index.leaves %}
