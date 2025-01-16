@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="reduce-fouce">
 <head>
     <meta charset=utf-8>
     <meta http-equiv=x-ua-compatible content="ie=edge">
@@ -47,22 +47,19 @@
 
 <article id="people">
 
-    <p>
-        <h1>People</h1>
-    </p>
+    <h1>People</h1>
 
-    <div class="card-filter">
-        <sl-dropdown style="display:none;">
-            <sl-button slot="trigger" caret>Filter</sl-button>
-            <sl-menu>
-                <sl-menu-item value="none">None</sl-menu-item>
-            </sl-menu>
-        </sl-dropdown>
+    <div class="select-container" style="display: none">
+        
+        <sl-select class="Tag" placeholder="Tags" value="" multiple clearable></sl-select>
+        
     </div>
+
 
     <div class="card-grid">
     
         
+
 
 
 
@@ -84,50 +81,57 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=coordinator>coordinator</sl-tag>
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+
+  
+  
+    <sl-tag size="small" pill class="coordinator Tag">coordinator</sl-tag>
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=bcjpWSwAAAAJ&hl=en&oi=ao target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=bcjpWSwAAAAJ&hl=en&oi=ao" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://medicinehealth.leeds.ac.uk/psychology/staff/632/dr-faisal-mushtaq target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://medicinehealth.leeds.ac.uk/psychology/staff/632/dr-faisal-mushtaq" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" href=https://immersivecognition.com/people/faisal-mushtaq/ target=
   
+    "_blank"
   
-    <sl-tooltip content="Lab website">
-        <sl-icon-button library="fa" name="fas-flask" href="https://immersivecognition.com/people/faisal-mushtaq/" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -135,6 +139,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -156,48 +161,55 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=coordinator>coordinator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="coordinator Tag">coordinator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?hl=en&user=nSM_MxUAAAAJ target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?hl=en&user=nSM_MxUAAAAJ" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.medizin.uni-tuebingen.de/de/das-klinikum/mitarbeiter/profil/2191 target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://www.medizin.uni-tuebingen.de/de/das-klinikum/mitarbeiter/profil/2191" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" href=https://yurigpavlov.com/ target=
   
+    "_blank"
   
-    <sl-tooltip content="Lab website">
-        <sl-icon-button library="fa" name="fas-flask" href="https://yurigpavlov.com/" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -205,6 +217,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -226,48 +239,55 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=P98yGl4AAAAJ&hl=en&oi=ao target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=P98yGl4AAAAJ&hl=en&oi=ao" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.birmingham.ac.uk/staff/profiles/psychology/cruse-damian target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://www.birmingham.ac.uk/staff/profiles/psychology/cruse-damian" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" href=https://www.damiancruse.com/ target=
   
+    "_blank"
   
-    <sl-tooltip content="Lab website">
-        <sl-icon-button library="fa" name="fas-flask" href="https://www.damiancruse.com/" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -275,6 +295,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -296,44 +317,51 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=9L2AQE4AAAAJ&hl=en target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=9L2AQE4AAAAJ&hl=en" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.psychologie.uni-wuerzburg.de/en/expklin/staff/matthias-gamer/ target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://www.psychologie.uni-wuerzburg.de/en/expklin/staff/matthias-gamer/" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -341,6 +369,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -362,44 +391,51 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=-j9yBRgAAAAJ&hl=en target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=-j9yBRgAAAAJ&hl=en" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.plymouth.ac.uk/staff/giorgio-ganis target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://www.plymouth.ac.uk/staff/giorgio-ganis" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -407,6 +443,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -428,48 +465,55 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=D5YaHnUAAAAJ&hl=en target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=D5YaHnUAAAAJ&hl=en" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.salford.ac.uk/our-staff/samantha-gregory target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://www.salford.ac.uk/our-staff/samantha-gregory" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" href=https://sites.google.com/view/drsamanthaeagregory/home target=
   
+    "_blank"
   
-    <sl-tooltip content="Lab website">
-        <sl-icon-button library="fa" name="fas-flask" href="https://sites.google.com/view/drsamanthaeagregory/home" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -477,6 +521,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -498,48 +543,55 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=-doZi8MAAAAJ&hl=en target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=-doZi8MAAAAJ&hl=en" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.macewan.ca/academics/academic-departments/psychology/our-people/profile/?profileid=hassallc target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://www.macewan.ca/academics/academic-departments/psychology/our-people/profile/?profileid=hassallc" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" href=https://www.cameronhassall.com/ target=
   
+    "_blank"
   
-    <sl-tooltip content="Lab website">
-        <sl-icon-button library="fa" name="fas-flask" href="https://www.cameronhassall.com/" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -547,6 +599,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -568,40 +621,47 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
-  
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" disabled></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.uni-bremen.de/en/pppd/team/dr-kilian-gloy target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://www.uni-bremen.de/en/pppd/team/dr-kilian-gloy" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -609,6 +669,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -630,44 +691,51 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=lSBrwo4AAAAJ&hl=en&oi=sra target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=lSBrwo4AAAAJ&hl=en&oi=sra" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.psy.uni-muenchen.de/expneurocog/people/lab-members/jakob_kaiser/index.html target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://www.psy.uni-muenchen.de/expneurocog/people/lab-members/jakob_kaiser/index.html" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -675,6 +743,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -696,48 +765,55 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=oyHUTa0AAAAJ&hl=en&oi=ao target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=oyHUTa0AAAAJ&hl=en&oi=ao" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://people.clas.ufl.edu/akeil/ target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://people.clas.ufl.edu/akeil/" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" href=https://www.ufbrainwaves.info/people target=
   
+    "_blank"
   
-    <sl-tooltip content="Lab website">
-        <sl-icon-button library="fa" name="fas-flask" href="https://www.ufbrainwaves.info/people" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -745,6 +821,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -766,44 +843,51 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=MElLotMAAAAJ&hl=en&oi=ao target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=MElLotMAAAAJ&hl=en&oi=ao" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.psychology.uzh.ch/en/areas/nec/plafor/team/Head-of-Discipline/Langer.html target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://www.psychology.uzh.ch/en/areas/nec/plafor/team/Head-of-Discipline/Langer.html" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -811,6 +895,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -832,44 +917,51 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=D1Tc1woAAAAJ&hl=en&oi=ao target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=D1Tc1woAAAAJ&hl=en&oi=ao" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.uni-bremen.de/en/research-methods-and-cognitive-psychology/team/heinrich-liesefeld target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://www.uni-bremen.de/en/research-methods-and-cognitive-psychology/team/heinrich-liesefeld" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -877,6 +969,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -898,44 +991,51 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=coordinator>coordinator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="coordinator Tag">coordinator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.de/citations?user=B5xCyM0AAAAJ&hl=de target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.de/citations?user=B5xCyM0AAAAJ&hl=de" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://immersivecognition.com/people/ target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://immersivecognition.com/people/" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -943,6 +1043,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -964,48 +1065,55 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=puWpGDgAAAAJ&hl=en&oi=ao target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=puWpGDgAAAAJ&hl=en&oi=ao" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://artsci.tamu.edu/psychological-brain-sciences/contact/profiles/annmarie-macnamara.html target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://artsci.tamu.edu/psychological-brain-sciences/contact/profiles/annmarie-macnamara.html" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" href=https://maclab.sites.tamu.edu/ target=
   
+    "_blank"
   
-    <sl-tooltip content="Lab website">
-        <sl-icon-button library="fa" name="fas-flask" href="https://maclab.sites.tamu.edu/" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -1013,6 +1121,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -1034,48 +1143,55 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=QPFeiZkAAAAJ&hl=en target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=QPFeiZkAAAAJ&hl=en" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://staffportal.curtin.edu.au/staff/profile/view/welber-marinovic-e50006ed/ target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://staffportal.curtin.edu.au/staff/profile/view/welber-marinovic-e50006ed/" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" href=https://sites.google.com/site/wmarinovic/ target=
   
+    "_blank"
   
-    <sl-tooltip content="Lab website">
-        <sl-icon-button library="fa" name="fas-flask" href="https://sites.google.com/site/wmarinovic/" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -1083,6 +1199,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -1104,44 +1221,51 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=AZzD8YUAAAAJ&hl=en target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=AZzD8YUAAAAJ&hl=en" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://ut.ee/en/employee/richard-naar target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://ut.ee/en/employee/richard-naar" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -1149,6 +1273,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -1170,48 +1295,55 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=xqxSCSkAAAAJ&hl=es target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=xqxSCSkAAAAJ&hl=es" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://cajal.csic.es/laboratorios/neuroimagen/ target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://cajal.csic.es/laboratorios/neuroimagen/" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" href=https://guiomarniso.com/ target=
   
+    "_blank"
   
-    <sl-tooltip content="Lab website">
-        <sl-icon-button library="fa" name="fas-flask" href="https://guiomarniso.com/" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -1219,6 +1351,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -1240,48 +1373,55 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=6AyGv5IAAAAJ&hl=en&oi=ao target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=6AyGv5IAAAAJ&hl=en&oi=ao" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://research.ugent.be/web/person/gilles-pourtois-0/en target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://research.ugent.be/web/person/gilles-pourtois-0/en" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" href=https://www.cap-lab.be/ target=
   
+    "_blank"
   
-    <sl-tooltip content="Lab website">
-        <sl-icon-button library="fa" name="fas-flask" href="https://www.cap-lab.be/" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -1289,6 +1429,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -1310,44 +1451,51 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=SMEhBPMAAAAJ&hl=pl target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=SMEhBPMAAAAJ&hl=pl" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://kognitywistyka.uj.edu.pl/en_GB/magdalena-senderecka target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://kognitywistyka.uj.edu.pl/en_GB/magdalena-senderecka" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -1355,6 +1503,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -1376,44 +1525,51 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=M_aMglAAAAAJ&hl=en target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=M_aMglAAAAAJ&hl=en" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.bcbl.eu/en/conocenos/equipo/manuela-ruzzoli target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://www.bcbl.eu/en/conocenos/equipo/manuela-ruzzoli" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -1421,6 +1577,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -1442,44 +1599,51 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=UUYnx4YAAAAJ&hl=en target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=UUYnx4YAAAAJ&hl=en" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://sunwayuniversity.edu.my/school-of-medical-life-sciences/staff-profiles/professor-alexandre-schaefer target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://sunwayuniversity.edu.my/school-of-medical-life-sciences/staff-profiles/professor-alexandre-schaefer" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -1487,6 +1651,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -1508,48 +1673,55 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=oL4UaqcAAAAJ&hl=en target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=oL4UaqcAAAAJ&hl=en" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://iitk.irins.org/profile/187765 target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://iitk.irins.org/profile/187765" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" href=https://sites.google.com/site/ammuns68/ target=
   
+    "_blank"
   
-    <sl-tooltip content="Lab website">
-        <sl-icon-button library="fa" name="fas-flask" href="https://sites.google.com/site/ammuns68/" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -1557,6 +1729,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -1578,48 +1751,55 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=2L8LoPMAAAAJ&hl=en target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=2L8LoPMAAAAJ&hl=en" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.universiteitleiden.nl/en/staffmembers/melle-van-der-molen target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://www.universiteitleiden.nl/en/staffmembers/melle-van-der-molen" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" href=https://www.codaplab.nl/melle target=
   
+    "_blank"
   
-    <sl-tooltip content="Lab website">
-        <sl-icon-button library="fa" name="fas-flask" href="https://www.codaplab.nl/melle" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -1627,6 +1807,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -1648,44 +1829,51 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=coordinator>coordinator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="coordinator Tag">coordinator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=XQ3-JHgAAAAJ&hl=en target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=XQ3-JHgAAAAJ&hl=en" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.birmingham.ac.uk/staff/profiles/psychology/bosch-jasper-van-den.aspx target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://www.birmingham.ac.uk/staff/profiles/psychology/bosch-jasper-van-den.aspx" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -1693,6 +1881,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -1714,44 +1903,51 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=8NW5HusAAAAJ&hl=en target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=8NW5HusAAAAJ&hl=en" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.usf.edu/arts-sciences/departments/psychology/people/everona.aspx target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://www.usf.edu/arts-sciences/departments/psychology/people/everona.aspx" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -1759,6 +1955,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -1780,42 +1977,49 @@
 
   
 
+  
+  
 
+  
+  
+
+  
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.de/citations?user=E0IRSXQAAAAJ&hl=de target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.de/citations?user=E0IRSXQAAAAJ&hl=de" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.medicalschool-hamburg.de/hochschule/unser-team/team-fakultaet-humanwissenschaften-universitaet/professoren/sebastian-ocklenburg/ target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://www.medicalschool-hamburg.de/hochschule/unser-team/team-fakultaet-humanwissenschaften-universitaet/professoren/sebastian-ocklenburg/" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -1823,6 +2027,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -1844,48 +2049,55 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=advisor>advisor</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="advisor Tag">advisor</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.co.uk/citations?user=yz6s_e8AAAAJ&hl=en target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.co.uk/citations?user=yz6s_e8AAAAJ&hl=en" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://nru.dk/index.php/about-us/staff-list/124-senior-researchers/318-cyril-pernet target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://nru.dk/index.php/about-us/staff-list/124-senior-researchers/318-cyril-pernet" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" href=https://cpernet.github.io target=
   
+    "_blank"
   
-    <sl-tooltip content="Lab website">
-        <sl-icon-button library="fa" name="fas-flask" href="https://cpernet.github.io" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -1893,6 +2105,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -1914,48 +2127,55 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.co.uk/citations?user=Z_934nkAAAAJ&hl=en target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.co.uk/citations?user=Z_934nkAAAAJ&hl=en" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.salford.ac.uk/our-staff/robert-bendall target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://www.salford.ac.uk/our-staff/robert-bendall" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" href=https://hub.salford.ac.uk/appliedcognition/people/ target=
   
+    "_blank"
   
-    <sl-tooltip content="Lab website">
-        <sl-icon-button library="fa" name="fas-flask" href="https://hub.salford.ac.uk/appliedcognition/people/" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -1963,6 +2183,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -1984,44 +2205,51 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.de/citations?user=QFdVCFEAAAAJ&hl=en target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.de/citations?user=QFdVCFEAAAAJ&hl=en" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" disabled></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" href=https://manuelrausch.github.io/ target=
   
+    "_blank"
   
-    <sl-tooltip content="Lab website">
-        <sl-icon-button library="fa" name="fas-flask" href="https://manuelrausch.github.io/" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -2029,6 +2257,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -2050,44 +2279,51 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=advisor>advisor</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="advisor Tag">advisor</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=CJDsN9cAAAAJ&hl=en&oi=sra target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=CJDsN9cAAAAJ&hl=en&oi=sra" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.cs.utsa.edu/~krobbins/ target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://www.cs.utsa.edu/~krobbins/" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -2095,6 +2331,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -2116,46 +2353,53 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=co-investigator>co-investigator</sl-tag>
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+
+  
+  
+    <sl-tag size="small" pill class="co-investigator Tag">co-investigator</sl-tag>
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=nQl3r9kAAAAJ&hl=en&oi=ao target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=nQl3r9kAAAAJ&hl=en&oi=ao" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.mmu.ac.uk/staff/profile/dr-amy-bland target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://www.mmu.ac.uk/staff/profile/dr-amy-bland" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -2163,6 +2407,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -2184,44 +2429,51 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=co-investigator>co-investigator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="co-investigator Tag">co-investigator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com.sg/citations?user=HBxF7nAAAAAJ&hl=en target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com.sg/citations?user=HBxF7nAAAAAJ&hl=en" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.sheffield.ac.uk/acse/department/people/academic/mahnaz-arvaneh target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://www.sheffield.ac.uk/acse/department/people/academic/mahnaz-arvaneh" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -2229,6 +2481,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -2250,46 +2503,53 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=co-investigator>co-investigator</sl-tag>
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+
+  
+  
+    <sl-tag size="small" pill class="co-investigator Tag">co-investigator</sl-tag>
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=08oketoAAAAJ&hl=en&oi=ao target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=08oketoAAAAJ&hl=en&oi=ao" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://staffprofiles.bournemouth.ac.uk/display/xhe target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://staffprofiles.bournemouth.ac.uk/display/xhe" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -2297,6 +2557,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -2318,44 +2579,51 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=advisor>advisor</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="advisor Tag">advisor</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.co.uk/citations?user=eEbaa0UAAAAJ&hl=en target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.co.uk/citations?user=eEbaa0UAAAAJ&hl=en" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.ru.nl/en/people/oostenveld-r target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://www.ru.nl/en/people/oostenveld-r" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -2363,6 +2631,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -2384,44 +2653,51 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=mFzYd1sAAAAJ&hl=en target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=mFzYd1sAAAAJ&hl=en" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" disabled></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" href=https://beaverslab.com/ target=
   
+    "_blank"
   
-    <sl-tooltip content="Lab website">
-        <sl-icon-button library="fa" name="fas-flask" href="https://beaverslab.com/" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -2429,6 +2705,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -2450,44 +2727,51 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=replicator>replicator</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=frClUFcAAAAJ&hl=en&oi=ao target=
   
-    <sl-tooltip content="Google Scholar profile">
-        <sl-icon-button library="fa" name="fab-google-scholar" href="https://scholar.google.com/citations?user=frClUFcAAAAJ&hl=en&oi=ao" target="_blank"></sl-icon-button>
-    </sl-tooltip>
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://cerca.labo.univ-poitiers.fr/en/membres/armand-chatard-2/ target=
   
+    "_blank"
   
-    <sl-tooltip content="University profile page">
-        <sl-icon-button library="fa" name="fas-building-columns" href="https://cerca.labo.univ-poitiers.fr/en/membres/armand-chatard-2/" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
 
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
   
 
   </div>
@@ -2522,14 +2806,31 @@
 </script>
 <script>
 function showResponsiveMenu() {
-  var x = document.getElementById("myTopnav");
-  if (x.className === "topnav") {
-    x.className += " responsive";
+  var navBar = document.getElementById("myTopnav");
+  if (navBar.className === "topnav") {
+    // Show menu in responsive state by adding responsive class to element
+    navBar.classList.add("responsive");
   } else {
-    x.className = "topnav";
+    // Hide menu by resetting to just the topnav class
+    navBar.className = "topnav";
   }
 }
 </script>
+<script type="module">
+  await Promise.race([
+    // Load all custom elements
+    Promise.allSettled([
+      customElements.whenDefined('sl-select'),
+      customElements.whenDefined('sl-card'),
+    ]),
+    // Resolve after two seconds
+    new Promise(resolve => setTimeout(resolve, 1500))
+  ]);
+
+  // Remove the class, showing the page content
+  document.documentElement.classList.remove('reduce-fouce');
+</script>
+
 
 </body>
 </html>

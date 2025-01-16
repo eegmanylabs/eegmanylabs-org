@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="reduce-fouce">
 <head>
     <meta charset=utf-8>
     <meta http-equiv=x-ua-compatible content="ie=edge">
@@ -47,23 +47,19 @@
 
 <article id="asymmetry">
 
-    <p>
-        <h2>Frontal alpha asymmetry and personality traits</h2>
+    <h2>Frontal alpha asymmetry and personality traits</h2>
 <p><img alt="matrix" src="/assets/images/stock/personality_matrix.png" title="Personality Matrix" /></p>
 <p>Project lead: <a href="/people/#socklenburg">Sebastian Ocklenburg</a></p>
 <p>“#EEGManyLabs Asymmetry” spin-off will leverage community engagement to record additional resting-state EEG data, and a set of personality questionnaires together with the replication attempts.</p>
 <p>There is a large body of literature suggesting the existence of hemispheric asymmetries in alpha frequency band (8-13 hz) oscillation power over frontal EEG electrodes during resting state (Allen et al., 2018). Alpha is often assumed to reflect the absence of cognitive activity, so that a rightward alpha asymmetry would reflect leftward brain activation asymmetry (Ocklenburg et al., 2018). One of the central reasons for the interest of the neuroscience community in EEG alpha asymmetries are their links to both affective disorders and personality. It has been shown on the meta-analytical level that depression is associated with a relative increase in left frontal (compared to right frontal) alpha, reflecting a relative increase in right-frontal activity compared to healthy controls (Thibodeau, Jorgensen, &amp; Kim, 2006). Moreover, individual differences in EEG alpha asymmetries have been linked to emotion processing (Tomarken et al., 1992) as well as to personality and motivation differences (Harmon-Jones &amp; Gable, 2018).</p>
 <p>The aim of the #EEGManyLabs Asymmetry spin-off is to shed light on the replicability of asymmetries in EEG alpha power (Reznik &amp; Allen, 2018, <a href="https://doi.org/10.1111/psyp.12965">10.1111/psyp.12965</a>) and their relation to personality traits.</p>
-    </p>
 
-    <div class="card-filter">
-        <sl-dropdown style="display:none;">
-            <sl-button slot="trigger" caret>Filter</sl-button>
-            <sl-menu>
-                <sl-menu-item value="none">None</sl-menu-item>
-            </sl-menu>
-        </sl-dropdown>
+    <div class="select-container" style="display: none">
+        
+        <sl-select class="Tag" placeholder="Tags" value="" multiple clearable></sl-select>
+        
     </div>
+
 
     <div class="card-grid">
     
@@ -95,14 +91,31 @@
 </script>
 <script>
 function showResponsiveMenu() {
-  var x = document.getElementById("myTopnav");
-  if (x.className === "topnav") {
-    x.className += " responsive";
+  var navBar = document.getElementById("myTopnav");
+  if (navBar.className === "topnav") {
+    // Show menu in responsive state by adding responsive class to element
+    navBar.classList.add("responsive");
   } else {
-    x.className = "topnav";
+    // Hide menu by resetting to just the topnav class
+    navBar.className = "topnav";
   }
 }
 </script>
+<script type="module">
+  await Promise.race([
+    // Load all custom elements
+    Promise.allSettled([
+      customElements.whenDefined('sl-select'),
+      customElements.whenDefined('sl-card'),
+    ]),
+    // Resolve after two seconds
+    new Promise(resolve => setTimeout(resolve, 1500))
+  ]);
+
+  // Remove the class, showing the page content
+  document.documentElement.classList.remove('reduce-fouce');
+</script>
+
 
 </body>
 </html>
