@@ -1,5 +1,6 @@
 {% import 'macros/icon_button.jinja2' as IconButton %}
 {% import 'macros/action_button.jinja2' as ActionButton %}
+{% from 'macros/utils.jinja2' import add_tag %}
 
 
 <sl-card id="{{ leaf.name }}">
@@ -20,22 +21,42 @@
 
   {{ leaf.content_html|safe }}
 
-
+  {{ add_tag(leaf, 'Stage') }}
+  {{ add_tag(leaf, 'Theme') }}
+  
   {% for tag in leaf.front['Tags'] %}
-    <sl-tag size="small" pill class={{tag}}>{{ tag }}</sl-tag>
+    <sl-tag size="small" pill class="{{tag}} Tag">{{ tag }}</sl-tag>
   {% endfor %}
 
   <div slot="footer">
-  {{ IconButton.render(leaf.front['ScholarUrl'], "Google Scholar profile", "fab-google-scholar") }}
-  {{ IconButton.render(leaf.front['UniUrl'], "University profile page", "fas-building-columns") }}
-  {{ IconButton.render(leaf.front['LabUrl'], "Lab website", "fas-flask") }}
+  {% if index.name == 'publications' %}
+    {{ IconButton.render(leaf.front['DoiUrl'], "Open Manuscript", "fas-arrow-up-right-from-square") }}   
+    {{ IconButton.render(leaf.front['Pdf'], "Open PDF", "far-file-pdf") }}
+    {{ IconButton.render(leaf.front['OsfUrl'], "OSF Material", "fas-recycle") }}
+    {{ IconButton.render(leaf.front['DataUrl'], "Data", "fas-database") }}
 
-  {{ ActionButton.render(leaf.front['SignupUrl'], "Sign up as participating lab", "fas-user-plus") }}
-  {{ IconButton.render(leaf.front['OsfUrl'], "OSF Material", "fas-recycle") }}
-  {{ IconButton.render(leaf.front['DataUrl'], "Data", "fas-database") }}
-  {{ IconButton.render(leaf.front['DoiUrl'], "Open Manuscript", "fas-arrow-up-right-from-square") }}
-  
-  {{ IconButton.render(leaf.front['Pdf'], "Open PDF", "far-file-pdf") }}
+    {% set ReplicationUrl = leaf.front['ReplicationId'] %}
+    {% if ReplicationUrl != "None" %}
+      {% set ReplicationUrl = "/replications/#" ~ ReplicationUrl %}
+    {% endif %}
+
+    {{ IconButton.render(ReplicationUrl, "Go to Replication Page", "fas-book-open", false) }}
+
+  {% elif index.name == 'replications' %}
+    {% set PublicationUrl = leaf.front['PublicationId'] %}
+    {% if PublicationUrl != "None" %}
+      {% set PublicationUrl = "/publications/#" ~ PublicationUrl %}
+    {% endif %}
+
+    {{ ActionButton.render(leaf.front['DoiUrl'], "Open Original Manuscript" , "", "fas-arrow-up-right-from-square") }}
+    {{ ActionButton.render(PublicationUrl, "Go to Published Replication Materials", "", "fas-book-open", false) }}
+    {{ ActionButton.render(leaf.front['SignupUrl'], "Sign up as participating lab", "Sign Up", "fas-user-plus") }}
+  {% elif index.name == 'people' %}
+    {{ IconButton.render(leaf.front['ScholarUrl'], "Google Scholar profile", "fab-google-scholar") }}
+    {{ IconButton.render(leaf.front['UniUrl'], "University profile page", "fas-building-columns") }}
+    {{ IconButton.render(leaf.front['LabUrl'], "Lab website", "fas-flask") }}
+  {% endif %}
+
   </div>
 
 </sl-card>

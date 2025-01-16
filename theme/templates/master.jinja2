@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="reduce-fouce">
 <head>
     <meta charset=utf-8>
     <meta http-equiv=x-ua-compatible content="ie=edge">
@@ -53,14 +53,31 @@
 </script>
 <script>
 function showResponsiveMenu() {
-  var x = document.getElementById("myTopnav");
-  if (x.className === "topnav") {
-    x.className += " responsive";
+  var navBar = document.getElementById("myTopnav");
+  if (navBar.className === "topnav") {
+    // Show menu in responsive state by adding responsive class to element
+    navBar.classList.add("responsive");
   } else {
-    x.className = "topnav";
+    // Hide menu by resetting to just the topnav class
+    navBar.className = "topnav";
   }
 }
 </script>
+<script type="module">
+  await Promise.race([
+    // Load all custom elements
+    Promise.allSettled([
+      customElements.whenDefined('sl-select'),
+      customElements.whenDefined('sl-card'),
+    ]),
+    // Resolve after two seconds
+    new Promise(resolve => setTimeout(resolve, 1500))
+  ]);
+
+  // Remove the class, showing the page content
+  document.documentElement.classList.remove('reduce-fouce');
+</script>
+
 
 </body>
 </html>

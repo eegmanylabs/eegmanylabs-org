@@ -1,7 +1,12 @@
-{% macro render(url, tooltip, icon) %}
-  {% if url|length > 5 %}
-    <sl-tooltip content="{{ tooltip }}">
-        <sl-icon-button library="fa" name="{{ icon }}" href="{{ url }}" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  {% endif %}
+{% from 'macros/utils.jinja2' import external_link %}
+
+{% macro render(url, tooltip, icon, external = true) %}
+  <sl-tooltip content="{{ tooltip }}">
+    {% if url|length > 5 %}
+      {% set aAttrs = "href=" ~ url ~ " target=" ~ external_link(external) %}
+    {% else %}
+      {% set aAttrs = "disabled" %}
+    {% endif %}
+    <sl-icon-button library="fa" name="{{ icon }}" {{aAttrs}}></sl-icon-button>
+  </sl-tooltip>
 {% endmacro %}
