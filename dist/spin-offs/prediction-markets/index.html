@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="reduce-fouce">
 <head>
     <meta charset=utf-8>
     <meta http-equiv=x-ua-compatible content="ie=edge">
@@ -47,21 +47,17 @@
 
 <article id="prediction-markets">
 
-    <p>
-        <h2>Prediction Markets</h2>
+    <h2>Prediction Markets</h2>
 <p><img alt="bidding" src="/assets/images/stock/bidding.jpg" title="Bidding" /></p>
 <p>Having seen the final list of studies, many readers familiar with these studies will have their own perspective about the likelihood of individual studies replicating. To what extent they are correct in these beliefs will be the focus of the prediction markets. Before we collect any data, we will advertise our plans to EEG researchers (including and beyond the #EEGManyLabs network) and request their perspectives on the replicability of our target studies in a survey. To formally examine this, we will invite EEG researchers to participate in prediction markets. Prediction markets function as a tool to aggregate private information - in this case participating researchers’ beliefs about which studies replicate - by giving participants monetary incentives to “bet” on the replication outcomes of the target studies. Previous studies using prediction markets on replications find that prediction markets may be useful to measure peer beliefs and can potentially be considered an imperfect replication indicator. The prediction markets perform better than chance in predicting replication outcomes - there is an indication that researchers to some extent can predict which results replicate and thus there is something systematic about such results. We intend to use prediction markets to predict the outcomes of the 27 replications prior to data collection.
 Participating researchers will be endowed with USD 50 to start with and can earn more or less depending on their prediction performance. Contracts, representing the selected studies, will be worth USD 1 if the study replicates and USD 0 if the study fails to replicate according to this criterion. Prediction market prices are interpreted as the probability that the prediction markets assign the studies successfully replicating. For a given price of a contract, a participant who believes that the study has a higher probability of replicating than this price can buy contracts in this study, making the price increase, whereas a participant who believes that the study’s probability of replicating is lower than this price can short-sell the contract, making the price go down. When participants trade these contracts, they thus reveal their own beliefs about the probability that studies will replicate, and they can also learn what others believe based on prediction market prices. In the analysis, we will interpret final prediction market prices above 50 as the market predicting that the specific studies will replicate. We will also include a survey to measure peer beliefs prior to the markets, with the same participants. At the end of this project we will be able to examine how closely internally held beliefs in the EEG community map on to the replication results.</p>
-    </p>
 
-    <div class="card-filter">
-        <sl-dropdown style="display:none;">
-            <sl-button slot="trigger" caret>Filter</sl-button>
-            <sl-menu>
-                <sl-menu-item value="none">None</sl-menu-item>
-            </sl-menu>
-        </sl-dropdown>
+    <div class="select-container" style="display: none">
+        
+        <sl-select class="Tag" placeholder="Tags" value="" multiple clearable></sl-select>
+        
     </div>
+
 
     <div class="card-grid">
     
@@ -93,14 +89,31 @@ Participating researchers will be endowed with USD 50 to start with and can earn
 </script>
 <script>
 function showResponsiveMenu() {
-  var x = document.getElementById("myTopnav");
-  if (x.className === "topnav") {
-    x.className += " responsive";
+  var navBar = document.getElementById("myTopnav");
+  if (navBar.className === "topnav") {
+    // Show menu in responsive state by adding responsive class to element
+    navBar.classList.add("responsive");
   } else {
-    x.className = "topnav";
+    // Hide menu by resetting to just the topnav class
+    navBar.className = "topnav";
   }
 }
 </script>
+<script type="module">
+  await Promise.race([
+    // Load all custom elements
+    Promise.allSettled([
+      customElements.whenDefined('sl-select'),
+      customElements.whenDefined('sl-card'),
+    ]),
+    // Resolve after two seconds
+    new Promise(resolve => setTimeout(resolve, 1500))
+  ]);
+
+  // Remove the class, showing the page content
+  document.documentElement.classList.remove('reduce-fouce');
+</script>
+
 
 </body>
 </html>

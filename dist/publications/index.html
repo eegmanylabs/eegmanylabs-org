@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="reduce-fouce">
 <head>
     <meta charset=utf-8>
     <meta http-equiv=x-ua-compatible content="ie=edge">
@@ -47,23 +47,20 @@
 
 <article id="publications">
 
-    <p>
-        <h1>Publications</h1>
+    <h1>Publications</h1>
 <p><a href="https://scholar.google.com/citations?user=ueMcfOcAAAAJ">Google Scholar project page</a></p>
-    </p>
 
-    <div class="card-filter">
-        <sl-dropdown style="display:none;">
-            <sl-button slot="trigger" caret>Filter</sl-button>
-            <sl-menu>
-                <sl-menu-item value="none">None</sl-menu-item>
-            </sl-menu>
-        </sl-dropdown>
+    <div class="select-container" style="display: none">
+        
+        <sl-select class="Tag" placeholder="Tags" value="" multiple clearable></sl-select>
+        
     </div>
+
 
     <div class="card-grid">
     
         
+
 
 
 
@@ -85,44 +82,72 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=published>published</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="published Tag">published</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Open Manuscript">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href=https://dx.doi.org/10.1016/j.cortex.2021.03.013 target=
   
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+   
+    
+  <sl-tooltip content="Open PDF">
+    
+      
+    
+    <sl-icon-button library="fa" name="far-file-pdf" href=/assets/pdfs/Pavlov2021.pdf target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="OSF Material">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-recycle" disabled></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Data">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-database" disabled></sl-icon-button>
+  </sl-tooltip>
 
 
-  
-  
+    
+    
 
-  
-  
+    
+  <sl-tooltip content="Go to Replication Page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-book-open" disabled></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
 
-  
-  
-    <sl-tooltip content="Open Manuscript">
-        <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href="https://dx.doi.org/10.1016/j.cortex.2021.03.013" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
-
-  
-  
-  
-    <sl-tooltip content="Open PDF">
-        <sl-icon-button library="fa" name="far-file-pdf" href="/assets/pdfs/Pavlov2021.pdf" target="_blank"></sl-icon-button>
-    </sl-tooltip>
   
 
   </div>
@@ -130,6 +155,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -151,44 +177,72 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=preprint>preprint</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="preprint Tag">preprint</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Open Manuscript">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href=https://dx.doi.org/10.31219/osf.io/g8udv target=
   
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+   
+    
+  <sl-tooltip content="Open PDF">
+    
+      
+    
+    <sl-icon-button library="fa" name="far-file-pdf" href=/assets/pdfs/Shuermann2022.pdf target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="OSF Material">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-recycle" disabled></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Data">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-database" disabled></sl-icon-button>
+  </sl-tooltip>
 
 
-  
-  
+    
+    
 
-  
-  
+    
+  <sl-tooltip content="Go to Replication Page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-book-open" disabled></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
 
-  
-  
-    <sl-tooltip content="Open Manuscript">
-        <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href="https://dx.doi.org/10.31219/osf.io/g8udv" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
-
-  
-  
-  
-    <sl-tooltip content="Open PDF">
-        <sl-icon-button library="fa" name="far-file-pdf" href="/assets/pdfs/Shuermann2022.pdf" target="_blank"></sl-icon-button>
-    </sl-tooltip>
   
 
   </div>
@@ -196,6 +250,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -217,44 +272,72 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=preprint>preprint</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="preprint Tag">preprint</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Open Manuscript">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href=https://dx.doi.org/10.31234/osf.io/vc3zg target=
   
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+   
+    
+  <sl-tooltip content="Open PDF">
+    
+      
+    
+    <sl-icon-button library="fa" name="far-file-pdf" href=/assets/pdfs/Schneider2022.pdf target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="OSF Material">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-recycle" disabled></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Data">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-database" disabled></sl-icon-button>
+  </sl-tooltip>
 
 
-  
-  
+    
+    
 
-  
-  
+    
+  <sl-tooltip content="Go to Replication Page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-book-open" disabled></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
 
-  
-  
-    <sl-tooltip content="Open Manuscript">
-        <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href="https://dx.doi.org/10.31234/osf.io/vc3zg" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
-
-  
-  
-  
-    <sl-tooltip content="Open PDF">
-        <sl-icon-button library="fa" name="far-file-pdf" href="/assets/pdfs/Schneider2022.pdf" target="_blank"></sl-icon-button>
-    </sl-tooltip>
   
 
   </div>
@@ -262,6 +345,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -283,48 +367,82 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=preprint>preprint</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="preprint Tag">preprint</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Open Manuscript">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href=https://dx.doi.org/10.31234/osf.io/4uy2c target=
   
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+   
+    
+  <sl-tooltip content="Open PDF">
+    
+      
+    
+    <sl-icon-button library="fa" name="far-file-pdf" href=/assets/pdfs/Paul2022.pdf target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="OSF Material">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-recycle" disabled></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="Data">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-database" href=https://gin.g-node.org/katpa/Paul_et_al_Cortex_ManyLabs_Hajcak05 target=
   
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
 
-  
-  
+    
+    
+      
+    
 
+    
+  <sl-tooltip content="Go to Replication Page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-book-open" href=/replications/#HajcakHolroyd2005 target=
   
+    "_top"
   
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
-    <sl-tooltip content="Data">
-        <sl-icon-button library="fa" name="fas-database" href="https://gin.g-node.org/katpa/Paul_et_al_Cortex_ManyLabs_Hajcak05" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
 
-  
-  
-    <sl-tooltip content="Open Manuscript">
-        <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href="https://dx.doi.org/10.31234/osf.io/4uy2c" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
-
-  
-  
-  
-    <sl-tooltip content="Open PDF">
-        <sl-icon-button library="fa" name="far-file-pdf" href="/assets/pdfs/Paul2022.pdf" target="_blank"></sl-icon-button>
-    </sl-tooltip>
   
 
   </div>
@@ -332,6 +450,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -353,48 +472,82 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=preprint>preprint</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="preprint Tag">preprint</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Open Manuscript">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href=https://dx.doi.org/10.31234/osf.io/8q4ks target=
   
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+   
+    
+  <sl-tooltip content="Open PDF">
+    
+      
+    
+    <sl-icon-button library="fa" name="far-file-pdf" href=/assets/pdfs/Verona2023.pdf target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="OSF Material">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-recycle" href=https://osf.io/6suf8/ target=
   
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Data">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-database" disabled></sl-icon-button>
+  </sl-tooltip>
 
 
-  
-  
+    
+    
+      
+    
 
+    
+  <sl-tooltip content="Go to Replication Page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-book-open" href=/replications/#Hajcak2003 target=
   
+    "_top"
   
-    <sl-tooltip content="OSF Material">
-        <sl-icon-button library="fa" name="fas-recycle" href="https://osf.io/6suf8/" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
 
-  
-  
-    <sl-tooltip content="Open Manuscript">
-        <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href="https://dx.doi.org/10.31234/osf.io/8q4ks" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
-
-  
-  
-  
-    <sl-tooltip content="Open PDF">
-        <sl-icon-button library="fa" name="far-file-pdf" href="/assets/pdfs/Verona2023.pdf" target="_blank"></sl-icon-button>
-    </sl-tooltip>
   
 
   </div>
@@ -402,6 +555,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -423,44 +577,78 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=pre-registered>pre-registered</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="pre-registered Tag">pre-registered</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Open Manuscript">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href=https://dx.doi.org/10.31234/osf.io/3472y target=
   
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+   
+    
+  <sl-tooltip content="Open PDF">
+    
+      
+    
+    <sl-icon-button library="fa" name="far-file-pdf" href=/assets/pdfs/Constant2023.pdf target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="OSF Material">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-recycle" disabled></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Data">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-database" disabled></sl-icon-button>
+  </sl-tooltip>
 
 
-  
-  
+    
+    
+      
+    
 
+    
+  <sl-tooltip content="Go to Replication Page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-book-open" href=/replications/#Eimer1996 target=
   
+    "_top"
   
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
 
-  
-  
-    <sl-tooltip content="Open Manuscript">
-        <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href="https://dx.doi.org/10.31234/osf.io/3472y" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
-
-  
-  
-  
-    <sl-tooltip content="Open PDF">
-        <sl-icon-button library="fa" name="far-file-pdf" href="/assets/pdfs/Constant2023.pdf" target="_blank"></sl-icon-button>
-    </sl-tooltip>
   
 
   </div>
@@ -468,6 +656,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -489,48 +678,82 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=pre-registered>pre-registered</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="pre-registered Tag">pre-registered</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Open Manuscript">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href=https://dx.doi.org/10.31234/osf.io/shdea target=
   
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+   
+    
+  <sl-tooltip content="Open PDF">
+    
+      
+    
+    <sl-icon-button library="fa" name="far-file-pdf" href=/assets/pdfs/Strzelczyk2023.pdf target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="OSF Material">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-recycle" href=https://osf.io/pbr8c/ target=
   
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Data">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-database" disabled></sl-icon-button>
+  </sl-tooltip>
 
 
-  
-  
+    
+    
+      
+    
 
+    
+  <sl-tooltip content="Go to Replication Page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-book-open" href=/replications/#VogelMachizawa2004 target=
   
+    "_top"
   
-    <sl-tooltip content="OSF Material">
-        <sl-icon-button library="fa" name="fas-recycle" href="https://osf.io/pbr8c/" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
 
-  
-  
-    <sl-tooltip content="Open Manuscript">
-        <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href="https://dx.doi.org/10.31234/osf.io/shdea" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
-
-  
-  
-  
-    <sl-tooltip content="Open PDF">
-        <sl-icon-button library="fa" name="far-file-pdf" href="/assets/pdfs/Strzelczyk2023.pdf" target="_blank"></sl-icon-button>
-    </sl-tooltip>
   
 
   </div>
@@ -538,6 +761,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -559,44 +783,78 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=pre-registered>pre-registered</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="pre-registered Tag">pre-registered</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Open Manuscript">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href=https://dx.doi.org/10.31234/osf.io/3dhpx target=
   
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+   
+    
+  <sl-tooltip content="Open PDF">
+    
+      
+    
+    <sl-icon-button library="fa" name="far-file-pdf" href=/assets/pdfs/Ruzzoli2023.pdf target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="OSF Material">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-recycle" disabled></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Data">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-database" disabled></sl-icon-button>
+  </sl-tooltip>
 
 
-  
-  
+    
+    
+      
+    
 
+    
+  <sl-tooltip content="Go to Replication Page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-book-open" href=/replications/#Mathewson2009 target=
   
+    "_top"
   
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
 
-  
-  
-    <sl-tooltip content="Open Manuscript">
-        <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href="https://dx.doi.org/10.31234/osf.io/3dhpx" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
-
-  
-  
-  
-    <sl-tooltip content="Open PDF">
-        <sl-icon-button library="fa" name="far-file-pdf" href="/assets/pdfs/Ruzzoli2023.pdf" target="_blank"></sl-icon-button>
-    </sl-tooltip>
   
 
   </div>
@@ -604,6 +862,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -625,44 +884,78 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=pre-registered>pre-registered</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="pre-registered Tag">pre-registered</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Open Manuscript">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href=https://dx.doi.org/10.31234/osf.io/hrtgc target=
   
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+   
+    
+  <sl-tooltip content="Open PDF">
+    
+      
+    
+    <sl-icon-button library="fa" name="far-file-pdf" href=/assets/pdfs/Gloy2023.pdf target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="OSF Material">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-recycle" disabled></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Data">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-database" disabled></sl-icon-button>
+  </sl-tooltip>
 
 
-  
-  
+    
+    
+      
+    
 
+    
+  <sl-tooltip content="Go to Replication Page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-book-open" href=/replications/#AmodioMaster2008 target=
   
+    "_top"
   
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
 
-  
-  
-    <sl-tooltip content="Open Manuscript">
-        <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href="https://dx.doi.org/10.31234/osf.io/hrtgc" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
-
-  
-  
-  
-    <sl-tooltip content="Open PDF">
-        <sl-icon-button library="fa" name="far-file-pdf" href="/assets/pdfs/Gloy2023.pdf" target="_blank"></sl-icon-button>
-    </sl-tooltip>
   
 
   </div>
@@ -670,6 +963,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -691,48 +985,82 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=pre-registered>pre-registered</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="pre-registered Tag">pre-registered</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Open Manuscript">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href=https://dx.doi.org/10.31234/osf.io/39vqj target=
   
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+   
+    
+  <sl-tooltip content="Open PDF">
+    
+      
+    
+    <sl-icon-button library="fa" name="far-file-pdf" href=/assets/pdfs/Marzuki2023.pdf target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
 
+    
+  <sl-tooltip content="OSF Material">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-recycle" href=https://osf.io/dc437/ target=
   
+    "_blank"
   
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Data">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-database" disabled></sl-icon-button>
+  </sl-tooltip>
 
 
-  
-  
+    
+    
+      
+    
 
+    
+  <sl-tooltip content="Go to Replication Page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-book-open" href=/replications/#AmodioJost2007 target=
   
+    "_top"
   
-    <sl-tooltip content="OSF Material">
-        <sl-icon-button library="fa" name="fas-recycle" href="https://osf.io/dc437/" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
 
-  
-  
-    <sl-tooltip content="Open Manuscript">
-        <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href="https://dx.doi.org/10.31234/osf.io/39vqj" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
-
-  
-  
-  
-    <sl-tooltip content="Open PDF">
-        <sl-icon-button library="fa" name="far-file-pdf" href="/assets/pdfs/Marzuki2023.pdf" target="_blank"></sl-icon-button>
-    </sl-tooltip>
   
 
   </div>
@@ -740,6 +1068,7 @@
 </sl-card>
     
         
+
 
 
 
@@ -761,44 +1090,78 @@
 
   
 
+  
+  
 
   
-    <sl-tag size="small" pill class=preprint>preprint</sl-tag>
+  
+
+  
+  
+    <sl-tag size="small" pill class="preprint Tag">preprint</sl-tag>
   
 
   <div slot="footer">
   
+    
+  <sl-tooltip content="Open Manuscript">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href=https://dx.doi.org/10.31234/osf.io/nyj3f target=
   
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+   
+    
+  <sl-tooltip content="Open PDF">
+    
+      
+    
+    <sl-icon-button library="fa" name="far-file-pdf" href=/assets/pdfs/Ganis2024.pdf target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="OSF Material">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-recycle" disabled></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
+    
+  <sl-tooltip content="Data">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-database" disabled></sl-icon-button>
+  </sl-tooltip>
 
 
-  
-  
+    
+    
+      
+    
 
+    
+  <sl-tooltip content="Go to Replication Page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-book-open" href=/replications/#Eimer1993 target=
   
+    "_top"
   
+></sl-icon-button>
+  </sl-tooltip>
 
-  
-  
 
-  
-  
-    <sl-tooltip content="Open Manuscript">
-        <sl-icon-button library="fa" name="fas-arrow-up-right-from-square" href="https://dx.doi.org/10.31234/osf.io/nyj3f" target="_blank"></sl-icon-button>
-    </sl-tooltip>
-  
-
-  
-  
-  
-    <sl-tooltip content="Open PDF">
-        <sl-icon-button library="fa" name="far-file-pdf" href="/assets/pdfs/Ganis2024.pdf" target="_blank"></sl-icon-button>
-    </sl-tooltip>
   
 
   </div>
@@ -833,14 +1196,31 @@
 </script>
 <script>
 function showResponsiveMenu() {
-  var x = document.getElementById("myTopnav");
-  if (x.className === "topnav") {
-    x.className += " responsive";
+  var navBar = document.getElementById("myTopnav");
+  if (navBar.className === "topnav") {
+    // Show menu in responsive state by adding responsive class to element
+    navBar.classList.add("responsive");
   } else {
-    x.className = "topnav";
+    // Hide menu by resetting to just the topnav class
+    navBar.className = "topnav";
   }
 }
 </script>
+<script type="module">
+  await Promise.race([
+    // Load all custom elements
+    Promise.allSettled([
+      customElements.whenDefined('sl-select'),
+      customElements.whenDefined('sl-card'),
+    ]),
+    // Resolve after two seconds
+    new Promise(resolve => setTimeout(resolve, 1500))
+  ]);
+
+  // Remove the class, showing the page content
+  document.documentElement.classList.remove('reduce-fouce');
+</script>
+
 
 </body>
 </html>
