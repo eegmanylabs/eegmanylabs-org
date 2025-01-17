@@ -95,7 +95,21 @@ function sample_cards(el) {
     let cards = Array.from(el.querySelectorAll(".preview"))
     shuffleArray(cards)
 
-    cards.slice(0, NfrontPageCards).forEach((el) => el.style = "display: grid")
+
+    cards.forEach((card, index) => {
+        let img = card.querySelector("img"); // Get the image element
+
+        if (index < NfrontPageCards) {
+            card.style.display = "grid"
+            if (img && !img.src) { // Check if image has not been loaded
+                img.src = img.dataset.src; // Load the image
+            }
+        } else {
+            if (img) {
+                img.src = ""; // Remove the src to prevent loading if card becomes hidden
+            }
+        }
+    })
 }
 
 /**
