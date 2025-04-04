@@ -60,6 +60,7 @@ nav#menu a {
     color: #666666;
     text-decoration: none;
 }
+
 nav#menu a:hover {
     color: black;
 }
@@ -134,10 +135,8 @@ h2 {
 
 /* footer */
 footer {
-    height: 30px;
-    overflow: hidden;
-    background-color: rgb(46, 46, 46);
-    color: rgb(131, 140, 149);
+    background-color: rgb(197 199 201);
+    color: rgb(46, 46, 46);
     font-size: 12px;
     font-weight: normal;
     padding: 5px 4em;
@@ -145,7 +144,9 @@ footer {
     -webkit-box-sizing: content-box;
     -moz-box-sizing: content-box;
     box-sizing: content-box;
+    border-top: 2px darkgray solid;
 }
+
 
 /* 
     INDEX

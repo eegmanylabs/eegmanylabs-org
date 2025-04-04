@@ -35,6 +35,9 @@
     </div>
   </div>
   <footer>
+    {% for leaf in root.leaves %}
+      {% include 'section_leaf.jinja2' %}
+    {% endfor %}
     <span id="copyright-reference">&copy; 2024 eegmanylabs</span>
   </footer>
 

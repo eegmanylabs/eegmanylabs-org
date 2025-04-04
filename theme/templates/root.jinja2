@@ -8,13 +8,11 @@
         {{ index.content_html|safe }}
     </p>
 
+    <div class="front-grid">
     {% for branch in index.branches %}
         {% include 'section_branch.jinja2' %}
     {% endfor %}
-
-    {% for leaf in index.leaves %}
-        {% include 'section_leaf.jinja2' %}
-    {% endfor %}
+    </div>
 
 </article>
 
