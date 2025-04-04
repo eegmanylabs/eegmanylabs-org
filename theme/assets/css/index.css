@@ -32,17 +32,19 @@ hr {
 
 #body-container {
     margin-top: 100px;
-    margin-bottom: 15px;
+    margin-bottom: 30px;
     min-height: calc(100vh - 80px); /* push footer down. 80px = header+footer */
     overflow: hidden; /* prevents child elements' margins from pushing this around  */
 }
+
 div#content {
-    width: 90%;
-    margin: auto;
+    width: 70%;
+    margin-inline: auto;
 }
+
 nav#menu {
     min-height: 40px;
-    width:100%;
+    width:90%;
     overflow: visible; /* if the floating menu wraps around, extend this nav */
     z-index: 1;     /* always on top */
     position: fixed;  /* attached to the top */
@@ -54,6 +56,7 @@ nav#menu {
     align-items: center;
     justify-content: space-between;
     filter: drop-shadow(#666 0px 2px 4px);
+    padding: 0 5%;
 }
 
 nav#menu a {
@@ -139,7 +142,7 @@ footer {
     color: rgb(46, 46, 46);
     font-size: 12px;
     font-weight: normal;
-    padding: 5px 4em;
+    padding: 5px 5%;
     text-align: left;
     -webkit-box-sizing: content-box;
     -moz-box-sizing: content-box;
@@ -153,8 +156,7 @@ footer {
 */
 
 article > p {
-    max-width: 600px;
-    padding: 20px;
+    padding: 20px 0;
 }
 
 .card-grid {
