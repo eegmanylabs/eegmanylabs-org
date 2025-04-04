@@ -35,6 +35,7 @@ hr {
     margin-bottom: 30px;
     min-height: calc(100vh - 80px); /* push footer down. 80px = header+footer */
     overflow: hidden; /* prevents child elements' margins from pushing this around  */
+    line-height: var(--sl-line-height-normal);
 }
 
 div#content {
@@ -122,7 +123,28 @@ nav#menu .icon {
         text-align: center;
         padding: 8px;
     }
-    .topnav.responsive li{display: block;}
+
+}
+
+.front-grid > a {
+    text-decoration: none;
+    color: black;
+}
+
+article > h1 {
+    font-size: 32px;
+    font-weight: bold;
+}
+
+#front > h1,
+#front > h2 {
+    text-align: center;
+}
+
+#front > hr {
+    display: block;
+    width: 30%;
+    color: lightslategray;
 }
 
 
@@ -168,6 +190,25 @@ article > p {
 
 }
 
+.front-grid sl-card {
+    margin-bottom: 15px;
+}
+
+@media screen and (min-width: 650px) {
+    #front sl-card::part(base) {
+        flex-direction: row;
+    }
+
+    #front sl-card::part(body) {
+        flex: 80%;
+    }
+
+    #front sl-card::part(image) {
+        flex: 15%;
+        align-items: center;
+    }
+}
+
 .preview-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, 300px);
@@ -204,12 +245,6 @@ sl-menu-item::part(label) {
 /*
     FRONT PAGE
 */
-
-/* fix non-conforming headshots */
-#front img[slot="image"] {
-    object-fit: cover;
-    height: 300px;
-}
 
 a.see-all {
     white-space: nowrap;
@@ -482,4 +517,51 @@ article#front {
     sl-card::part(header) {
         display: none;
     }
+}
+
+
+#front sl-card::part(base) {
+    padding: var(--padding)
+}
+
+#front sl-card::part(body) {
+    padding: 0;
+    padding-left: var(--padding);
+}
+
+#front sl-card > p {
+    margin: 0
+}
+
+#front sl-card > h1 {
+    margin-top: 0
+}
+
+#front img[slot="image"] {
+    padding: 0;
+    max-width: 100%;
+}
+
+article#front > p:first-of-type {
+    display: flex;
+    justify-content: center;
+    padding-top: 0;
+}
+
+article#front > p > img {
+    width: 70%
+}
+
+.get_involved {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, 300px);
+    column-gap: 30px;
+}
+
+#front .get_involved sl-card::part(body) {
+    padding: 0;
+}
+
+.get_involved h1 {
+    font-size: medium;
 }

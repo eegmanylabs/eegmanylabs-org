@@ -1,7 +1,7 @@
 +++
 +++
 
-# EEGManyLabs
+![](/assets/images/logo.png)
 
 ## A large-scale, international effort replicating influential EEG experiments  
 
