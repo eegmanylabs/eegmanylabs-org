@@ -318,26 +318,26 @@ sl-card a[href^="https://eeg100"] {
 }
 
 #spin-offs img {
-	height: 270px
+	height: 270px;
 }
 
 #spin-offs sl-card::part(header) {
-	 flex-grow: 0
+    flex-grow: 0;
+    font-size: large;
+    font-weight: 600;
 }
 
 #spin-offs sl-card::part(body) {
 	display: flex;
 	flex-direction: column;
-	flex-grow: 1
+	flex-grow: 1;
 }
 
 #spin-offs sl-card p:first-of-type {
-	flex-grow: 1
+	flex-grow: 1;
+    margin-top: 0;
 }
 
-#spin-offs sl-card::part(footer) {
-	padding: 0
-}
 
 /*  
     REPLICATION PAGE
