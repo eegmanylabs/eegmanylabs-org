@@ -1,6 +1,6 @@
 // Get all the cards and tags on the page
 const allCards = document.querySelectorAll("sl-card");
-const allTags = document.querySelectorAll("sl-tag");
+const allTags = document.querySelectorAll(".tag");
 const allSelectors = document.querySelectorAll("sl-select")
 const allSections = document.querySelectorAll("section")
 
@@ -31,7 +31,7 @@ function add_select_options(selEl) {
     let tagVals = new Set();
     let elTags = Array.from(allTags);
     
-    elTags = elTags.filter((el) => el.classList.contains(selEl.className));
+    elTags = elTags.filter((el) => el.classList.contains(selEl.id));
     
     elTags.forEach((el) => tagVals.add(el.innerText))
 
@@ -67,7 +67,7 @@ function update_cards() {
  */
 function hideCard(el) {
     // Get all tags within card
-    childTags = Array.from(el.querySelectorAll("sl-tag")).map((el) => (el.innerText));
+    childTags = Array.from(el.querySelectorAll(".tag")).map((el) => (el.innerText));
     // See if any of those tags match the text of the clicked tag
     contains = search_terms.every((term) => (childTags.includes(term)))
     
