@@ -1,13 +1,14 @@
 +++
-SequenceNumber = "{{ SequenceNumber }}"
+SequenceNumber = {{ SequenceNumber }}
 Anchor = "{{ PersonId }}"
 Title = "{{ FullName }}"
-Image = "headshots/{{ HeadShotFilename }}"
+Image =  {%- if HeadShotFilename %} "headshots/{{ HeadShotFilename }}" {%- else %} "None" {% endif %}
 Tags = [
 {%- if CoordinatorRole %} "coordinator", {% endif -%}
 {%- if AdvisorRole %} "advisor", {% endif -%}
 {%- if CoInvestigatorRole %} "co-investigator", {% endif -%}
-{%- if ReplicatorRole %} "replicator", {% endif -%} 
+{%- if LeadRole %} "replicator", {% endif -%} 
+{%- if SpinOffRole %} "spin-off", {% endif -%} 
 ]
 ScholarUrl = "{{ ScholarUrl }}"
 UniUrl = "{{ UniUrl }}"
@@ -15,4 +16,5 @@ LabUrl = "{{ LabUrl }}"
 StudyId = "{{ StudyId }}"
 PersonId = "{{ PersonId }}"
 FullName = "{{ FullName }}"
+Affiliation = "{{ Affiliation }}"
 +++

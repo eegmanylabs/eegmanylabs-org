@@ -232,7 +232,7 @@ sl-menu-item::part(label) {
 
 /* finer grid for people */
 #people .card-grid {
-    grid-template-columns: repeat(auto-fit, 240px);
+    grid-template-columns: repeat(auto-fit, 280px);
     column-gap: 25px;
 }
 
@@ -410,26 +410,34 @@ article#people sl-card::part(footer) {
     color: teal;
 }
 
-#people sl-tag::part(base), #publications sl-tag::part(base) {
+#publications sl-tag::part(base) {
     border-radius: 3px;
     color:white;
     font-weight: bold;
 }
 
-#people sl-tag.coordinator::part(base) {
+#people sl-button::part(base) {
+    border-color: white;
+}
+
+#people sl-button.coordinator::part(base) {
     background-color: teal;
 }
 
-#people sl-tag.replicator::part(base) {
+#people sl-button.replicator::part(base) {
     background-color: deepskyblue;
 }
 
-#people sl-tag.co-investigator::part(base) {
+#people sl-button.co-investigator::part(base) {
     background-color: rgb(163, 106, 0);
 }
 
-#people sl-tag.advisor::part(base) {
+#people sl-button.advisor::part(base) {
     background-color: rgb(128, 0, 122);
+}
+
+#people sl-button.spin-off::part(base) {
+    background-color: darkgray;
 }
 
 
@@ -621,4 +629,12 @@ article#front > p > img {
 
 .get_involved h1 {
     font-size: medium;
+}
+
+#people #name {
+    font-weight: bold;
+}
+
+#people #affil {
+    font-size: smaller;
 }

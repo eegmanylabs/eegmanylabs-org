@@ -19,6 +19,10 @@
     <div class="card-grid">
       {% if index.name == "publications" %}
         {% include 'publication_page.jinja2' %}
+      {% elif index.name == "people" %}
+        {% for leaf in index.leaves|sort(attribute='front.SequenceNumber') %}
+          {% include 'people_card.jinja2' %}
+        {% endfor %}
       {% else %}
         {% for leaf in index.leaves %}
           {% include 'card_full.jinja2' %}
