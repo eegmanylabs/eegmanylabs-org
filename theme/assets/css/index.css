@@ -87,45 +87,6 @@ nav#menu .icon {
     text-transform: capitalize;
 }
 
-@media screen and (max-width: 650px) {
-    nav#menu {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    nav#menu a.icon {
-        position: absolute;
-        right: 0;
-        top: 0;
-        display: block;
-        padding: 1em 1em 0 0;
-    }
-
-    nav#menu a sl-icon {
-        height: 25px;
-        width: auto;
-    }
-
-    .topnav {
-        display: none;
-        flex-direction: column;
-        width: 100%;
-        padding: 0;
-    }
-
-    .topnav.responsive {
-        display: flex;
-    }
-
-    .topnav li {
-        margin: 0;
-        width: 100%;
-        text-align: center;
-        padding: 8px;
-    }
-
-}
-
 .front-grid > a {
     text-decoration: none;
     color: black;
@@ -192,21 +153,6 @@ article > p {
 
 .front-grid sl-card {
     margin-bottom: 15px;
-}
-
-@media screen and (min-width: 650px) {
-    #front sl-card::part(base) {
-        flex-direction: row;
-    }
-
-    #front sl-card::part(body) {
-        flex: 80%;
-    }
-
-    #front sl-card::part(image) {
-        flex: 15%;
-        align-items: center;
-    }
 }
 
 .preview-grid {
@@ -571,12 +517,19 @@ article#front {
 }
 
 #front sl-card::part(base) {
-    padding: var(--padding)
+    padding: var(--padding);
+    flex-direction: row;
 }
 
 #front sl-card::part(body) {
     padding: 0;
     padding-left: var(--padding);
+    flex: 80%;
+}
+
+#front sl-card::part(image) {
+    flex: 20%;
+    align-items: center;
 }
 
 #front sl-card > p {
@@ -634,4 +587,74 @@ article#front > p > img {
 
 #people #affil {
     font-size: smaller;
+}
+
+@media screen and (max-width: 768px) {
+    nav#menu {
+        flex-direction: column;
+        align-items: flex-start;
+        width: 100%;
+        padding: 0;
+    }
+
+    nav#menu a.icon {
+        position: absolute;
+        right: 0;
+        top: 0;
+        display: block;
+        padding: 1em 1em 0 0;
+    }
+
+    nav#menu a sl-icon {
+        height: 25px;
+        width: auto;
+    }
+
+    .topnav {
+        display: none;
+        flex-direction: column;
+        width: 100%;
+        padding: 0;
+    }
+
+    .topnav.responsive {
+        display: flex;
+    }
+
+    .topnav li {
+        margin: 0;
+        width: 100%;
+        text-align: center;
+        padding: 8px;
+    }
+
+    div#content {
+        width: 90%;
+    }
+
+    div#body-container {
+        margin-top: 70px;
+    }
+
+    #front sl-card::part(base) {
+        flex-direction: column;
+    }
+
+    #front sl-card::part(body) {
+        padding-top: var(--padding);
+        padding-left: 0;
+    }
+
+    #front sl-card::part(image) {
+        flex: none;
+    }
+
+    #publications #buttons {
+        display: flex;
+        flex-direction: column;
+    }
+
+    #publications sl-button {
+        padding-top: 10px;
+    }
 }
