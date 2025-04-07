@@ -1,0 +1,33 @@
+{% import 'macros/action_button.jinja2' as ActionButton %}
+{% from 'macros/utils.jinja2' import add_tag %}
+
+<sl-card id="{{ leaf.name }}">
+  
+  <div slot="header" id="card-header">
+    <div id="title">
+      {{ leaf.front['StudyId'] }}
+      <sl-tooltip content="{{ leaf.front['Title'] }} - {{ leaf.front['AuthorShort'] }}">
+        <sl-icon-button name="info-circle" href="{{ leaf.front['DoiUrl'] }}" target="_blank"></sl-icon-button>
+      </sl-tooltip>
+    </div>
+  </div>
+
+  <img
+    slot="image"
+    src="/assets/images/{{ leaf.front['Image'] }}"
+  />
+
+  {{ leaf.content_html|safe }}
+
+  {{ add_tag(leaf, 'Stage') }}
+  {{ add_tag(leaf, 'Theme') }}
+  
+  {% set PublicationUrl = leaf.front['PublicationId'] %}
+  {% if PublicationUrl != "None" %}
+    {% set PublicationUrl = "/publications/#" ~ PublicationUrl %}
+  {% endif %}
+
+  {{ ActionButton.render(PublicationUrl, "Go to Published Replication Materials", "", "fas-book-open", false) }}
+  {{ ActionButton.render(leaf.front['SignupUrl'], "Sign up as participating lab", "Sign Up", "fas-user-plus") }}
+
+</sl-card>

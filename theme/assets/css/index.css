@@ -343,24 +343,9 @@ sl-card a[href^="https://eeg100"] {
     REPLICATION PAGE
 */
 
-#replications div[slot="header"] {
-    font-weight: bolder;
-    font-size: larger;
-    min-height: 3.5em;
-}
 
 #replications .card-grid {
-    grid-template-columns: repeat(auto-fit, 350px);
-}
-
-#replications blockquote {
-    max-height: 200px;
-    overflow: hidden;
-}
-
-#replications blockquote {
-    max-height: 200px;
-    overflow: hidden;
+    padding-top: 20px;
 }
 
 #replications a[href^="https://forms"],
@@ -629,6 +614,18 @@ article#front > p > img {
 
 .get_involved h1 {
     font-size: medium;
+}
+
+#replications div#title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bolder;
+    font-size: larger;
+}
+
+#replications sl-card::part(header) {
+    display: block;
 }
 
 #people #name {
