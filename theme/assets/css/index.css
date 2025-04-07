@@ -448,42 +448,6 @@ a[href^="https://scholar.google.com/citations?user=ueMcfOcAAAAJ"] {
 }
 
 
-#publications a[href^="https://dx.doi.org"] {
-    padding: 5px;
-    border-radius: 3px;
-    border: 1px solid teal;
-    margin: 2px;
-    text-decoration: none;
-    color: teal;
-}
-
-#publications blockquote {
-    font-size: 12px;
-    max-height: 5em;
-    overflow-y: scroll;
-}
-
-#publications sl-tag.preprint::part(base) {
-    background-color: rgb(69, 183, 209);
-}
-
-#publications sl-tag.pre-registered::part(base) {
-    background-color: rgb(210, 199, 72);
-}
-
-#publications sl-tag.published::part(base) {
-    background-color: rgb(81, 187, 160);
-}
-
-#publications img {
-    height: 300px;
-}
-
-#publications #authors{
-    padding-top: 20px;
-    font-size: 14px;
-}
-
 /* CSS for equal sized but reactive cards */
 
 sl-card {
@@ -519,6 +483,99 @@ article#front {
     }
 }
 
+/* Publications section  */
+
+#publications .card-grid {
+    display: block;
+}
+
+#publications h2 {
+    padding-top: 10px;
+}
+
+#publications p:first-of-type {
+    padding-bottom: 0;
+}
+
+#publications sl-card {
+    margin-bottom: 15px;
+}
+
+#publications sl-card::part(base) {
+    border-width: 2px;
+}
+
+#publications sl-card::part(header) {
+    display: none;
+}
+
+#publications sl-card::part(body) {
+    padding: calc(var(--padding)/2) var(--padding);
+    background-color: white;
+}
+
+#publications sl-button::part(label) {
+    font-weight: bold;
+}
+
+#publications #title{
+    font-size: 18px;
+    font-weight: bold;
+}
+
+#publications #authors{
+    padding-top: 10px;
+    font-size: 16px;
+}
+
+#publications #journal{
+    padding-top: 10px;
+    font-size: 14px;
+}
+
+#publications #buttons{
+    padding-top: 10px;
+}
+
+.tag {
+    cursor: auto;
+}
+
+#publications .preprint::part(base) {
+    background-color: rgb(69, 183, 209);
+    border-color: rgb(69, 183, 209);
+}
+
+#publications .stage1::part(base) {
+    background-color: rgb(210, 199, 72);
+    border-color: rgb(210, 199, 72);
+}
+
+#publications .stage2::part(base) {
+    background-color: rgb(5, 147, 27);
+    border-color: rgb(5, 147, 27);
+}
+
+#publications .published::part(base) {
+    background-color: rgb(81, 187, 160);
+    border-color: rgb(81, 187, 160);
+}
+
+#publications .doi::part(base) {
+    border-color: blue;
+}
+
+#publications .paper::part(base) {
+    border-color: green;
+}
+
+#publications .osf::part(base) {
+    border-color: orange;
+}
+
+#publications .data::part(base) {
+    border-color:coral
+}
 
 #front sl-card::part(base) {
     padding: var(--padding)

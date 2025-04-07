@@ -13,3 +13,18 @@
   {% endif %}
 {% endmacro %}
 
+{% macro add_button(id, content="", url="") %}
+  <sl-button size="small" 
+  {% if url != "" %}
+    class= "button {{id}}" href="{{ url }}" target="_blank"
+  {% else %}
+    variant="success" class= "tag {{id}}"
+  {% endif %}
+  >
+  {% if content == "" %}
+    {{id|title}}
+  {% else %}
+    {{content}}
+  {% endif %}
+  </sl-button>
+{% endmacro %}

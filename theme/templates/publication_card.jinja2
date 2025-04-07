@@ -1,0 +1,32 @@
+{% from 'macros/utils.jinja2' import add_button %}
+
+
+<sl-card id="{{ leaf.name }}">
+  
+  <div id="title">
+    {{ leaf.front['Title'] }}
+  </div>
+  <div id="authors">
+    {{ leaf.front['AuthorShort'] }}
+  </div>
+  <div id="journal">
+    {{ leaf.front['Journal'] }}
+  </div>
+  <div id="buttons">
+    {% for tag, text in leaf.front.Tags.items() %}
+      {{ add_button(tag, text|title) }}
+    {% endfor %}
+
+    {{ add_button("doi", "DOI: {}".format(leaf.front['DOI']), leaf.front['DoiUrl']) }} 
+    {{ add_button("paper", "PDF", leaf.front['Pdf']) }} 
+
+    {% if leaf.front['OsfUrl'] != "None" %}
+      {{ add_button("osf", "OSF materials", leaf.front['OsfUrl']) }} 
+    {% endif %}
+
+    {% if leaf.front['DataUrl'] != "None" %}
+      {{ add_button("data", "Data", leaf.front['DataUrl']) }} 
+    {% endif %}
+  </div>
+
+</sl-card>

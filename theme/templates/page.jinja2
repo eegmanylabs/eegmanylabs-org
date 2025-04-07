@@ -17,9 +17,13 @@
 
 
     <div class="card-grid">
-    {% for leaf in index.leaves %}
-        {% include 'card_full.jinja2' %}
-    {% endfor %}
+      {% if index.name == "publications" %}
+        {% include 'publication_page.jinja2' %}
+      {% else %}
+        {% for leaf in index.leaves %}
+          {% include 'card_full.jinja2' %}
+        {% endfor %}
+      {% endif %}
     </div>
 
 </article>
