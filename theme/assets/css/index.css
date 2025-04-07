@@ -143,11 +143,11 @@ article > p {
 
 .card-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, 300px);
+    grid-template-columns: repeat(auto-fit, 340px);
     grid-auto-rows: auto;
     column-gap: 20px;
     row-gap: 20px;
-    justify-content: left;
+    justify-content: space-evenly;
 
 }
 
