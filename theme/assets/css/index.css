@@ -45,28 +45,27 @@ div#content {
 
 nav#menu {
     min-height: 40px;
-    width:90%;
+    width: 90%;
     overflow: visible; /* if the floating menu wraps around, extend this nav */
     z-index: 1;     /* always on top */
     position: fixed;  /* attached to the top */
     top: 0;
     font-size: 18px;
     font-weight: normal;
-    background-color: #E7E7E7;
+    background-color: var(--sl-color-gray-800);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    filter: drop-shadow(#666 0px 2px 4px);
     padding: 0 5%;
 }
 
 nav#menu a {
-    color: #666666;
+    color: lightgray;
     text-decoration: none;
 }
 
 nav#menu a:hover {
-    color: black;
+    color: white;
 }
 
 nav#menu .icon {
@@ -120,7 +119,7 @@ h2 {
 
 /* footer */
 footer {
-    background-color: rgb(197 199 201);
+    background-color: var(--sl-color-gray-200);
     color: rgb(46, 46, 46);
     font-size: 12px;
     font-weight: normal;
