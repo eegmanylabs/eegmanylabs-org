@@ -222,6 +222,10 @@ a.see-all {
     margin: auto;
 }
 
+#funders img {
+    height: 55px;
+}
+
 #contact a {
     color: black;
     text-decoration: none;
