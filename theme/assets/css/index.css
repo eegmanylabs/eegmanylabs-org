@@ -558,6 +558,10 @@ article#front > p > img {
     width: 70%
 }
 
+#front a > sl-card::part(base):hover {
+    border: solid 1px var(--sl-color-gray-500);
+}
+
 .get_involved {
     display: grid;
     grid-template-columns: repeat(auto-fit, 300px);
