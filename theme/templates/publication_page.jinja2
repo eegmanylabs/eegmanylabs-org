@@ -1,7 +1,12 @@
 <a href="{{ index.front.scholar_link }}" target="_blank">Google Scholar project page</a>
 
-<h2>About EEG ManyLabs</h2>
-{% for leaf in index.leaves if leaf.front['ReplicationId'] == "None" %}
+<h2>About #EEGManyLabs</h2>
+{% for leaf in index.leaves if leaf.front['PublicationId'] == "Pavlov2021" %}
+  {% include 'publication_card.jinja2' %}
+{% endfor %}
+
+<h2>Spin-off projects</h2>
+{% for leaf in index.leaves if leaf.front['ReplicationId'] == "None" and leaf.front['PublicationId'] != "Pavlov2021" %}
   {% include 'publication_card.jinja2' %}
 {% endfor %}
 
