@@ -1,7 +1,7 @@
 {% import 'macros/action_button.jinja2' as ActionButton %}
 {% from 'macros/utils.jinja2' import add_tag %}
 
-<sl-card id="{{ leaf.name }}">
+<sl-card id="{{ leaf.name }}" class="{{leaf.front['StageID']}} {{leaf.front['Theme']|lower}}">
   
   <div slot="header" id="card-header">
     <div id="title">
@@ -19,8 +19,8 @@
 
   {{ leaf.content_html|safe }}
 
-  {{ add_tag(leaf, 'Stage') }}
-  {{ add_tag(leaf, 'Theme') }}
+  <p>Stage: <span class="tag stage {{leaf.front['StageID']}}">{{ leaf.front['LongStage'] }}</span></p>
+  <p>Theme: <span class="tag theme {{leaf.front['Theme']}}">{{ leaf.front['Theme'] }}</span></p>
   
   {% set PublicationUrl = leaf.front['PublicationId'] %}
   {% if PublicationUrl != "None" %}

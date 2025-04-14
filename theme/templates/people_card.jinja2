@@ -2,7 +2,7 @@
 {% from 'macros/utils.jinja2' import add_button %}
 
 
-<sl-card id="{{ leaf.name }}">
+<sl-card id="{{ leaf.name }}" class="{{ leaf.front['Tags']|join(" ") }}">
   
   <div slot="header" id="card-header">
     <div id="name">
