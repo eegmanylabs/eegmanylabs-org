@@ -183,7 +183,7 @@ sl-menu-item::part(label) {
 
 /* fix non-conforming headshots */
 #people .card-grid img {
-    object-fit: cover;
+    object-fit: contain;
     height: 200px;
 }
 
