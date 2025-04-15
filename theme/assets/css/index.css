@@ -358,7 +358,7 @@ article#people sl-card::part(footer) {
     background-color: teal;
 }
 
-#people sl-button.replicator::part(base) {
+#people sl-button.study_lead::part(base) {
     background-color: deepskyblue;
 }
 

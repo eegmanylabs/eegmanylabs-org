@@ -7,7 +7,7 @@ Tags = [
 {%- if CoordinatorRole %} "coordinator", {% endif -%}
 {%- if AdvisorRole %} "advisor", {% endif -%}
 {%- if CoInvestigatorRole %} "co-investigator", {% endif -%}
-{%- if LeadRole %} "replicator", {% endif -%} 
+{%- if LeadRole %} "study_lead", {% endif -%} 
 {%- if SpinOffRole %} "spin-off", {% endif -%} 
 ]
 ScholarUrl = "{{ ScholarUrl }}"
