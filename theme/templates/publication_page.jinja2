@@ -1,3 +1,5 @@
+{% import 'macros/icon_button.jinja2' as IconButton %}
+
 <a href="{{ index.front.scholar_link }}" target="_blank">Google Scholar project page</a>
 
 <h2>About #EEGManyLabs</h2>
@@ -13,7 +15,8 @@
 <h2>Replications</h2>
 {% for repID, group in index.leaves|groupby("front.ReplicationId") %}
   {% if repID != "None" %}
-    <h3>{{ repID }}</h3>
+    {% set replicationUrl = "/replications/#" ~ repID %}
+    <h3>{{ repID }} {{ IconButton.render(replicationUrl, "Replicaton page", "fas-clipboard", external = false) }}</h3>
     {% for leaf in group %}
       {% include 'publication_card.jinja2' %}
     {% endfor %}
