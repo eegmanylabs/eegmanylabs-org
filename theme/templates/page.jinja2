@@ -7,19 +7,31 @@
     {{ index.content_html|safe }}
 
     <div class="select-container" style="display: none">
-        {% if index.name == "replications" %}
-        <sl-select class="Stage" placeholder="Replication Stage" value="" multiple clearable></sl-select>
-        <sl-select class="Theme" placeholder="Themes" value="" multiple clearable></sl-select>
-        {% else %}
-        <sl-select class="Tag" placeholder="Tags" value="" multiple clearable></sl-select>
-        {% endif %}
+      {% if index.name == "replications" %}
+        <sl-select id="stage" placeholder="Replication Stage" value="" clearable></sl-select>
+        <sl-select id="theme" placeholder="Themes" value="" multiple clearable></sl-select>
+      {% elif index.name == "people" %}
+        <sl-select id="tag" placeholder="Tags" value="" multiple clearable></sl-select>
+      {% endif %}
     </div>
 
 
     <div class="card-grid">
-    {% for leaf in index.leaves %}
-        {% include 'card_full.jinja2' %}
-    {% endfor %}
+      {% if index.name == "publications" %}
+        {% include 'publication_page.jinja2' %}
+      {% elif index.name == "replications" %}
+        {% for leaf in index.leaves %}
+          {% include 'replication_card.jinja2' %}
+        {% endfor %}
+      {% elif index.name == "people" %}
+        {% for leaf in index.leaves|sort(attribute='front.SequenceNumber') %}
+          {% include 'people_card.jinja2' %}
+        {% endfor %}
+      {% else %}
+        {% for leaf in index.leaves %}
+          {% include 'spinoff_card.jinja2' %}
+        {% endfor %}
+      {% endif %}
     </div>
 
 </article>

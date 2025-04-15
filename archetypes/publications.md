@@ -14,5 +14,5 @@ OsfUrl = "{{ OSF }}"
 DataUrl = "{{ DataUrl }}"
 ReplicationId = "{{ ReplicationId }}"
 Pdf = "/assets/pdfs/{{ PublicationId }}.pdf"
-Tags = ["{{ Status }}"]
+Tags = { "{{ Status }}" = "{{ StatusText }}" }
 +++

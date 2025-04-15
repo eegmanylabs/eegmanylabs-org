@@ -1,20 +1,14 @@
 
-<sl-card id="{{ leaf.name }}" class="preview" style="display:none">
-  
-    <h3>{{ leaf.front['Title'] }}</h3>
+<sl-card >
 
-    {% if 'Image' in leaf.front %}
-
-        <img
-            slot="image"
-            src="/assets/images/{{ leaf.front['Image'] }}"
-            loading="lazy"
-        />
-
-    {% else %}
-
-        {{ leaf.content_html|safe }}
-
+  {% if 'image' in item.front %}
+    <img
+      slot="image"
+      src="{{ item.front['image'] }}"
+      loading="lazy"
+    />
   {% endif %}
+
+  {{ item.content_html|safe }}
 
 </sl-card>

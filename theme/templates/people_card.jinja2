@@ -1,0 +1,45 @@
+{% import 'macros/icon_button.jinja2' as IconButton %}
+{% from 'macros/utils.jinja2' import add_button %}
+
+
+<sl-card id="{{ leaf.name }}" class="{{ leaf.front['Tags']|join(" ") }}">
+  
+  <div slot="header" id="card-header">
+    <div id="name">
+      {{ leaf.front['FullName'] }}
+    </div>
+    <div id="affil">
+      {{ leaf.front['Affiliation'] }}
+    </div>
+  </div>
+
+  {% if leaf.front['Image'] != "None" %}
+    {% set imageURL = leaf.front['Image'] %}
+  {% else %}
+    {% set imageURL = "missing_person.avif" %}
+  {% endif %}
+
+  <img
+    slot="image"
+    src="/assets/images/{{ imageURL }}"
+  />
+
+  {{ leaf.content_html|safe }}
+
+  {% for tag in leaf.front['Tags'] %}
+    {{ add_button(tag) }}
+  {% endfor %}
+
+  <div slot="footer">
+  
+    {{ IconButton.render(leaf.front['ScholarUrl'], "Google Scholar profile", "fab-google-scholar") }}
+    {{ IconButton.render(leaf.front['UniUrl'], "University profile page", "fas-building-columns") }}
+    {{ IconButton.render(leaf.front['LabUrl'], "Lab website", "fas-flask") }}
+    {% if leaf.front['StudyId'] != "None" %}
+      {% set replicationUrl = "/replications/#" ~ leaf.front['StudyId'] %}
+      {{ IconButton.render(replicationUrl, "Replicaton page", "fas-clipboard", external = false) }}
+    {% endif %}
+
+  </div>
+
+</sl-card>
