@@ -1,5 +1,5 @@
 +++
-SequenceNumber = "5"
+SequenceNumber = 5
 Anchor = "marvaneh"
 Title = "Mahnaz Arvaneh"
 Image = "headshots/marvaneh.jpg"
@@ -10,4 +10,5 @@ LabUrl = "None"
 StudyId = "None"
 PersonId = "marvaneh"
 FullName = "Mahnaz Arvaneh"
+Affiliation = "University of Sheffield"
 +++

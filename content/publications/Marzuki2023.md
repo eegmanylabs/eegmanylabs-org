@@ -5,7 +5,7 @@ Title = "Error- and inhibitory-related brain activity associated with political 
 AuthorShort = "Marzuki et al (2023)"
 Image = "previews/Marzuki2023.pdf.png"
 PublicationId = "Marzuki2023"
-Authors = "Marzuki AA,Gloy K,Kandler C,Phon-Amnuaisuk P,Jenkins M,Wong KY,Lim S,Yip WZ,Garrison K,Wahlers J,al. E"
+Authors = ""
 Journal = "Psyarxiv"
 Year = "2023"
 DOI = "10.31234/osf.io/39vqj"
@@ -14,5 +14,5 @@ OsfUrl = "https://osf.io/dc437/"
 DataUrl = "None"
 ReplicationId = "AmodioJost2007"
 Pdf = "/assets/pdfs/Marzuki2023.pdf"
-Tags = ["pre-registered"]
+Tags = { "stage1" = "Stage 1 accepted" }
 +++

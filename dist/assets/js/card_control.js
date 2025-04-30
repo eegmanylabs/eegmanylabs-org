@@ -1,10 +1,7 @@
 // Get all the cards and tags on the page
 const allCards = document.querySelectorAll("sl-card");
-const allTags = document.querySelectorAll("sl-tag");
+const allTags = document.querySelectorAll(".tag");
 const allSelectors = document.querySelectorAll("sl-select")
-const allSections = document.querySelectorAll("section")
-
-const NfrontPageCards = 4;
 
 let search_terms;
 
@@ -17,9 +14,6 @@ window.addEventListener("load", () => {
         })
         document.querySelector("div.select-container").style = "display:block"
     }
-
-    // Sample cards for front page
-    allSections.forEach((el) => sample_cards(el))
 })
 
 /**
@@ -28,19 +22,31 @@ window.addEventListener("load", () => {
  */
 function add_select_options(selEl) {
 
-    let tagVals = new Set();
     let elTags = Array.from(allTags);
+    elTags = elTags.filter((el) => el.classList.contains(selEl.id));
+    let tagVals = new Object();
     
-    elTags = elTags.filter((el) => el.classList.contains(selEl.className));
-    
-    elTags.forEach((el) => tagVals.add(el.innerText))
+    if (selEl.id == "stage") {
+        elTags.forEach((el) => (tagVals[el.classList[2]] = el.innerText))
 
-    for (let tagVal of tagVals) {
+        tagVals = Object.keys(tagVals).sort().reduce(
+            (obj, key) => { 
+              obj[key] = tagVals[key]; 
+              return obj;
+            }, 
+            {}
+          );
+    } else {
+        elTags.forEach((el) => (tagVals[el.innerText.toLowerCase()] = el.innerText))
+    }
+
+    for (const [value, text] of Object.entries(tagVals)) {
         item = document.createElement("sl-option");
-        item.value = tagVal;
-        item.innerText = tagVal;
+        item.value = value;
+        item.innerText = text;
         selEl.appendChild(item);
     }
+    
 }
 
 /**
@@ -51,7 +57,7 @@ function update_cards() {
     search_terms = []; // Empty array first
 
     // Push the values from each select element to the search_terms array
-    allSelectors.forEach((el) => (search_terms.push(...el.value)))
+    allSelectors.forEach(update_search_terms)
 
     // Filter cards if there are values in the search_terms array
     if (search_terms.length == 0) {
@@ -61,13 +67,23 @@ function update_cards() {
     }
 }
 
+function update_search_terms(el) {
+    if (typeof(el.value) ==='string') {
+        if (el.value.length > 0) {
+            search_terms.push(el.value)
+        }
+    } else {
+        search_terms.push(...el.value)
+    }
+}
+
 /**
  * Checks whether a card should be hidden based on the contents of a clicked tag.
  * @param {object} el - The card element to be checked 
  */
 function hideCard(el) {
     // Get all tags within card
-    childTags = Array.from(el.querySelectorAll("sl-tag")).map((el) => (el.innerText));
+    childTags = Array.from(el.classList);
     // See if any of those tags match the text of the clicked tag
     contains = search_terms.every((term) => (childTags.includes(term)))
     
@@ -85,40 +101,4 @@ function hideCard(el) {
  */
 function showCard(el) {
     el.style.display = '';
-}
-
-/**
- * Display a random sample of cards for a section on the front page
- * @param {object} el - Section element contaning cards
- */
-function sample_cards(el) {
-    let cards = Array.from(el.querySelectorAll(".preview"))
-    shuffleArray(cards)
-
-
-    cards.forEach((card, index) => {
-        let img = card.querySelector("img"); // Get the image element
-
-        if (index < NfrontPageCards) {
-            card.style.display = "grid"
-            if (img && !img.src) { // Check if image has not been loaded
-                img.src = img.dataset.src; // Load the image
-            }
-        } else {
-            if (img) {
-                img.src = ""; // Remove the src to prevent loading if card becomes hidden
-            }
-        }
-    })
-}
-
-/**
- * Shuffles an array
- * @param {array} array 
- */
-function shuffleArray(array) {
-    for (let i = array.length - 1; i >= 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-    }
 }

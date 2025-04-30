@@ -1,5 +1,5 @@
 +++
-SequenceNumber = "7"
+SequenceNumber = 7
 Anchor = "roostenveld"
 Title = "Robert Oostenveld"
 Image = "headshots/roostenveld.jpg"
@@ -10,4 +10,5 @@ LabUrl = "None"
 StudyId = "None"
 PersonId = "roostenveld"
 FullName = "Robert Oostenveld"
+Affiliation = "Donders Institute for Brain, Cognition and Behaviour"
 +++

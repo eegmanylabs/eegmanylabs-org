@@ -7,7 +7,9 @@
     <meta name="robots" content="noindex, nofollow">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.0/cdn/themes/light.css" />
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.0/cdn/shoelace-autoloader.js"></script>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/assets/css/index.css">
     <script src="/assets/js/card_control.js" defer></script>
 
@@ -15,7 +17,7 @@
 </head>
 <body>
   <nav id="menu">
-    <a id="logo" href="/"><img id="logo" src="/assets/images/logo.png"></a>
+    <a id="logo" href="/"><img id="logo" src="/assets/images/logo_dark.png"></a>
     <a href="javascript:void(0);" class="icon" onclick="showResponsiveMenu()">
       <sl-icon library="fa" name="fas-bars"></sl-icon>
     </a>
@@ -48,223 +50,128 @@
 <article id="spin-offs">
 
     <h1>Spin-offs</h1>
-<p>EEGManyLabs has inspired a number of spin-off projects</p>
+<p>The #EEGManyLabs framework has generated several spin-off projects, each extending the collaborative spirit of the main initiative. These include efforts to celebrate 100 years of EEG, create the largest open dataset of resting-state EEG, automate preprocessing pipelines, explore associations between brain asymmetry and personality, and use prediction markets to estimate replication outcomes. These projects reflect how #EEGManyLabs continues to evolve as a platform for discovery, innovation, and dialogue across diverse strands of EEG science.</p>
 
     <div class="select-container" style="display: none">
-        
-        <sl-select class="Tag" placeholder="Tags" value="" multiple clearable></sl-select>
-        
+      
     </div>
 
 
     <div class="card-grid">
-    
+      
         
-
-
-
-
-<sl-card id="eeg100">
+          <sl-card id="eeg100">
   
   <div slot="header" id="card-header">
     <div id="title">
       100 years of EEG (1924-2024)
     </div>
-    <div id="authors">
-      
-    </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/stock/printing_eeg.jpg"
-    loading="lazy"
   />
 
   <p>In July 2024 it will be exactly 100 years since the first human EEG was recorded.
 Much has happened since then and in light of ongoing developments on hardware, software, and theory side the method might still be about to grow to its full potential. People in various scientific organisations are working to celebrate this jubilee throughout the year.</p>
 <p><a href="https://eeg100.org">project website</a></p>
 
-  
-  
-
-  
-  
-
-  
-  
-
-  <div slot="footer">
-  
-
-  </div>
-
 </sl-card>
-    
         
-
-
-
-
-<sl-card id="automation">
+          <sl-card id="automation">
   
   <div slot="header" id="card-header">
     <div id="title">
       Automation
     </div>
-    <div id="authors">
-      
-    </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/stock/processor.jpg"
-    loading="lazy"
   />
 
   <p>This team will implement automated analyses to investigate differences between manual and automated coding. This will provide a test of how analytical decisions such as manual or algorithmic artifact removal, selection of regions of interest can affect reproducibility.</p>
 <p><a href="/spin-offs/automation">read more</a></p>
 
-  
-  
-
-  
-  
-
-  
-  
-
-  <div slot="footer">
-  
-
-  </div>
-
 </sl-card>
-    
         
-
-
-
-
-<sl-card id="resting-state">
+          <sl-card id="resting-state">
   
   <div slot="header" id="card-header">
     <div id="title">
       Resting State
     </div>
-    <div id="authors">
-      
-    </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/stock/sleep_eeg.png"
-    loading="lazy"
   />
 
   <p>This project aims to create the world's largest open dataset of EEG resting state. This can provide a detailed characterisation of resting state across the population and mapping developmental trajectories to answering questions on the nature of the signal and its relationship with task-related activity.</p>
 <p><a href="/spin-offs/resting-state">read more</a></p>
 
-  
-  
-
-  
-  
-
-  
-  
-
-  <div slot="footer">
-  
-
-  </div>
-
 </sl-card>
-    
         
-
-
-
-
-<sl-card id="asymmetry">
+          <sl-card id="asymmetry">
   
   <div slot="header" id="card-header">
     <div id="title">
       Asymmetry and personality traits
     </div>
-    <div id="authors">
-      
-    </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/stock/personality_matrix.png"
-    loading="lazy"
   />
 
   <p>“#EEGManyLabs Asymmetry” spin-off will leverage community engagement to record additional resting-state EEG data, and a set of personality questionnaires together with the replication attempts.</p>
 <p><a href="/spin-offs/asymmetry">read more</a></p>
 
-  
-  
-
-  
-  
-
-  
-  
-
-  <div slot="footer">
-  
-
-  </div>
-
 </sl-card>
-    
         
-
-
-
-
-<sl-card id="prediction-markets">
+          <sl-card id="prediction-markets">
   
   <div slot="header" id="card-header">
     <div id="title">
       Prediction Markets
     </div>
-    <div id="authors">
-      
-    </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/stock/bidding.jpg"
-    loading="lazy"
   />
 
   <p>Many readers familiar with these studies will have their own perspective about the likelihood of individual studies replicating. This will be the focus of the prediction markets. We will be able to examine how closely internally held beliefs in the EEG community map on to the replication results.</p>
 <p><a href="/spin-offs/prediction-markets">read more</a></p>
 
-  
-  
-
-  
-  
-
-  
-  
-
-  <div slot="footer">
-  
-
-  </div>
-
 </sl-card>
-    
+        
+      
     </div>
 
 </article>
@@ -273,6 +180,35 @@ Much has happened since then and in light of ongoing developments on hardware, s
     </div>
   </div>
   <footer>
+    
+      
+<section id="contact">
+
+    <h2>Contact</h2>
+
+    <ul>
+<li><a href="https://discord.gg/kKNtue4AW7"><img alt="Discord" src="/assets/images/discord_logo.png" title="Discord Server" /> Discord Server</a></li>
+<li><a href="mailto:contact@eegmanylabs.org"><img alt="Email" src="/assets/images/email_logo.png" title="Email us" /> contact@eegmanylabs.org</a></li>
+<li><a href="https://osf.io/yb3pq/"><img alt="Open Science Foundation" src="/assets/images/osf_logo.png" title="Open Science Foundation" /> OSF Resources</a></li>
+<li><a href="https://twitter.com/eegmanylabs"><img alt="X" src="/assets/images/x_logo.png" title="Follow us on X" /> @eegmanylabs</a></li>
+</ul>
+
+</section>
+
+    
+      
+<section id="funders">
+
+    <h2>Funders</h2>
+
+    <ul>
+<li><img alt="bbsrc" src="/assets/images/bbsrc_logo.png" title="BBSRC" /></li>
+<li><img alt="dfg" src="/assets/images/dfg_logo.png" title="Deutsche Forschungsgemeinde" /></li>
+</ul>
+
+</section>
+
+    
     <span id="copyright-reference">&copy; 2024 eegmanylabs</span>
   </footer>
 
