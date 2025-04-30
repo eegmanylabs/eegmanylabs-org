@@ -7,7 +7,9 @@
     <meta name="robots" content="noindex, nofollow">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.0/cdn/themes/light.css" />
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.0/cdn/shoelace-autoloader.js"></script>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/assets/css/index.css">
     <script src="/assets/js/card_control.js" defer></script>
 
@@ -15,7 +17,7 @@
 </head>
 <body>
   <nav id="menu">
-    <a id="logo" href="/"><img id="logo" src="/assets/images/logo.png"></a>
+    <a id="logo" href="/"><img id="logo" src="/assets/images/logo_dark.png"></a>
     <a href="javascript:void(0);" class="icon" onclick="showResponsiveMenu()">
       <sl-icon library="fa" name="fas-bars"></sl-icon>
     </a>
@@ -48,79 +50,47 @@
 <article id="replications">
 
     <h1>Replications</h1>
+<p>At the heart of #EEGManyLabs is the coordinated replication of 27 influential EEG studies selected for their impact on the field. Each experiment is conducted across multiple laboratories (minimum of 3 per replication) using a Registered Report protocol. This approach is delivering high statistical power, offering the field its most comprehensive test of replicability to date. The project is not only revisiting foundational findings but in doing so, is helping to establish best practices for future experimental and analytic standards in EEG research.</p>
 
     <div class="select-container" style="display: none">
-        
-        <sl-select class="Stage" placeholder="Replication Stage" value="" multiple clearable></sl-select>
-        <sl-select class="Theme" placeholder="Themes" value="" multiple clearable></sl-select>
-        
+      
+        <sl-select id="stage" placeholder="Replication Stage" value="" clearable></sl-select>
+        <sl-select id="theme" placeholder="Themes" value="" multiple clearable></sl-select>
+      
     </div>
 
 
     <div class="card-grid">
-    
+      
         
+          
 
 
-
-
-<sl-card id="Boksem2006">
+<sl-card id="Boksem2006" class="4_stage1_prep conflict">
   
   <div slot="header" id="card-header">
     <div id="title">
-      Mental fatigue, motivation and action monitoring
-    </div>
-    <div id="authors">
-      Boksem, Meijman, & Lorist (2006)
+      Boksem2006
+      <sl-tooltip content="Mental fatigue, motivation and action monitoring - Boksem, Meijman, & Lorist (2006)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1016/j.biopsycho.2005.08.007" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
   </div>
 
   <img
     slot="image"
     src="/assets/images/figures/Boksem2006.png"
-    loading="lazy"
   />
 
-  <p>Lead: <a href="/people/#jkaiser">Jakob Kaiser</a></p>
+  <p>Lead: <a href="/people/#zliu">Zhong Xu Liu</a></p>
 
+  <p>Stage: <span class="tag stage 4_stage1_prep">Stage 1 Registered report in preparation</span></p>
+  <p>Theme: <span class="tag theme Conflict">Conflict</span></p>
   
   
-    <p>Stage: <sl-tag size="small" class="Stage Recruiting">Recruiting</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Conflict">Conflict</sl-tag></p>
   
 
   
-  
-
-  <div slot="footer">
-  
-    
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1016/j.biopsycho.2005.08.007 target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
-  
-
-    
 
   
     <sl-tooltip content="Go to Published Replication Materials">
@@ -135,7 +105,7 @@
     </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Sign up as participating lab">
@@ -154,74 +124,37 @@
     </sl-tooltip>
   
 
-  
-
-  </div>
 
 </sl-card>
-    
         
+          
 
 
-
-
-<sl-card id="Carretie2004">
+<sl-card id="Carretie2004" class="4_stage1_prep emotion">
   
   <div slot="header" id="card-header">
     <div id="title">
-      Spatial Selective Attention Affects Early Extrastriate But Not Striate Components of the Visual Evoked Potential
-    </div>
-    <div id="authors">
-      Clark, & Hillyard (1996)
+      Carretie2004
+      <sl-tooltip content="Automatic attention to emotional stimuli: neural correlates - Carretié, et al. (2004)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1002/hbm.20037" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
   </div>
 
   <img
     slot="image"
     src="/assets/images/figures/Carretie2004.png"
-    loading="lazy"
   />
 
   <p>Lead: <a href="/people/#rbendall">Robert Bendall</a></p>
 
+  <p>Stage: <span class="tag stage 4_stage1_prep">Stage 1 Registered report in preparation</span></p>
+  <p>Theme: <span class="tag theme Emotion">Emotion</span></p>
   
   
-    <p>Stage: <sl-tag size="small" class="Stage Recruiting">Recruiting</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Emotion">Emotion</sl-tag></p>
   
 
   
-  
-
-  <div slot="footer">
-  
-    
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1162/jocn.1996.8.5.387 target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
-  
-
-    
 
   
     <sl-tooltip content="Go to Published Replication Materials">
@@ -236,7 +169,7 @@
     </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Sign up as participating lab">
@@ -255,173 +188,39 @@
     </sl-tooltip>
   
 
-  
-
-  </div>
 
 </sl-card>
-    
         
+          
 
 
-
-
-<sl-card id="DelCul2007">
+<sl-card id="Eimer1993" class="6_data_collection attention">
   
   <div slot="header" id="card-header">
     <div id="title">
-      Brain Dynamics Underlying the Nonlinear Threshold for Access to Consciousness
-    </div>
-    <div id="authors">
-      Del Cul, Baillet, & Dehaene (2007)
-    </div>
-  </div>
-
-  <img
-    slot="image"
-    src="/assets/images/figures/DelCul2007.png"
-    loading="lazy"
-  />
-
-  <p>Lead: <a href="/people/#mrausch">Manuel Rausch</a></p>
-
-  
-  
-    <p>Stage: <sl-tag size="small" class="Stage Registration">Registration</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Consciousness">Consciousness</sl-tag></p>
-  
-
-  
-  
-
-  <div slot="footer">
-  
-    
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1371/journal.pbio.0050260 target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
-  
-
-    
-
-  
-    <sl-tooltip content="Go to Published Replication Materials">
-      
-        
-      
-
-      <sl-button disabled>
-        <sl-icon slot="prefix" library="fa" name="fas-book-open"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
-  
-
-    
-
-  
-    <sl-tooltip content="Sign up as participating lab">
-      
-        
-      
-
-      <sl-button disabled>
-        <sl-icon slot="prefix" library="fa" name="fas-user-plus"></sl-icon>
-        Sign Up
-      </sl-button>
-    </sl-tooltip>
-  
-
-  
-
-  </div>
-
-</sl-card>
-    
-        
-
-
-
-
-<sl-card id="Eimer1993">
-  
-  <div slot="header" id="card-header">
-    <div id="title">
-      Effects of attention and stimulus probability on ERPs in a Go/Nogo task
-    </div>
-    <div id="authors">
-      Eimer (1993)
+      Eimer1993
+      <sl-tooltip content="Effects of attention and stimulus probability on ERPs in a Go/Nogo task - Eimer (1993)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1016/0301-0511(93)90009-W" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
   </div>
 
   <img
     slot="image"
     src="/assets/images/figures/Eimer1993.png"
-    loading="lazy"
   />
 
   <p>Lead: <a href="/people/#gganis">Giorgio Ganis</a></p>
 
+  <p>Stage: <span class="tag stage 6_data_collection">IPA acquired. Data collection ongoing</span></p>
+  <p>Theme: <span class="tag theme Attention">Attention</span></p>
   
   
-    <p>Stage: <sl-tag size="small" class="Stage Registration">Registration</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Attention">Attention</sl-tag></p>
-  
-
-  
-  
-
-  <div slot="footer">
   
     
-    
-      
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1016/0301-0511(93)90009-W target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Go to Published Replication Materials">
@@ -440,7 +239,7 @@
     </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Sign up as participating lab">
@@ -455,76 +254,39 @@
     </sl-tooltip>
   
 
-  
-
-  </div>
 
 </sl-card>
-    
         
+          
 
 
-
-
-<sl-card id="Eimer1996">
+<sl-card id="Eimer1996" class="7_stage2_review attention">
   
   <div slot="header" id="card-header">
     <div id="title">
-      The N2pc component as an indicator of attentional selectivity. Electroencephalography and Clinical Neurophysiology
-    </div>
-    <div id="authors">
-      Eimer (1996)
+      Eimer1996
+      <sl-tooltip content="The N2pc component as an indicator of attentional selectivity. Electroencephalography and Clinical Neurophysiology - Eimer (1996)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1016/0013-4694(96)95711-9" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
   </div>
 
   <img
     slot="image"
     src="/assets/images/figures/Eimer1996.png"
-    loading="lazy"
   />
 
   <p>Lead: <a href="/people/#hliesefeld">Heinrich Liesefeld</a></p>
 
+  <p>Stage: <span class="tag stage 7_stage2_review">Stage 2 Registered report under review</span></p>
+  <p>Theme: <span class="tag theme Attention">Attention</span></p>
   
   
-    <p>Stage: <sl-tag size="small" class="Stage Recording">Recording</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Attention">Attention</sl-tag></p>
-  
-
-  
-  
-
-  <div slot="footer">
   
     
-    
-      
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1016/0013-4694(96)95711-9 target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Go to Published Replication Materials">
@@ -543,7 +305,7 @@
     </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Sign up as participating lab">
@@ -558,74 +320,37 @@
     </sl-tooltip>
   
 
-  
-
-  </div>
 
 </sl-card>
-    
         
+          
 
 
-
-
-<sl-card id="Eimer2003">
+<sl-card id="Eimer2003" class="4_stage1_prep emotion">
   
   <div slot="header" id="card-header">
     <div id="title">
-      The role of spatial attention in the processing of facial expression: An ERP study of rapid brain responses to six basic emotions
-    </div>
-    <div id="authors">
-      Eimer, Holmes, & Mcglone (2003)
+      Eimer2003
+      <sl-tooltip content="The role of spatial attention in the processing of facial expression: An ERP study of rapid brain responses to six basic emotions - Eimer, Holmes, & Mcglone (2003)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.3758/CABN.3.2.97" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
   </div>
 
   <img
     slot="image"
     src="/assets/images/figures/Eimer2003.png"
-    loading="lazy"
   />
 
   <p>Lead: <a href="/people/#xhe">Xun He</a></p>
 
+  <p>Stage: <span class="tag stage 4_stage1_prep">Stage 1 Registered report in preparation</span></p>
+  <p>Theme: <span class="tag theme Emotion">Emotion</span></p>
   
   
-    <p>Stage: <sl-tag size="small" class="Stage Registration">Registration</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Emotion">Emotion</sl-tag></p>
   
 
   
-  
-
-  <div slot="footer">
-  
-    
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.3758/CABN.3.2.97 target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
-  
-
-    
 
   
     <sl-tooltip content="Go to Published Replication Materials">
@@ -640,7 +365,7 @@
     </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Sign up as participating lab">
@@ -655,173 +380,39 @@
     </sl-tooltip>
   
 
-  
-
-  </div>
 
 </sl-card>
-    
         
+          
 
 
-
-
-<sl-card id="Frank2005">
+<sl-card id="Hajcak2003" class="6_data_collection error">
   
   <div slot="header" id="card-header">
     <div id="title">
-      Error-Related Negativity Predicts Reinforcement Learning and Conflict Biases
-    </div>
-    <div id="authors">
-      Frank, Woroch, & Curran (2005)
-    </div>
-  </div>
-
-  <img
-    slot="image"
-    src="/assets/images/figures/Frank2005.png"
-    loading="lazy"
-  />
-
-  <p>Lead: <a href="/people/#achatard">Armand Chatard</a></p>
-
-  
-  
-    <p>Stage: <sl-tag size="small" class="Stage Recruiting">Recruiting</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Feedback">Feedback</sl-tag></p>
-  
-
-  
-  
-
-  <div slot="footer">
-  
-    
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1016/j.neuron.2005.06.020 target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
-  
-
-    
-
-  
-    <sl-tooltip content="Go to Published Replication Materials">
-      
-        
-      
-
-      <sl-button disabled>
-        <sl-icon slot="prefix" library="fa" name="fas-book-open"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
-  
-
-    
-
-  
-    <sl-tooltip content="Sign up as participating lab">
-      
-        
-      
-
-      <sl-button disabled>
-        <sl-icon slot="prefix" library="fa" name="fas-user-plus"></sl-icon>
-        Sign Up
-      </sl-button>
-    </sl-tooltip>
-  
-
-  
-
-  </div>
-
-</sl-card>
-    
-        
-
-
-
-
-<sl-card id="Hajcak2003">
-  
-  <div slot="header" id="card-header">
-    <div id="title">
-      Anxiety and error-related brain activity
-    </div>
-    <div id="authors">
-      Hajcak, McDonald, & Simons (2003)
+      Hajcak2003
+      <sl-tooltip content="Anxiety and error-related brain activity - Hajcak, McDonald, & Simons (2003)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1016/S0301-0511(03)00103-0" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
   </div>
 
   <img
     slot="image"
     src="/assets/images/figures/Hajcak2003.png"
-    loading="lazy"
   />
 
   <p>Lead: <a href="/people/#everona">Edelyn Verona</a></p>
 
+  <p>Stage: <span class="tag stage 6_data_collection">IPA acquired. Data collection ongoing</span></p>
+  <p>Theme: <span class="tag theme Error">Error</span></p>
   
   
-    <p>Stage: <sl-tag size="small" class="Stage Recording">Recording</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Error">Error</sl-tag></p>
-  
-
-  
-  
-
-  <div slot="footer">
   
     
-    
-      
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1016/S0301-0511(03)00103-0 target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Go to Published Replication Materials">
@@ -840,7 +431,7 @@
     </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Sign up as participating lab">
@@ -855,74 +446,37 @@
     </sl-tooltip>
   
 
-  
-
-  </div>
 
 </sl-card>
-    
         
+          
 
 
-
-
-<sl-card id="Hajcak2006">
+<sl-card id="Hajcak2006" class="4_stage1_prep feedback">
   
   <div slot="header" id="card-header">
     <div id="title">
-      The feedback-related negativity reflects the binary evaluation of good versus bad outcomes
-    </div>
-    <div id="authors">
-      Hajcak, et al. (2006)
+      Hajcak2006
+      <sl-tooltip content="The feedback-related negativity reflects the binary evaluation of good versus bad outcomes - Hajcak, et al. (2006)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1016/j.biopsycho.2005.04.001" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
   </div>
 
   <img
     slot="image"
     src="/assets/images/figures/Hajcak2006.png"
-    loading="lazy"
   />
 
   <p>Lead: <a href="/people/#mvandermolen">Melle van der Molen </a></p>
 
+  <p>Stage: <span class="tag stage 4_stage1_prep">Stage 1 Registered report in preparation</span></p>
+  <p>Theme: <span class="tag theme Feedback">Feedback</span></p>
   
   
-    <p>Stage: <sl-tag size="small" class="Stage Recruiting">Recruiting</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Feedback">Feedback</sl-tag></p>
   
 
   
-  
-
-  <div slot="footer">
-  
-    
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1016/j.biopsycho.2005.04.001 target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
-  
-
-    
 
   
     <sl-tooltip content="Go to Published Replication Materials">
@@ -937,7 +491,7 @@
     </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Sign up as participating lab">
@@ -952,76 +506,39 @@
     </sl-tooltip>
   
 
-  
-
-  </div>
 
 </sl-card>
-    
         
+          
 
 
-
-
-<sl-card id="HajcakHolroyd2005">
+<sl-card id="HajcakHolroyd2005" class="8_finished feedback">
   
   <div slot="header" id="card-header">
     <div id="title">
-      Brain potentials associated with expected and unexpected good and bad outcomes
-    </div>
-    <div id="authors">
-      Hajcak, et al. (2005a)
+      HajcakHolroyd2005
+      <sl-tooltip content="Brain potentials associated with expected and unexpected good and bad outcomes - Hajcak, et al. (2005a)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1111/j.1469-8986.2005.00278.x" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
   </div>
 
   <img
     slot="image"
     src="/assets/images/figures/HajcakHolroyd2005.png"
-    loading="lazy"
   />
 
   <p>Lead: <a href="/people/#gpourtois">Gilles Pourtois</a></p>
 
+  <p>Stage: <span class="tag stage 8_finished">Finished</span></p>
+  <p>Theme: <span class="tag theme Feedback">Feedback</span></p>
   
   
-    <p>Stage: <sl-tag size="small" class="Stage Recording">Recording</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Feedback">Feedback</sl-tag></p>
-  
-
-  
-  
-
-  <div slot="footer">
   
     
-    
-      
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1111/j.1469-8986.2005.00278.x target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Go to Published Replication Materials">
@@ -1029,7 +546,7 @@
         
       
 
-      <sl-button href=/publications/#Paul2022 target=
+      <sl-button href=/publications/#Paul2025 target=
   
     "_top"
   
@@ -1040,7 +557,7 @@
     </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Sign up as participating lab">
@@ -1055,74 +572,37 @@
     </sl-tooltip>
   
 
-  
-
-  </div>
 
 </sl-card>
-    
         
+          
 
 
-
-
-<sl-card id="HajcakMoser2005">
+<sl-card id="HajcakMoser2005" class="5_stage1_review error">
   
   <div slot="header" id="card-header">
     <div id="title">
-      On the ERN and the significance of errors
-    </div>
-    <div id="authors">
-      Hajcak, et al. (2005b)
+      HajcakMoser2005
+      <sl-tooltip content="On the ERN and the significance of errors - Hajcak, et al. (2005b)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1111/j.1469-8986.2005.00270.x" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
   </div>
 
   <img
     slot="image"
     src="/assets/images/figures/HajcakMoser2005.png"
-    loading="lazy"
   />
 
   <p>Lead: <a href="/people/#msenderecka">Magdalena Senderecka</a></p>
 
+  <p>Stage: <span class="tag stage 5_stage1_review">Stage 1 Registered report under review</span></p>
+  <p>Theme: <span class="tag theme Error">Error</span></p>
   
   
-    <p>Stage: <sl-tag size="small" class="Stage Recruiting">Recruiting</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Error">Error</sl-tag></p>
   
 
   
-  
-
-  <div slot="footer">
-  
-    
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1111/j.1469-8986.2005.00270.x target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
-  
-
-    
 
   
     <sl-tooltip content="Go to Published Replication Materials">
@@ -1137,7 +617,7 @@
     </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Sign up as participating lab">
@@ -1152,74 +632,37 @@
     </sl-tooltip>
   
 
-  
-
-  </div>
 
 </sl-card>
-    
         
+          
 
 
-
-
-<sl-card id="Inzlicht2009">
+<sl-card id="Inzlicht2009" class="6_data_collection personality">
   
   <div slot="header" id="card-header">
     <div id="title">
-      Neural Markers of Religious Conviction
-    </div>
-    <div id="authors">
-      Inzlicht, et al. (2009)
+      Inzlicht2009
+      <sl-tooltip content="Neural Markers of Religious Conviction - Inzlicht, et al. (2009)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1111/j.1467-9280.2009.02305.x" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
   </div>
 
   <img
     slot="image"
     src="/assets/images/figures/Inzlicht2009.png"
-    loading="lazy"
   />
 
   <p>Lead: <a href="/people/#amacnamara">Annmarie MacNamara</a></p>
 
+  <p>Stage: <span class="tag stage 6_data_collection">IPA acquired. Data collection ongoing</span></p>
+  <p>Theme: <span class="tag theme Personality">Personality</span></p>
   
   
-    <p>Stage: <sl-tag size="small" class="Stage Registration">Registration</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Personality">Personality</sl-tag></p>
   
 
   
-  
-
-  <div slot="footer">
-  
-    
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1111/j.1467-9280.2009.02305.x target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
-  
-
-    
 
   
     <sl-tooltip content="Go to Published Replication Materials">
@@ -1234,7 +677,7 @@
     </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Sign up as participating lab">
@@ -1249,177 +692,39 @@
     </sl-tooltip>
   
 
-  
-
-  </div>
 
 </sl-card>
-    
         
+          
 
 
-
-
-<sl-card id="HajcakFoti2008">
+<sl-card id="Mathewson2009" class="6_data_collection consciousness">
   
   <div slot="header" id="card-header">
     <div id="title">
-      Errors Are Aversive: Defensive Motivation and the Error-Related Negativity
-    </div>
-    <div id="authors">
-      Hajcak, & Foti (2008)
-    </div>
-  </div>
-
-  <img
-    slot="image"
-    src="/assets/images/figures/HajcakFoti2008.png"
-    loading="lazy"
-  />
-
-  <p>Lead: <a href="/people/#abland">Amy Bland</a></p>
-
-  
-  
-    <p>Stage: <sl-tag size="small" class="Stage Recruiting">Recruiting</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Emotion">Emotion</sl-tag></p>
-  
-
-  
-  
-
-  <div slot="footer">
-  
-    
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1111/j.1467-9280.2008.02053.x target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
-  
-
-    
-
-  
-    <sl-tooltip content="Go to Published Replication Materials">
-      
-        
-      
-
-      <sl-button disabled>
-        <sl-icon slot="prefix" library="fa" name="fas-book-open"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
-  
-
-    
-
-  
-    <sl-tooltip content="Sign up as participating lab">
-      
-        
-      
-
-      <sl-button href=mailto:a.bland@mmu.ac.uk target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-user-plus"></sl-icon>
-        Sign Up
-      </sl-button>
-    </sl-tooltip>
-  
-
-  
-
-  </div>
-
-</sl-card>
-    
-        
-
-
-
-
-<sl-card id="Mathewson2009">
-  
-  <div slot="header" id="card-header">
-    <div id="title">
-      To See or Not to See: Prestimulus Phase Predicts Visual Awareness
-    </div>
-    <div id="authors">
-      Mathewson, et al. (2009)
+      Mathewson2009
+      <sl-tooltip content="To See or Not to See: Prestimulus Phase Predicts Visual Awareness - Mathewson, et al. (2009)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1523/JNEUROSCI.3963-08.2009" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
   </div>
 
   <img
     slot="image"
     src="/assets/images/figures/Mathewson2009.png"
-    loading="lazy"
   />
 
   <p>Lead: <a href="/people/#mruzzoli">Manuela Ruzzoli</a></p>
 
+  <p>Stage: <span class="tag stage 6_data_collection">IPA acquired. Data collection ongoing</span></p>
+  <p>Theme: <span class="tag theme Consciousness">Consciousness</span></p>
   
   
-    <p>Stage: <sl-tag size="small" class="Stage Review">Review</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Consciousness">Consciousness</sl-tag></p>
-  
-
-  
-  
-
-  <div slot="footer">
   
     
-    
-      
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1523/JNEUROSCI.3963-08.2009 target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Go to Published Replication Materials">
@@ -1438,7 +743,7 @@
     </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Sign up as participating lab">
@@ -1453,74 +758,37 @@
     </sl-tooltip>
   
 
-  
-
-  </div>
 
 </sl-card>
-    
         
+          
 
 
-
-
-<sl-card id="Miltner1999">
+<sl-card id="Miltner1999" class="5_stage1_review learning">
   
   <div slot="header" id="card-header">
     <div id="title">
-      Coherence of gamma-band EEG activity as a basis for associative learning
-    </div>
-    <div id="authors">
-      Miltner, et al. (1999)
+      Miltner1999
+      <sl-tooltip content="Coherence of gamma-band EEG activity as a basis for associative learning - Miltner, et al. (1999)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1038/17126" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
   </div>
 
   <img
     slot="image"
     src="/assets/images/figures/Miltner1999.png"
-    loading="lazy"
   />
 
   <p>Lead: <a href="/people/#mgamer">Matthias Gamer</a></p>
 
+  <p>Stage: <span class="tag stage 5_stage1_review">Stage 1 Registered report under review</span></p>
+  <p>Theme: <span class="tag theme Learning">Learning</span></p>
   
   
-    <p>Stage: <sl-tag size="small" class="Stage Registration">Registration</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Learning">Learning</sl-tag></p>
   
 
   
-  
-
-  <div slot="footer">
-  
-    
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1038/17126 target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
-  
-
-    
 
   
     <sl-tooltip content="Go to Published Replication Materials">
@@ -1535,7 +803,7 @@
     </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Sign up as participating lab">
@@ -1550,74 +818,101 @@
     </sl-tooltip>
   
 
-  
-
-  </div>
 
 </sl-card>
-    
         
+          
 
 
-
-
-<sl-card id="Muller2003">
+<sl-card id="HajcakFoti2008" class="6_data_collection emotion">
   
   <div slot="header" id="card-header">
     <div id="title">
-      Sustained division of the attentional spotlight
+      HajcakFoti2008
+      <sl-tooltip content="Errors Are Aversive: Defensive Motivation and the Error-Related Negativity - Hajcak, & Foti (2008)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1111/j.1467-9280.2008.02053.x" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
-    <div id="authors">
-      Müller, et al. (2003)
+  </div>
+
+  <img
+    slot="image"
+    src="/assets/images/figures/HajcakFoti2008.png"
+  />
+
+  <p>Lead: <a href="/people/#abland">Amy Bland</a></p>
+
+  <p>Stage: <span class="tag stage 6_data_collection">IPA acquired. Data collection ongoing</span></p>
+  <p>Theme: <span class="tag theme Emotion">Emotion</span></p>
+  
+  
+  
+
+  
+
+  
+    <sl-tooltip content="Go to Published Replication Materials">
+      
+        
+      
+
+      <sl-button disabled>
+        <sl-icon slot="prefix" library="fa" name="fas-book-open"></sl-icon>
+        
+      </sl-button>
+    </sl-tooltip>
+  
+
+  
+
+  
+    <sl-tooltip content="Sign up as participating lab">
+      
+        
+      
+
+      <sl-button href=mailto:a.bland@mmu.ac.uk target=
+  
+    "_blank"
+  
+>
+        <sl-icon slot="prefix" library="fa" name="fas-user-plus"></sl-icon>
+        Sign Up
+      </sl-button>
+    </sl-tooltip>
+  
+
+
+</sl-card>
+        
+          
+
+
+<sl-card id="Muller2003" class="4_stage1_prep attention">
+  
+  <div slot="header" id="card-header">
+    <div id="title">
+      Muller2003
+      <sl-tooltip content="Sustained division of the attentional spotlight - Müller, et al. (2003)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1038/nature01812" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
   </div>
 
   <img
     slot="image"
     src="/assets/images/figures/Muller2003.png"
-    loading="lazy"
   />
 
   <p>Lead: <a href="/people/#rnaar">Richard Naar</a></p>
 
+  <p>Stage: <span class="tag stage 4_stage1_prep">Stage 1 Registered report in preparation</span></p>
+  <p>Theme: <span class="tag theme Attention">Attention</span></p>
   
   
-    <p>Stage: <sl-tag size="small" class="Stage Recruiting">Recruiting</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Attention">Attention</sl-tag></p>
   
 
   
-  
-
-  <div slot="footer">
-  
-    
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1038/nature01812 target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
-  
-
-    
 
   
     <sl-tooltip content="Go to Published Replication Materials">
@@ -1632,7 +927,7 @@
     </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Sign up as participating lab">
@@ -1647,74 +942,37 @@
     </sl-tooltip>
   
 
-  
-
-  </div>
 
 </sl-card>
-    
         
+          
 
 
-
-
-<sl-card id="Onton2005">
+<sl-card id="Onton2005" class="4_stage1_prep memory">
   
   <div slot="header" id="card-header">
     <div id="title">
-      Frontal midline EEG dynamics during working memory
-    </div>
-    <div id="authors">
-      Onton, Delorme, & Makeig (2005)
+      Onton2005
+      <sl-tooltip content="Frontal midline EEG dynamics during working memory - Onton, Delorme, & Makeig (2005)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1016/j.neuroimage.2005.04.014" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
   </div>
 
   <img
     slot="image"
     src="/assets/images/figures/Onton2005.png"
-    loading="lazy"
   />
 
   <p>Lead: <a href="/people/#sgregory">Samantha Gregory</a></p>
 
+  <p>Stage: <span class="tag stage 4_stage1_prep">Stage 1 Registered report in preparation</span></p>
+  <p>Theme: <span class="tag theme Memory">Memory</span></p>
   
   
-    <p>Stage: <sl-tag size="small" class="Stage Recruiting">Recruiting</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Memory">Memory</sl-tag></p>
   
 
   
-  
-
-  <div slot="footer">
-  
-    
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1016/j.neuroimage.2005.04.014 target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
-  
-
-    
 
   
     <sl-tooltip content="Go to Published Replication Materials">
@@ -1729,7 +987,7 @@
     </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Sign up as participating lab">
@@ -1744,74 +1002,37 @@
     </sl-tooltip>
   
 
-  
-
-  </div>
 
 </sl-card>
-    
         
+          
 
 
-
-
-<sl-card id="Vidal2000">
+<sl-card id="Vidal2000" class="4_stage1_prep error">
   
   <div slot="header" id="card-header">
     <div id="title">
-      Is the ‘error negativity’ specific to errors?
-    </div>
-    <div id="authors">
-      Vidal, et al. (2000)
+      Vidal2000
+      <sl-tooltip content="Is the ‘error negativity’ specific to errors? - Vidal, et al. (2000)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1016/S0301-0511(99)00032-0" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
   </div>
 
   <img
     slot="image"
     src="/assets/images/figures/Vidal2000.png"
-    loading="lazy"
   />
 
   <p>Lead: <a href="/people/#chassall">Cameron Hassall</a></p>
 
+  <p>Stage: <span class="tag stage 4_stage1_prep">Stage 1 Registered report in preparation</span></p>
+  <p>Theme: <span class="tag theme Error">Error</span></p>
   
   
-    <p>Stage: <sl-tag size="small" class="Stage Recruiting">Recruiting</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Error">Error</sl-tag></p>
   
 
   
-  
-
-  <div slot="footer">
-  
-    
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1016/S0301-0511(99)00032-0 target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
-  
-
-    
 
   
     <sl-tooltip content="Go to Published Replication Materials">
@@ -1826,7 +1047,7 @@
     </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Sign up as participating lab">
@@ -1841,76 +1062,39 @@
     </sl-tooltip>
   
 
-  
-
-  </div>
 
 </sl-card>
-    
         
+          
 
 
-
-
-<sl-card id="VogelMachizawa2004">
+<sl-card id="VogelMachizawa2004" class="6_data_collection memory">
   
   <div slot="header" id="card-header">
     <div id="title">
-      Neural activity predicts individual differences in visual working memory capacity
-    </div>
-    <div id="authors">
-      Vogel, & Machizawa (2004)
+      VogelMachizawa2004
+      <sl-tooltip content="Neural activity predicts individual differences in visual working memory capacity - Vogel, & Machizawa (2004)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1038/nature02447" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
   </div>
 
   <img
     slot="image"
     src="/assets/images/figures/VogelMachizawa2004.png"
-    loading="lazy"
   />
 
   <p>Lead: <a href="/people/#nlanger">Nicolas Langer</a></p>
 
+  <p>Stage: <span class="tag stage 6_data_collection">IPA acquired. Data collection ongoing</span></p>
+  <p>Theme: <span class="tag theme Memory">Memory</span></p>
   
   
-    <p>Stage: <sl-tag size="small" class="Stage Recording">Recording</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Memory">Memory</sl-tag></p>
-  
-
-  
-  
-
-  <div slot="footer">
   
     
-    
-      
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1038/nature02447 target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Go to Published Replication Materials">
@@ -1929,7 +1113,7 @@
     </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Sign up as participating lab">
@@ -1944,74 +1128,37 @@
     </sl-tooltip>
   
 
-  
-
-  </div>
 
 </sl-card>
-    
         
+          
 
 
-
-
-<sl-card id="YeungSanfey2004">
+<sl-card id="YeungSanfey2004" class="4_stage1_prep feedback">
   
   <div slot="header" id="card-header">
     <div id="title">
-      Independent Coding of Reward Magnitude and Valence in the Human Brain
-    </div>
-    <div id="authors">
-      Yeung, & Sanfey (2004)
+      YeungSanfey2004
+      <sl-tooltip content="Independent Coding of Reward Magnitude and Valence in the Human Brain - Yeung, & Sanfey (2004)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1523/JNEUROSCI.4537-03.2004" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
   </div>
 
   <img
     slot="image"
     src="/assets/images/figures/YeungSanfey2004.png"
-    loading="lazy"
   />
 
   <p>Lead: <a href="/people/#fmushtaq">Faisal Mushtaq</a></p>
 
+  <p>Stage: <span class="tag stage 4_stage1_prep">Stage 1 Registered report in preparation</span></p>
+  <p>Theme: <span class="tag theme Feedback">Feedback</span></p>
   
   
-    <p>Stage: <sl-tag size="small" class="Stage Recruiting">Recruiting</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Feedback">Feedback</sl-tag></p>
   
 
   
-  
-
-  <div slot="footer">
-  
-    
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1523/JNEUROSCI.4537-03.2004 target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
-  
-
-    
 
   
     <sl-tooltip content="Go to Published Replication Materials">
@@ -2026,7 +1173,7 @@
     </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Sign up as participating lab">
@@ -2041,74 +1188,37 @@
     </sl-tooltip>
   
 
-  
-
-  </div>
 
 </sl-card>
-    
         
+          
 
 
-
-
-<sl-card id="Luck1996">
+<sl-card id="Luck1996" class="4_stage1_prep consciousness">
   
   <div slot="header" id="card-header">
     <div id="title">
-      Word meanings can be accessed but not reported during the attentional blink
-    </div>
-    <div id="authors">
-      Luck, Vogel, & Shapiro (1996)
+      Luck1996
+      <sl-tooltip content="Word meanings can be accessed but not reported during the attentional blink - Luck, Vogel, & Shapiro (1996)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1038/383616a0" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
   </div>
 
   <img
     slot="image"
     src="/assets/images/figures/Luck1996.png"
-    loading="lazy"
   />
 
   <p>Lead: <a href="/people/#gniso">Guiomar Niso</a></p>
 
+  <p>Stage: <span class="tag stage 4_stage1_prep">Stage 1 Registered report in preparation</span></p>
+  <p>Theme: <span class="tag theme Consciousness">Consciousness</span></p>
   
   
-    <p>Stage: <sl-tag size="small" class="Stage Recruiting">Recruiting</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Consciousness">Consciousness</sl-tag></p>
   
 
   
-  
-
-  <div slot="footer">
-  
-    
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1038/383616a0 target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
-  
-
-    
 
   
     <sl-tooltip content="Go to Published Replication Materials">
@@ -2123,7 +1233,7 @@
     </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Sign up as participating lab">
@@ -2142,74 +1252,37 @@
     </sl-tooltip>
   
 
-  
-
-  </div>
 
 </sl-card>
-    
         
+          
 
 
-
-
-<sl-card id="Sergent2005">
+<sl-card id="Sergent2005" class="4_stage1_prep consciousness">
   
   <div slot="header" id="card-header">
     <div id="title">
-      Timing of the brain events underlying access to consciousness during the attentional blink
-    </div>
-    <div id="authors">
-      Sergent, Baillet, & Dehaene (2005)
+      Sergent2005
+      <sl-tooltip content="Timing of the brain events underlying access to consciousness during the attentional blink - Sergent, Baillet, & Dehaene (2005)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1038/nn1549" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
   </div>
 
   <img
     slot="image"
     src="/assets/images/figures/Sergent2005.png"
-    loading="lazy"
   />
 
   <p>Lead: <a href="/people/#dcruse">Damian Cruse</a></p>
 
+  <p>Stage: <span class="tag stage 4_stage1_prep">Stage 1 Registered report in preparation</span></p>
+  <p>Theme: <span class="tag theme Consciousness">Consciousness</span></p>
   
   
-    <p>Stage: <sl-tag size="small" class="Stage Registration">Registration</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Consciousness">Consciousness</sl-tag></p>
   
 
   
-  
-
-  <div slot="footer">
-  
-    
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1038/nn1549 target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
-  
-
-    
 
   
     <sl-tooltip content="Go to Published Replication Materials">
@@ -2224,7 +1297,7 @@
     </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Sign up as participating lab">
@@ -2243,177 +1316,39 @@
     </sl-tooltip>
   
 
-  
-
-  </div>
 
 </sl-card>
-    
         
+          
 
 
-
-
-<sl-card id="DonkersvanBoxtel2004">
+<sl-card id="AmodioJost2007" class="6_data_collection personality">
   
   <div slot="header" id="card-header">
     <div id="title">
-      The N2 in go/no-go tasks reflects conflict monitoring not response inhibition
-    </div>
-    <div id="authors">
-      Donkers, & van Boxtel (2004)
-    </div>
-  </div>
-
-  <img
-    slot="image"
-    src="/assets/images/figures/DonkersvanBoxtel2004.png"
-    loading="lazy"
-  />
-
-  <p>Lead: <a href="/people/#wmarinovic">Welber Marinovic</a></p>
-
-  
-  
-    <p>Stage: <sl-tag size="small" class="Stage Recruiting">Recruiting</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Conflict">Conflict</sl-tag></p>
-  
-
-  
-  
-
-  <div slot="footer">
-  
-    
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1016/j.bandc.2004.04.005 target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
-  
-
-    
-
-  
-    <sl-tooltip content="Go to Published Replication Materials">
-      
-        
-      
-
-      <sl-button disabled>
-        <sl-icon slot="prefix" library="fa" name="fas-book-open"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
-  
-
-    
-
-  
-    <sl-tooltip content="Sign up as participating lab">
-      
-        
-      
-
-      <sl-button href=https://docs.google.com/forms/d/e/1FAIpQLSdo9rk0V5OWYi0TB9T9JouxFQ1E91Xe9arUauX5legz2e1iUA/viewform target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-user-plus"></sl-icon>
-        Sign Up
-      </sl-button>
-    </sl-tooltip>
-  
-
-  
-
-  </div>
-
-</sl-card>
-    
-        
-
-
-
-
-<sl-card id="AmodioJost2007">
-  
-  <div slot="header" id="card-header">
-    <div id="title">
-      Neurocognitive correlates of liberalism and conservatism
-    </div>
-    <div id="authors">
-      Amodio, et al. (2007)
+      AmodioJost2007
+      <sl-tooltip content="Neurocognitive correlates of liberalism and conservatism - Amodio, et al. (2007)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1038/nn1979" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
   </div>
 
   <img
     slot="image"
     src="/assets/images/figures/AmodioJost2007.png"
-    loading="lazy"
   />
 
   <p>Lead: <a href="/people/#aschaefer">Alexandre Schaefer</a></p>
 
+  <p>Stage: <span class="tag stage 6_data_collection">IPA acquired. Data collection ongoing</span></p>
+  <p>Theme: <span class="tag theme Personality">Personality</span></p>
   
   
-    <p>Stage: <sl-tag size="small" class="Stage Recording">Recording</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Personality">Personality</sl-tag></p>
-  
-
-  
-  
-
-  <div slot="footer">
   
     
-    
-      
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1038/nn1979 target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Go to Published Replication Materials">
@@ -2432,7 +1367,7 @@
     </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Sign up as participating lab">
@@ -2447,76 +1382,39 @@
     </sl-tooltip>
   
 
-  
-
-  </div>
 
 </sl-card>
-    
         
+          
 
 
-
-
-<sl-card id="AmodioMaster2008">
+<sl-card id="AmodioMaster2008" class="6_data_collection conflict">
   
   <div slot="header" id="card-header">
     <div id="title">
-      Neurocognitive components of the behavioral inhibition and activation systems: Implications for theories of self-regulation
-    </div>
-    <div id="authors">
-      Amodio, et al. (2008)
+      AmodioMaster2008
+      <sl-tooltip content="Neurocognitive components of the behavioral inhibition and activation systems: Implications for theories of self-regulation - Amodio, et al. (2008)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1111/j.1469-8986.2007.00609.x" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
   </div>
 
   <img
     slot="image"
     src="/assets/images/figures/AmodioMaster2008.png"
-    loading="lazy"
   />
 
   <p>Lead: <a href="/people/#kgloy">Kilian Gloy</a></p>
 
+  <p>Stage: <span class="tag stage 6_data_collection">IPA acquired. Data collection ongoing</span></p>
+  <p>Theme: <span class="tag theme Conflict">Conflict</span></p>
   
   
-    <p>Stage: <sl-tag size="small" class="Stage Review">Review</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Conflict">Conflict</sl-tag></p>
-  
-
-  
-  
-
-  <div slot="footer">
   
     
-    
-      
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1111/j.1469-8986.2007.00609.x target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Go to Published Replication Materials">
@@ -2535,7 +1433,7 @@
     </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Sign up as participating lab">
@@ -2550,74 +1448,37 @@
     </sl-tooltip>
   
 
-  
-
-  </div>
 
 </sl-card>
-    
         
+          
 
 
-
-
-<sl-card id="BuschVanRullen2010">
+<sl-card id="BuschVanRullen2010" class="4_stage1_prep attention">
   
   <div slot="header" id="card-header">
     <div id="title">
-      Spontaneous EEG oscillations reveal periodic sampling of visual attention
-    </div>
-    <div id="authors">
-      Busch, & VanRullen (2010)
+      BuschVanRullen2010
+      <sl-tooltip content="Spontaneous EEG oscillations reveal periodic sampling of visual attention - Busch, & VanRullen (2010)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1073/pnas.1004801107" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
   </div>
 
   <img
     slot="image"
     src="/assets/images/figures/BuschVanRullen2010.png"
-    loading="lazy"
   />
 
   <p>Lead: <a href="/people/#nsrinivasan">Narayanan Srinivasan</a></p>
 
+  <p>Stage: <span class="tag stage 4_stage1_prep">Stage 1 Registered report in preparation</span></p>
+  <p>Theme: <span class="tag theme Attention">Attention</span></p>
   
   
-    <p>Stage: <sl-tag size="small" class="Stage Registration">Registration</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Attention">Attention</sl-tag></p>
   
 
   
-  
-
-  <div slot="footer">
-  
-    
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1073/pnas.1004801107 target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
-  
-
-    
 
   
     <sl-tooltip content="Go to Published Replication Materials">
@@ -2632,7 +1493,7 @@
     </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Sign up as participating lab">
@@ -2647,74 +1508,37 @@
     </sl-tooltip>
   
 
-  
-
-  </div>
 
 </sl-card>
-    
         
+          
 
 
-
-
-<sl-card id="ClarkHillyard1996">
+<sl-card id="ClarkHillyard1996" class="4_stage1_prep attention">
   
   <div slot="header" id="card-header">
     <div id="title">
-      Spatial Selective Attention Affects Early Extrastriate But Not Striate Components of the Visual Evoked Potential
-    </div>
-    <div id="authors">
-      Clark, & Hillyard (1996)
+      ClarkHillyard1996
+      <sl-tooltip content="Spatial Selective Attention Affects Early Extrastriate But Not Striate Components of the Visual Evoked Potential - Clark, & Hillyard (1996)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1162/jocn.1996.8.5.387" target="_blank"></sl-icon-button>
+      </sl-tooltip>
     </div>
   </div>
 
   <img
     slot="image"
     src="/assets/images/figures/ClarkHillyard1996.png"
-    loading="lazy"
   />
 
   <p>Lead: <a href="/people/#akeil">Andreas Keil</a></p>
 
+  <p>Stage: <span class="tag stage 4_stage1_prep">Stage 1 Registered report in preparation</span></p>
+  <p>Theme: <span class="tag theme Attention">Attention</span></p>
   
   
-    <p>Stage: <sl-tag size="small" class="Stage Registration">Registration</sl-tag></p>
-  
-
-  
-  
-    <p>Theme: <sl-tag size="small" class="Theme Attention">Attention</sl-tag></p>
   
 
   
-  
-
-  <div slot="footer">
-  
-    
-    
-
-    
-
-  
-    <sl-tooltip content="Open Original Manuscript">
-      
-        
-      
-
-      <sl-button href=https://dx.doi.org/10.1162/jocn.1996.8.5.387 target=
-  
-    "_blank"
-  
->
-        <sl-icon slot="prefix" library="fa" name="fas-arrow-up-right-from-square"></sl-icon>
-        
-      </sl-button>
-    </sl-tooltip>
-  
-
-    
 
   
     <sl-tooltip content="Go to Published Replication Materials">
@@ -2729,7 +1553,7 @@
     </sl-tooltip>
   
 
-    
+  
 
   
     <sl-tooltip content="Sign up as participating lab">
@@ -2744,12 +1568,70 @@
     </sl-tooltip>
   
 
-  
-
-  </div>
 
 </sl-card>
-    
+        
+          
+
+
+<sl-card id="DelCul2007" class="4_stage1_prep consciousness">
+  
+  <div slot="header" id="card-header">
+    <div id="title">
+      DelCul2007
+      <sl-tooltip content="Brain Dynamics Underlying the Nonlinear Threshold for Access to Consciousness - Del Cul, Baillet, & Dehaene (2007)">
+        <sl-icon-button name="info-circle" href="https://dx.doi.org/10.1371/journal.pbio.0050260" target="_blank"></sl-icon-button>
+      </sl-tooltip>
+    </div>
+  </div>
+
+  <img
+    slot="image"
+    src="/assets/images/figures/DelCul2007.png"
+  />
+
+  <p>Lead: <a href="/people/#mrausch">Manuel Rausch</a></p>
+
+  <p>Stage: <span class="tag stage 4_stage1_prep">Stage 1 Registered report in preparation</span></p>
+  <p>Theme: <span class="tag theme Consciousness">Consciousness</span></p>
+  
+  
+  
+
+  
+
+  
+    <sl-tooltip content="Go to Published Replication Materials">
+      
+        
+      
+
+      <sl-button disabled>
+        <sl-icon slot="prefix" library="fa" name="fas-book-open"></sl-icon>
+        
+      </sl-button>
+    </sl-tooltip>
+  
+
+  
+
+  
+    <sl-tooltip content="Sign up as participating lab">
+      
+        
+      
+
+      <sl-button disabled>
+        <sl-icon slot="prefix" library="fa" name="fas-user-plus"></sl-icon>
+        Sign Up
+      </sl-button>
+    </sl-tooltip>
+  
+
+
+</sl-card>
+        
+      
     </div>
 
 </article>
@@ -2758,6 +1640,35 @@
     </div>
   </div>
   <footer>
+    
+      
+<section id="contact">
+
+    <h2>Contact</h2>
+
+    <ul>
+<li><a href="https://discord.gg/kKNtue4AW7"><img alt="Discord" src="/assets/images/discord_logo.png" title="Discord Server" /> Discord Server</a></li>
+<li><a href="mailto:contact@eegmanylabs.org"><img alt="Email" src="/assets/images/email_logo.png" title="Email us" /> contact@eegmanylabs.org</a></li>
+<li><a href="https://osf.io/yb3pq/"><img alt="Open Science Foundation" src="/assets/images/osf_logo.png" title="Open Science Foundation" /> OSF Resources</a></li>
+<li><a href="https://twitter.com/eegmanylabs"><img alt="X" src="/assets/images/x_logo.png" title="Follow us on X" /> @eegmanylabs</a></li>
+</ul>
+
+</section>
+
+    
+      
+<section id="funders">
+
+    <h2>Funders</h2>
+
+    <ul>
+<li><img alt="bbsrc" src="/assets/images/bbsrc_logo.png" title="BBSRC" /></li>
+<li><img alt="dfg" src="/assets/images/dfg_logo.png" title="Deutsche Forschungsgemeinde" /></li>
+</ul>
+
+</section>
+
+    
     <span id="copyright-reference">&copy; 2024 eegmanylabs</span>
   </footer>
 

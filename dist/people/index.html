@@ -7,7 +7,9 @@
     <meta name="robots" content="noindex, nofollow">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.0/cdn/themes/light.css" />
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.0/cdn/shoelace-autoloader.js"></script>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/assets/css/index.css">
     <script src="/assets/js/card_control.js" defer></script>
 
@@ -15,7 +17,7 @@
 </head>
 <body>
   <nav id="menu">
-    <a id="logo" href="/"><img id="logo" src="/assets/images/logo.png"></a>
+    <a id="logo" href="/"><img id="logo" src="/assets/images/logo_dark.png"></a>
     <a href="javascript:void(0);" class="icon" onclick="showResponsiveMenu()">
       <sl-icon library="fa" name="fas-bars"></sl-icon>
     </a>
@@ -48,51 +50,68 @@
 <article id="people">
 
     <h1>People</h1>
+<p>#EEGManyLabs is only possible thanks to the contributions of a global network of researchers committed to improving the field. Project coordinators oversee planning and communication; lead labs manage individual study logistics; an advisory board supports rigorous design and analysis; and replication teams collect data worldwide. From early career scientists to established investigators, contributors are shaping the project’s success through openness, collaboration, and mutual learning.</p>
 
     <div class="select-container" style="display: none">
-        
-        <sl-select class="Tag" placeholder="Tags" value="" multiple clearable></sl-select>
-        
+      
+        <sl-select id="tag" placeholder="Tags" value="" multiple clearable></sl-select>
+      
     </div>
 
 
     <div class="card-grid">
-    
+      
         
+          
 
 
 
-
-<sl-card id="fmushtaq">
+<sl-card id="fmushtaq" class="coordinator study_lead">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Faisal Mushtaq
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      University of Leeds
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/fmushtaq.png"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag coordinator"
+  
+  >
+  
+    Coordinator
+  
+  </sl-button>
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
 
-  
-  
-    <sl-tag size="small" pill class="coordinator Tag">coordinator</sl-tag>
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
@@ -133,45 +152,64 @@
 ></sl-icon-button>
   </sl-tooltip>
 
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#YeungSanfey2004 target=
   
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="ypavlov">
+<sl-card id="ypavlov" class="coordinator">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Yuri Pavlov
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      University of Alabama at Birmingham
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/ypavlov.jpg"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag coordinator"
+  
+  >
+  
+    Coordinator
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="coordinator Tag">coordinator</sl-tag>
   
 
   <div slot="footer">
@@ -193,11 +231,7 @@
     
       
     
-    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.medizin.uni-tuebingen.de/de/das-klinikum/mitarbeiter/profil/2191 target=
-  
-    "_blank"
-  
-></sl-icon-button>
+    <sl-icon-button library="fa" name="fas-building-columns" disabled></sl-icon-button>
   </sl-tooltip>
 
     
@@ -212,45 +246,676 @@
 ></sl-icon-button>
   </sl-tooltip>
 
-  
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="dcruse">
+<sl-card id="dwelke" class="coordinator">
   
   <div slot="header" id="card-header">
-    <div id="title">
-      Damian Cruse
+    <div id="name">
+      Dominik Welke
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      University of Leeds
     </div>
   </div>
 
+  
+    
+  
+
   <img
     slot="image"
-    src="/assets/images/headshots/dcruse.jpg"
-    loading="lazy"
+    src="/assets/images/headshots/dwelke.jpg"
   />
 
   
 
   
+    
+  <sl-button size="small" 
+  
+    variant="success" class= "tag coordinator"
+  
+  >
+  
+    Coordinator
+  
+  </sl-button>
+
+  
+
+  <div slot="footer">
+  
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.de/citations?user=B5xCyM0AAAAJ&hl=de target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" disabled></sl-icon-button>
+  </sl-tooltip>
+
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" href=https://dominikwelke.github.io/ target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
+
+  </div>
+
+</sl-card>
+        
+          
+
+
+
+<sl-card id="jvandenbosch" class="coordinator">
+  
+  <div slot="header" id="card-header">
+    <div id="name">
+      Jasper van den Bosch
+    </div>
+    <div id="affil">
+      University of Leeds
+    </div>
+  </div>
+
+  
+    
+  
+
+  <img
+    slot="image"
+    src="/assets/images/headshots/jvandenbosch.jpg"
+  />
+
   
 
   
+    
+  <sl-button size="small" 
+  
+    variant="success" class= "tag coordinator"
+  
+  >
+  
+    Coordinator
+  
+  </sl-button>
+
+  
+
+  <div slot="footer">
+  
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=XQ3-JHgAAAAJ&hl=en target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.birmingham.ac.uk/staff/profiles/psychology/bosch-jasper-van-den.aspx target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
+
+    
+
+  </div>
+
+</sl-card>
+        
+          
+
+
+
+<sl-card id="abland" class="co-investigator study_lead">
+  
+  <div slot="header" id="card-header">
+    <div id="name">
+      Amy Bland
+    </div>
+    <div id="affil">
+      Manchester Metropolitan University
+    </div>
+  </div>
+
+  
+    
+  
+
+  <img
+    slot="image"
+    src="/assets/images/headshots/abland.jpg"
+  />
+
   
 
   
+    
+  <sl-button size="small" 
   
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
+    variant="success" class= "tag co-investigator"
+  
+  >
+  
+    Co-Investigator
+  
+  </sl-button>
+
+  
+    
+  <sl-button size="small" 
+  
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
+
+  
+
+  <div slot="footer">
+  
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=nQl3r9kAAAAJ&hl=en&oi=ao target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.mmu.ac.uk/staff/profile/dr-amy-bland target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
+
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#HajcakFoti2008 target=
+  
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
+
+  </div>
+
+</sl-card>
+        
+          
+
+
+
+<sl-card id="marvaneh" class="co-investigator">
+  
+  <div slot="header" id="card-header">
+    <div id="name">
+      Mahnaz Arvaneh
+    </div>
+    <div id="affil">
+      University of Sheffield
+    </div>
+  </div>
+
+  
+    
+  
+
+  <img
+    slot="image"
+    src="/assets/images/headshots/marvaneh.jpg"
+  />
+
+  
+
+  
+    
+  <sl-button size="small" 
+  
+    variant="success" class= "tag co-investigator"
+  
+  >
+  
+    Co-Investigator
+  
+  </sl-button>
+
+  
+
+  <div slot="footer">
+  
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com.sg/citations?user=HBxF7nAAAAAJ&hl=en target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.sheffield.ac.uk/acse/department/people/academic/mahnaz-arvaneh target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
+
+    
+
+  </div>
+
+</sl-card>
+        
+          
+
+
+
+<sl-card id="xhe" class="co-investigator study_lead">
+  
+  <div slot="header" id="card-header">
+    <div id="name">
+      Xun He
+    </div>
+    <div id="affil">
+      Bournemouth University
+    </div>
+  </div>
+
+  
+    
+  
+
+  <img
+    slot="image"
+    src="/assets/images/headshots/xhe.png"
+  />
+
+  
+
+  
+    
+  <sl-button size="small" 
+  
+    variant="success" class= "tag co-investigator"
+  
+  >
+  
+    Co-Investigator
+  
+  </sl-button>
+
+  
+    
+  <sl-button size="small" 
+  
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
+
+  
+
+  <div slot="footer">
+  
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=08oketoAAAAJ&hl=en&oi=ao target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://staffprofiles.bournemouth.ac.uk/display/xhe target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
+
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#Eimer2003 target=
+  
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
+
+  </div>
+
+</sl-card>
+        
+          
+
+
+
+<sl-card id="roostenveld" class="advisor">
+  
+  <div slot="header" id="card-header">
+    <div id="name">
+      Robert Oostenveld
+    </div>
+    <div id="affil">
+      Donders Institute for Brain, Cognition and Behaviour
+    </div>
+  </div>
+
+  
+    
+  
+
+  <img
+    slot="image"
+    src="/assets/images/headshots/roostenveld.jpg"
+  />
+
+  
+
+  
+    
+  <sl-button size="small" 
+  
+    variant="success" class= "tag advisor"
+  
+  >
+  
+    Advisor
+  
+  </sl-button>
+
+  
+
+  <div slot="footer">
+  
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.co.uk/citations?user=eEbaa0UAAAAJ&hl=en target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.ru.nl/en/people/oostenveld-r target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+  </sl-tooltip>
+
+    
+
+  </div>
+
+</sl-card>
+        
+          
+
+
+
+<sl-card id="dbradford" class="study_lead">
+  
+  <div slot="header" id="card-header">
+    <div id="name">
+      Daniel Bradford
+    </div>
+    <div id="affil">
+      Oregon State University
+    </div>
+  </div>
+
+  
+    
+  
+
+  <img
+    slot="image"
+    src="/assets/images/headshots/dbradford.jpg"
+  />
+
+  
+
+  
+    
+  <sl-button size="small" 
+  
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
+
+  
+
+  <div slot="footer">
+  
+    
+  <sl-tooltip content="Google Scholar profile">
+    
+      
+    
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=mFzYd1sAAAAJ&hl=en target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
+  <sl-tooltip content="University profile page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-building-columns" disabled></sl-icon-button>
+  </sl-tooltip>
+
+    
+  <sl-tooltip content="Lab website">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-flask" href=https://beaverslab.com/ target=
+  
+    "_blank"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#HajcakFoti2008 target=
+  
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
+
+  </div>
+
+</sl-card>
+        
+          
+
+
+
+<sl-card id="dcruse" class="study_lead">
+  
+  <div slot="header" id="card-header">
+    <div id="name">
+      Damian Cruse
+    </div>
+    <div id="affil">
+      University of Birmingham
+    </div>
+  </div>
+
+  
+    
+  
+
+  <img
+    slot="image"
+    src="/assets/images/headshots/dcruse.jpg"
+  />
+
+  
+
+  
+    
+  <sl-button size="small" 
+  
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
+
   
 
   <div slot="footer">
@@ -291,45 +956,64 @@
 ></sl-icon-button>
   </sl-tooltip>
 
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#Sergent2005 target=
   
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="mgamer">
+<sl-card id="mgamer" class="study_lead">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Matthias Gamer
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      University of Würzburg
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/mgamer.jpg"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
@@ -366,45 +1050,64 @@
     <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
   </sl-tooltip>
 
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#Miltner1999 target=
   
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="gganis">
+<sl-card id="gganis" class="study_lead">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Giorgio Ganis
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      University of Plymouth
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/gganis.jpg"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
@@ -441,45 +1144,64 @@
     <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
   </sl-tooltip>
 
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#Eimer1993 target=
   
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="sgregory">
+<sl-card id="sgregory" class="study_lead">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Samantha Gregory
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      University of Salford
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/sgregory.jpg"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
@@ -520,45 +1242,64 @@
 ></sl-icon-button>
   </sl-tooltip>
 
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#Onton2005 target=
   
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="chassall">
+<sl-card id="chassall" class="study_lead">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Cameron Hassall
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      MacEwan University
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/chassall.jpg"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
@@ -599,45 +1340,64 @@
 ></sl-icon-button>
   </sl-tooltip>
 
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#Vidal2000 target=
   
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="kgloy">
+<sl-card id="kgloy" class="study_lead">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Kilian Gloy
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      University of Bremen
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/kgloy.jpg"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
@@ -670,45 +1430,64 @@
     <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
   </sl-tooltip>
 
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#AmodioMaster2008 target=
   
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="jkaiser">
+<sl-card id="zliu" class="study_lead">
   
   <div slot="header" id="card-header">
-    <div id="title">
-      Jakob Kaiser
+    <div id="name">
+      Zhong Xu Liu
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      University of Michigan-Dearborn
     </div>
   </div>
 
+  
+    
+  
+
   <img
     slot="image"
-    src="/assets/images/headshots/jkaiser.jpg"
-    loading="lazy"
+    src="/assets/images/headshots/zliu.jpg"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
@@ -718,11 +1497,7 @@
     
       
     
-    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=lSBrwo4AAAAJ&hl=en&oi=sra target=
-  
-    "_blank"
-  
-></sl-icon-button>
+    <sl-icon-button library="fa" name="fab-google-scholar" disabled></sl-icon-button>
   </sl-tooltip>
 
     
@@ -730,7 +1505,7 @@
     
       
     
-    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.psy.uni-muenchen.de/expneurocog/people/lab-members/jakob_kaiser/index.html target=
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://umdearborn.edu/people-um-dearborn/zhong-xu-liu target=
   
     "_blank"
   
@@ -742,48 +1517,71 @@
     
       
     
-    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
+    <sl-icon-button library="fa" name="fas-flask" href=https://zhongxuliu.wixsite.com/cogneurolab target=
+  
+    "_blank"
+  
+></sl-icon-button>
   </sl-tooltip>
 
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#Boksem2006 target=
   
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="akeil">
+<sl-card id="akeil" class="study_lead">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Andreas Keil
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      University of Florida
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/akeil.png"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
@@ -824,45 +1622,64 @@
 ></sl-icon-button>
   </sl-tooltip>
 
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#ClarkHillyard1996 target=
   
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="nlanger">
+<sl-card id="nlanger" class="study_lead">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Nicolas Langer
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      University of Zurich
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/nlanger.jpg"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
@@ -899,45 +1716,64 @@
     <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
   </sl-tooltip>
 
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#VogelMachizawa2004 target=
   
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="hliesefeld">
+<sl-card id="hliesefeld" class="study_lead">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Heinrich Liesefeld
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      University of Bremen
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/hliesefeld.png"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
@@ -974,120 +1810,64 @@
     <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
   </sl-tooltip>
 
-  
-
-  </div>
-
-</sl-card>
     
-        
-
-
-
-
-<sl-card id="dwelke">
-  
-  <div slot="header" id="card-header">
-    <div id="title">
-      Dominik Welke
-    </div>
-    <div id="authors">
       
-    </div>
-  </div>
-
-  <img
-    slot="image"
-    src="/assets/images/headshots/dwelke.jpg"
-    loading="lazy"
-  />
-
-  
-
-  
-  
-
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="coordinator Tag">coordinator</sl-tag>
-  
-
-  <div slot="footer">
-  
-    
-  <sl-tooltip content="Google Scholar profile">
+      
+  <sl-tooltip content="Replicaton page">
     
       
     
-    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.de/citations?user=B5xCyM0AAAAJ&hl=de target=
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#Eimer1996 target=
   
-    "_blank"
+    "_top"
   
 ></sl-icon-button>
   </sl-tooltip>
 
     
-  <sl-tooltip content="University profile page">
-    
-      
-    
-    <sl-icon-button library="fa" name="fas-building-columns" href=https://immersivecognition.com/people/ target=
-  
-    "_blank"
-  
-></sl-icon-button>
-  </sl-tooltip>
-
-    
-  <sl-tooltip content="Lab website">
-    
-      
-    
-    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
-  </sl-tooltip>
-
-  
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="amacnamara">
+<sl-card id="amacnamara" class="study_lead">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Annmarie MacNamara
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      Texas A&M University
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/amacnamara.jpg"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
@@ -1128,124 +1908,64 @@
 ></sl-icon-button>
   </sl-tooltip>
 
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#Inzlicht2009 target=
   
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="wmarinovic">
+<sl-card id="rnaar" class="study_lead">
   
   <div slot="header" id="card-header">
-    <div id="title">
-      Welber Marinovic
-    </div>
-    <div id="authors">
-      
-    </div>
-  </div>
-
-  <img
-    slot="image"
-    src="/assets/images/headshots/wmarinovic.jpg"
-    loading="lazy"
-  />
-
-  
-
-  
-  
-
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
-  
-
-  <div slot="footer">
-  
-    
-  <sl-tooltip content="Google Scholar profile">
-    
-      
-    
-    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=QPFeiZkAAAAJ&hl=en target=
-  
-    "_blank"
-  
-></sl-icon-button>
-  </sl-tooltip>
-
-    
-  <sl-tooltip content="University profile page">
-    
-      
-    
-    <sl-icon-button library="fa" name="fas-building-columns" href=https://staffportal.curtin.edu.au/staff/profile/view/welber-marinovic-e50006ed/ target=
-  
-    "_blank"
-  
-></sl-icon-button>
-  </sl-tooltip>
-
-    
-  <sl-tooltip content="Lab website">
-    
-      
-    
-    <sl-icon-button library="fa" name="fas-flask" href=https://sites.google.com/site/wmarinovic/ target=
-  
-    "_blank"
-  
-></sl-icon-button>
-  </sl-tooltip>
-
-  
-
-  </div>
-
-</sl-card>
-    
-        
-
-
-
-
-<sl-card id="rnaar">
-  
-  <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Richard Naar
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      University of Tartu
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/rnaar.jpg"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
@@ -1282,45 +2002,64 @@
     <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
   </sl-tooltip>
 
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#Muller2003 target=
   
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="gniso">
+<sl-card id="gniso" class="study_lead">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Guiomar Niso
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      Instituto Cajal CSIC
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/gniso.png"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
@@ -1361,45 +2100,64 @@
 ></sl-icon-button>
   </sl-tooltip>
 
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#Luck1996 target=
   
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="gpourtois">
+<sl-card id="gpourtois" class="study_lead">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Gilles Pourtois
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      Ghent University
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/gpourtois.png"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
@@ -1440,45 +2198,64 @@
 ></sl-icon-button>
   </sl-tooltip>
 
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#HajcakHolroyd2005 target=
   
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="msenderecka">
+<sl-card id="msenderecka" class="study_lead">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Magdalena Senderecka
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      Jagiellonian University
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/msenderecka.png"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
@@ -1515,45 +2292,64 @@
     <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
   </sl-tooltip>
 
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#HajcakMoser2005 target=
   
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="mruzzoli">
+<sl-card id="mruzzoli" class="study_lead">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Manuela Ruzzoli
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      Basque Center on Cognition, Brain and Language
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/mruzzoli.jpg"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
@@ -1590,45 +2386,64 @@
     <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
   </sl-tooltip>
 
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#Mathewson2009 target=
   
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="aschaefer">
+<sl-card id="aschaefer" class="study_lead">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Alexandre Schaefer
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      Sunway University
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/aschaefer.png"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
@@ -1665,45 +2480,64 @@
     <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
   </sl-tooltip>
 
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#AmodioJost2007  target=
   
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="nsrinivasan">
+<sl-card id="nsrinivasan" class="study_lead">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Narayanan Srinivasan
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      Indian Institute of Technology Kanpur
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/nsrinivasan.jpg"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
@@ -1744,45 +2578,64 @@
 ></sl-icon-button>
   </sl-tooltip>
 
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#BuschVanRullen2010 target=
   
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="mvandermolen">
+<sl-card id="mvandermolen" class="study_lead">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Melle van der Molen 
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      Leiden University
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/mvandermolen.jpg"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
@@ -1823,120 +2676,64 @@
 ></sl-icon-button>
   </sl-tooltip>
 
-  
-
-  </div>
-
-</sl-card>
     
-        
-
-
-
-
-<sl-card id="jvandenbosch">
-  
-  <div slot="header" id="card-header">
-    <div id="title">
-      Jasper van den Bosch
-    </div>
-    <div id="authors">
       
-    </div>
-  </div>
-
-  <img
-    slot="image"
-    src="/assets/images/headshots/jvandenbosch.jpg"
-    loading="lazy"
-  />
-
-  
-
-  
-  
-
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="coordinator Tag">coordinator</sl-tag>
-  
-
-  <div slot="footer">
-  
-    
-  <sl-tooltip content="Google Scholar profile">
+      
+  <sl-tooltip content="Replicaton page">
     
       
     
-    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=XQ3-JHgAAAAJ&hl=en target=
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#Hajcak2006 target=
   
-    "_blank"
+    "_top"
   
 ></sl-icon-button>
   </sl-tooltip>
 
     
-  <sl-tooltip content="University profile page">
-    
-      
-    
-    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.birmingham.ac.uk/staff/profiles/psychology/bosch-jasper-van-den.aspx target=
-  
-    "_blank"
-  
-></sl-icon-button>
-  </sl-tooltip>
-
-    
-  <sl-tooltip content="Lab website">
-    
-      
-    
-    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
-  </sl-tooltip>
-
-  
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="everona">
+<sl-card id="everona" class="study_lead">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Edelyn Verona
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      University of South Florida
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/everona.png"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
@@ -1973,43 +2770,64 @@
     <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
   </sl-tooltip>
 
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#Hajcak2003 target=
   
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="socklenburg">
+<sl-card id="socklenburg" class="spin-off">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Sebastian Ocklenburg
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      MSH Medical School Hamburg
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/socklenburg.jpg"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag spin-off"
+  
+  >
+  
+    Spin-Off
+  
+  </sl-button>
 
-  
-  
-
-  
   
 
   <div slot="footer">
@@ -2046,45 +2864,62 @@
     <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
   </sl-tooltip>
 
-  
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="cpernet">
+<sl-card id="cpernet" class="advisor spin-off">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Cyril Pernet
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      Copenhagen University Hospital
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/cpernet.jpg"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag advisor"
+  
+  >
+  
+    Advisor
+  
+  </sl-button>
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag spin-off"
+  
+  >
+  
+    Spin-Off
+  
+  </sl-button>
 
-  
-  
-    <sl-tag size="small" pill class="advisor Tag">advisor</sl-tag>
   
 
   <div slot="footer">
@@ -2125,45 +2960,50 @@
 ></sl-icon-button>
   </sl-tooltip>
 
-  
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="rbendall">
+<sl-card id="rbendall" class="study_lead">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Robert Bendall
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      University of Salford
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/rbendall.jpg"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
@@ -2204,45 +3044,64 @@
 ></sl-icon-button>
   </sl-tooltip>
 
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#Carretie2004 target=
   
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="mrausch">
+<sl-card id="mrausch" class="study_lead">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Manuel Rausch
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      Catholic University of Eichstätt-Ingolstadt
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/mrausch.jpg"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
@@ -2279,45 +3138,64 @@
 ></sl-icon-button>
   </sl-tooltip>
 
+    
+      
+      
+  <sl-tooltip content="Replicaton page">
+    
+      
+    
+    <sl-icon-button library="fa" name="fas-clipboard" href=/replications/#DelCul2007 target=
   
+    "_top"
+  
+></sl-icon-button>
+  </sl-tooltip>
+
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="krobbins">
+<sl-card id="krobbins" class="advisor">
   
   <div slot="header" id="card-header">
-    <div id="title">
+    <div id="name">
       Kay Robbins
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      University of Texas at San Antonio
     </div>
   </div>
+
+  
+    
+  
 
   <img
     slot="image"
     src="/assets/images/headshots/krobbins.jpg"
-    loading="lazy"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag advisor"
+  
+  >
+  
+    Advisor
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="advisor Tag">advisor</sl-tag>
   
 
   <div slot="footer">
@@ -2354,47 +3232,62 @@
     <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
   </sl-tooltip>
 
-  
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="abland">
+<sl-card id="nadamian" class="advisor study_lead">
   
   <div slot="header" id="card-header">
-    <div id="title">
-      Amy Bland
+    <div id="name">
+      Nika Adamian
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      Liverpool John Moores University
     </div>
   </div>
 
+  
+    
+  
+
   <img
     slot="image"
-    src="/assets/images/headshots/abland.jpg"
-    loading="lazy"
+    src="/assets/images/headshots/nadamian.jpg"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag advisor"
+  
+  >
+  
+    Advisor
+  
+  </sl-button>
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag study_lead"
+  
+  >
+  
+    Study Lead
+  
+  </sl-button>
 
-  
-  
-    <sl-tag size="small" pill class="co-investigator Tag">co-investigator</sl-tag>
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
   
 
   <div slot="footer">
@@ -2404,7 +3297,7 @@
     
       
     
-    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=nQl3r9kAAAAJ&hl=en&oi=ao target=
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=dwl_710AAAAJ&hl=en&oi=ao target=
   
     "_blank"
   
@@ -2416,7 +3309,7 @@
     
       
     
-    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.mmu.ac.uk/staff/profile/dr-amy-bland target=
+    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.ljmu.ac.uk/about-us/staff-profiles/faculty-of-health/school-of-psychology/nika-adamian target=
   
     "_blank"
   
@@ -2431,45 +3324,50 @@
     <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
   </sl-tooltip>
 
-  
+    
 
   </div>
 
 </sl-card>
-    
         
+          
 
 
 
-
-<sl-card id="marvaneh">
+<sl-card id="bsanders" class="advisor">
   
   <div slot="header" id="card-header">
-    <div id="title">
-      Mahnaz Arvaneh
+    <div id="name">
+      Blair Saunders
     </div>
-    <div id="authors">
-      
+    <div id="affil">
+      University of Dundee
     </div>
   </div>
 
+  
+    
+  
+
   <img
     slot="image"
-    src="/assets/images/headshots/marvaneh.jpg"
-    loading="lazy"
+    src="/assets/images/headshots/bsanders.jpg"
   />
 
   
 
   
+    
+  <sl-button size="small" 
   
+    variant="success" class= "tag advisor"
+  
+  >
+  
+    Advisor
+  
+  </sl-button>
 
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="co-investigator Tag">co-investigator</sl-tag>
   
 
   <div slot="footer">
@@ -2479,234 +3377,7 @@
     
       
     
-    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com.sg/citations?user=HBxF7nAAAAAJ&hl=en target=
-  
-    "_blank"
-  
-></sl-icon-button>
-  </sl-tooltip>
-
-    
-  <sl-tooltip content="University profile page">
-    
-      
-    
-    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.sheffield.ac.uk/acse/department/people/academic/mahnaz-arvaneh target=
-  
-    "_blank"
-  
-></sl-icon-button>
-  </sl-tooltip>
-
-    
-  <sl-tooltip content="Lab website">
-    
-      
-    
-    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
-  </sl-tooltip>
-
-  
-
-  </div>
-
-</sl-card>
-    
-        
-
-
-
-
-<sl-card id="xhe">
-  
-  <div slot="header" id="card-header">
-    <div id="title">
-      Xun He
-    </div>
-    <div id="authors">
-      
-    </div>
-  </div>
-
-  <img
-    slot="image"
-    src="/assets/images/headshots/xhe.png"
-    loading="lazy"
-  />
-
-  
-
-  
-  
-
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="co-investigator Tag">co-investigator</sl-tag>
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
-  
-
-  <div slot="footer">
-  
-    
-  <sl-tooltip content="Google Scholar profile">
-    
-      
-    
-    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=08oketoAAAAJ&hl=en&oi=ao target=
-  
-    "_blank"
-  
-></sl-icon-button>
-  </sl-tooltip>
-
-    
-  <sl-tooltip content="University profile page">
-    
-      
-    
-    <sl-icon-button library="fa" name="fas-building-columns" href=https://staffprofiles.bournemouth.ac.uk/display/xhe target=
-  
-    "_blank"
-  
-></sl-icon-button>
-  </sl-tooltip>
-
-    
-  <sl-tooltip content="Lab website">
-    
-      
-    
-    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
-  </sl-tooltip>
-
-  
-
-  </div>
-
-</sl-card>
-    
-        
-
-
-
-
-<sl-card id="roostenveld">
-  
-  <div slot="header" id="card-header">
-    <div id="title">
-      Robert Oostenveld
-    </div>
-    <div id="authors">
-      
-    </div>
-  </div>
-
-  <img
-    slot="image"
-    src="/assets/images/headshots/roostenveld.jpg"
-    loading="lazy"
-  />
-
-  
-
-  
-  
-
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="advisor Tag">advisor</sl-tag>
-  
-
-  <div slot="footer">
-  
-    
-  <sl-tooltip content="Google Scholar profile">
-    
-      
-    
-    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.co.uk/citations?user=eEbaa0UAAAAJ&hl=en target=
-  
-    "_blank"
-  
-></sl-icon-button>
-  </sl-tooltip>
-
-    
-  <sl-tooltip content="University profile page">
-    
-      
-    
-    <sl-icon-button library="fa" name="fas-building-columns" href=https://www.ru.nl/en/people/oostenveld-r target=
-  
-    "_blank"
-  
-></sl-icon-button>
-  </sl-tooltip>
-
-    
-  <sl-tooltip content="Lab website">
-    
-      
-    
-    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
-  </sl-tooltip>
-
-  
-
-  </div>
-
-</sl-card>
-    
-        
-
-
-
-
-<sl-card id="dbradford">
-  
-  <div slot="header" id="card-header">
-    <div id="title">
-      Daniel Bradford
-    </div>
-    <div id="authors">
-      
-    </div>
-  </div>
-
-  <img
-    slot="image"
-    src="/assets/images/headshots/dbradford.jpg"
-    loading="lazy"
-  />
-
-  
-
-  
-  
-
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
-  
-
-  <div slot="footer">
-  
-    
-  <sl-tooltip content="Google Scholar profile">
-    
-      
-    
-    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=mFzYd1sAAAAJ&hl=en target=
+    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=UYQGHIsAAAAJ&hl=en&oi=ao target=
   
     "_blank"
   
@@ -2726,94 +3397,20 @@
     
       
     
-    <sl-icon-button library="fa" name="fas-flask" href=https://beaverslab.com/ target=
+    <sl-icon-button library="fa" name="fas-flask" href=https://sites.google.com/view/srplab target=
   
     "_blank"
   
 ></sl-icon-button>
   </sl-tooltip>
 
-  
+    
 
   </div>
 
 </sl-card>
-    
         
-
-
-
-
-<sl-card id="achatard">
-  
-  <div slot="header" id="card-header">
-    <div id="title">
-      Armand Chatard
-    </div>
-    <div id="authors">
       
-    </div>
-  </div>
-
-  <img
-    slot="image"
-    src="/assets/images/headshots/achatard.png"
-    loading="lazy"
-  />
-
-  
-
-  
-  
-
-  
-  
-
-  
-  
-    <sl-tag size="small" pill class="replicator Tag">replicator</sl-tag>
-  
-
-  <div slot="footer">
-  
-    
-  <sl-tooltip content="Google Scholar profile">
-    
-      
-    
-    <sl-icon-button library="fa" name="fab-google-scholar" href=https://scholar.google.com/citations?user=frClUFcAAAAJ&hl=en&oi=ao target=
-  
-    "_blank"
-  
-></sl-icon-button>
-  </sl-tooltip>
-
-    
-  <sl-tooltip content="University profile page">
-    
-      
-    
-    <sl-icon-button library="fa" name="fas-building-columns" href=https://cerca.labo.univ-poitiers.fr/en/membres/armand-chatard-2/ target=
-  
-    "_blank"
-  
-></sl-icon-button>
-  </sl-tooltip>
-
-    
-  <sl-tooltip content="Lab website">
-    
-      
-    
-    <sl-icon-button library="fa" name="fas-flask" disabled></sl-icon-button>
-  </sl-tooltip>
-
-  
-
-  </div>
-
-</sl-card>
-    
     </div>
 
 </article>
@@ -2822,6 +3419,35 @@
     </div>
   </div>
   <footer>
+    
+      
+<section id="contact">
+
+    <h2>Contact</h2>
+
+    <ul>
+<li><a href="https://discord.gg/kKNtue4AW7"><img alt="Discord" src="/assets/images/discord_logo.png" title="Discord Server" /> Discord Server</a></li>
+<li><a href="mailto:contact@eegmanylabs.org"><img alt="Email" src="/assets/images/email_logo.png" title="Email us" /> contact@eegmanylabs.org</a></li>
+<li><a href="https://osf.io/yb3pq/"><img alt="Open Science Foundation" src="/assets/images/osf_logo.png" title="Open Science Foundation" /> OSF Resources</a></li>
+<li><a href="https://twitter.com/eegmanylabs"><img alt="X" src="/assets/images/x_logo.png" title="Follow us on X" /> @eegmanylabs</a></li>
+</ul>
+
+</section>
+
+    
+      
+<section id="funders">
+
+    <h2>Funders</h2>
+
+    <ul>
+<li><img alt="bbsrc" src="/assets/images/bbsrc_logo.png" title="BBSRC" /></li>
+<li><img alt="dfg" src="/assets/images/dfg_logo.png" title="Deutsche Forschungsgemeinde" /></li>
+</ul>
+
+</section>
+
+    
     <span id="copyright-reference">&copy; 2024 eegmanylabs</span>
   </footer>
 

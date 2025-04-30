@@ -32,32 +32,40 @@ hr {
 
 #body-container {
     margin-top: 100px;
-    margin-bottom: 15px;
+    margin-bottom: 30px;
     min-height: calc(100vh - 80px); /* push footer down. 80px = header+footer */
     overflow: hidden; /* prevents child elements' margins from pushing this around  */
+    line-height: var(--sl-line-height-normal);
 }
+
 div#content {
-    width: 90%;
-    margin: auto;
+    width: 70%;
+    margin-inline: auto;
 }
+
 nav#menu {
     min-height: 40px;
-    width:100%;
+    width: 90%;
     overflow: visible; /* if the floating menu wraps around, extend this nav */
     z-index: 1;     /* always on top */
     position: fixed;  /* attached to the top */
     top: 0;
     font-size: 18px;
     font-weight: normal;
-    background-color: #F7F7F7;;
+    background-color: var(--sl-color-gray-800);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 5%;
 }
 
 nav#menu a {
-    color: #666666;
+    color: lightgray;
     text-decoration: none;
 }
+
 nav#menu a:hover {
-    color: black;
+    color: white;
 }
 
 nav#menu .icon {
@@ -67,81 +75,83 @@ nav#menu .icon {
 .topnav {
 	float: right;
 	margin: 0;
-	padding: 16px 8px 0 0;
 	list-style-type: none;
+    display: flex;
+    align-items: center;
 }
 
 .topnav li {
 	display: inline;
 	margin: 0 1em 0 0;
+    text-transform: capitalize;
 }
 
-@media screen and (max-width: 600px) {
-    nav#menu a.icon {
-        float: right;
-        display: block;
-        padding: 1em 1em 0 0;
-    }
-    nav#menu a sl-icon {
-        height: 25px;
-        width: auto;
-    }
-
-    .topnav {
-        display: contents;
-        text-align: right;
-    }
-
-    .topnav li {
-        display: none;
-        margin-bottom: 8px;
-    }
-    .topnav.responsive li{display: block;}
+.front-grid > a {
+    text-decoration: none;
+    color: black;
 }
+
+article > h1 {
+    font-size: 32px;
+    font-weight: bold;
+}
+
+#front > h1,
+#front > h2 {
+    text-align: center;
+}
+
+#front > hr {
+    display: block;
+    width: 30%;
+    color: lightslategray;
+}
+
 
 h1 {
-    font-family: "Garamond", Georgia, serif;
     font-weight: normal;
 }
 
 h2 {
-    font-family: "Garamond", Georgia, serif;
     font-weight: normal;
 }
 
 
 /* footer */
 footer {
-    height: 30px;
-    overflow: hidden;
-    background-color: rgb(46, 46, 46);
-    color: rgb(131, 140, 149);
+    background-color: var(--sl-color-gray-200);
+    color: rgb(46, 46, 46);
     font-size: 12px;
     font-weight: normal;
-    padding: 5px 4em;
+    padding: 5px 5%;
     text-align: left;
     -webkit-box-sizing: content-box;
     -moz-box-sizing: content-box;
     box-sizing: content-box;
+    border-top: 2px darkgray solid;
 }
+
 
 /* 
     INDEX
 */
 
 article > p {
-    max-width: 600px;
-    padding: 20px;
+    padding: 20px 0;
 }
 
 .card-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, 300px);
+    grid-template-columns: repeat(auto-fit, 340px);
     grid-auto-rows: auto;
     column-gap: 20px;
     row-gap: 20px;
-    justify-content: left;
+    justify-content: space-evenly;
 
+}
+
+.front-grid sl-card {
+    margin-bottom: 15px;
 }
 
 .preview-grid {
@@ -167,25 +177,19 @@ sl-menu-item::part(label) {
 
 /* finer grid for people */
 #people .card-grid {
-    grid-template-columns: repeat(auto-fit, 240px);
+    grid-template-columns: repeat(auto-fit, 280px);
     column-gap: 25px;
 }
 
 /* fix non-conforming headshots */
 #people .card-grid img {
-    object-fit: cover;
+    object-fit: contain;
     height: 200px;
 }
 
 /*
     FRONT PAGE
 */
-
-/* fix non-conforming headshots */
-#front img[slot="image"] {
-    object-fit: cover;
-    height: 300px;
-}
 
 a.see-all {
     white-space: nowrap;
@@ -215,6 +219,10 @@ a.see-all {
     height: 40px;
     display: block;
     margin: auto;
+}
+
+#funders img {
+    height: 55px;
 }
 
 #contact a {
@@ -259,49 +267,34 @@ sl-card a[href^="https://eeg100"] {
 }
 
 #spin-offs img {
-	height: 270px
+	height: 270px;
 }
 
 #spin-offs sl-card::part(header) {
-	 flex-grow: 0
+    flex-grow: 0;
+    font-size: large;
+    font-weight: 600;
 }
 
 #spin-offs sl-card::part(body) {
 	display: flex;
 	flex-direction: column;
-	flex-grow: 1
+	flex-grow: 1;
 }
 
 #spin-offs sl-card p:first-of-type {
-	flex-grow: 1
+	flex-grow: 1;
+    margin-top: 0;
 }
 
-#spin-offs sl-card::part(footer) {
-	padding: 0
-}
 
 /*  
     REPLICATION PAGE
 */
 
-#replications div[slot="header"] {
-    font-weight: bolder;
-    font-size: larger;
-    min-height: 3.5em;
-}
 
 #replications .card-grid {
-    grid-template-columns: repeat(auto-fit, 350px);
-}
-
-#replications blockquote {
-    max-height: 200px;
-    overflow: hidden;
-}
-
-#replications blockquote {
-    max-height: 200px;
-    overflow: hidden;
+    padding-top: 20px;
 }
 
 #replications a[href^="https://forms"],
@@ -351,26 +344,34 @@ article#people sl-card::part(footer) {
     color: teal;
 }
 
-#people sl-tag::part(base), #publications sl-tag::part(base) {
+#publications sl-tag::part(base) {
     border-radius: 3px;
     color:white;
     font-weight: bold;
 }
 
-#people sl-tag.coordinator::part(base) {
+#people sl-button::part(base) {
+    border-color: white;
+}
+
+#people sl-button.coordinator::part(base) {
     background-color: teal;
 }
 
-#people sl-tag.replicator::part(base) {
+#people sl-button.study_lead::part(base) {
     background-color: deepskyblue;
 }
 
-#people sl-tag.co-investigator::part(base) {
+#people sl-button.co-investigator::part(base) {
     background-color: rgb(163, 106, 0);
 }
 
-#people sl-tag.advisor::part(base) {
+#people sl-button.advisor::part(base) {
     background-color: rgb(128, 0, 122);
+}
+
+#people sl-button.spin-off::part(base) {
+    background-color: darkgray;
 }
 
 
@@ -388,42 +389,6 @@ a[href^="https://scholar.google.com/citations?user=ueMcfOcAAAAJ"] {
     color: teal;
 }
 
-
-#publications a[href^="https://dx.doi.org"] {
-    padding: 5px;
-    border-radius: 3px;
-    border: 1px solid teal;
-    margin: 2px;
-    text-decoration: none;
-    color: teal;
-}
-
-#publications blockquote {
-    font-size: 12px;
-    max-height: 5em;
-    overflow-y: scroll;
-}
-
-#publications sl-tag.preprint::part(base) {
-    background-color: rgb(69, 183, 209);
-}
-
-#publications sl-tag.pre-registered::part(base) {
-    background-color: rgb(210, 199, 72);
-}
-
-#publications sl-tag.published::part(base) {
-    background-color: rgb(81, 187, 160);
-}
-
-#publications img {
-    height: 300px;
-}
-
-#publications #authors{
-    padding-top: 20px;
-    font-size: 14px;
-}
 
 /* CSS for equal sized but reactive cards */
 
@@ -457,5 +422,246 @@ article#front {
     
     sl-card::part(header) {
         display: none;
+    }
+}
+
+/* Publications section  */
+
+#publications .card-grid {
+    display: block;
+}
+
+#publications h2 {
+    padding-top: 10px;
+}
+
+#publications p:first-of-type {
+    padding-bottom: 0;
+}
+
+#publications sl-card {
+    margin-bottom: 15px;
+}
+
+#publications sl-card::part(base) {
+    border-width: 2px;
+}
+
+#publications sl-card::part(header) {
+    display: none;
+}
+
+#publications sl-card::part(body) {
+    padding: calc(var(--padding)/2) var(--padding);
+    background-color: white;
+}
+
+#publications sl-button::part(label) {
+    font-weight: bold;
+}
+
+#publications #title{
+    font-size: 18px;
+    font-weight: bold;
+}
+
+#publications #authors{
+    padding-top: 10px;
+    font-size: 16px;
+}
+
+#publications #journal{
+    padding-top: 10px;
+    font-size: 14px;
+}
+
+#publications #buttons{
+    padding-top: 10px;
+}
+
+.tag {
+    cursor: auto;
+}
+
+#publications .preprint::part(base) {
+    background-color: rgb(69, 183, 209);
+    border-color: rgb(69, 183, 209);
+}
+
+#publications .stage1::part(base) {
+    background-color: rgb(210, 199, 72);
+    border-color: rgb(210, 199, 72);
+}
+
+#publications .stage2::part(base) {
+    background-color: rgb(5, 147, 27);
+    border-color: rgb(5, 147, 27);
+}
+
+#publications .published::part(base) {
+    background-color: rgb(81, 187, 160);
+    border-color: rgb(81, 187, 160);
+}
+
+#publications .doi::part(base) {
+    border-color: blue;
+}
+
+#publications .paper::part(base) {
+    border-color: green;
+}
+
+#publications .osf::part(base) {
+    border-color: orange;
+}
+
+#publications .data::part(base) {
+    border-color:coral
+}
+
+#front sl-card::part(base) {
+    padding: var(--padding);
+    flex-direction: row;
+}
+
+#front sl-card::part(body) {
+    padding: 0;
+    padding-left: var(--padding);
+    flex: 80%;
+}
+
+#front sl-card::part(image) {
+    flex: 20%;
+    align-items: center;
+}
+
+#front sl-card > p {
+    margin: 0
+}
+
+#front sl-card > h1 {
+    margin-top: 0
+}
+
+#front img[slot="image"] {
+    padding: 0;
+    max-width: 100%;
+}
+
+article#front > p:first-of-type {
+    display: flex;
+    justify-content: center;
+    padding-top: 0;
+}
+
+article#front > p > img {
+    width: 70%
+}
+
+#front a > sl-card::part(base):hover {
+    border: solid 1px var(--sl-color-gray-500);
+}
+
+.get_involved {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, 300px);
+    column-gap: 30px;
+}
+
+#front .get_involved sl-card::part(body) {
+    padding: 0;
+}
+
+.get_involved h1 {
+    font-size: medium;
+}
+
+#replications div#title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bolder;
+    font-size: larger;
+}
+
+#replications sl-card::part(header) {
+    display: block;
+}
+
+#people #name {
+    font-weight: bold;
+}
+
+#people #affil {
+    font-size: smaller;
+}
+
+@media screen and (max-width: 768px) {
+    nav#menu {
+        flex-direction: column;
+        align-items: flex-start;
+        width: 100%;
+        padding: 0;
+    }
+
+    nav#menu a.icon {
+        position: absolute;
+        right: 0;
+        top: 0;
+        display: block;
+        padding: 1em 1em 0 0;
+    }
+
+    nav#menu a sl-icon {
+        height: 25px;
+        width: auto;
+    }
+
+    .topnav {
+        display: none;
+        flex-direction: column;
+        width: 100%;
+        padding: 0;
+    }
+
+    .topnav.responsive {
+        display: flex;
+    }
+
+    .topnav li {
+        margin: 0;
+        width: 100%;
+        text-align: center;
+        padding: 8px;
+    }
+
+    div#content {
+        width: 90%;
+    }
+
+    div#body-container {
+        margin-top: 70px;
+    }
+
+    #front sl-card::part(base) {
+        flex-direction: column;
+    }
+
+    #front sl-card::part(body) {
+        padding-top: var(--padding);
+        padding-left: 0;
+    }
+
+    #front sl-card::part(image) {
+        flex: none;
+    }
+
+    #publications #buttons {
+        display: flex;
+        flex-direction: column;
+    }
+
+    #publications sl-button {
+        padding-top: 10px;
     }
 }
