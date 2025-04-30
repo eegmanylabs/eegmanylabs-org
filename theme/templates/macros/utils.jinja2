@@ -9,7 +9,22 @@
 
 {% macro add_tag(leaf, name) %}
   {% if leaf.front[name] %}
-    <p>{{ name }}: <sl-tag size="small" class="{{ name }} {{leaf.front[name]}}">{{ leaf.front[name] }}</sl-tag></p>
+    <p>{{ name }}: <sl-tag size="small" class="tag {{ name|lower }} {{leaf.front[name]}}">{{ leaf.front[name] }}</sl-tag></p>
   {% endif %}
 {% endmacro %}
 
+{% macro add_button(id, content="", url="") %}
+  <sl-button size="small" 
+  {% if url != "" %}
+    class= "button {{id}}" href="{{ url }}" target="_blank"
+  {% else %}
+    variant="success" class= "tag {{id}}"
+  {% endif %}
+  >
+  {% if content == "" %}
+    {{id|trim|replace("_", " ")|title}}
+  {% else %}
+    {{content}}
+  {% endif %}
+  </sl-button>
+{% endmacro %}

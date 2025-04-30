@@ -1,0 +1,22 @@
+<sl-card id="{{ leaf.name }}">
+  
+  <div slot="header" id="card-header">
+    <div id="title">
+      {{ leaf.front['Title'] }}
+    </div>
+  </div>
+
+  {% if leaf.front['Image'] != "None" %}
+    {% set imageURL = leaf.front['Image'] %}
+  {% else %}
+    {% set imageURL = "missing_person.avif" %}
+  {% endif %}
+
+  <img
+    slot="image"
+    src="/assets/images/{{ imageURL }}"
+  />
+
+  {{ leaf.content_html|safe }}
+
+</sl-card>

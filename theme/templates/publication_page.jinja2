@@ -1,0 +1,24 @@
+{% import 'macros/icon_button.jinja2' as IconButton %}
+
+<a href="{{ index.front.scholar_link }}" target="_blank">Google Scholar project page</a>
+
+<h2>About #EEGManyLabs</h2>
+{% for leaf in index.leaves if leaf.front['PublicationId'] == "Pavlov2021" %}
+  {% include 'publication_card.jinja2' %}
+{% endfor %}
+
+<h2>Spin-off projects</h2>
+{% for leaf in index.leaves if leaf.front['ReplicationId'] == "None" and leaf.front['PublicationId'] != "Pavlov2021" %}
+  {% include 'publication_card.jinja2' %}
+{% endfor %}
+
+<h2>Replications</h2>
+{% for repID, group in index.leaves|groupby("front.ReplicationId") %}
+  {% if repID != "None" %}
+    {% set replicationUrl = "/replications/#" ~ repID %}
+    <h3>{{ repID }} {{ IconButton.render(replicationUrl, "Replicaton page", "fas-clipboard", external = false) }}</h3>
+    {% for leaf in group %}
+      {% include 'publication_card.jinja2' %}
+    {% endfor %}
+  {% endif %}
+{% endfor %}
