@@ -5,7 +5,7 @@ Title = "An #EEGManyLabs study to test the role of the alpha phase on visual per
 AuthorShort = "Ruzzoli et al (2023)"
 Image = "previews/Ruzzoli2023.pdf.png"
 PublicationId = "Ruzzoli2023"
-Authors = "Ruzzoli M,Molinaro N,Benwell C,Berkowitz DH,et al."
+Authors = ""
 Journal = "Psyarxiv"
 Year = "2023"
 DOI = "10.31234/osf.io/3dhpx"
@@ -14,5 +14,5 @@ OsfUrl = "None"
 DataUrl = "None"
 ReplicationId = "Mathewson2009"
 Pdf = "/assets/pdfs/Ruzzoli2023.pdf"
-Tags = ["pre-registered"]
+Tags = { "stage1" = "Stage 1 accepted" }
 +++

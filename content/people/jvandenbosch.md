@@ -1,5 +1,5 @@
 +++
-SequenceNumber = "3"
+SequenceNumber = 3
 Anchor = "jvandenbosch"
 Title = "Jasper van den Bosch"
 Image = "headshots/jvandenbosch.jpg"
@@ -10,4 +10,5 @@ LabUrl = "None"
 StudyId = "None"
 PersonId = "jvandenbosch"
 FullName = "Jasper van den Bosch"
+Affiliation = "University of Leeds"
 +++

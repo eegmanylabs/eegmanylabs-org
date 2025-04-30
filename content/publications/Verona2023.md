@@ -5,7 +5,7 @@ Title = "Fear, Anxiety, and the Error-Related Negativity: A Registered Report of
 AuthorShort = "Verona et al (2023)"
 Image = "previews/Verona2023.pdf.png"
 PublicationId = "Verona2023"
-Authors = "None"
+Authors = ""
 Journal = "PsyArXiv"
 Year = "2023"
 DOI = "10.31234/osf.io/8q4ks"
@@ -14,5 +14,5 @@ OsfUrl = "https://osf.io/6suf8/"
 DataUrl = "None"
 ReplicationId = "Hajcak2003"
 Pdf = "/assets/pdfs/Verona2023.pdf"
-Tags = ["preprint"]
+Tags = { "stage1" = "Stage 1 accepted" }
 +++
