@@ -17,17 +17,20 @@
     src="/assets/images/{{ leaf.front['Image'] }}"
   />
 
-  {{ leaf.content_html|safe }}
+  <div class="card-body">
+    {{ leaf.content_html|safe }}
 
-  <p>Stage: <span class="tag stage {{leaf.front['StageID']}}">{{ leaf.front['LongStage'] }}</span></p>
-  <p>Theme: <span class="tag theme {{leaf.front['Theme']}}">{{ leaf.front['Theme'] }}</span></p>
-  
-  {% set PublicationUrl = leaf.front['PublicationId'] %}
-  {% if PublicationUrl != "None" %}
-    {% set PublicationUrl = "/publications/#" ~ PublicationUrl %}
-  {% endif %}
-
-  {{ ActionButton.render(PublicationUrl, "Go to Published Replication Materials", "", "fas-book-open", false) }}
-  {{ ActionButton.render(leaf.front['SignupUrl'], "Sign up as participating lab", "Sign Up", "fas-user-plus") }}
+    <p class="stage">Stage: <span class="tag stage {{leaf.front['StageID']}}">{{ leaf.front['LongStage'] }}</span></p>
+    <p>Theme: <span class="tag theme {{leaf.front['Theme']}}">{{ leaf.front['Theme'] }}</span></p>
+    
+    {% set PublicationUrl = leaf.front['PublicationId'] %}
+    {% if PublicationUrl != "None" %}
+      {% set PublicationUrl = "/publications/#" ~ PublicationUrl %}
+    {% endif %}
+    <div class="card-buttons">
+      {{ ActionButton.render(PublicationUrl, "Go to Published Replication Materials", "", "fas-book-open", false) }}
+      {{ ActionButton.render(leaf.front['SignupUrl'], "Sign up as participating lab", "Sign Up", "fas-user-plus") }}
+    </div>
+  </div>
 
 </sl-card>

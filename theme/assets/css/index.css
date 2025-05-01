@@ -312,6 +312,24 @@ sl-card a[href^="https://eeg100"] {
     font-size: 14px;
 }
 
+#replications sl-card::part(body) {
+    display: flex;
+    flex-grow: 1;
+}
+
+.card-body {
+    display: flex;
+    flex-grow: 1;
+    flex-direction: column;
+}
+
+p.stage {
+    flex-grow: 1;
+}
+
+.card-body p {
+    margin-block-start: 0;
+}
 
 sl-card::part(footer) {
     border-top: none;
@@ -394,11 +412,6 @@ a[href^="https://scholar.google.com/citations?user=ueMcfOcAAAAJ"] {
 
 sl-card {
     display:grid;
-}
-
-sl-card::part(header){
-    display: flex;
-    flex-grow: 1;
 }
 
 div#card-header {
@@ -594,6 +607,11 @@ article#front > p > img {
 
 #people #affil {
     font-size: smaller;
+}
+
+#people sl-card::part(header){
+    display: flex;
+    flex-grow: 1;
 }
 
 @media screen and (max-width: 768px) {
