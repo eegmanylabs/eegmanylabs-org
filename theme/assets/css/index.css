@@ -147,7 +147,10 @@ article > p {
     column-gap: 20px;
     row-gap: 20px;
     justify-content: space-evenly;
+}
 
+.card-grid sl-card[id] {
+    scroll-margin-top: 100px;
 }
 
 .front-grid sl-card {
