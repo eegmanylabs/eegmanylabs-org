@@ -28,8 +28,9 @@
       {% set PublicationUrl = "/publications/#" ~ PublicationUrl %}
     {% endif %}
     <div class="card-buttons">
-      {{ ActionButton.render(PublicationUrl, "Go to Published Replication Materials", "", "fas-book-open", false) }}
-      {{ ActionButton.render(leaf.front['SignupUrl'], "Sign up as participating lab", "Sign Up", "fas-user-plus") }}
+      {% if leaf.front['SignupUrl'] != "done" %}
+        {{ ActionButton.render(leaf.front['SignupUrl'], "Sign up as participating lab", "Sign Up", "fas-user-plus") }}
+      {% endif %}
     </div>
   </div>
 
