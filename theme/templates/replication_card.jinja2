@@ -26,8 +26,12 @@
     {% set PublicationUrl = leaf.front['PublicationId'] %}
     {% if PublicationUrl != "None" %}
       {% set PublicationUrl = "/publications/#" ~ PublicationUrl %}
+      {% set PublicationText = "Go to Published Replication Materials" %}
+    {% else %}
+      {% set PublicationText = "Materials not yet available" %}
     {% endif %}
     <div class="card-buttons">
+      {{ ActionButton.render(PublicationUrl, PublicationText, "", "fas-book-open", false) }}
       {% if leaf.front['SignupUrl'] != "done" %}
         {{ ActionButton.render(leaf.front['SignupUrl'], "Sign up as participating lab", "Sign Up", "fas-user-plus") }}
       {% endif %}
