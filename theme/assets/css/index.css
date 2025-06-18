@@ -401,7 +401,7 @@ article#people sl-card::part(footer) {
 */
 
 
-a[href^="https://scholar.google.com/citations?user=ueMcfOcAAAAJ"] {
+a.proj-link {
     padding: 5px;
     border-radius: 3px;
     border: 1px solid teal;

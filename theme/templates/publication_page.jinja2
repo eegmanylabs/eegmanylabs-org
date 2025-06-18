@@ -1,6 +1,9 @@
 {% import 'macros/icon_button.jinja2' as IconButton %}
 
-<a href="{{ index.front.scholar_link }}" target="_blank">Google Scholar project page</a>
+<a class="proj-link" href="{{ index.front.scholar_link }}" target="_blank">Google Scholar project page</a>
+<a class="proj-link" href="{{ index.front.osf_link }}" target="_blank">Project OSF page</a>
+<a class="proj-link" href="{{ index.front.gnode_link }}" target="_blank">Project GNode page</a>
+
 
 <h2>About #EEGManyLabs</h2>
 {% for leaf in index.leaves if leaf.front['PublicationId'] == "Pavlov2021" %}
