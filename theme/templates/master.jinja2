@@ -24,7 +24,7 @@
     <ul class="topnav" id="myTopnav">
     {% for branch in root.branches %}
         {% if branch.buildPage %}
-            <li><a href="/{{ branch.name }}/">{{ branch.name }}</a></li>
+            <li><a href="/{{ branch.name }}/">{{ branch.name|replace("_", " ")}}</a></li>
         {% endif %}
     {% endfor %}
     </ul>

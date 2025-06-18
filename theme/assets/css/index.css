@@ -269,23 +269,23 @@ sl-card a[href^="https://eeg100"] {
     color: teal;
 }
 
-#spin-offs img {
+#related_projects img {
 	height: 270px;
 }
 
-#spin-offs sl-card::part(header) {
+#related_projects sl-card::part(header) {
     flex-grow: 0;
     font-size: large;
     font-weight: 600;
 }
 
-#spin-offs sl-card::part(body) {
+#related_projects sl-card::part(body) {
 	display: flex;
 	flex-direction: column;
 	flex-grow: 1;
 }
 
-#spin-offs sl-card p:first-of-type {
+#related_projects sl-card p:first-of-type {
 	flex-grow: 1;
     margin-top: 0;
 }
