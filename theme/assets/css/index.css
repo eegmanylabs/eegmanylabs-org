@@ -205,12 +205,12 @@ a.see-all {
     background-color: white;
 }
 
-#contact ul, #funders ul {
+#resources ul, #contact ul, #funders ul {
     list-style-type: none;
     text-align: justify;
 }
 
-#contact li, #funders li {
+#resources li, #contact li, #funders li {
     display: inline-block;
     text-align: center;
     padding: 10px;
@@ -218,7 +218,7 @@ a.see-all {
     color: rgb(49, 49, 49);
 }
 
-#contact img, #funders img {
+#resources img, #contact img, #funders img {
     height: 40px;
     display: block;
     margin: auto;
@@ -228,7 +228,7 @@ a.see-all {
     height: 55px;
 }
 
-#contact a {
+#resources a, #contact a {
     color: black;
     text-decoration: none;
 }
