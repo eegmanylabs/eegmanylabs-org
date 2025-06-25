@@ -94,6 +94,7 @@ nav#menu .icon {
 article > h1 {
     font-size: 32px;
     font-weight: bold;
+    margin-bottom: 0.2em;
 }
 
 #front > h1,
@@ -137,7 +138,8 @@ footer {
 */
 
 article > p {
-    padding: 20px 0;
+    padding-bottom: 20px;
+    margin-top: 0;
 }
 
 .card-grid {
@@ -372,6 +374,7 @@ article#people sl-card::part(footer) {
 }
 
 #people sl-button::part(base) {
+    background-color: forestgreen;
     border-color: white;
 }
 
@@ -395,6 +398,9 @@ article#people sl-card::part(footer) {
     background-color: darkgray;
 }
 
+#people sl-button.founder::part(base) {
+    background-color: goldenrod;
+}
 
 /*
     PUBLICATIONS PAGE
@@ -439,6 +445,16 @@ article#front {
     sl-card::part(header) {
         display: none;
     }
+}
+
+/* About section */
+
+#about p {
+    padding: 0
+}
+
+#about h2 {
+    margin-bottom: 0.3em;
 }
 
 /* Publications section  */
@@ -643,6 +659,7 @@ article#front > p > img {
         flex-direction: column;
         width: 100%;
         padding: 0;
+        margin-bottom: 10px;
     }
 
     .topnav.responsive {
@@ -669,12 +686,15 @@ article#front > p > img {
     }
 
     #front sl-card::part(body) {
-        padding-top: var(--padding);
         padding-left: 0;
     }
 
     #front sl-card::part(image) {
         flex: none;
+    }
+
+    #front img[slot="image"] {
+        padding-bottom: var(--padding);
     }
 
     #publications #buttons {
