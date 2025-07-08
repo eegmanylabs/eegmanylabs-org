@@ -1,4 +1,4 @@
-name: Build
+name: Staging
 
 on: pull_request
 
@@ -36,7 +36,7 @@ jobs:
               with:
                 context: .
                 push: true
-                tags: meadowsresearch/eegmanylabsorg:v0.10
+                tags: meadowsresearch/eegmanylabsorg:v0.11
             - name: Install DigitalOcean CLI
               uses: digitalocean/action-doctl@v2
               with:

@@ -18,7 +18,7 @@ services:
     registry: meadowsresearch
     registry_type: DOCKER_HUB
     repository: eegmanylabsorg
-    tag: v0.10
+    tag: v0.11
   instance_count: 1
   instance_size_slug: basic-xxs
   name: meadowsresearch-eegmanylabsorg
