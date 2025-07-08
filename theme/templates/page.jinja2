@@ -4,35 +4,40 @@
 
 <article id="{{ index.name }}">
 
-    {{ index.content_html|safe }}
+    {% if index.name == "about" %}
+      {% include 'about_page.jinja2' %}
+    {% else %}
+      {{ index.content_html|safe }}
 
-    <div class="select-container" style="display: none">
-      {% if index.name == "replications" %}
-        <sl-select id="stage" placeholder="Replication Stage" value="" clearable></sl-select>
-        <sl-select id="theme" placeholder="Themes" value="" multiple clearable></sl-select>
-      {% elif index.name == "people" %}
-        <sl-select id="tag" placeholder="Tags" value="" multiple clearable></sl-select>
-      {% endif %}
-    </div>
+      <div class="select-container" style="display: none">
+        {% if index.name == "replications" %}
+          <sl-select id="stage" placeholder="Replication Stage" value="" clearable></sl-select>
+          <sl-select id="theme" placeholder="Themes" value="" clearable></sl-select>
+        {% elif index.name == "people" %}
+          <sl-select id="tag" placeholder="Tags" value="" multiple clearable></sl-select>
+        {% endif %}
+      </div>
 
 
-    <div class="card-grid">
-      {% if index.name == "publications" %}
-        {% include 'publication_page.jinja2' %}
-      {% elif index.name == "replications" %}
-        {% for leaf in index.leaves %}
-          {% include 'replication_card.jinja2' %}
-        {% endfor %}
-      {% elif index.name == "people" %}
-        {% for leaf in index.leaves|sort(attribute='front.SequenceNumber') %}
-          {% include 'people_card.jinja2' %}
-        {% endfor %}
-      {% else %}
-        {% for leaf in index.leaves %}
-          {% include 'spinoff_card.jinja2' %}
-        {% endfor %}
-      {% endif %}
-    </div>
+      <div class="card-grid">
+        {% if index.name == "publications" %}
+          {% include 'publication_page.jinja2' %}
+        {% elif index.name == "replications" %}
+          {% for leaf in index.leaves %}
+            {% include 'replication_card.jinja2' %}
+          {% endfor %}
+        {% elif index.name == "people" %}
+          {% for leaf in index.leaves|sort(attribute='front.SequenceNumber') %}
+            {% include 'people_card.jinja2' %}
+          {% endfor %}
+        {% else %}
+          {% for leaf in index.leaves %}
+            {% include 'spinoff_card.jinja2' %}
+          {% endfor %}
+        {% endif %}
+      </div>
+
+    {% endif %}
 
 </article>
 

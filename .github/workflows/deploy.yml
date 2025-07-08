@@ -42,4 +42,4 @@ jobs:
               with:
                   token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
             - name: Deploy App
-              run: doctl apps update acd1f9b7-f0a2-4e21-a320-6bba1c5cfd16 --spec .do/seashell-app.yml
+              run: doctl apps update d880c160-3854-4710-83cc-dada4a088dd1 --spec .do/seashell-app.yml

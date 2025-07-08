@@ -37,7 +37,7 @@
     {{ IconButton.render(leaf.front['LabUrl'], "Lab website", "fas-flask") }}
     {% if leaf.front['StudyId'] != "None" %}
       {% set replicationUrl = "/replications/#" ~ leaf.front['StudyId'] %}
-      {{ IconButton.render(replicationUrl, "Replicaton page", "fas-clipboard", external = false) }}
+      {{ IconButton.render(replicationUrl, "Replication page", "fas-clipboard", external = false) }}
     {% endif %}
 
   </div>

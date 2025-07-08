@@ -5,4 +5,4 @@ Image = "stock/bidding.jpg"
 +++
 Many readers familiar with these studies will have their own perspective about the likelihood of individual studies replicating. This will be the focus of the prediction markets. We will be able to examine how closely internally held beliefs in the EEG community map on to the replication results.
 
-[read more](/spin-offs/prediction-markets)
+[read more](/related_projects/prediction-markets)

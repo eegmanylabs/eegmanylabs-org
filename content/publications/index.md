@@ -1,7 +1,9 @@
 +++
-SequenceNumber = 4
+SequenceNumber = 5
 image = "assets/images/Publications.jpg"
 scholar_link = "https://scholar.google.com/citations?user=ueMcfOcAAAAJ"
+osf_link = "https://osf.io/yb3pq/"
+gnode_link = "https://gin.g-node.org/EEGManyLabs"
 +++
 # Publications
 
