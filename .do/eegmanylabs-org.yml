@@ -10,6 +10,11 @@ ingress:
     match:
       path:
         prefix: /
+  - redirect:
+      authority: eegmanylabs.org
+    match:
+      authority:
+        exact: www.eegmanylabs.org
 name: eegmanylabs-org
 region: lon
 services:
@@ -22,3 +27,8 @@ services:
   instance_count: 1
   instance_size_slug: basic-xxs
   name: meadowsresearch-eegmanylabsorg
+domains:
+  - domain: eegmanylabs.org
+    type: PRIMARY
+    wildcard: true
+    zone: eegmanylabs.org
