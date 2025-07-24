@@ -6,11 +6,16 @@ features:
 ingress:
   rules:
   - component:
-      name: meadowsresearch-eegmanylabsorg
+      name: meadowsresearch-eegmanylabs-dev
     match:
       path:
         prefix: /
-name: seashell-app
+  - redirect:
+      authority: eegmanylabs.dev
+    match:
+      authority:
+        exact: www.eegmanylabs.dev
+name: eegmanylabs-dev
 region: lon
 services:
 - http_port: 80
@@ -21,4 +26,9 @@ services:
     tag: v0.11
   instance_count: 1
   instance_size_slug: basic-xxs
-  name: meadowsresearch-eegmanylabsorg
+  name: meadowsresearch-eegmanylabs-dev
+domains:
+  - domain: eegmanylabs.dev
+    type: PRIMARY
+    wildcard: true
+    zone: eegmanylabs.dev
