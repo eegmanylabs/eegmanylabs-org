@@ -22,7 +22,7 @@ jobs:
             - name: Inspect
               run: ls -l && ls -l content
             - name: Build site
-              run: syrinx . -c
+              run: syrinx . -c -e production
             - name: Inspect files
               run: ls -l dist/
             - name: Set up QEMU
