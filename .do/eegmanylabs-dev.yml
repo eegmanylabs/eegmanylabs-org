@@ -20,6 +20,8 @@ ingress:
     match:
       authority:
         exact: www.eegmanylabs.dev
+      path:
+        prefix: /
 name: eegmanylabs-dev
 region: lon
 services:
@@ -28,6 +30,7 @@ services:
     registry_type: GHCR
     registry: eegmanylabs
     repository: eegmanylabsorg
+    tag: latest
     #digest: ${IMAGE_DIGEST}
   instance_count: 1
   instance_size_slug: basic-xxs
