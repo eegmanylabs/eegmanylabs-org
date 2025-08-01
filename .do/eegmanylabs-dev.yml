@@ -15,12 +15,11 @@ ingress:
     match:
       path:
         prefix: /
-  - match:
+  - redirect:
+      authority: eegmanylabs.dev
+    match:
       authority:
         exact: www.eegmanylabs.dev
-    redirect:
-      authority: eegmanylabs.dev
-      redirect_code: 302
 name: eegmanylabs-dev
 region: lon
 services:
