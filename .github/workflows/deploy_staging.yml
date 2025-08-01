@@ -2,6 +2,10 @@ name: Staging
 
 on: pull_request
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
 
     build:
@@ -37,7 +41,6 @@ jobs:
             #     context: .
             #     push: true
             #     tags: meadowsresearch/eegmanylabsorg:v0.11
-
             - name: Log in to the Container registry
               uses: docker/login-action@v3.3.0
               with:
@@ -53,7 +56,6 @@ jobs:
                 no-cache: true
                 push: true
                 tags: ghcr.io/eegmanylabs/docs:latest
-
             # - name: Install DigitalOcean CLI
             #   uses: digitalocean/action-doctl@v2
             #   with:
