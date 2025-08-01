@@ -18,8 +18,6 @@ ingress:
   - match:
       authority:
         exact: www.eegmanylabs.dev
-      path:
-        prefix: /
     redirect:
       authority: eegmanylabs.dev
       redirect_code: 302
