@@ -15,13 +15,11 @@ ingress:
     match:
       path:
         prefix: /
-  - redirect:
-      authority: eegmanylabs.dev
-    match:
+  - match:
       authority:
-        exact: www.eegmanylabs.dev
-      path:
-        prefix: /
+        exact: "www.eegmanylabs.dev"
+    redirect: 
+      authority: "eegmanylabs.dev"
 name: eegmanylabs-dev
 region: lon
 services:
