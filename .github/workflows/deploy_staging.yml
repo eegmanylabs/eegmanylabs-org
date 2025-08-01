@@ -22,24 +22,50 @@ jobs:
               run: syrinx . -c -e staging
             - name: Inspect files
               run: ls -l dist/
-            - name: Set up QEMU
-              uses: docker/setup-qemu-action@v3
-            - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@v3
-            - name: Login to Docker Hub
-              uses: docker/login-action@v3
+            # - name: Set up QEMU
+            #   uses: docker/setup-qemu-action@v3
+            # - name: Set up Docker Buildx
+            #   uses: docker/setup-buildx-action@v3
+            # - name: Login to Docker Hub
+            #   uses: docker/login-action@v3
+            #   with:
+            #     username: meadowsresearch
+            #     password: ${{ secrets.DOCKERHUB_TOKEN }}
+            # - name: Build and push
+            #   uses: docker/build-push-action@v5
+            #   with:
+            #     context: .
+            #     push: true
+            #     tags: meadowsresearch/eegmanylabsorg:v0.11
+
+            - name: Log in to the Container registry
+              uses: docker/login-action@v3.3.0
               with:
-                username: meadowsresearch
-                password: ${{ secrets.DOCKERHUB_TOKEN }}
-            - name: Build and push
-              uses: docker/build-push-action@v5
+                registry: ghcr.io
+                username: ${{ github.actor }}
+                password: ${{ secrets.GITHUB_TOKEN }}
+            - name: Build and push Docker image
+              id: push
+              uses: docker/build-push-action@v6.10.0
               with:
-                context: .
+                file: Dockerfile
+                #context: ./docs
+                no-cache: true
                 push: true
-                tags: meadowsresearch/eegmanylabsorg:v0.11
-            - name: Install DigitalOcean CLI
-              uses: digitalocean/action-doctl@v2
+                tags: ghcr.io/eegmanylabs/docs:latest
+
+            # - name: Install DigitalOcean CLI
+            #   uses: digitalocean/action-doctl@v2
+            #   with:
+            #       token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+            # - name: Deploy App
+            #   run: doctl apps update d880c160-3854-4710-83cc-dada4a088dd1 --spec .do/eegmanylabs-dev.yml
+            - name: Deploy the app
+              uses: digitalocean/app_action/deploy@v2
+              env:
+                IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
               with:
-                  token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-            - name: Deploy App
-              run: doctl apps update d880c160-3854-4710-83cc-dada4a088dd1 --spec .do/eegmanylabs-dev.yml
+                token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+                app_spec_location: .do/eegmanylabs-dev.yml
+                print_build_logs: true
+                print_deploy_logs: true
