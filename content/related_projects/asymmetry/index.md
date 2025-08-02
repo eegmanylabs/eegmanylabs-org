@@ -3,7 +3,7 @@ SequenceNumber = 4
 +++
 ## Frontal alpha asymmetry and personality traits 
 
-![matrix](/assets/images/stock/personality_matrix.png 'Personality Matrix')
+![asymmetry](/assets/images/stock/personality_matrix.png 'asymmetry')
 
 Project lead: [Sebastian Ocklenburg](/people/#socklenburg)
 

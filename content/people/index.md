@@ -1,6 +1,6 @@
 +++
 SequenceNumber =  3
-image = "assets/images/People.jpg"
+image = "assets/images/people.png"
 +++
 # People
 
