@@ -18,8 +18,11 @@ jobs:
 
     build:
         runs-on: ubuntu-latest
+
         steps:
             - uses: actions/checkout@v4
+            - name: Setup tmate session
+              uses: mxschmitt/action-tmate@v3
             - name: Set up Python
               uses: actions/setup-python@v4
               with:
