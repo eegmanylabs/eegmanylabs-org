@@ -1,0 +1,35 @@
+alerts:
+- rule: DEPLOYMENT_FAILED
+- rule: DOMAIN_FAILED
+domains:
+  - domain: eegmanylabs.${TLD}
+    type: PRIMARY
+    wildcard: true
+    zone: eegmanylabs.${TLD}
+features:
+- buildpack-stack=ubuntu-22
+ingress:
+  rules:
+  - component:
+      name: website
+    match:
+      path:
+        prefix: /
+  # - match:
+  #     authority:
+  #       exact: "www.eegmanylabs.dev"
+  #   redirect: 
+  #     authority: "eegmanylabs.dev"
+name: eegmanylabs-${TLD}
+region: lon
+services:
+- http_port: 80
+  image:
+    registry_type: GHCR
+    registry: eegmanylabs
+    registry_credentials: ${GHCR_CREDS}
+    repository: eegmanylabsorg
+    digest: ${IMAGE_DIGEST}
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  name: website
