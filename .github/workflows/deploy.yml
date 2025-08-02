@@ -35,8 +35,8 @@ jobs:
               run: syrinx -c -e ${{ env.environment }} .
             - name: Inspect files
               run: ls -l dist/
-            - name: Setup tmate session
-              uses: mxschmitt/action-tmate@v3
+            # - name: Setup tmate session
+            #   uses: mxschmitt/action-tmate@v3
             - name: Log in to the Container registry
               uses: docker/login-action@v3.3.0
               with:
@@ -48,6 +48,7 @@ jobs:
               uses: docker/build-push-action@v6.10.0
               with:
                 file: Dockerfile
+                context: .
                 no-cache: true
                 push: true
                 tags: ghcr.io/eegmanylabs/eegmanylabsorg:latest
