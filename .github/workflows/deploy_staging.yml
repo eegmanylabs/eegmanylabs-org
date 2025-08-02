@@ -44,6 +44,7 @@ jobs:
               uses: digitalocean/app_action/deploy@v2
               env:
                 IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
+                GHCR_CREDS: ${{ secrets.GHCR_CREDS }}
               with:
                 token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
                 app_spec_location: .do/eegmanylabs-dev.yml

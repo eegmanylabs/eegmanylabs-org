@@ -27,6 +27,7 @@ services:
   image:
     registry_type: GHCR
     registry: eegmanylabs
+    registry_credentials: ${GHCR_CREDS}
     repository: eegmanylabsorg
     digest: ${IMAGE_DIGEST}
   instance_count: 1
