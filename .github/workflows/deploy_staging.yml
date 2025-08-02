@@ -6,6 +6,10 @@ permissions:
   contents: read
   packages: write
 
+env:
+  TLD: ${{ github.ref == 'refs/heads/main' && 'org' || 'dev' }}
+  environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+
 jobs:
 
     build:
@@ -23,7 +27,7 @@ jobs:
             - name: Inspect
               run: ls -l && ls -l content
             - name: Build site
-              run: syrinx . -c -e staging
+              run: syrinx -c -e ${{ env.environment }} .
             - name: Inspect files
               run: ls -l dist/
             - name: Log in to the Container registry
@@ -45,6 +49,7 @@ jobs:
               env:
                 IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
                 GHCR_CREDS: ${{ secrets.GHCR_CREDS }}
+                TLD: ${{ env.TLD }}
               with:
                 token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
                 app_spec_location: .do/eegmanylabs-dev.yml
