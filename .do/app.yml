@@ -17,11 +17,11 @@ ingress:
     match:
       path:
         prefix: /
-  # - redirect:
-  #     authority: "eegmanylabs.${TLD}"
-  #   match:
-  #     authority:
-  #       exact: "www.eegmanylabs.${TLD}"
+  - redirect:
+      authority: "eegmanylabs.${TLD}"
+    match:
+      authority:
+        exact: "www.eegmanylabs.${TLD}"
 name: eegmanylabs-${TLD}
 region: lon
 services:
