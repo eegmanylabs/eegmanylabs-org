@@ -17,15 +17,11 @@ ingress:
     match:
       path:
         prefix: /
-      authority:
-        exact: "eegmanylabs.${TLD}"
-  - redirect:
-      authority: "eegmanylabs.${TLD}"
-    match:
-      authority:
-        exact: "www.eegmanylabs.${TLD}"
-      path:
-        prefix: /
+  # - redirect:
+  #     authority: "eegmanylabs.${TLD}"
+  #   match:
+  #     authority:
+  #       exact: "www.eegmanylabs.${TLD}"
 name: eegmanylabs-${TLD}
 region: lon
 services:
@@ -33,7 +29,6 @@ services:
   image:
     registry_type: GHCR
     registry: eegmanylabs
-    registry_credentials: ${GHCR_CREDS}
     repository: eegmanylabsorg
     digest: ${IMAGE_DIGEST}
   instance_count: 1
