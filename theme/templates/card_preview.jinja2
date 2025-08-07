@@ -8,7 +8,8 @@
       loading="lazy"
     />
   {% endif %}
-
-  {{ item.content_html|safe }}
-
+  
+  {% set replications_count = item.leaves | length | string %}
+  {{ item.content_html|replace("replications_count", replications_count)|safe }}
+  
 </sl-card>

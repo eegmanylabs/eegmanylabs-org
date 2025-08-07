@@ -4,7 +4,9 @@ alerts:
 domains:
   - domain: eegmanylabs.${TLD}
     type: PRIMARY
-    wildcard: true
+    zone: eegmanylabs.${TLD}
+  - domain: www.eegmanylabs.${TLD}
+    type: ALIAS
     zone: eegmanylabs.${TLD}
 features:
 - buildpack-stack=ubuntu-22
@@ -15,11 +17,6 @@ ingress:
     match:
       path:
         prefix: /
-  # - match:
-  #     authority:
-  #       exact: "www.eegmanylabs.dev"
-  #   redirect: 
-  #     authority: "eegmanylabs.dev"
 name: eegmanylabs-${TLD}
 region: lon
 services:
@@ -27,7 +24,6 @@ services:
   image:
     registry_type: GHCR
     registry: eegmanylabs
-    registry_credentials: ${GHCR_CREDS}
     repository: eegmanylabsorg
     digest: ${IMAGE_DIGEST}
   instance_count: 1

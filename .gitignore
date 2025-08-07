@@ -1,5 +1,6 @@
 # syrinx
 dist/
+app_test.yml
 
 # OS
 .DS_Store
