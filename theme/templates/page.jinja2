@@ -7,7 +7,8 @@
     {% if index.name == "about" %}
       {% include 'about_page.jinja2' %}
     {% else %}
-      {{ index.content_html|safe }}
+      {% set replications_count = index.leaves | length | string %}
+      {{ index.content_html|replace("replications_count", replications_count)|safe }}
 
       <div class="select-container" style="display: none">
         {% if index.name == "replications" %}
