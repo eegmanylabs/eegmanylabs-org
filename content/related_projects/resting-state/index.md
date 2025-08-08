@@ -3,7 +3,7 @@ SequenceNumber = 3
 +++ 
 ## Resting State (#EEGML:RS)
 
-![sleep_eeg](/assets/images/stock/sleep_eeg.png 'Child sleeping with EEG electrodes')
+![sleep_eeg](/assets/images/stock/resting_state.png 'Child sleeping with EEG electrodes')
 
 
 **What is the #EEGML:RS?**

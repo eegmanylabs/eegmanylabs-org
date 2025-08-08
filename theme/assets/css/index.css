@@ -292,6 +292,10 @@ sl-card a[href^="https://eeg100"] {
     margin-top: 0;
 }
 
+#automation img, #resting-state img, #asymmetry img, #prediction-markets img{
+    width: 30%;
+}
+
 
 /*  
     REPLICATION PAGE
