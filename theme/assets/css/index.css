@@ -271,8 +271,8 @@ sl-card a[href^="https://eeg100"] {
     color: teal;
 }
 
-#related_projects img {
-	height: 270px;
+#related_projects sl-card::part(image) {
+    height: 340px;
 }
 
 #related_projects sl-card::part(header) {
