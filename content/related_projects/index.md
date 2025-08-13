@@ -1,6 +1,6 @@
 +++
 SequenceNumber = 3
-image = "assets/images/Spinoffs.jpg"
+image = "assets/images/spinoffs.png"
 
 +++
 # Related Projects

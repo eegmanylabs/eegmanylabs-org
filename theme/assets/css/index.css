@@ -271,8 +271,8 @@ sl-card a[href^="https://eeg100"] {
     color: teal;
 }
 
-#related_projects img {
-	height: 270px;
+#related_projects sl-card::part(image) {
+    height: 340px;
 }
 
 #related_projects sl-card::part(header) {
@@ -290,6 +290,10 @@ sl-card a[href^="https://eeg100"] {
 #related_projects sl-card p:first-of-type {
 	flex-grow: 1;
     margin-top: 0;
+}
+
+article#automation img, article#resting-state img, article#asymmetry img, article#prediction-markets img {
+    width: 30%;
 }
 
 
