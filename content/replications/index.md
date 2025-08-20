@@ -1,6 +1,6 @@
 +++
 SequenceNumber = 2
-image = "assets/images/Replications.jpg"
+image = "assets/images/replications.png"
 +++
 # Replications
 
