@@ -1,0 +1,8 @@
+
+{% for leaf in index.leaves %}
+  <div>
+    <b>{{ leaf.front['ForeName'] }} {{ leaf.front['Surname'] }}</b>
+    <br/>
+    {{ leaf.front['Affiliation'] }}
+  </div>
+{% endfor %}
