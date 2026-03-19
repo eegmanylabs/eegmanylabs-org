@@ -637,6 +637,15 @@ article#front > p > img {
     flex-grow: 1;
 }
 
+#members .card-grid{
+    grid-template-columns: repeat(2, auto);
+    justify-content: unset;
+}
+
+#members b{
+    font-weight: bold;
+}
+
 @media screen and (max-width: 768px) {
     nav#menu {
         flex-direction: column;
@@ -709,4 +718,11 @@ article#front > p > img {
     #publications sl-button {
         padding-top: 10px;
     }
+
+    #members .card-grid{
+        grid-template-columns: repeat(1, auto);
+
+    }
 }
+
+
