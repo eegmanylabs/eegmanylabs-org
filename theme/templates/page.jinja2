@@ -31,6 +31,8 @@
           {% for leaf in index.leaves|sort(attribute='front.SequenceNumber') %}
             {% include 'people_card.jinja2' %}
           {% endfor %}
+        {% elif index.name == "members" %}
+          {% include 'members_page.jinja2' %}
         {% else %}
           {% for leaf in index.leaves %}
             {% include 'spinoff_card.jinja2' %}
