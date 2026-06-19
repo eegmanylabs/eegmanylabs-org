@@ -261,8 +261,8 @@ img[slot="image"] {
     SPIN-OFFS PAGE
 */
 
-/* eeg100 link same as local links */
-sl-card a[href^="https://eeg100"] {
+/* external links inside cards */
+sl-card a[href^="http"] {
     padding: 5px;
     border-radius: 3px;
     border: 1px solid teal;
@@ -304,16 +304,6 @@ article#automation img, article#resting-state img, article#asymmetry img, articl
 
 #replications .card-grid {
     padding-top: 20px;
-}
-
-#replications a[href^="https://forms"],
-#replications a[href^="https://docs"] {
-    padding: 5px;
-    border-radius: 3px;
-    border: 1px solid teal;
-    margin: 2px;
-    text-decoration: none;
-    color: teal;
 }
 
 #replications #authors{
@@ -360,15 +350,6 @@ article#people sl-card::part(body) {
 article#people sl-card::part(footer) {
     padding: var(--sl-spacing-small) var(--padding);
     height: 56px;
-}
-
-#people a[href^="http"] {
-    padding: 5px;
-    border-radius: 3px;
-    border: 1px solid teal;
-    margin: 2px;
-    text-decoration: none;
-    color: teal;
 }
 
 #publications sl-tag::part(base) {
