@@ -15,9 +15,27 @@
     </section>
 
     {% if index.name == "replications" %}
-      <div class="select-container filter-controls" aria-label="Filter replications">
-        <sl-select id="stage" placeholder="Replication stage" value="" clearable></sl-select>
-        <sl-select id="theme" placeholder="Themes" value="" clearable></sl-select>
+      <div class="chip-filters chip-filters--replications" data-chip-filters data-filter-target="#replications .card-grid > sl-card" aria-label="Filter replications">
+        <div class="chip-filters__group"><span class="chip-filters__label">Stage</span><div class="chip-filters__list" role="group" aria-label="Replication stage">
+          <button type="button" class="filter-chip is-active" data-filter-key="stage" data-filter-value="">All stages</button>
+          <button type="button" class="filter-chip" data-filter-key="stage" data-filter-value="4_stage1_prep">Stage 1 preparation</button>
+          <button type="button" class="filter-chip" data-filter-key="stage" data-filter-value="5_stage1_review">Stage 1 review</button>
+          <button type="button" class="filter-chip" data-filter-key="stage" data-filter-value="6_data_collection">Data collection</button>
+          <button type="button" class="filter-chip" data-filter-key="stage" data-filter-value="7_stage2_prep">Stage 2 preparation</button>
+          <button type="button" class="filter-chip" data-filter-key="stage" data-filter-value="9_finished">Finished</button>
+        </div></div>
+        <div class="chip-filters__group"><span class="chip-filters__label">Theme</span><div class="chip-filters__list" role="group" aria-label="Replication theme">
+          <button type="button" class="filter-chip is-active" data-filter-key="theme" data-filter-value="">All themes</button>
+          <button type="button" class="filter-chip" data-filter-key="theme" data-filter-value="attention">Attention</button>
+          <button type="button" class="filter-chip" data-filter-key="theme" data-filter-value="conflict">Conflict</button>
+          <button type="button" class="filter-chip" data-filter-key="theme" data-filter-value="consciousness">Consciousness</button>
+          <button type="button" class="filter-chip" data-filter-key="theme" data-filter-value="emotion">Emotion</button>
+          <button type="button" class="filter-chip" data-filter-key="theme" data-filter-value="error">Error</button>
+          <button type="button" class="filter-chip" data-filter-key="theme" data-filter-value="feedback">Feedback</button>
+          <button type="button" class="filter-chip" data-filter-key="theme" data-filter-value="learning">Learning</button>
+          <button type="button" class="filter-chip" data-filter-key="theme" data-filter-value="memory">Memory</button>
+          <button type="button" class="filter-chip" data-filter-key="theme" data-filter-value="personality">Personality</button>
+        </div></div>
       </div>
     {% elif index.name == "people" %}
       <div class="chip-filters" data-chip-filters data-filter-target="#people .card-grid > sl-card" aria-label="Filter Core Team roles">
@@ -26,13 +44,6 @@
           <button type="button" class="filter-chip is-active" data-filter-key="role" data-filter-value="">All</button>
           <button type="button" class="filter-chip" data-filter-key="role" data-filter-value="coordinator">Coordinators</button>
           <button type="button" class="filter-chip" data-filter-key="role" data-filter-value="founder">Founder</button>
-        </div>
-      </div>
-    {% elif index.name == "members" %}
-      <div class="chip-filters" data-chip-filters data-filter-target="#members .card-grid > sl-card" aria-label="Filter members by role">
-        <span class="chip-filters__label">Filter roles</span>
-        <div class="chip-filters__list" role="group" aria-label="Member roles">
-          <button type="button" class="filter-chip is-active" data-filter-key="role" data-filter-value="">All</button>
           <button type="button" class="filter-chip" data-filter-key="role" data-filter-value="advisor">Advisors</button>
           <button type="button" class="filter-chip" data-filter-key="role" data-filter-value="study_lead">Study leads</button>
           <button type="button" class="filter-chip" data-filter-key="role" data-filter-value="co-investigator">Co-investigators</button>
@@ -56,6 +67,8 @@
       {% include 'contact_page.jinja2' %}
     {% elif index.name == "privacy" %}
       {% include 'privacy_page.jinja2' %}
+    {% elif index.name == "site_map" %}
+      {% include 'site_map_page.jinja2' %}
     {% elif index.name == "partners" %}
       {% include 'partners_page.jinja2' %}
     {% else %}
@@ -69,22 +82,10 @@
             {% endfor %}
           {% elif index.name == "people" %}
             {% for leaf in index.leaves|sort(attribute='front.SequenceNumber') %}
-              {% if "coordinator" in leaf.front['Tags'] %}
-                {% include 'people_card.jinja2' %}
-              {% endif %}
+              {% include 'people_card.jinja2' %}
             {% endfor %}
           {% elif index.name == "members" %}
-            {% set person_data = namespace(leaves=[]) %}
-            {% for branch in root.branches %}
-              {% if branch.name == "people" %}
-                {% set person_data.leaves = branch.leaves %}
-              {% endif %}
-            {% endfor %}
-            {% for leaf in person_data.leaves|sort(attribute='front.FullName') %}
-              {% if "coordinator" not in leaf.front['Tags'] %}
-                {% include 'member_card.jinja2' %}
-              {% endif %}
-            {% endfor %}
+            <p class="directory-empty-state">The membership directory will be published here.</p>
           {% else %}
             {% for leaf in index.leaves %}
               {% include 'spinoff_card.jinja2' %}

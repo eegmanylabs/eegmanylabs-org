@@ -398,3 +398,23 @@ h3 { font-size: clamp(1.35rem, 3vw, 1.8rem); font-weight: 500; }
 @media (min-width: 1020px) {
   #members .card-grid { grid-template-columns: repeat(4,minmax(0,1fr)); }
 }
+
+/* Final navigation, visual sitemap, and hero playback polish */
+.home-hero__media video { pointer-events: none; }
+.home-hero__media video::-webkit-media-controls, .home-hero__media video::-webkit-media-controls-start-playback-button { display: none !important; -webkit-appearance: none; }
+.directory-empty-state { grid-column: 1 / -1; max-width: 620px; margin: 0; padding: 28px; border: 1px dashed var(--line); border-radius: var(--radius-md); color: var(--muted); background: var(--paper-strong); }
+.site-map-layout { width: var(--content); margin: 44px auto 0; }
+.site-map-section + .site-map-section { margin-top: 62px; }
+.site-map-section h2 { margin-bottom: 22px; font-size: clamp(1.8rem, 5vw, 2.75rem); }
+.site-map-grid { display: grid; gap: 12px; }
+.site-map-card { display: flex; min-height: 116px; padding: 20px; align-items: flex-start; gap: 15px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper-strong); transition: border-color 170ms ease, transform 170ms ease, box-shadow 170ms ease; }
+.site-map-card:hover { border-color: var(--aqua-deep); box-shadow: var(--shadow); transform: translateY(-2px); }
+.site-map-card sl-icon { flex: 0 0 auto; margin-top: 2px; color: var(--aqua-deep); font-size: 1.25rem; }
+.site-map-card strong, .site-map-card small { display: block; }
+.site-map-card strong { margin-bottom: 5px; color: var(--ink-900); font-size: 1.02rem; font-weight: 500; }
+.site-map-card small { color: var(--muted); font-size: .86rem; line-height: 1.42; }
+@media (min-width: 560px) { .site-map-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+
+.chip-filters--replications { gap: 22px; padding: 24px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper-strong); }
+.chip-filters__group { display: grid; gap: 10px; }
+.chip-filters--replications .chip-filters__label { color: var(--ink-900); font-size: .86rem; }
