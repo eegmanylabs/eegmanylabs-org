@@ -18,9 +18,9 @@
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.0/cdn/shoelace-autoloader.js"></script>
     <link rel="canonical" href="{{ index.address }}">
     <link rel="sitemap" type="application/xml" href="/sitemap.xml">
-    <link rel="stylesheet" href="/assets/css/index.css">
-    <script src="/assets/js/card_control.js" defer></script>
-    <script src="/assets/js/site.js" defer></script>
+    <link rel="stylesheet" href="/assets/css/index.css?v={{ index.meta.timestamp.isoformat() }}">
+    <script src="/assets/js/card_control.js?v={{ index.meta.timestamp.isoformat() }}" defer></script>
+    <script src="/assets/js/site.js?v={{ index.meta.timestamp.isoformat() }}" defer></script>
     <title>EEGManyLabs</title>
 </head>
 <body>
