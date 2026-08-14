@@ -50,7 +50,7 @@
   </div>
   <main id="main-content">{% block main %}{% endblock %}</main>
   <footer class="site-footer">
-    <div class="footer-inner"><div class="footer-links">{% for leaf in root.leaves %}{% include 'section_leaf.jinja2' %}{% endfor %}</div></div>
+    <div class="footer-inner"><div class="footer-links">{% for leaf in root.leaves if leaf.name != "contact" %}{% include 'section_leaf.jinja2' %}{% endfor %}</div></div>
     <div class="footer-base"><nav aria-label="Footer information"><a href="/sitemap.xml">Sitemap</a><a href="/privacy/">Privacy</a><a href="/contact/">Contact</a></nav></div>
   </footer>
   <script type="module">
