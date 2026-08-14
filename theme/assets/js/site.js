@@ -47,25 +47,43 @@
   }
 
   document.querySelectorAll('[data-chip-filters]').forEach((filterRoot) => {
-    const cards = [...document.querySelectorAll(filterRoot.dataset.filterTarget)];
-    const selected = {};
-    const applyFilters = () => {
+    const target = filterRoot.dataset.filterTarget || '[data-filter-card]';
+    const cards = [...document.querySelectorAll(target)];
+    const activeFilters = {};
+    const filterKeys = [...new Set([...filterRoot.querySelectorAll('[data-filter-key]')].map((chip) => chip.dataset.filterKey))];
+
+    filterKeys.forEach((key) => { activeFilters[key] = ''; });
+
+    const getCardValues = (card, key) => (card.dataset[key] || '').split(/\s+/).filter(Boolean);
+
+    const updateDisplay = () => {
       cards.forEach((card) => {
-        const matches = Object.values(selected).every((term) => !term || card.classList.contains(term));
+        const matches = filterKeys.every((key) => {
+          const selected = activeFilters[key];
+          return !selected || getCardValues(card, key).includes(selected);
+        });
+        card.classList.toggle('is-filtered-out', !matches);
         card.hidden = !matches;
+        card.setAttribute('aria-hidden', String(!matches));
       });
     };
+
     filterRoot.querySelectorAll('[data-filter-key]').forEach((chip) => {
+      chip.setAttribute('aria-pressed', String(chip.classList.contains('is-active')));
       chip.addEventListener('click', () => {
         const key = chip.dataset.filterKey;
-        const value = chip.dataset.filterValue;
-        selected[key] = value;
+        const value = chip.dataset.filterValue || '';
+        activeFilters[key] = value;
         filterRoot.querySelectorAll(`[data-filter-key="${key}"]`).forEach((control) => {
-          control.classList.toggle('is-active', control === chip);
+          const isActive = control === chip;
+          control.classList.toggle('is-active', isActive);
+          control.setAttribute('aria-pressed', String(isActive));
         });
-        applyFilters();
+        updateDisplay();
       });
     });
+
+    updateDisplay();
   });
 
   const menu = document.querySelector('[data-mobile-menu]');

@@ -418,3 +418,6 @@ h3 { font-size: clamp(1.35rem, 3vw, 1.8rem); font-weight: 500; }
 .chip-filters--replications { gap: 22px; padding: 24px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper-strong); }
 .chip-filters__group { display: grid; gap: 10px; }
 .chip-filters--replications .chip-filters__label { color: var(--ink-900); font-size: .86rem; }
+
+[data-filter-card][hidden], [data-filter-card].is-filtered-out { display: none !important; }
+.filter-chip[aria-pressed="true"] { border-color: var(--ink-900); background: var(--ink-900); color: var(--paper-strong); }

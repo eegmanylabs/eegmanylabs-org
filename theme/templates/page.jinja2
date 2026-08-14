@@ -15,7 +15,7 @@
     </section>
 
     {% if index.name == "replications" %}
-      <div class="chip-filters chip-filters--replications" data-chip-filters data-filter-target="#replications .card-grid > sl-card" aria-label="Filter replications">
+      <div class="chip-filters chip-filters--replications" data-chip-filters data-filter-target="#replications [data-filter-card]" aria-label="Filter replications">
         <div class="chip-filters__group"><span class="chip-filters__label">Stage</span><div class="chip-filters__list" role="group" aria-label="Replication stage">
           <button type="button" class="filter-chip is-active" data-filter-key="stage" data-filter-value="">All stages</button>
           <button type="button" class="filter-chip" data-filter-key="stage" data-filter-value="4_stage1_prep">Stage 1 preparation</button>
@@ -38,7 +38,7 @@
         </div></div>
       </div>
     {% elif index.name == "people" %}
-      <div class="chip-filters" data-chip-filters data-filter-target="#people .card-grid > sl-card" aria-label="Filter Core Team roles">
+      <div class="chip-filters" data-chip-filters data-filter-target="#people [data-filter-card]" aria-label="Filter Core Team roles">
         <span class="chip-filters__label">Filter roles</span>
         <div class="chip-filters__list" role="group" aria-label="Core Team roles">
           <button type="button" class="filter-chip is-active" data-filter-key="role" data-filter-value="">All</button>
@@ -52,7 +52,7 @@
         </div>
       </div>
     {% elif index.name == "publications" %}
-      <div class="chip-filters" data-chip-filters data-filter-target="#publications .card-grid > sl-card" aria-label="Filter publications by status">
+      <div class="chip-filters" data-chip-filters data-filter-target="#publications [data-filter-card]" aria-label="Filter publications by status">
         <span class="chip-filters__label">Filter publications</span>
         <div class="chip-filters__list" role="group" aria-label="Publication status">
           <button type="button" class="filter-chip is-active" data-filter-key="status" data-filter-value="">All</button>

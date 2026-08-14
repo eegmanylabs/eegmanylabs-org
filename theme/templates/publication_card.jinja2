@@ -1,6 +1,6 @@
 {% from 'macros/utils.jinja2' import add_button %}
 
-<sl-card id="{{ leaf.name }}" class="publication-card {% for tag in leaf.front.Tags.keys() %}{{ tag }} {% endfor %}">
+<sl-card id="{{ leaf.name }}" class="publication-card {% for tag in leaf.front.Tags.keys() %}{{ tag }} {% endfor %}" data-filter-card data-status="{% for tag in leaf.front.Tags.keys() %}{{ tag }} {% endfor %}">
   <div class="publication-card__content">
     {% if leaf.front['ReplicationId'] != "None" %}
       <p class="publication-card__study"><a href="/replications/#{{ leaf.front['ReplicationId'] }}">{{ leaf.front['ReplicationId'] }}</a></p>

@@ -2,7 +2,7 @@
 SequenceNumber = 50
 +++
 
-## About EEG
+## What is EEG?
 
 Electroencephalography (EEG) is the most widely used functional neuroimaging modality in the world, featuring in over 5,000 publications annually. Its popularity stems from its unique ability to provide non-invasive, cost-effective, millisecond-level insights into brain activity. In recent years, researchers in engineering and computer science have sought to harness EEG signals beyond the lab—embedding them in wearable and assistive technologies that promise real-world utility.
 The potential applications of EEG are vast and potentially transformative. They include Brain-Computer Interfaces (BCIs) for real-time monitoring of cognition and emotion, systems for motor rehabilitation, communication tools for individuals with locked-in syndrome, technologies for augmenting athletic performance, and consumer-grade devices for sleep tracking and mental well-being.

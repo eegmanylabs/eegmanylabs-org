@@ -1,6 +1,6 @@
 {% import 'macros/action_button.jinja2' as ActionButton %}
 
-<sl-card id="{{ leaf.name }}" class="study-card {{ leaf.front['StageID'] }} {{ leaf.front['Theme']|lower }}">
+<sl-card id="{{ leaf.name }}" class="study-card {{ leaf.front['StageID'] }} {{ leaf.front['Theme']|lower }}" data-filter-card data-stage="{{ leaf.front['StageID'] }}" data-theme="{{ leaf.front['Theme']|lower }}">
   <div slot="header" class="study-card__header">
     <h2>{{ leaf.front['StudyId'] }}</h2>
     <sl-tooltip content="{{ leaf.front['Title'] }} - {{ leaf.front['AuthorShort'] }}">
