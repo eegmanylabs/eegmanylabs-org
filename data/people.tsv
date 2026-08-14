@@ -1,6 +1,6 @@
 PersonId	FullName	HeadShotFilename	Affiliation	Country	StudyId	SpinOffId	LeadRole	SpinOffRole	CoordinatorRole	AdvisorRole	CoInvestigatorRole	OtherRole	ScholarUrl	UniUrl	LabUrl
+ypavlov	Yuri Pavlov	ypavlov.jpg	University of Alabama at Birmingham	USA			0	0	1	0	0	founder	https://scholar.google.com/citations?hl=en&user=nSM_MxUAAAAJ	https://www.uab.edu/cas/psychology/people/faculty/yuri-pavlov	https://yurigpavlov.com/
 fmushtaq	Faisal Mushtaq	fmushtaq.jpg	University of Leeds	United Kingdom	YeungSanfey2004		1	0	1	0	0		https://scholar.google.com/citations?user=bcjpWSwAAAAJ&hl=en	https://medicinehealth.leeds.ac.uk/psychology/staff/632/dr-faisal-mushtaq	
-ypavlov	Yuri Pavlov	ypavlov.jpg	unaffiliated	Unaffiliated			0	0	1	0	0	founder	https://scholar.google.com/citations?hl=en&user=nSM_MxUAAAAJ		https://yurigpavlov.com/
 dwelke	Dominik Welke	dwelke.jpg	University of Leeds	United Kingdom			0	0	1	0	0		https://scholar.google.de/citations?user=B5xCyM0AAAAJ&hl=en		https://dominikwelke.github.io/
 jvandenbosch	Jasper van den Bosch	jvandenbosch.jpg	University of Leeds	United Kingdom			0	0	1	0	0		https://scholar.google.com/citations?user=XQ3-JHgAAAAJ&hl=en	https://medicinehealth.leeds.ac.uk/psychology/staff/11861/jasper-van-den-bosch	
 abland	Amy Bland	abland.jpg	Manchester Metropolitan University	United Kingdom	HajcakFoti2008		1	0	0	0	1		https://scholar.google.com/citations?user=nQl3r9kAAAAJ&hl=en	https://www.mmu.ac.uk/staff/profile/dr-amy-bland	
