@@ -3,6 +3,9 @@
 
   if (heroVideo) {
     const playHeroVideo = () => {
+      heroVideo.autoplay = true;
+      heroVideo.loop = true;
+      heroVideo.defaultMuted = true;
       heroVideo.muted = true;
       heroVideo.playsInline = true;
       heroVideo.play().catch(() => {});
@@ -13,6 +16,11 @@
     } else {
       heroVideo.addEventListener('loadeddata', playHeroVideo, { once: true });
     }
+
+    heroVideo.addEventListener('ended', () => {
+      heroVideo.currentTime = 0;
+      playHeroVideo();
+    });
 
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) playHeroVideo();
