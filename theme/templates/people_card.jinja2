@@ -10,9 +10,9 @@
 
   <img slot="image" src="/assets/images/{{ imageURL }}" alt="Portrait of {{ leaf.front['FullName'] }}" loading="lazy" />
   <div class="person-card__content">
-    <p class="card-kicker">Network member</p>
     <h2>{{ leaf.front['FullName'] }}</h2>
     <p class="person-card__affiliation">{{ leaf.front['Affiliation'] }}</p>
+    {{ leaf.content_html|safe }}
     <div class="tag-list" aria-label="Roles">
       {% for tag in leaf.front['Tags'] %}
         {{ add_button(tag) }}
