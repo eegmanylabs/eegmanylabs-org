@@ -213,18 +213,22 @@ h3 { font-size: clamp(1.35rem, 3vw, 1.8rem); font-weight: 500; }
 
 /* Footer */
 .site-footer { background: var(--ink-950); color: var(--paper); }
-.footer-inner { width: var(--content); margin: 0 auto; padding: 56px 0 34px; }
-.brand--footer { color: var(--paper); }
-.brand--footer .brand-mark { background: var(--aqua); }
-.brand--footer .brand-mark span { background: var(--ink-950); }
-.footer-intro p { max-width: 300px; margin: 18px 0 0; color: rgba(255,255,255,.65); }
-.footer-links { display: grid; gap: 34px; }
-.footer-links section h2 { margin-bottom: 13px; color: var(--aqua); font-size: 1rem; font-weight: 750; letter-spacing: 0; }
-.footer-links section p, .footer-links section ul { margin: 0; padding: 0; list-style: none; color: rgba(255,255,255,.78); }
-.footer-links section li { margin: 8px 0; }
-.footer-links section a:hover { color: var(--aqua); }
-.footer-links section img { display: inline-block; width: auto; max-height: 26px; margin-right: 6px; vertical-align: middle; }
-.footer-base { display: flex; width: var(--content); margin: 0 auto; padding: 18px 0; flex-wrap: wrap; gap: 8px 22px; border-top: 1px solid rgba(255,255,255,.18); color: rgba(255,255,255,.55); font-size: .82rem; }
+.footer-inner { width: var(--content); margin: 0 auto; padding: 52px 0 28px; }
+.footer-links { display: grid; border-top: 1px solid rgba(255,255,255,.2); }
+.footer-section { padding: 27px 0 29px; border-bottom: 1px solid rgba(255,255,255,.2); }
+.footer-section h2 { margin-bottom: 16px; color: var(--aqua); font-size: .92rem; font-weight: 600; letter-spacing: .01em; line-height: 1.25; }
+.footer-section__content > p, .footer-section__content > ul { margin: 0; padding: 0; list-style: none; color: rgba(255,255,255,.8); }
+.footer-section__content ul { display: grid; gap: 10px; }
+.footer-section__content li { min-width: 0; margin: 0; }
+.footer-section__content a { display: inline-flex; min-height: 36px; align-items: center; gap: 10px; color: rgba(255,255,255,.84); line-height: 1.35; transition: color 160ms ease; }
+.footer-section__content a:hover { color: var(--aqua); }
+.footer-section__content a img { display: block; width: 32px; max-width: 32px; height: 32px; max-height: 32px; margin: 0; object-fit: contain; }
+.footer-section--resources a, .footer-section--contact a { padding: 5px 0; }
+.footer-section--funders .footer-section__content ul { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 22px; }
+.footer-section--funders .footer-section__content li { display: flex; align-items: center; }
+.footer-section--funders .footer-section__content img { width: auto; max-width: 130px; height: 44px; max-height: 44px; object-fit: contain; }
+.footer-base { width: var(--content); margin: 0 auto; padding: 18px 0 24px; color: rgba(255,255,255,.55); font-size: .82rem; }
+.footer-base span { display: block; }
 
 @media (min-width: 560px) {
   :root { --content: min(1180px, calc(100% - 64px)); }
@@ -234,7 +238,9 @@ h3 { font-size: clamp(1.35rem, 3vw, 1.8rem); font-weight: 500; }
   .proof-bar div:first-child { border-left: 0; }
   .front-grid, .home-cta-grid { grid-template-columns: repeat(2,1fr); }
   .filter-controls { grid-template-columns: repeat(2,minmax(0,1fr)); }
-  .footer-links { grid-template-columns: repeat(3,1fr); }
+  .footer-links { grid-template-columns: repeat(2,minmax(0,1fr)); column-gap: 48px; }
+  .footer-section { padding-top: 32px; }
+  .footer-section--funders { grid-column: 1 / -1; }
 }
 @media (min-width: 760px) {
   .header-inner { min-height: 82px; }
@@ -255,7 +261,9 @@ h3 { font-size: clamp(1.35rem, 3vw, 1.8rem); font-weight: 500; }
   .section-hero { grid-template-columns: minmax(0,1.15fr) minmax(280px,.65fr); align-items: end; padding-top: 104px; padding-bottom: 64px; }
   .card-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
   #people .card-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
-  .footer-inner { padding-top: 74px; }
+  .footer-inner { padding-top: 64px; }
+  .footer-links { grid-template-columns: repeat(3,minmax(0,1fr)); column-gap: 56px; }
+  .footer-section--funders { grid-column: auto; }
 }
 @media (min-width: 1020px) {
   .home-section { padding: 110px 0; }

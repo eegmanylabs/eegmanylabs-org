@@ -1,9 +1,6 @@
-
-<section id="{{ leaf.name }}">
-
-    <h2>{{ leaf.name|title }}</h2>
-
+<section id="{{ leaf.name }}" class="footer-section footer-section--{{ leaf.name }}">
+  <h2>{{ leaf.name|title }}</h2>
+  <div class="footer-section__content">
     {{ leaf.content_html|safe }}
-
+  </div>
 </section>
-
