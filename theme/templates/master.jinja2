@@ -1,96 +1,109 @@
 <!DOCTYPE html>
-<html lang="en" class="reduce-fouce">
+<html lang="en">
 <head>
-    <meta charset=utf-8>
-    <meta http-equiv=x-ua-compatible content="ie=edge">
-    <meta name=viewport content="width=device-width,initial-scale=1">
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta
         syrinx-environment="{{ index.meta.environment }}"
         syrinx-timestamp="{{ index.meta.timestamp.isoformat() }}"
-        syrinx-version="{{ index.meta.syrinx_version }}"/>
+        syrinx-version="{{ index.meta.syrinx_version }}" />
     {% if index.meta.environment != 'production' %}
       <meta name="robots" content="noindex, nofollow">
     {% endif %}
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.0/cdn/themes/light.css" />
-    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.0/cdn/shoelace-autoloader.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400..700&family=Fraunces:opsz,wght@9..144,500..700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.0/cdn/themes/light.css" />
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.0/cdn/shoelace-autoloader.js"></script>
     <link rel="canonical" href="{{ index.address }}">
     <link rel="sitemap" type="application/xml" href="/sitemap.xml">
-    <link href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/assets/css/index.css">
     <script src="/assets/js/card_control.js" defer></script>
-
-    <title>eegmanylabs</title>
+    <script src="/assets/js/site.js" defer></script>
+    <title>EEGManyLabs</title>
 </head>
 <body>
-  <nav id="menu">
-    <a id="logo" href="/"><img id="logo" src="/assets/images/logo_dark.png"></a>
-    <a href="javascript:void(0);" class="icon" onclick="showResponsiveMenu()">
-      <sl-icon library="fa" name="fas-bars"></sl-icon>
-    </a>
-    <ul class="topnav" id="myTopnav">
-    {% for branch in root.branches %}
-        {% if branch.buildPage %}
-            <li><a href="/{{ branch.name }}/">{{ branch.name|replace("_", " ")}}</a></li>
-        {% endif %}
-    {% endfor %}
-    </ul>
-  </nav>
-  <div id="body-container">{# pushes down the footer when there is little content #}
-    <div id="content">
-      {% block main %}{% endblock %}
+  <a class="skip-link" href="#main-content">Skip to content</a>
+
+  <header class="site-header" data-site-header>
+    <div class="header-inner">
+      <a class="brand" href="/" aria-label="EEGManyLabs home">
+        <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></span>
+        <span class="brand-name">EEGManyLabs</span>
+      </a>
+
+      <nav class="desktop-nav" aria-label="Primary navigation">
+        {% for branch in root.branches %}
+          {% if branch.buildPage %}
+            <a href="/{{ branch.name }}/" {% if index.name == branch.name %}aria-current="page"{% endif %}>{{ branch.name|replace("_", " ")|capitalize }}</a>
+          {% endif %}
+        {% endfor %}
+      </nav>
+
+      <button class="menu-toggle" type="button" aria-controls="mobile-menu" aria-expanded="false" data-menu-toggle>
+        <span class="sr-only">Open navigation</span>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <path d="M3 6h18M3 12h18M3 18h18" />
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="mobile-menu" id="mobile-menu" data-mobile-menu hidden>
+    <div class="mobile-menu__panel" role="dialog" aria-modal="true" aria-label="Site navigation">
+      <div class="mobile-menu__top">
+        <span class="mobile-menu__label">Explore</span>
+        <button class="menu-close" type="button" data-menu-close aria-label="Close navigation">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </div>
+      <nav class="mobile-nav" aria-label="Primary navigation">
+        {% for branch in root.branches %}
+          {% if branch.buildPage %}
+            <a href="/{{ branch.name }}/" {% if index.name == branch.name %}aria-current="page"{% endif %}>{{ branch.name|replace("_", " ")|capitalize }}<span aria-hidden="true">↗</span></a>
+          {% endif %}
+        {% endfor %}
+      </nav>
+      <p class="mobile-menu__note">A global collaboration advancing rigorous, open EEG science.</p>
     </div>
   </div>
-  <footer>
-    {% for leaf in root.leaves %}
-      {% include 'section_leaf.jinja2' %}
-    {% endfor %}
-    <span id="copyright-reference">&copy; 2024 eegmanylabs</span>
+
+  <main id="main-content">
+    {% block main %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-intro">
+        <a class="brand brand--footer" href="/" aria-label="EEGManyLabs home">
+          <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></span>
+          <span class="brand-name">EEGManyLabs</span>
+        </a>
+        <p>Collaborative EEG research, designed for reproducibility and global participation.</p>
+      </div>
+      <div class="footer-links">
+        {% for leaf in root.leaves %}
+          {% include 'section_leaf.jinja2' %}
+        {% endfor %}
+      </div>
+    </div>
+    <div class="footer-base"><span>&copy; 2024 EEGManyLabs</span><span>Open science, shared progress.</span></div>
   </footer>
 
-{# shoelace snippet to add font awesome #}
-<script type="module">
-  import { registerIconLibrary } from 'https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.0/cdn/utilities/icon-library.js';
+  <script type="module">
+    import { registerIconLibrary } from 'https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.0/cdn/utilities/icon-library.js';
 
-  registerIconLibrary('fa', {
-    resolver: name => {
-      const filename = name.replace(/^fa[rbs]-/, '');
-      let folder = 'regular';
-      if (name.substring(0, 4) === 'fas-') folder = 'solid';
-      if (name.substring(0, 4) === 'fab-') folder = 'brands';
-      return `https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.2/svgs/${folder}/${filename}.svg`;
-    },
-    mutator: svg => svg.setAttribute('fill', 'currentColor')
-  });
-</script>
-<script>
-function showResponsiveMenu() {
-  var navBar = document.getElementById("myTopnav");
-  if (navBar.className === "topnav") {
-    // Show menu in responsive state by adding responsive class to element
-    navBar.classList.add("responsive");
-  } else {
-    // Hide menu by resetting to just the topnav class
-    navBar.className = "topnav";
-  }
-}
-</script>
-<script type="module">
-  await Promise.race([
-    // Load all custom elements
-    Promise.allSettled([
-      customElements.whenDefined('sl-select'),
-      customElements.whenDefined('sl-card'),
-    ]),
-    // Resolve after two seconds
-    new Promise(resolve => setTimeout(resolve, 1500))
-  ]);
-
-  // Remove the class, showing the page content
-  document.documentElement.classList.remove('reduce-fouce');
-</script>
-
-
+    registerIconLibrary('fa', {
+      resolver: name => {
+        const filename = name.replace(/^fa[rbs]-/, '');
+        let folder = 'regular';
+        if (name.substring(0, 4) === 'fas-') folder = 'solid';
+        if (name.substring(0, 4) === 'fab-') folder = 'brands';
+        return `https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.2/svgs/${folder}/${filename}.svg`;
+      },
+      mutator: svg => svg.setAttribute('fill', 'currentColor')
+    });
+  </script>
 </body>
 </html>

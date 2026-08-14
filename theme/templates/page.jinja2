@@ -1,25 +1,46 @@
 {% extends 'master.jinja2' %}
 
 {% block main %}
-
-<article id="{{ index.name }}">
-
-    {% if index.name == "about" %}
+<article id="{{ index.name }}" class="section-page section-page--{{ index.name|replace('_', '-') }}">
+  {% if index.name == "about" %}
+    <section class="section-hero section-hero--about">
+      <div>
+        <p class="eyebrow">About the collaboration</p>
+        <h1>Evidence grows stronger when research is shared.</h1>
+      </div>
+      <p class="section-hero__summary">EEGManyLabs convenes researchers across the world to coordinate rigorous replication, transparent methods, and equitable participation in EEG science.</p>
+    </section>
+    <section class="longform longform--about">
       {% include 'about_page.jinja2' %}
-    {% else %}
-      {% set replications_count = index.leaves | length | string %}
-      {{ index.content_html|replace("replications_count", replications_count)|safe }}
+    </section>
+  {% else %}
+    {% set replications_count = index.leaves | length | string %}
+    <section class="section-hero">
+      <div class="section-hero__title">
+        <p class="eyebrow">{{ index.name|replace('_', ' ')|capitalize }}</p>
+        {{ index.content_html|replace("replications_count", replications_count)|safe }}
+      </div>
+      {% if index.name == 'replications' %}
+        <p class="section-hero__summary">Each study is developed and delivered through a coordinated international network, creating a transparent and robust assessment of influential EEG findings.</p>
+      {% elif index.name == 'people' %}
+        <p class="section-hero__summary">The collaboration is powered by researchers, coordinators, advisory members, and replication teams working across disciplines and countries.</p>
+      {% elif index.name == 'publications' %}
+        <p class="section-hero__summary">Registered reports, results, materials, and data resources from the EEGManyLabs programme.</p>
+      {% endif %}
+    </section>
 
-      <div class="select-container" style="display: none">
+    {% if index.name == "replications" or index.name == "people" %}
+      <div class="select-container filter-controls" aria-label="Filter content">
         {% if index.name == "replications" %}
-          <sl-select id="stage" placeholder="Replication Stage" value="" clearable></sl-select>
-          <sl-select id="theme" placeholder="Themes" value="" clearable></sl-select>
+          <sl-select id="stage" placeholder="Filter by stage" value="" clearable></sl-select>
+          <sl-select id="theme" placeholder="Filter by theme" value="" clearable></sl-select>
         {% elif index.name == "people" %}
-          <sl-select id="tag" placeholder="Tags" value="" multiple clearable></sl-select>
+          <sl-select id="tag" placeholder="Filter by role" value="" multiple clearable></sl-select>
         {% endif %}
       </div>
+    {% endif %}
 
-
+    <section class="content-collection">
       <div class="card-grid">
         {% if index.name == "publications" %}
           {% include 'publication_page.jinja2' %}
@@ -37,9 +58,7 @@
           {% endfor %}
         {% endif %}
       </div>
-
-    {% endif %}
-
+    </section>
+  {% endif %}
 </article>
-
 {% endblock %}

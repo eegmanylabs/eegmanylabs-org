@@ -1,30 +1,78 @@
 {% extends 'master.jinja2' %}
 
 {% block main %}
+{% set statistics = namespace(replications=0, people=0) %}
+{% for branch in index.branches %}
+  {% if branch.name == 'replications' %}
+    {% set statistics.replications = branch.leaves|length %}
+  {% elif branch.name == 'people' %}
+    {% set statistics.people = branch.leaves|length %}
+  {% endif %}
+{% endfor %}
 
-<article id="front">
+<article class="home-page">
+  <section class="home-hero">
+    <div class="home-hero__copy">
+      <p class="eyebrow">Global EEG collaboration</p>
+      {{ index.content_html|safe }}
+      <p class="home-hero__lede">Coordinated, transparent research for a stronger evidence base in cognitive neuroscience.</p>
+      <div class="hero-actions">
+        <a class="button button--primary" href="/replications/">Explore replications <span aria-hidden="true">→</span></a>
+        <a class="text-link text-link--light" href="/people/">Meet the network <span aria-hidden="true">↗</span></a>
+      </div>
+    </div>
+    <div class="home-hero__art" aria-hidden="true">
+      <div class="signal-orbit signal-orbit--one"></div>
+      <div class="signal-orbit signal-orbit--two"></div>
+      <div class="signal-orbit signal-orbit--three"></div>
+      <div class="signal-path"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      <div class="signal-label">Open. Rigorous. Global.</div>
+    </div>
+  </section>
 
-    {{ index.content_html|safe }}
+  <section class="proof-bar" aria-label="EEGManyLabs overview">
+    <div><strong>{{ statistics.replications }}</strong><span>coordinated replications</span></div>
+    <div><strong>{{ statistics.people }}</strong><span>researchers in the network</span></div>
+    <div><strong>Open</strong><span>methods, materials and data</span></div>
+  </section>
+
+  <section class="home-section home-section--features">
+    <div class="section-heading section-heading--split">
+      <div>
+        <p class="eyebrow">The collaboration</p>
+        <h2>Building reliable EEG science, together.</h2>
+      </div>
+      <p>Explore the research programme, the people making it possible, and the projects growing from the network.</p>
+    </div>
 
     <div class="front-grid">
-    {% for branch in index.branches %}
-      {% if branch.front %}
-        <a href="{{branch.name}}">
-          {% set item = branch %}
-          {% include 'card_preview.jinja2' %}
-        </a>
-      {% else %}
-        <h2>{{ branch.name|replace("_", " ")|title }} </h2>
-        <div class={{branch.name}}>
+      {% for branch in index.branches %}
+        {% if branch.front %}
+          <a class="feature-card" href="/{{ branch.name }}/">
+            {% set item = branch %}
+            {% include 'card_preview.jinja2' %}
+            <span class="feature-card__arrow" aria-hidden="true">↗</span>
+          </a>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </section>
+
+  {% for branch in index.branches %}
+    {% if not branch.front %}
+      <section class="home-section home-section--secondary {{ branch.name|replace('_', '-') }}">
+        <div class="section-heading">
+          <p class="eyebrow">Take part</p>
+          <h2>{{ branch.name|replace("_", " ")|title }}</h2>
+        </div>
+        <div class="home-cta-grid">
           {% for leaf in branch.leaves %}
             {% set item = leaf %}
             {% include 'card_preview.jinja2' %}
           {% endfor %}
-        </div> 
-      {% endif %}
-    {% endfor %}
-    </div>
-
+        </div>
+      </section>
+    {% endif %}
+  {% endfor %}
 </article>
-
 {% endblock %}

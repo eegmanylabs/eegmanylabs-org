@@ -1,22 +1,14 @@
-<sl-card id="{{ leaf.name }}">
-  
-  <div slot="header" id="card-header">
-    <div id="title">
-      {{ leaf.front['Title'] }}
-    </div>
-  </div>
-
+<sl-card id="{{ leaf.name }}" class="project-card">
   {% if leaf.front['Image'] != "None" %}
     {% set imageURL = leaf.front['Image'] %}
   {% else %}
     {% set imageURL = "missing_person.avif" %}
   {% endif %}
 
-  <img
-    slot="image"
-    src="/assets/images/{{ imageURL }}"
-  />
-
-  {{ leaf.content_html|safe }}
-
+  <img slot="image" src="/assets/images/{{ imageURL }}" alt="{{ leaf.front['Title'] }}" loading="lazy" />
+  <div class="project-card__content">
+    <p class="card-kicker">Related project</p>
+    <h2>{{ leaf.front['Title'] }}</h2>
+    {{ leaf.content_html|safe }}
+  </div>
 </sl-card>
