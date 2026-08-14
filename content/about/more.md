@@ -2,8 +2,6 @@
 SequenceNumber = 50
 +++
 
-# About \#EEGManyLabs
-
 ## About EEG
 
 Electroencephalography (EEG) is the most widely used functional neuroimaging modality in the world, featuring in over 5,000 publications annually. Its popularity stems from its unique ability to provide non-invasive, cost-effective, millisecond-level insights into brain activity. In recent years, researchers in engineering and computer science have sought to harness EEG signals beyond the lab—embedding them in wearable and assistive technologies that promise real-world utility.

@@ -18,4 +18,5 @@ StudyId = "{{ StudyId }}"
 PersonId = "{{ PersonId }}"
 FullName = "{{ FullName }}"
 Affiliation = "{{ Affiliation }}"
+Country = "{{ Country }}"
 +++

@@ -1,26 +1,17 @@
 {% import 'macros/icon_button.jinja2' as IconButton %}
 {% from 'macros/utils.jinja2' import add_button %}
 
-<sl-card id="{{ leaf.name }}" class="person-card {{ leaf.front['Tags']|join(" ") }}">
-  {% if leaf.front['Image'] != "None" %}
-    {% set imageURL = leaf.front['Image'] %}
-  {% else %}
-    {% set imageURL = "missing_person.avif" %}
-  {% endif %}
-
-  <img slot="image" src="/assets/images/{{ imageURL }}" alt="Portrait of {{ leaf.front['FullName'] }}" loading="lazy" />
-  <div class="person-card__content">
+<sl-card id="{{ leaf.name }}" class="member-card {{ leaf.front['Tags']|join(" ") }}">
+  <div class="member-card__content">
     <h2>{{ leaf.front['FullName'] }}</h2>
-    <p class="person-card__affiliation">{{ leaf.front['Affiliation'] }}{% if leaf.front['Country'] != "Unaffiliated" %}<span aria-hidden="true"> · </span><span>{{ leaf.front['Country'] }}</span>{% endif %}</p>
-    {{ leaf.content_html|safe }}
+    <p class="member-card__affiliation">{{ leaf.front['Affiliation'] }}{% if leaf.front['Country'] != "Unaffiliated" %}<span aria-hidden="true"> · </span><span>{{ leaf.front['Country'] }}</span>{% endif %}</p>
     <div class="tag-list" aria-label="Roles">
       {% for tag in leaf.front['Tags'] %}
         {{ add_button(tag) }}
       {% endfor %}
     </div>
   </div>
-
-  <div slot="footer" class="person-card__links">
+  <div slot="footer" class="member-card__links">
     {{ IconButton.render(leaf.front['ScholarUrl'], "Google Scholar profile", "fab-google-scholar") }}
     {{ IconButton.render(leaf.front['UniUrl'], "University profile page", "fas-building-columns") }}
     {{ IconButton.render(leaf.front['LabUrl'], "Lab website", "fas-flask") }}

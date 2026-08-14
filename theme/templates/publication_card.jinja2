@@ -1,27 +1,19 @@
 {% from 'macros/utils.jinja2' import add_button %}
 
-<sl-card id="{{ leaf.name }}" class="publication-card">
+<sl-card id="{{ leaf.name }}" class="publication-card {% for tag in leaf.front.Tags.keys() %}{{ tag }} {% endfor %}">
   <div class="publication-card__content">
+    {% if leaf.front['ReplicationId'] != "None" %}
+      <p class="publication-card__study"><a href="/replications/#{{ leaf.front['ReplicationId'] }}">{{ leaf.front['ReplicationId'] }}</a></p>
+    {% endif %}
     <h2>{{ leaf.front['Title'] }}</h2>
     <p class="publication-card__authors">{{ leaf.front['AuthorShort'] }}</p>
     <p class="publication-card__journal">{{ leaf.front['Journal'] }}</p>
-
-    <div class="tag-list publication-card__status" aria-label="Publication status">
-      {% for tag, text in leaf.front.Tags.items() %}
-        {{ add_button(tag, text|title) }}
-      {% endfor %}
-    </div>
-
+    <div class="tag-list publication-card__status" aria-label="Publication status">{% for tag, text in leaf.front.Tags.items() %}{{ add_button(tag, text|title) }}{% endfor %}</div>
     <p class="publication-card__doi"><a href="{{ leaf.front['DoiUrl'] }}" target="_blank" rel="noopener">DOI: {{ leaf.front['DOI'] }}</a></p>
-
-    <div class="tag-list publication-card__resources" aria-label="Publication resources">
-      {{ add_button("paper", "PDF", leaf.front['Pdf']) }}
-      {% if leaf.front['OsfUrl'] != "None" %}
-        {{ add_button("osf", "OSF materials", leaf.front['OsfUrl']) }}
-      {% endif %}
-      {% if leaf.front['DataUrl'] != "None" %}
-        {{ add_button("data", "Data", leaf.front['DataUrl']) }}
-      {% endif %}
+    <div class="publication-card__resources" aria-label="Publication resources">
+      <a class="publication-resource-tile" href="{{ leaf.front['Pdf'] }}" target="_blank" rel="noopener"><sl-icon name="fas-file-pdf" aria-hidden="true"></sl-icon><span>PDF</span></a>
+      {% if leaf.front['OsfUrl'] != "None" %}<a class="publication-resource-tile publication-resource-tile--osf" href="{{ leaf.front['OsfUrl'] }}" target="_blank" rel="noopener"><img src="/assets/images/osf_logo.png" alt=""><span>OSF materials</span></a>{% endif %}
+      {% if leaf.front['DataUrl'] != "None" %}<a class="publication-resource-tile" href="{{ leaf.front['DataUrl'] }}" target="_blank" rel="noopener"><sl-icon name="fas-database" aria-hidden="true"></sl-icon><span>Data</span></a>{% endif %}
     </div>
   </div>
 </sl-card>
