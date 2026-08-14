@@ -5,11 +5,16 @@
     <h2>{{ leaf.front['Title'] }}</h2>
     <p class="publication-card__authors">{{ leaf.front['AuthorShort'] }}</p>
     <p class="publication-card__journal">{{ leaf.front['Journal'] }}</p>
-    <div class="tag-list publication-card__links">
+
+    <div class="tag-list publication-card__status" aria-label="Publication status">
       {% for tag, text in leaf.front.Tags.items() %}
         {{ add_button(tag, text|title) }}
       {% endfor %}
-      {{ add_button("doi", "DOI: {}".format(leaf.front['DOI']), leaf.front['DoiUrl']) }}
+    </div>
+
+    <p class="publication-card__doi"><a href="{{ leaf.front['DoiUrl'] }}" target="_blank" rel="noopener">DOI: {{ leaf.front['DOI'] }}</a></p>
+
+    <div class="tag-list publication-card__resources" aria-label="Publication resources">
       {{ add_button("paper", "PDF", leaf.front['Pdf']) }}
       {% if leaf.front['OsfUrl'] != "None" %}
         {{ add_button("osf", "OSF materials", leaf.front['OsfUrl']) }}

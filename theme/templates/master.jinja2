@@ -57,7 +57,7 @@
       <nav class="mobile-nav" aria-label="Primary navigation">
         {% for branch in root.branches %}
           {% if branch.buildPage %}
-            <a href="/{{ branch.name }}/" {% if index.name == branch.name %}aria-current="page"{% endif %}>{{ branch.name|replace("_", " ")}}<span aria-hidden="true">↗</span></a>
+            <a href="/{{ branch.name }}/" {% if index.name == branch.name %}aria-current="page"{% endif %}>{{ branch.name|replace("_", " ")}}</a>
           {% endif %}
         {% endfor %}
       </nav>
