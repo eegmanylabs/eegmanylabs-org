@@ -435,6 +435,8 @@ h3 { font-size: clamp(1.35rem, 3vw, 1.8rem); font-weight: 500; }
 #members .member-card::part(body) { padding: 12px 12px 4px; }
 #members .member-card::part(footer) { padding: 10px 12px 12px; }
 .member-card [slot="image"] { height: auto !important; aspect-ratio: 1 !important; object-fit: cover !important; object-position: center top; filter: saturate(.84) contrast(1.02) !important; }
+.member-card__initials { display: grid !important; width: 100%; place-items: center; background: var(--ink-900); color: var(--paper-strong); }
+.member-card__initials span { display: grid; width: 78px; height: 78px; place-items: center; border: 1px solid rgba(255,255,255,.42); border-radius: 50%; font-family: var(--serif); font-size: 2rem; font-weight: 500; letter-spacing: -.06em; }
 .member-card__content { padding: 0; }
 .member-card__content h2 { margin-bottom: 5px; font-size: 1rem; line-height: 1.16; }
 .member-card__affiliation { min-height: 0; margin-bottom: 10px; color: var(--muted); font-size: .76rem; line-height: 1.35; }

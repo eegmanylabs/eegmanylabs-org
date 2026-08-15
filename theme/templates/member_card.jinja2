@@ -3,11 +3,12 @@
 
 <sl-card id="{{ leaf.name }}" class="member-card {{ leaf.front['Tags']|join(" ") }}">
   {% if leaf.front['Image'] != "None" %}
-    {% set image_url = leaf.front['Image'] %}
+    <img slot="image" src="{{ leaf.front['Image'] }}" alt="Portrait of {{ leaf.front['FullName'] }}">
   {% else %}
-    {% set image_url = "/assets/images/member-characters/" ~ member_character %}
+    {% set name_parts = leaf.front['FullName'].split(' ') %}
+    {% set initials = name_parts[0][0] ~ name_parts[-1][0] %}
+    <div slot="image" class="member-card__initials" aria-hidden="true"><span>{{ initials|upper }}</span></div>
   {% endif %}
-  <img slot="image" src="{{ image_url }}" alt="{% if leaf.front['Image'] != 'None' %}{{ leaf.front['FullName'] }}{% else %}EEGManyLabs community member illustration{% endif %}">
   <div class="member-card__content">
     <h2>{{ leaf.front['FullName'] }}</h2>
     <p class="member-card__affiliation">{{ leaf.front['Affiliation'] }}{% if leaf.front['Country'] != "Unaffiliated" %}<span aria-hidden="true"> · </span><span>{{ leaf.front['Country'] }}</span>{% endif %}</p>
@@ -17,13 +18,15 @@
       {% endfor %}
     </div>
   </div>
-  <div slot="footer" class="member-card__links">
-    {{ IconButton.render(leaf.front['ScholarUrl'], "Google Scholar profile", "fab-google-scholar") }}
-    {{ IconButton.render(leaf.front['UniUrl'], "University profile page", "fas-building-columns") }}
-    {{ IconButton.render(leaf.front['LabUrl'], "Lab website", "fas-flask") }}
-    {% if leaf.front['StudyId'] != "None" %}
-      {% set replicationUrl = "/replications/#" ~ leaf.front['StudyId'] %}
-      {{ IconButton.render(replicationUrl, "Replication page", "fas-clipboard", external = false) }}
-    {% endif %}
-  </div>
+  {% if leaf.front['ScholarUrl'] != "None" or leaf.front['UniUrl'] != "None" or leaf.front['LabUrl'] != "None" or leaf.front['StudyId'] != "None" %}
+    <div slot="footer" class="member-card__links">
+      {{ IconButton.render(leaf.front['ScholarUrl'], "Google Scholar profile", "fab-google-scholar") }}
+      {{ IconButton.render(leaf.front['UniUrl'], "University profile page", "fas-building-columns") }}
+      {{ IconButton.render(leaf.front['LabUrl'], "Lab website", "fas-flask") }}
+      {% if leaf.front['StudyId'] != "None" %}
+        {% set replicationUrl = "/replications/#" ~ leaf.front['StudyId'] %}
+        {{ IconButton.render(replicationUrl, "Replication page", "fas-clipboard", external = false) }}
+      {% endif %}
+    </div>
+  {% endif %}
 </sl-card>
