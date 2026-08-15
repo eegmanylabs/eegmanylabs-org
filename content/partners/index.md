@@ -1,5 +1,6 @@
 +++
 SequenceNumber = 7
+image = "/assets/images/partners.png"
 +++
 # Partners
 

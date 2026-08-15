@@ -1,5 +1,6 @@
 +++
 SequenceNumber = 4
+image = "/assets/images/members.png"
 +++
 # Members
 

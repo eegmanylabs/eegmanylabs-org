@@ -16,7 +16,7 @@
   <section class="home-section home-section--features">
     <div class="front-grid">
       {% for branch in index.branches %}
-        {% if branch.front and branch.name not in ['contact', 'privacy', 'site_map'] %}
+        {% if branch.front and branch.name in ['about', 'replications', 'people', 'related_projects', 'members', 'publications', 'partners'] %}
           <a class="feature-card" href="{{ branch.name }}">
             {% set item = branch %}
             {% include 'card_preview.jinja2' %}
@@ -27,7 +27,7 @@
   </section>
 
   {% for branch in index.branches %}
-    {% if not branch.front and branch.name not in ['contact', 'privacy', 'site_map'] %}
+    {% if not branch.front and branch.name in ['get_involved'] %}
       <section class="home-section home-section--secondary {{ branch.name|replace('_', '-') }}">
         <h2>{{ branch.name|replace("_", " ")|title }}</h2>
         <div class="home-cta-grid">
