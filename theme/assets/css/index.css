@@ -443,3 +443,160 @@ h3 { font-size: clamp(1.35rem, 3vw, 1.8rem); font-weight: 500; }
 .footer-section--funders .footer-section__content li { flex: 0 1 220px; width: 220px; height: 68px; justify-content: flex-start; }
 .footer-section--funders .footer-section__content img,
 .footer-section--funders .footer-section__content img[src$="bbsrc_logo_footer.png"] { width: 100% !important; height: 100% !important; max-width: none !important; max-height: none !important; object-fit: contain; object-position: left center; }
+
+/* UX refinement: compact page rhythm, structured related-project reading flow, and stable controls. */
+:where(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 3px solid var(--aqua);
+  outline-offset: 3px;
+}
+
+.section-hero {
+  padding-top: 42px;
+  padding-bottom: 32px;
+  gap: 18px;
+}
+.section-hero h1 + p { margin-top: 14px; }
+.longform { padding-top: 42px; }
+.longform h1, .longform h2, .longform h3 { scroll-margin-top: 112px; }
+
+.publication-resource-tile__icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.65;
+}
+.publication-resource-tile--osf img { width: 22px; height: 22px; }
+
+.related-project-hero { border-bottom: 1px solid var(--line); }
+.related-project-hero__inner {
+  width: var(--content);
+  margin: 0 auto;
+  padding: 42px 0 30px;
+}
+.related-project-hero h1 {
+  max-width: 860px;
+  margin: 0;
+  color: var(--ink-950);
+}
+.project-detail {
+  width: min(860px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 34px 0 88px;
+}
+.project-detail__content { color: var(--ink-700); font-size: 1.04rem; line-height: 1.68; }
+.project-detail__content > p { max-width: 760px; margin: 0 0 1.35em; }
+.project-detail__content > p:has(img) {
+  max-width: none;
+  margin: 0 0 30px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--paper-strong);
+}
+.project-detail__content > p:has(img) img {
+  width: 100%;
+  max-height: 460px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: var(--paper-muted);
+}
+.project-detail__content > h3 {
+  margin: 40px 0 13px;
+  color: var(--ink-900);
+  font-size: clamp(1.32rem, 4.5vw, 1.8rem);
+  font-weight: 500;
+  letter-spacing: -.035em;
+}
+.project-detail__content > h3:first-of-type + p {
+  max-width: none;
+  margin-bottom: 30px;
+  padding: 22px 24px;
+  border-left: 4px solid var(--aqua);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: #eaf5f0;
+  color: var(--ink-900);
+  font-size: 1.12rem;
+  line-height: 1.55;
+}
+.project-detail__content > p:has(a[href*="/people/"]) {
+  display: inline-flex;
+  max-width: none;
+  margin-top: -7px;
+  margin-bottom: 24px;
+  padding: 7px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper-strong);
+  color: var(--muted);
+  font-size: .82rem;
+  line-height: 1.35;
+}
+.project-detail__content > ul {
+  display: grid;
+  gap: 10px;
+  max-width: 760px;
+  margin: 0 0 28px;
+  padding: 20px 22px 20px 40px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--paper-strong);
+}
+.project-detail__content > ul li::marker { color: var(--aqua-deep); }
+.project-detail__content a {
+  color: var(--aqua-deep);
+  text-decoration: underline;
+  text-decoration-color: rgba(0,118,87,.38);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+@media (hover: none) {
+  .feature-card:hover,
+  .partner-card:hover,
+  .contact-social__card:hover,
+  .site-map-card:hover { transform: none; box-shadow: none; }
+  .card-grid sl-card:hover::part(base) { box-shadow: none; transform: none; }
+}
+@media (min-width: 760px) {
+  .section-hero { padding-top: 62px; padding-bottom: 44px; }
+  .longform { padding-top: 54px; }
+  .related-project-hero__inner { padding-top: 64px; padding-bottom: 42px; }
+  .project-detail { padding-top: 48px; }
+}
+
+html { scrollbar-gutter: stable; }
+.project-detail__content > h2 {
+  margin: 46px 0 14px;
+  color: var(--ink-900);
+  font-size: clamp(1.5rem, 4.8vw, 2.15rem);
+  font-weight: 500;
+  letter-spacing: -.04em;
+}
+.project-detail__content > p:has(> a[target="_blank"]):not(:has(a[href*="/people/"])) {
+  display: inline-flex;
+  margin-top: 3px;
+  padding: 0;
+}
+.project-detail__content > p:has(> a[target="_blank"]):not(:has(a[href*="/people/"])) > a {
+  display: inline-flex;
+  min-height: 44px;
+  padding: 11px 15px;
+  align-items: center;
+  border: 1px solid var(--aqua-deep);
+  border-radius: 9px;
+  background: var(--paper-strong);
+  color: var(--aqua-deep);
+  font-size: .9rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+.project-detail__content > p:has(> a[target="_blank"]):not(:has(a[href*="/people/"])) > a:hover {
+  background: var(--aqua-deep);
+  color: var(--paper-strong);
+  transform: translateY(-1px);
+}

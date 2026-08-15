@@ -6,6 +6,8 @@
     <section class="longform longform--about">
       {% include 'about_page.jinja2' %}
     </section>
+  {% elif index.name in ["BIDS_tutorial", "asymmetry", "automation", "eeg100", "electrotime", "prediction-markets", "resting-state"] %}
+    {% include 'related_project_page.jinja2' %}
   {% else %}
     {% set replications_count = index.leaves | length | string %}
     <section class="section-hero">
@@ -86,7 +88,7 @@
               {% include 'people_card.jinja2' %}
             {% endfor %}
           {% elif index.name == "members" %}
-            {% set member_characters = ["member-character-01.png", "member-character-02.png", "member-character-03.png", "member-character-04.png"] %}
+            {% set member_characters = ["member-character-01.webp", "member-character-02.webp", "member-character-03.webp", "member-character-04.webp"] %}
             {% for leaf in index.leaves|sort(attribute='front.SequenceNumber') %}
               {% set member_character = member_characters[loop.index0 % (member_characters|length)] %}
               {% include 'member_card.jinja2' %}

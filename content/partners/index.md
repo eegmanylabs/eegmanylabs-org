@@ -1,6 +1,6 @@
 +++
 SequenceNumber = 7
-image = "/assets/images/partners.png"
+image = "/assets/images/partners.webp"
 +++
 # Partners
 

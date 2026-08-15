@@ -15,7 +15,7 @@
     {{ leaf.content_html|safe }}
     <div class="tag-list" aria-label="Roles">
       {% for tag in leaf.front['Tags'] %}
-        {{ add_button(tag) }}
+        {{ add_button(tag, "Director" if tag == "directors" else tag) }}
       {% endfor %}
     </div>
   </div>

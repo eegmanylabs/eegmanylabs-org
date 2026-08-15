@@ -1,6 +1,6 @@
 +++
 SequenceNumber = 4
-image = "/assets/images/members.png"
+image = "/assets/images/members.webp"
 +++
 # Members
 

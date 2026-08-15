@@ -11,9 +11,9 @@
     <div class="tag-list publication-card__status" aria-label="Publication status">{% for tag, text in leaf.front.Tags.items() %}{{ add_button(tag, text|title) }}{% endfor %}</div>
     <p class="publication-card__doi"><a href="{{ leaf.front['DoiUrl'] }}" target="_blank" rel="noopener">DOI: {{ leaf.front['DOI'] }}</a></p>
     <div class="publication-card__resources" aria-label="Publication resources">
-      <a class="publication-resource-tile" href="{{ leaf.front['Pdf'] }}" target="_blank" rel="noopener"><sl-icon name="fas-file-pdf" aria-hidden="true"></sl-icon><span>PDF</span></a>
+      <a class="publication-resource-tile" href="{{ leaf.front['Pdf'] }}" target="_blank" rel="noopener"><svg class="publication-resource-tile__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2.75h7l5 5V21.25H6z"/><path d="M13 2.75v5h5"/><path d="M8.4 15.8h1.35a1.45 1.45 0 1 0 0-2.9H8.4v4.2m4.2-4.2h1.05a2.1 2.1 0 0 1 0 4.2H12.6zm4.1 0h2.9m-2.9 2.05h2.25"/></svg><span>PDF</span></a>
       {% if leaf.front['OsfUrl'] != "None" %}<a class="publication-resource-tile publication-resource-tile--osf" href="{{ leaf.front['OsfUrl'] }}" target="_blank" rel="noopener"><img src="/assets/images/osf_logo.png" alt=""><span>OSF materials</span></a>{% endif %}
-      {% if leaf.front['DataUrl'] != "None" %}<a class="publication-resource-tile" href="{{ leaf.front['DataUrl'] }}" target="_blank" rel="noopener"><sl-icon name="fas-database" aria-hidden="true"></sl-icon><span>Data</span></a>{% endif %}
+      {% if leaf.front['DataUrl'] != "None" %}<a class="publication-resource-tile" href="{{ leaf.front['DataUrl'] }}" target="_blank" rel="noopener"><svg class="publication-resource-tile__icon" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="6.5" ry="2.75"/><path d="M5.5 5v6c0 1.52 2.91 2.75 6.5 2.75s6.5-1.23 6.5-2.75V5m-13 6v6c0 1.52 2.91 2.75 6.5 2.75s6.5-1.23 6.5-2.75v-6"/></svg><span>Data</span></a>{% endif %}
     </div>
   </div>
 </sl-card>
