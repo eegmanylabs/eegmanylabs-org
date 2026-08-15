@@ -14,7 +14,7 @@
     {{ leaf.content_html|safe }}
     <div class="metadata-row">
       <span class="metadata-label">Stage:</span>
-      <span class="tag stage {{ leaf.front['StageID'] }}">{{ leaf.front['LongStage'] }}</span>
+      <span class="tag stage {{ leaf.front['StageID'] }}">{{ "Completed" if leaf.front['LongStage'] == "Finished" else leaf.front['LongStage'] }}</span>
     </div>
     <div class="metadata-row">
       <span class="metadata-label">Theme:</span>

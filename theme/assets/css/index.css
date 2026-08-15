@@ -197,7 +197,9 @@ h3 { font-size: clamp(1.35rem, 3vw, 1.8rem); font-weight: 500; }
 .tag.theme, sl-button.tag.theme::part(base) { background: #eaf0f6; color: #1f4b76; }
 .card-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
 .card-buttons sl-button::part(base) { min-height: 40px; padding: 0 13px; border: 1px solid var(--ink-900); border-radius: 8px; background: var(--ink-900); color: var(--paper); font-size: .84rem; font-weight: 400; }
-.card-buttons sl-tooltip:first-child sl-button::part(base) { background: transparent; color: var(--ink-900); }
+.card-buttons sl-tooltip:first-child sl-button::part(base) { width: 44px; padding: 0; background: transparent; color: var(--ink-900); }
+.card-buttons sl-tooltip:first-child sl-button::part(prefix) { margin-inline-end: 0; }
+.card-buttons sl-tooltip:first-child sl-button::part(label) { display: none; }
 .card-buttons sl-button[disabled]::part(base) { border-color: var(--line); background: var(--paper-muted); color: var(--muted); }
 
 /* People */
