@@ -7,4 +7,4 @@ SequenceNumber = 1
 
 \#EEGManyLabs is a large-scale, international collaboration. By pooling expertise and resources, our goal is to rigorously assess the replicability of landmark EEG findings. This collective effort is supporting the development of more transparent, reliable science, promoting shared tools, open data, and reproducible methods.
 
-<aside class="mission-callout"><p>Through our inclusive design, #EEGManyLabs is working to build a stronger, more connected research ecosystem committed to the future of EEG.</p></aside>
+<aside class="mission-callout"><p>Through large-scale multi-site collaboration, #EEGManyLabs is working to build a stronger, more connected research ecosystem committed to improving the foundations of EEG science.</p></aside>
