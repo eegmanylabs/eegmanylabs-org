@@ -2,7 +2,7 @@
 Title = "Resting State (#EEGML:RS)"
 SequenceNumber = 3
 +++ 
-![sleep_eeg](/assets/images/stock/sleep_eeg.png 'Child sleeping with EEG electrodes')
+![Child sleeping with EEG electrodes](/assets/images/stock/resting_state.png 'Child sleeping with EEG electrodes')
 
 
 ### What is the #EEGML:RS?
