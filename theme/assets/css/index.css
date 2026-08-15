@@ -273,7 +273,8 @@ h3 { font-size: clamp(1.35rem, 3vw, 1.8rem); font-weight: 500; }
   .desktop-nav a:hover, .desktop-nav a[aria-current="page"] { color: var(--ink-950); }
   .desktop-nav a:hover::after, .desktop-nav a[aria-current="page"]::after { transform: scaleX(1); }
   .menu-toggle { display: none; }
-  .home-hero { grid-template-columns: minmax(0,1fr); align-items: end; min-height: 700px; }
+  .home-hero { grid-template-columns: minmax(0,1fr); min-height: 700px; height: calc(100svh - 82px); }
+  .home-hero__copy { align-self: center; transform: translateY(8%); }
   .signal-orbit--one { top: 32px; right: -80px; }
   .signal-orbit--two { top: -34px; right: -188px; }
   .signal-orbit--three { right: -340px; bottom: -350px; }
