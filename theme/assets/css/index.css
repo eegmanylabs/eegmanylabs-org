@@ -421,3 +421,25 @@ h3 { font-size: clamp(1.35rem, 3vw, 1.8rem); font-weight: 500; }
 
 [data-filter-card][hidden], [data-filter-card].is-filtered-out { display: none !important; }
 .filter-chip[aria-pressed="true"] { border-color: var(--ink-900); background: var(--ink-900); color: var(--paper-strong); }
+
+/* Future Members directory: retain the Core Team card language while using varied EEG character portraits where photographs are unavailable. */
+#members .member-card::part(body) { padding: 12px 12px 4px; }
+#members .member-card::part(footer) { padding: 10px 12px 12px; }
+.member-card [slot="image"] { height: auto !important; aspect-ratio: 1 !important; object-fit: cover !important; object-position: center top; filter: saturate(.84) contrast(1.02) !important; }
+.member-card__content { padding: 0; }
+.member-card__content h2 { margin-bottom: 5px; font-size: 1rem; line-height: 1.16; }
+.member-card__affiliation { min-height: 0; margin-bottom: 10px; color: var(--muted); font-size: .76rem; line-height: 1.35; }
+.member-card .tag-list { gap: 5px; }
+.member-card .tag-list sl-button::part(base) { min-height: 27px; padding: 0 8px; border: 1px solid #c9e7d7; border-radius: 999px; background: #eaf7f0; color: #006848; font-size: .68rem; font-weight: 400; }
+.member-card__links { display: flex; flex-wrap: wrap; gap: 6px; }
+.member-card__links sl-icon-button::part(base) { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 50%; color: var(--ink-700); }
+.member-card__links sl-icon-button:hover::part(base) { border-color: var(--aqua-deep); color: var(--aqua-deep); }
+.directory-empty-state--members { max-width: 760px; padding: 24px; }
+.directory-empty-state--members p { margin: 16px 0 0; }
+.member-character-preview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: end; }
+.member-character-preview img { width: 100%; aspect-ratio: 1; object-fit: cover; border: 1px solid var(--line); border-radius: 12px; background: var(--paper-strong); }
+
+/* Equal visual frames for every funder mark. */
+.footer-section--funders .footer-section__content li { flex: 0 1 220px; width: 220px; height: 68px; justify-content: flex-start; }
+.footer-section--funders .footer-section__content img,
+.footer-section--funders .footer-section__content img[src$="bbsrc_logo_footer.png"] { width: 100% !important; height: 100% !important; max-width: none !important; max-height: none !important; object-fit: contain; object-position: left center; }
