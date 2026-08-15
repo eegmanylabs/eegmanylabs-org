@@ -618,3 +618,135 @@ html { scrollbar-gutter: stable; }
   color: var(--paper-strong);
   transform: translateY(-1px);
 }
+
+/* Scientists network map */
+.scientists-network-link {
+  display: grid;
+  width: var(--content);
+  margin: 34px auto 0;
+  padding: 24px;
+  gap: 20px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--aqua);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: #eaf5f0;
+}
+.scientists-network-link .eyebrow { margin-bottom: 10px; }
+.scientists-network-link h2 { margin-bottom: 10px; color: var(--ink-900); font-size: clamp(1.65rem, 5vw, 2.35rem); }
+.scientists-network-link p:not(.eyebrow) { max-width: 610px; margin: 0; color: var(--ink-700); }
+.scientists-network-link .button { width: max-content; }
+.scientists-network-link svg { width: 19px; height: 19px; }
+
+.network-map-layout { width: var(--content); margin: 36px auto 0; }
+.network-map__note {
+  display: flex;
+  max-width: 790px;
+  margin-bottom: 22px;
+  gap: 12px;
+  color: var(--muted);
+  font-size: .9rem;
+  line-height: 1.5;
+}
+.network-map__note-icon { width: 23px; height: 23px; flex: 0 0 auto; margin-top: 1px; color: var(--aqua-deep); }
+.network-map__note p { margin: 0; }
+.network-map__summary { margin: 0 0 12px; color: var(--ink-900); font-size: .9rem; font-weight: 500; }
+.network-map__controls {
+  display: grid;
+  margin-bottom: 12px;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--paper-strong);
+}
+.network-map__controls label { display: grid; gap: 6px; color: var(--muted); font-size: .76rem; }
+.network-map__controls input,
+.network-map__controls select {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  outline: none;
+  background: var(--paper);
+  color: var(--ink-950);
+}
+.network-map__controls input:focus,
+.network-map__controls select:focus { border-color: var(--aqua-deep); box-shadow: 0 0 0 3px rgba(0,199,129,.15); }
+.network-map__reset {
+  min-height: 46px;
+  padding: 10px 15px;
+  align-self: end;
+  border: 1px solid var(--ink-900);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-900);
+  font: inherit;
+  font-size: .88rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.network-map__reset:hover { border-color: var(--aqua-deep); color: var(--aqua-deep); }
+.network-map__shell {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--paper-strong);
+}
+.network-map__canvas { min-height: 360px; background: #dce9f3; }
+.network-map__canvas .leaflet-control { box-shadow: none; }
+.network-map__canvas .leaflet-control-zoom a { border-color: var(--line); color: var(--ink-900); }
+.network-map__canvas .leaflet-control-attribution { background: rgba(248,248,246,.85); color: var(--muted); font-size: .67rem; }
+.network-map__canvas .leaflet-control-attribution a { color: var(--aqua-deep); }
+.network-map-marker { border: 0 !important; background: transparent !important; }
+.network-map-marker span {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 2px solid var(--paper-strong);
+  border-radius: 50%;
+  background: var(--ink-900);
+  color: var(--paper-strong);
+  font-size: .82rem;
+  font-weight: 700;
+}
+.network-map__panel { min-height: 300px; padding: 24px; background: var(--paper-strong); }
+.network-map__panel-empty { display: grid; height: 100%; align-content: center; }
+.network-map__panel h2 { margin-bottom: 10px; color: var(--ink-900); font-size: clamp(1.7rem, 4vw, 2.35rem); }
+.network-map__panel p { margin: 0; color: var(--muted); }
+.network-map__panel-kicker { display: block; margin-bottom: 8px; color: var(--aqua-deep); font-size: .74rem; font-weight: 600; letter-spacing: .04em; }
+.network-map__panel-header { padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.network-map__tags { display: flex; flex-wrap: wrap; margin-top: 16px; gap: 6px; }
+.network-map__tag { display: inline-flex; padding: 5px 8px; border: 1px solid #c9e7d7; border-radius: 999px; background: #eaf7f0; color: #006848; font-size: .7rem; line-height: 1.2; }
+.network-map__people { padding-top: 3px; }
+.network-map__person { padding: 15px 0; border-bottom: 1px solid var(--line); }
+.network-map__person:last-child { border-bottom: 0; }
+.network-map__person a { display: inline-block; margin-bottom: 4px; color: var(--ink-900); font-size: 1rem; font-weight: 500; text-decoration: underline; text-decoration-color: rgba(0,118,87,.4); text-underline-offset: 3px; }
+.network-map__person a:hover { color: var(--aqua-deep); }
+.network-map__person p { margin-bottom: 7px; font-size: .84rem; line-height: 1.35; }
+.network-map__person span { color: var(--aqua-deep); font-size: .74rem; }
+.network-map__unmapped { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--line); }
+.network-map__unmapped > .eyebrow { margin-bottom: 9px; }
+.network-map__unmapped h2 { margin-bottom: 10px; color: var(--ink-900); font-size: clamp(1.55rem, 4vw, 2.2rem); }
+.network-map__unmapped > p:not(.eyebrow) { max-width: 680px; margin-bottom: 18px; color: var(--muted); }
+.network-map__unmapped-list { display: grid; gap: 0; border-top: 1px solid var(--line); }
+.network-map__unmapped-person { display: grid; padding: 14px 0; gap: 2px; border-bottom: 1px solid var(--line); }
+.network-map__unmapped-person strong { color: var(--ink-900); font-weight: 500; }
+.network-map__unmapped-person span { color: var(--muted); font-size: .86rem; }
+.network-map__unmapped-person:hover strong { color: var(--aqua-deep); }
+.network-map__noscript { margin-top: 18px; padding: 20px; border: 1px dashed var(--line); border-radius: var(--radius-md); }
+.network-map__noscript h2 { margin-bottom: 10px; font-size: 1.45rem; }
+.network-map__noscript p { margin: 0; color: var(--muted); }
+.network-map__noscript a { color: var(--aqua-deep); text-decoration: underline; text-underline-offset: 3px; }
+
+@media (min-width: 560px) {
+  .network-map__controls { grid-template-columns: minmax(0,1.3fr) minmax(0,.8fr) auto; align-items: end; }
+}
+@media (min-width: 760px) {
+  .scientists-network-link { grid-template-columns: minmax(0,1fr) auto; align-items: center; padding: 28px 30px; }
+  .network-map__shell { grid-template-columns: minmax(0,1.2fr) minmax(300px,.8fr); }
+  .network-map__canvas { min-height: 520px; }
+  .network-map__panel { max-height: 520px; overflow: auto; }
+}

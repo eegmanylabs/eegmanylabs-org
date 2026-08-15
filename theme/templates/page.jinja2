@@ -68,6 +68,8 @@
 
     {% if index.name == "contact" %}
       {% include 'contact_page.jinja2' %}
+    {% elif index.name == "network-map" %}
+      {% include 'network_map_page.jinja2' %}
     {% elif index.name == "privacy" %}
       {% include 'privacy_page.jinja2' %}
     {% elif index.name == "site_map" %}
@@ -75,6 +77,16 @@
     {% elif index.name == "partners" %}
       {% include 'partners_page.jinja2' %}
     {% else %}
+      {% if index.name == "members" %}
+        <section class="scientists-network-link" aria-labelledby="scientists-network-link-title">
+          <div>
+            <p class="eyebrow">Explore the collaboration</p>
+            <h2 id="scientists-network-link-title">See the network</h2>
+            <p>Explore the countries, institutions, and researchers currently represented across #EEGManyLabs.</p>
+          </div>
+          <a class="button button--primary" href="/network-map/">Open network map <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.8 12h16.4M12 3.5c2.2 2.4 3.4 5.2 3.4 8.5S14.2 18.1 12 20.5c-2.2-2.4-3.4-5.2-3.4-8.5S9.8 5.9 12 3.5"/></svg></a>
+        </section>
+      {% endif %}
       <section class="content-collection">
         <div class="card-grid">
           {% if index.name == "publications" %}
