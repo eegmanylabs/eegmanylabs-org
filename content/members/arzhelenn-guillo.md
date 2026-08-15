@@ -11,5 +11,5 @@ StudyId = "None"
 PersonId = "arzhelenn-guillo"
 FullName = "Arzhelenn Guillo"
 Affiliation = "Biotrial"
-Country = "Unaffiliated"
+Country = "France"
 +++

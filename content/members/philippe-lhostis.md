@@ -11,5 +11,5 @@ StudyId = "None"
 PersonId = "philippe-lhostis"
 FullName = "Philippe l’Hostis"
 Affiliation = "Biotrial"
-Country = "Unaffiliated"
+Country = "France"
 +++

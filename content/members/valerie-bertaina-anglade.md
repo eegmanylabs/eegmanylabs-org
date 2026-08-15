@@ -11,5 +11,5 @@ StudyId = "None"
 PersonId = "valerie-bertaina-anglade"
 FullName = "Valérie Bertaina-Anglade"
 Affiliation = "Biotrial"
-Country = "Unaffiliated"
+Country = "France"
 +++
