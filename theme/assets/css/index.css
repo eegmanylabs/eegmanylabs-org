@@ -315,12 +315,14 @@ h3 { font-size: clamp(1.35rem, 3vw, 1.8rem); font-weight: 500; }
 .member-card__links sl-icon-button::part(base) { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 50%; color: var(--ink-700); }
 .member-card__links sl-icon-button:hover::part(base) { border-color: var(--aqua-deep); color: var(--aqua-deep); }
 
-.about-intro { padding-bottom: 45px; border-bottom: 1px solid var(--line); }
-.about-intro h1 { margin-bottom: 18px; }
+.longform--about { width: 100%; margin: 0; padding: 0; }
+.longform--about .about-intro { width: var(--content); margin: 0 auto; padding: 42px 0 32px; border-bottom: 1px solid var(--line); }
+.longform--about .about-intro h1 { max-width: 760px; margin: 0 0 18px; color: var(--ink-950); font-size: clamp(2.65rem, 10vw, 6.6rem); }
+.longform--about .about-intro > p:not(.about-subtitle) { max-width: 680px; }
 .about-subtitle { max-width: 650px; margin-bottom: 34px !important; color: var(--ink-900) !important; font-size: clamp(1.35rem, 3.8vw, 2rem); line-height: 1.35; }
-.mission-callout { margin: 34px 0 0; padding: 24px; border-left: 4px solid var(--aqua); border-radius: 0 var(--radius-md) var(--radius-md) 0; background: #eaf5f0; }
+.mission-callout { max-width: 760px; margin: 34px 0 0; padding: 24px; border-left: 4px solid var(--aqua); border-radius: 0 var(--radius-md) var(--radius-md) 0; background: #eaf5f0; }
 .mission-callout p { margin: 0; color: var(--ink-900); font-size: 1.15rem; line-height: 1.5; }
-.about-detail { padding-top: 42px; }
+.longform--about .about-detail { width: min(780px,calc(100% - 40px)); margin: 0 auto; padding-top: 42px; }
 
 .contact-layout, .partners-section, .privacy-layout { width: var(--content); margin: 44px auto 0; }
 .contact-layout { display: grid; gap: 22px; }
@@ -564,6 +566,8 @@ h3 { font-size: clamp(1.35rem, 3vw, 1.8rem); font-weight: 500; }
 @media (min-width: 760px) {
   .section-hero { padding-top: 62px; padding-bottom: 44px; }
   .longform { padding-top: 54px; }
+  .longform--about .about-intro { padding-top: 62px; padding-bottom: 44px; }
+  .longform--about .about-detail { padding-top: 48px; }
   .related-project-hero__inner { padding-top: 64px; padding-bottom: 42px; }
   .project-detail { padding-top: 48px; }
 }
