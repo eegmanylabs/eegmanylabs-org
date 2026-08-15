@@ -465,6 +465,7 @@ h3 { font-size: clamp(1.35rem, 3vw, 1.8rem); font-weight: 500; }
 }
 .section-hero h1 + p { margin-top: 14px; }
 .longform { padding-top: 42px; }
+.longform--about { padding-top: 0; }
 .longform h1, .longform h2, .longform h3 { scroll-margin-top: 112px; }
 
 .publication-resource-tile__icon {
@@ -575,6 +576,7 @@ h3 { font-size: clamp(1.35rem, 3vw, 1.8rem); font-weight: 500; }
   .longform--about .about-intro h1,
   .related-project-hero h1 { font-size: clamp(3.25rem, 5.1vw, 5.4rem); }
   .longform { padding-top: 54px; }
+  .longform--about { padding-top: 0; }
   .longform--about .about-intro { padding-top: 62px; padding-bottom: 44px; }
   .longform--about .about-detail { padding-top: 48px; }
   .related-project-hero__inner { padding-top: 64px; padding-bottom: 42px; }
