@@ -19,15 +19,18 @@
 </head>
 <body>
   {% set nav_labels = {"people": "Core team", "related_projects": "Related projects"} %}
+  {% set nav_order = ["about", "replications", "people", "members", "publications", "related_projects", "partners", "contact"] %}
   <a class="skip-link" href="#main-content">Skip to content</a>
   <header class="site-header" data-site-header>
     <div class="header-inner">
       <a class="brand" href="/" aria-label="EEGManyLabs home"><img class="brand-image" src="/assets/images/logo-harmonised.png" alt="EEGManyLabs"></a>
       <nav class="desktop-nav" aria-label="Primary navigation">
-        {% for branch in root.branches %}
-          {% if branch.buildPage and branch.name not in ["contact", "privacy", "site_map"] %}
-            <a href="/{{ branch.name }}/" {% if index.name == branch.name %}aria-current="page"{% endif %}>{{ nav_labels.get(branch.name, branch.name|replace("_", " "))|title }}</a>
-          {% endif %}
+        {% for nav_name in nav_order %}
+          {% for branch in root.branches %}
+            {% if branch.buildPage and branch.name == nav_name %}
+              <a href="/{{ branch.name }}/" {% if index.name == branch.name %}aria-current="page"{% endif %}>{{ nav_labels.get(branch.name, branch.name|replace("_", " "))|title }}</a>
+            {% endif %}
+          {% endfor %}
         {% endfor %}
       </nav>
       <button class="menu-toggle" type="button" aria-controls="mobile-menu" aria-expanded="false" data-menu-toggle>
@@ -39,10 +42,12 @@
     <div class="mobile-menu__panel" role="dialog" aria-modal="true" aria-label="Site navigation">
       <div class="mobile-menu__top"><button class="menu-close" type="button" data-menu-close aria-label="Close navigation"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg></button></div>
       <nav class="mobile-nav" aria-label="Primary navigation">
-        {% for branch in root.branches %}
-          {% if branch.buildPage and branch.name not in ["privacy", "site_map"] %}
-            <a href="/{{ branch.name }}/" {% if index.name == branch.name %}aria-current="page"{% endif %}>{{ nav_labels.get(branch.name, branch.name|replace("_", " "))|title }}</a>
-          {% endif %}
+        {% for nav_name in nav_order %}
+          {% for branch in root.branches %}
+            {% if branch.buildPage and branch.name == nav_name %}
+              <a href="/{{ branch.name }}/" {% if index.name == branch.name %}aria-current="page"{% endif %}>{{ nav_labels.get(branch.name, branch.name|replace("_", " "))|title }}</a>
+            {% endif %}
+          {% endfor %}
         {% endfor %}
       </nav>
     </div>
