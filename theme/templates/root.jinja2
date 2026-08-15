@@ -19,7 +19,7 @@
     {% for branch in index.branches %}
       {% if branch.name == 'about' %}
         <div class="home-about-intro">
-          {{ branch.content_html|safe }}
+          {{ branch.content_html|replace('<h1>About</h1>', '')|safe }}
         </div>
       {% endif %}
     {% endfor %}
