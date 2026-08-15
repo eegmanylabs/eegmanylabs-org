@@ -1,6 +1,7 @@
 +++
 SequenceNumber = 2
 image = "assets/images/replications.png"
+front_summary = "Coordinated replications of influential EEG studies, bringing together multiple laboratories to strengthen experimental and analytic standards across the field."
 +++
 # Replications
 

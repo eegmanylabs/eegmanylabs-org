@@ -1,6 +1,7 @@
 +++
 SequenceNumber = 3
 image = "assets/images/spinoffs.png"
+front_summary = "Collaborative projects extending #EEGManyLabs through datasets, methods, infrastructure, and dialogue across the global EEG community."
 +++
 # Related Projects
 

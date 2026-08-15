@@ -4,6 +4,7 @@ image = "assets/images/publications.png"
 scholar_link = "https://scholar.google.com/citations?user=ueMcfOcAAAAJ"
 osf_link = "https://osf.io/yb3pq/"
 gnode_link = "https://gin.g-node.org/EEGManyLabs"
+front_summary = "Stage 1 protocols, final results, and associated data, code, and materials arising from #EEGManyLabs replication studies."
 +++
 # Publications
 
