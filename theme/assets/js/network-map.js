@@ -94,12 +94,17 @@
 
   const renderSite = (site) => {
     const affiliations = [...new Set(site.people.map((person) => person.affiliation).filter(Boolean))];
-    const peopleMarkup = [...site.people].sort((a, b) => a.name.localeCompare(b.name)).map((person) => `
+    const peopleMarkup = [...site.people].sort((a, b) => a.name.localeCompare(b.name)).map((person) => {
+      const nameMarkup = person.url
+        ? `<a href="${escapeHTML(person.url)}">${escapeHTML(person.name)}</a>`
+        : `<strong>${escapeHTML(person.name)}</strong>`;
+      return `
       <article class="network-map__person">
-        <a href="${escapeHTML(person.url)}">${escapeHTML(person.name)}</a>
+        ${nameMarkup}
         <p>${escapeHTML(person.affiliation || 'Affiliation not listed')}</p>
         <span>${escapeHTML(person.category)}</span>
-      </article>`).join('');
+      </article>`;
+    }).join('');
     const affiliationMarkup = affiliations.map((affiliation) => `<span class="network-map__tag">${escapeHTML(affiliation)}</span>`).join('');
 
     panel.innerHTML = `
@@ -115,11 +120,15 @@
 
   const renderUnmapped = () => {
     if (!unmappedPeople.length || !unmappedContainer) return;
-    const cards = unmappedPeople.sort((a, b) => a.name.localeCompare(b.name)).map((person) => `
-      <a class="network-map__unmapped-person" href="${escapeHTML(person.url)}">
+    const cards = unmappedPeople.sort((a, b) => a.name.localeCompare(b.name)).map((person) => {
+      const tag = person.url ? 'a' : 'div';
+      const href = person.url ? ` href="${escapeHTML(person.url)}"` : '';
+      return `
+      <${tag} class="network-map__unmapped-person"${href}>
         <strong>${escapeHTML(person.name)}</strong>
         <span>${escapeHTML(person.affiliation || 'Affiliation not listed')}</span>
-      </a>`).join('');
+      </${tag}>`;
+    }).join('');
     unmappedContainer.hidden = false;
     unmappedContainer.innerHTML = `
       <p class="eyebrow">Directory records awaiting location data</p>

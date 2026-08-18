@@ -55,7 +55,7 @@
   {% endif %}
   {% if scientists_branch.value %}
     {% for leaf in scientists_branch.value.leaves|sort(attribute='front.FullName') %}
-      {"name": {{ leaf.front['FullName']|tojson }}, "affiliation": {{ leaf.front['Affiliation']|tojson }}, "country": {{ leaf.front['Country']|tojson }}, "category": "Member", "url": {{ ('/members/#' ~ leaf.front['Anchor'])|tojson }}}{% if not loop.last %},{% endif %}
+      {"name": {{ leaf.front['FullName']|tojson }}, "affiliation": {{ leaf.front['Affiliation']|tojson }}, "country": {{ leaf.front['Country']|tojson }}, "category": "Member", "url": null}{% if not loop.last %},{% endif %}
     {% endfor %}
   {% endif %}
   ]</script>

@@ -724,7 +724,9 @@ html { scrollbar-gutter: stable; }
 .network-map__people { padding-top: 3px; }
 .network-map__person { padding: 15px 0; border-bottom: 1px solid var(--line); }
 .network-map__person:last-child { border-bottom: 0; }
-.network-map__person a { display: inline-block; margin-bottom: 4px; color: var(--ink-900); font-size: 1rem; font-weight: 500; text-decoration: underline; text-decoration-color: rgba(0,118,87,.4); text-underline-offset: 3px; }
+.network-map__person a,
+.network-map__person strong { display: inline-block; margin-bottom: 4px; color: var(--ink-900); font-size: 1rem; font-weight: 500; }
+.network-map__person a { text-decoration: underline; text-decoration-color: rgba(0,118,87,.4); text-underline-offset: 3px; }
 .network-map__person a:hover { color: var(--aqua-deep); }
 .network-map__person p { margin-bottom: 7px; font-size: .84rem; line-height: 1.35; }
 .network-map__person span { color: var(--aqua-deep); font-size: .74rem; }
