@@ -21,19 +21,35 @@
 
   const countryAliases = { USA: 'United States' };
   const coordinates = {
+    Argentina: [-38.42, -63.62],
+    Australia: [-25.27, 133.78],
+    Austria: [47.52, 14.55],
     Belgium: [50.85, 4.35],
     Canada: [56.13, -106.35],
+    Chile: [-35.68, -71.54],
+    China: [35.86, 104.20],
     Denmark: [56.26, 9.50],
     Estonia: [58.60, 25.01],
     France: [46.23, 2.21],
     Germany: [51.17, 10.45],
+    'Hong Kong': [22.32, 114.17],
+    Hungary: [47.16, 19.50],
+    Iceland: [64.96, -19.02],
     India: [20.59, 78.96],
+    Italy: [41.87, 12.57],
+    Japan: [36.20, 138.25],
     Malaysia: [4.21, 101.98],
     Netherlands: [52.13, 5.29],
+    'New Zealand': [-40.90, 174.89],
+    Norway: [60.47, 8.47],
     Poland: [51.92, 19.15],
+    Portugal: [39.40, -8.22],
+    Romania: [45.94, 24.97],
+    Russia: [61.52, 105.32],
     Spain: [40.46, -3.75],
     Sweden: [60.13, 18.64],
     Switzerland: [46.82, 8.23],
+    'Türkiye': [38.96, 35.24],
     'United Kingdom': [55.38, -3.44],
     'United States': [39.83, -98.58]
   };
@@ -45,6 +61,12 @@
     summary.textContent = 'The network directory could not be loaded.';
     return;
   }
+
+  people = Object.values(people.reduce((uniquePeople, person) => {
+    const identity = String(person.name || '').trim().toLocaleLowerCase();
+    if (!uniquePeople[identity] || person.category === 'Core team') uniquePeople[identity] = person;
+    return uniquePeople;
+  }, {}));
 
   const mappedPeople = people.map((person) => ({
     ...person,
@@ -101,8 +123,8 @@
     unmappedContainer.hidden = false;
     unmappedContainer.innerHTML = `
       <p class="eyebrow">Directory records awaiting location data</p>
-      <h2>Additional scientists</h2>
-      <p>These Scientists are included in the directory, but their country has not yet been recorded for the map.</p>
+      <h2>Additional members</h2>
+      <p>These Members are included in the directory, but their country has not yet been recorded for the map.</p>
       <div class="network-map__unmapped-list">${cards}</div>`;
   };
 
@@ -110,7 +132,7 @@
 
   if (typeof window.L === 'undefined') {
     summary.textContent = 'The interactive map is temporarily unavailable.';
-    renderEmptyPanel('The map library could not be loaded. You can still browse the Scientists directory.');
+    renderEmptyPanel('The map library could not be loaded. You can still browse the Members directory.');
     return;
   }
 

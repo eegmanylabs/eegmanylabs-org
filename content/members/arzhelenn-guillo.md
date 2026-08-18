@@ -1,5 +1,5 @@
 +++
-SequenceNumber = 1
+SequenceNumber = 108
 Anchor = "arzhelenn-guillo"
 Title = "Arzhelenn Guillo"
 Image = "None"
@@ -10,6 +10,6 @@ LabUrl = "None"
 StudyId = "None"
 PersonId = "arzhelenn-guillo"
 FullName = "Arzhelenn Guillo"
-Affiliation = "Biotrial"
+Affiliation = "Biotrial, Core Lab, Rennes, France"
 Country = "France"
 +++

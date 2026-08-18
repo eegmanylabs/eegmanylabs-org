@@ -441,6 +441,7 @@ h3 { font-size: clamp(1.35rem, 3vw, 1.8rem); font-weight: 500; }
 .member-list-item__identity h2 { margin: 0 0 3px; color: var(--ink-950); font-size: 1.15rem; font-weight: 500; letter-spacing: -.03em; }
 .member-list-item__identity p { margin: 0; color: var(--muted); font-size: .92rem; }
 @media (min-width: 760px) {
+  #members .card-grid { max-width: 1040px; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; column-gap: 36px; }
   .member-list-item { grid-template-columns: 52px minmax(0, 1fr); gap: 18px; padding: 22px 0; }
   .member-list-item__initials { width: 52px; height: 52px; font-size: 1.25rem; }
   .member-list-item__identity h2 { font-size: 1.25rem; }

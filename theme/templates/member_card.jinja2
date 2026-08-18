@@ -1,6 +1,6 @@
 {% set name_parts = leaf.front['FullName'].split(' ') %}
 {% set initials = name_parts[0][0] ~ name_parts[-1][0] %}
-<article id="{{ leaf.name }}" class="member-list-item">
+<article id="{{ leaf.front['Anchor'] }}" class="member-list-item">
   <span class="member-list-item__initials" aria-hidden="true">{{ initials|upper }}</span>
   <div class="member-list-item__identity">
     <h2>{{ leaf.front['FullName'] }}</h2>
