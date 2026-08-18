@@ -63,7 +63,7 @@
   }
 
   people = Object.values(people.reduce((uniquePeople, person) => {
-    const identity = String(person.name || '').trim().toLocaleLowerCase();
+    const identity = String(person.name || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase().replace(/[^a-z0-9]+/g, '');
     if (!uniquePeople[identity] || person.category === 'Core team') uniquePeople[identity] = person;
     return uniquePeople;
   }, {}));
