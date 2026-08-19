@@ -93,7 +93,6 @@
   };
 
   const renderSite = (site) => {
-    const affiliations = [...new Set(site.people.map((person) => person.affiliation).filter(Boolean))];
     const peopleMarkup = [...site.people].sort((a, b) => a.name.localeCompare(b.name)).map((person) => {
       const nameMarkup = person.url
         ? `<a href="${escapeHTML(person.url)}">${escapeHTML(person.name)}</a>`
@@ -102,17 +101,12 @@
       <article class="network-map__person">
         ${nameMarkup}
         <p>${escapeHTML(person.affiliation || 'Affiliation not listed')}</p>
-        <span>${escapeHTML(person.category)}</span>
       </article>`;
     }).join('');
-    const affiliationMarkup = affiliations.map((affiliation) => `<span class="network-map__tag">${escapeHTML(affiliation)}</span>`).join('');
-
     panel.innerHTML = `
       <div class="network-map__panel-header">
         <span class="network-map__panel-kicker">${escapeHTML(site.country)}</span>
-        <h2>${site.people.length} ${site.people.length === 1 ? 'researcher' : 'researchers'}</h2>
-        <p>${affiliations.length} ${affiliations.length === 1 ? 'institution' : 'institutions'} represented</p>
-        <div class="network-map__tags">${affiliationMarkup}</div>
+        <h2>${site.people.length} ${site.people.length === 1 ? 'member' : 'members'}</h2>
       </div>
       <div class="network-map__people">${peopleMarkup}</div>`;
     panel.scrollTop = 0;

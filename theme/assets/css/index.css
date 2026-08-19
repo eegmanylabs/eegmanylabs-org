@@ -719,17 +719,14 @@ html { scrollbar-gutter: stable; }
 .network-map__panel p { margin: 0; color: var(--muted); }
 .network-map__panel-kicker { display: block; margin-bottom: 8px; color: var(--aqua-deep); font-size: .74rem; font-weight: 600; letter-spacing: .04em; }
 .network-map__panel-header { padding-bottom: 20px; border-bottom: 1px solid var(--line); }
-.network-map__tags { display: flex; flex-wrap: wrap; margin-top: 16px; gap: 6px; }
-.network-map__tag { display: inline-flex; padding: 5px 8px; border: 1px solid #c9e7d7; border-radius: 999px; background: #eaf7f0; color: #006848; font-size: .7rem; line-height: 1.2; }
-.network-map__people { padding-top: 3px; }
-.network-map__person { padding: 15px 0; border-bottom: 1px solid var(--line); }
-.network-map__person:last-child { border-bottom: 0; }
+.network-map__people { display: grid; padding-top: 16px; gap: 9px; }
+.network-map__person { padding: 14px 15px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+.network-map__person:last-child { border-bottom: 1px solid var(--line); }
 .network-map__person a,
 .network-map__person strong { display: inline-block; margin-bottom: 4px; color: var(--ink-900); font-size: 1rem; font-weight: 500; }
 .network-map__person a { text-decoration: underline; text-decoration-color: rgba(0,118,87,.4); text-underline-offset: 3px; }
 .network-map__person a:hover { color: var(--aqua-deep); }
-.network-map__person p { margin-bottom: 7px; font-size: .84rem; line-height: 1.35; }
-.network-map__person span { color: var(--aqua-deep); font-size: .74rem; }
+.network-map__person p { margin: 0; color: var(--muted); font-size: .84rem; line-height: 1.35; }
 .network-map__unmapped { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--line); }
 .network-map__unmapped > .eyebrow { margin-bottom: 9px; }
 .network-map__unmapped h2 { margin-bottom: 10px; color: var(--ink-900); font-size: clamp(1.55rem, 4vw, 2.2rem); }
