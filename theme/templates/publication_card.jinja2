@@ -8,12 +8,14 @@
     <h2>{{ leaf.front['Title'] }}</h2>
     <p class="publication-card__authors">{{ leaf.front['AuthorShort'] }}</p>
     <p class="publication-card__journal">{{ leaf.front['Journal'] }}</p>
-    <div class="tag-list publication-card__status" aria-label="Publication status">{% for tag, text in leaf.front.Tags.items() %}{{ add_button(tag, text|title) }}{% endfor %}</div>
-    <p class="publication-card__doi"><a href="{{ leaf.front['DoiUrl'] }}" target="_blank" rel="noopener">DOI: {{ leaf.front['DOI'] }}</a></p>
-    <div class="publication-card__resources" aria-label="Publication resources">
-      <a class="publication-resource-tile" href="{{ leaf.front['Pdf'] }}" target="_blank" rel="noopener"><svg class="publication-resource-tile__icon publication-resource-tile__icon--pdf" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2.75h7l5 5V21.25H6z"/><path d="M13 2.75v5h5"/><path d="M8.5 14h7"/><path d="M8.5 17h5.25"/></svg><span>PDF</span></a>
-      {% if leaf.front['OsfUrl'] != "None" %}<a class="publication-resource-tile publication-resource-tile--osf" href="{{ leaf.front['OsfUrl'] }}" target="_blank" rel="noopener"><img src="/assets/images/osf_logo.png" alt=""><span>OSF</span></a>{% endif %}
-      {% if leaf.front['DataUrl'] != "None" %}<a class="publication-resource-tile" href="{{ leaf.front['DataUrl'] }}" target="_blank" rel="noopener"><svg class="publication-resource-tile__icon" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="6.5" ry="2.75"/><path d="M5.5 5v6c0 1.52 2.91 2.75 6.5 2.75s6.5-1.23 6.5-2.75V5m-13 6v6c0 1.52 2.91 2.75 6.5 2.75s6.5-1.23 6.5-2.75v-6"/></svg><span>Data</span></a>{% endif %}
+    <div class="publication-card__actions">
+      <div class="tag-list publication-card__status" aria-label="Publication status">{% for tag, text in leaf.front.Tags.items() %}{{ add_button(tag, text|title) }}{% endfor %}</div>
+      <p class="publication-card__doi"><a href="{{ leaf.front['DoiUrl'] }}" target="_blank" rel="noopener">DOI: {{ leaf.front['DOI'] }}</a></p>
+      <div class="publication-card__resources" aria-label="Publication resources">
+        <a class="publication-resource-tile" href="{{ leaf.front['Pdf'] }}" target="_blank" rel="noopener"><svg class="publication-resource-tile__icon publication-resource-tile__icon--pdf" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2.75h7l5 5V21.25H6z"/><path d="M13 2.75v5h5"/><path d="M8.5 14h7"/><path d="M8.5 17h5.25"/></svg><span>PDF</span></a>
+        {% if leaf.front['OsfUrl'] != "None" %}<a class="publication-resource-tile publication-resource-tile--osf" href="{{ leaf.front['OsfUrl'] }}" target="_blank" rel="noopener"><img src="/assets/images/osf_logo.png" alt=""><span>OSF</span></a>{% endif %}
+        {% if leaf.front['DataUrl'] != "None" %}<a class="publication-resource-tile" href="{{ leaf.front['DataUrl'] }}" target="_blank" rel="noopener"><svg class="publication-resource-tile__icon" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="6.5" ry="2.75"/><path d="M5.5 5v6c0 1.52 2.91 2.75 6.5 2.75s6.5-1.23 6.5-2.75V5m-13 6v6c0 1.52 2.91 2.75 6.5 2.75s6.5-1.23 6.5-2.75v-6"/></svg><span>Data</span></a>{% endif %}
+      </div>
     </div>
   </div>
 </sl-card>

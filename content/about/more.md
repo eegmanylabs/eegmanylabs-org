@@ -27,7 +27,7 @@ Each replication involves at least three independent laboratories, increasing st
 
 - Advisory board members  
 
-- Over 240 scientists across 40 countries  
+- Over 340 scientists across 30 countries
 
 
 We also work closely with aligned initiatives, institutions, and programmes that share our mission of building a more open, reliable, and inclusive EEG science. This project has also inspired multiple new lines of scientific inquiry, spin-offs and collaborations. To learn more about these projects and partnerships, visit our [Related Projects](/related_projects/) page.
