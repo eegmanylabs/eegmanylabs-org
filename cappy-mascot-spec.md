@@ -15,3 +15,7 @@ Regenerate the illustrative, non-logo assets as a coherent Cappy set: homepage R
 ## ElectroTime
 
 Use a simple square illustration of canonical Cappy holding a single plain analogue clock. No glasses, ECG monitor, EEG traces, cables, stopwatch labels, text, or additional equipment. The clock alone should communicate the subject.
+
+## Current hero integration note
+
+The original logo is a red-and-black horizontal mark. It remains suitable on the warm-white header, where its black wordmark is legible. On the dark hero it requires a warm-white presentation panel or a dedicated light-logo treatment to preserve the original red component and maintain wordmark visibility. The re-encoded hero source contains an active electrode-preparation frame, but the combination of source darkness, grayscale, and a high-opacity overlay suppresses the footage. Use a brighter source treatment, a lighter charcoal overlay, and a poster frame to make the autoplaying video visibly present from first paint.
