@@ -79,7 +79,7 @@ h3 { font-size: clamp(1.35rem, 3vw, 1.8rem); font-weight: 500; }
 /* Links and actions */
 .button, .text-link { display: inline-flex; align-items: center; gap: 10px; font-weight: 750; }
 .button { min-height: 50px; padding: 13px 18px; border-radius: 8px; transition: transform 180ms ease, background 180ms ease; }
-.button--primary { background: var(--aqua); color: var(--ink-950); }
+.button--primary { background: var(--aqua); color: var(--paper-strong); }
 .button--primary:hover { background: #e16468; transform: translateY(-2px); }
 .text-link { padding-bottom: 4px; border-bottom: 1px solid currentColor; }
 .text-link--light { color: var(--paper); }
