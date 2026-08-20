@@ -17,8 +17,9 @@
       if (playback) playback.catch(() => {});
     };
 
-    heroVideo.addEventListener('canplay', playHeroVideo);
-    heroVideo.addEventListener('loadedmetadata', playHeroVideo);
+    ['loadedmetadata', 'loadeddata', 'canplay', 'canplaythrough'].forEach((eventName) => {
+      heroVideo.addEventListener(eventName, playHeroVideo);
+    });
     heroVideo.addEventListener('ended', () => {
       heroVideo.currentTime = 0;
       playHeroVideo();
@@ -27,6 +28,9 @@
       if (!document.hidden) playHeroVideo();
     });
     window.addEventListener('pageshow', playHeroVideo);
+    window.addEventListener('focus', playHeroVideo);
+    window.setTimeout(playHeroVideo, 250);
+    window.setTimeout(playHeroVideo, 1200);
     window.setInterval(() => {
       if (!document.hidden && heroVideo.paused) playHeroVideo();
     }, 1500);
