@@ -1,8 +1,8 @@
 +++
 SequenceNumber = 4
 image = "/assets/images/members.webp"
-front_summary = "An international network of members contributing to #EEGManyLabs and advancing more open, rigorous, and inclusive EEG science."
+front_summary = "An international network of co-authors of the #EEGManyLabs registered report."
 +++
 # Members
 
-Meet the international network of members contributing to #EEGManyLabs. This directory brings together collaborators across the global replication effort.
+The members represented here are co-authors of the #EEGManyLabs registered report, forming an international network across the global replication effort.
