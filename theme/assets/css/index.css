@@ -152,7 +152,7 @@ h3 { font-size: clamp(1.35rem, 3vw, 1.8rem); font-weight: 500; }
 .section-page { padding-bottom: 88px; }
 .section-hero { display: grid; width: var(--content); margin: 0 auto; padding: 68px 0 46px; gap: 30px; border-bottom: 1px solid var(--line); }
 .section-hero h1 { max-width: 760px; margin-bottom: 0; color: var(--ink-950); }
-.section-hero h1 + p { max-width: 680px; margin-top: 22px; margin-bottom: 0; color: var(--muted); font-size: 1.1rem; }
+.section-hero__title > p { max-width: 680px; margin: 14px 0 0; color: var(--muted); font-size: 1.1rem; line-height: 1.55; }
 .section-hero__summary { max-width: 450px; margin: 0; color: var(--ink-700); font-size: 1.07rem; line-height: 1.6; }
 .section-hero--about { padding-bottom: 62px; }
 .section-hero--about h1 { max-width: 900px; }
