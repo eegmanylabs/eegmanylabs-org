@@ -97,7 +97,7 @@ h3 { font-size: clamp(1.35rem, 3vw, 1.8rem); font-weight: 500; }
 .home-hero__copy p,
 .home-hero__copy .eyebrow { color: var(--paper-strong); }
 .home-hero h1, .home-hero h2 { max-width: 720px; margin-bottom: 25px; }
-.home-hero__copy > img, .home-hero__copy p > img { width: min(440px, 84%); margin-bottom: 25px; padding: 10px 14px; border-radius: 8px; background: rgba(252,249,247,.96); filter: none; opacity: 1; }
+.home-hero__copy > img, .home-hero__copy p > img { width: min(440px, 84%); margin-bottom: 25px; padding: 0; border-radius: 0; background: transparent; filter: brightness(0) invert(1); opacity: 1; }
 .home-hero__lede { max-width: 570px; margin-bottom: 34px; color: var(--paper-strong); font-size: clamp(1.05rem,2.5vw,1.35rem); line-height: 1.5; }
 .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; }
 .signal-orbit { position: absolute; border: 1px solid rgba(216,75,77,.27); border-radius: 50%; }
