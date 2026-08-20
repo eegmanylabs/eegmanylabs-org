@@ -1,6 +1,7 @@
 {% import 'macros/icon_button.jinja2' as IconButton %}
 {% from 'macros/utils.jinja2' import add_button %}
 {% set role_labels = {"directors": "Director", "coordinator": "Coordinator", "founder": "Founder", "advisor": "Advisor", "study_lead": "Study lead", "co-investigator": "Co-investigator", "spin-off": "Spin-off", "contributor": "Contributor"} %}
+{% set role_order = ["directors", "coordinator", "founder", "advisor", "study_lead", "co-investigator", "spin-off", "contributor"] %}
 
 <sl-card id="{{ leaf.name }}" class="person-card {{ leaf.front['Tags']|join(" ") }}" data-filter-card data-role="{{ leaf.front['Tags']|join(' ') }}">
   {% if leaf.front['Image'] != "None" %}
@@ -11,11 +12,16 @@
 
   <img slot="image" src="/assets/images/{{ imageURL }}" alt="Portrait of {{ leaf.front['FullName'] }}" loading="lazy" />
   <div class="person-card__content">
-    <h2>{{ leaf.front['FullName'] }}</h2>
-    <p class="person-card__affiliation">{{ leaf.front['Affiliation'] }}{% if leaf.front['Country'] != "Unaffiliated" %}<span aria-hidden="true"> · </span><span>{{ leaf.front['Country'] }}</span>{% endif %}</p>
-    {{ leaf.content_html|safe }}
-    <div class="tag-list" aria-label="Roles">
-      {% for tag in leaf.front['Tags'] %}
+    <div class="person-card__identity">
+      <h2>{{ leaf.front['FullName'] }}</h2>
+      <p class="person-card__affiliation">{{ leaf.front['Affiliation'] }}{% if leaf.front['Country'] != "Unaffiliated" %}<span aria-hidden="true"> · </span><span>{{ leaf.front['Country'] }}</span>{% endif %}</p>
+      {{ leaf.content_html|safe }}
+    </div>
+    <div class="person-card__roles tag-list" aria-label="Roles">
+      {% for tag in role_order if tag in leaf.front['Tags'] %}
+        {{ add_button(tag, role_labels[tag]) }}
+      {% endfor %}
+      {% for tag in leaf.front['Tags'] if tag not in role_order %}
         {{ add_button(tag, role_labels.get(tag, tag|replace('_', ' ')|replace('-', ' ')|capitalize)) }}
       {% endfor %}
     </div>
