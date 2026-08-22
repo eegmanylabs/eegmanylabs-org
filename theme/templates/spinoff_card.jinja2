@@ -5,7 +5,7 @@
     {% set imageURL = "missing_person.avif" %}
   {% endif %}
 
-  <img slot="image" src="/assets/images/{{ imageURL }}" alt="{{ leaf.front['Title'] }}" loading="lazy" />
+  <img slot="image" src="/assets/images/{{ imageURL }}" alt="{{ leaf.front['Title'] }}" decoding="async" />
   <div class="project-card__content">
     <h2>{{ leaf.front['Title'] }}</h2>
     {{ leaf.content_html|safe }}

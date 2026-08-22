@@ -53,6 +53,10 @@
   document.querySelectorAll('[data-chip-filters]').forEach((filterRoot) => {
     const target = filterRoot.dataset.filterTarget || '[data-filter-card]';
     const cards = [...document.querySelectorAll(target)];
+    const status = document.createElement('p');
+    status.className = 'sr-only';
+    status.setAttribute('aria-live', 'polite');
+    filterRoot.append(status);
     const activeFilters = {};
     const filterKeys = [...new Set([...filterRoot.querySelectorAll('[data-filter-key]')].map((chip) => chip.dataset.filterKey))];
 
@@ -70,6 +74,8 @@
         card.hidden = !matches;
         card.setAttribute('aria-hidden', String(!matches));
       });
+      const visibleCount = cards.filter((card) => !card.hidden).length;
+      status.textContent = `${visibleCount} ${visibleCount === 1 ? 'item is' : 'items are'} shown.`;
     };
 
     filterRoot.querySelectorAll('[data-filter-key]').forEach((chip) => {
@@ -95,15 +101,45 @@
   const closeButton = document.querySelector('[data-menu-close]');
 
   if (menu && toggle && closeButton) {
+    let previouslyFocused = null;
+    const getFocusableControls = () => [...menu.querySelectorAll('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+      .filter((element) => !element.hidden);
     const setMenuState = (open) => {
-      menu.hidden = !open;
-      toggle.setAttribute('aria-expanded', String(open));
-      document.body.classList.toggle('menu-open', open);
-      if (open) closeButton.focus(); else toggle.focus();
+      if (open) {
+        previouslyFocused = document.activeElement;
+        menu.hidden = false;
+        toggle.setAttribute('aria-expanded', 'true');
+        document.body.classList.add('menu-open');
+        closeButton.focus();
+        return;
+      }
+      menu.hidden = true;
+      toggle.setAttribute('aria-expanded', 'false');
+      document.body.classList.remove('menu-open');
+      (previouslyFocused || toggle).focus();
+      previouslyFocused = null;
     };
     toggle.addEventListener('click', () => setMenuState(menu.hidden));
     closeButton.addEventListener('click', () => setMenuState(false));
     menu.addEventListener('click', (event) => { if (event.target === menu) setMenuState(false); });
-    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !menu.hidden) setMenuState(false); });
+    document.addEventListener('keydown', (event) => {
+      if (menu.hidden) return;
+      if (event.key === 'Escape') {
+        setMenuState(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusableControls = getFocusableControls();
+      const firstControl = focusableControls[0];
+      const lastControl = focusableControls[focusableControls.length - 1];
+      if (!firstControl || !lastControl) return;
+      if (event.shiftKey && document.activeElement === firstControl) {
+        event.preventDefault();
+        lastControl.focus();
+      } else if (!event.shiftKey && document.activeElement === lastControl) {
+        event.preventDefault();
+        firstControl.focus();
+      }
+    });
   }
 })();

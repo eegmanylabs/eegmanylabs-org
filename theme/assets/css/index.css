@@ -43,7 +43,7 @@ h2 { font-size: clamp(2rem, 5vw, 3.6rem); font-weight: 400; }
 h3 { font-size: clamp(1.35rem, 3vw, 1.8rem); font-weight: 500; }
 
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
-.skip-link { position: fixed; z-index: 100; top: 12px; left: 12px; padding: 10px 14px; border-radius: 8px; background: var(--aqua); color: var(--ink-950); font-weight: 700; transform: translateY(-160%); }
+.skip-link { position: fixed; z-index: 100; top: 12px; left: 12px; padding: 10px 14px; border-radius: 8px; background: var(--aqua); color: var(--paper-strong); font-weight: 700; transform: translateY(-160%); }
 .skip-link:focus { transform: translateY(0); }
 .eyebrow { margin-bottom: 16px; color: var(--aqua-deep); font-size: .78rem; font-weight: 500; letter-spacing: .02em; line-height: 1.3; }
 

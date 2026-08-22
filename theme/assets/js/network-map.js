@@ -92,8 +92,8 @@
       </div>`;
   };
 
-  const renderSite = (site) => {
-    const peopleMarkup = [...site.people].sort((a, b) => a.name.localeCompare(b.name)).map((person) => {
+  const renderSite = (site, visiblePeople = site.people, heading = null) => {
+    const peopleMarkup = [...visiblePeople].sort((a, b) => a.name.localeCompare(b.name)).map((person) => {
       const nameMarkup = person.url
         ? `<a href="${escapeHTML(person.url)}">${escapeHTML(person.name)}</a>`
         : `<strong>${escapeHTML(person.name)}</strong>`;
@@ -103,10 +103,11 @@
         <p>${escapeHTML(person.affiliation || 'Affiliation not listed')}</p>
       </article>`;
     }).join('');
+    const count = visiblePeople.length;
     panel.innerHTML = `
       <div class="network-map__panel-header">
         <span class="network-map__panel-kicker">${escapeHTML(site.country)}</span>
-        <h2>${site.people.length} ${site.people.length === 1 ? 'member' : 'members'}</h2>
+        <h2>${heading || `${count} ${count === 1 ? 'member' : 'members'}`}</h2>
       </div>
       <div class="network-map__people">${peopleMarkup}</div>`;
     panel.scrollTop = 0;
@@ -172,31 +173,41 @@
   const updateVisibleSites = () => {
     const query = search.value.trim().toLowerCase();
     const selectedCountry = countrySelect.value;
-    const visibleSites = sites.filter((site) => {
-      const haystack = [
-        site.country,
-        ...site.people.flatMap((person) => [person.name, person.affiliation, person.category])
-      ].join(' ').toLowerCase();
-      return (!selectedCountry || site.country === selectedCountry) && (!query || haystack.includes(query));
-    });
+    const visibleSites = sites.reduce((matches, site) => {
+      const countryMatches = site.country.toLowerCase().includes(query);
+      const matchingPeople = query
+        ? site.people.filter((person) => [person.name, person.affiliation, person.category].join(' ').toLowerCase().includes(query))
+        : site.people;
+      const passesCountryFilter = !selectedCountry || site.country === selectedCountry;
+      const passesSearch = !query || countryMatches || matchingPeople.length;
+      if (passesCountryFilter && passesSearch) matches.push({ ...site, countryMatches, matchingPeople });
+      return matches;
+    }, []);
 
     markerLayer.clearLayers();
     visibleSites.forEach((site) => markerLayer.addLayer(markers.get(site.country)));
 
     if (!visibleSites.length) {
-      summary.textContent = 'No countries match the current search or filter.';
-      renderEmptyPanel('No countries match the current search or filter. Try clearing the search or selecting a different country.');
+      summary.textContent = 'No researchers or countries match the current search or filter.';
+      renderEmptyPanel('No researchers or countries match the current search or filter. Try clearing the search or selecting a different country.');
       return;
     }
 
     const bounds = window.L.latLngBounds(visibleSites.map((site) => site.coordinates));
     if (visibleSites.length === 1) {
-      map.setView(visibleSites[0].coordinates, 4);
-      renderSite(visibleSites[0]);
+      const site = visibleSites[0];
+      const isDirectPersonSearch = Boolean(query) && !site.countryMatches;
+      const visiblePeople = isDirectPersonSearch ? site.matchingPeople : site.people;
+      const heading = isDirectPersonSearch
+        ? `${visiblePeople.length} ${visiblePeople.length === 1 ? 'matching researcher' : 'matching researchers'}`
+        : null;
+      map.setView(site.coordinates, 4);
+      renderSite(site, visiblePeople, heading);
     } else {
       map.fitBounds(bounds, { padding: [34, 34], maxZoom: 4 });
+      renderEmptyPanel('Choose a country marker to view the matching researchers represented there.');
     }
-    const count = visibleSites.reduce((total, site) => total + site.people.length, 0);
+    const count = visibleSites.reduce((total, site) => total + (query && !site.countryMatches ? site.matchingPeople.length : site.people.length), 0);
     summary.textContent = `Showing ${visibleSites.length} ${visibleSites.length === 1 ? 'country' : 'countries'} and ${count} ${count === 1 ? 'researcher' : 'researchers'}.`;
   };
 

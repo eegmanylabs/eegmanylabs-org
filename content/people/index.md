@@ -9,4 +9,4 @@ The Coordinators oversee planning and communication; Study Leads manage individu
 
 From early career scientists to established investigators, contributors are shaping the project’s success through openness, collaboration, and mutual learning.
 
-The list below includes a snapshot of the Core Team and is not a complete reflection of the many scientists it takes to deliver a Many Labs programme. For that, please consult our Members page.
+The list below includes a snapshot of the Core Team and is not a complete reflection of the many scientists it takes to deliver a Many Labs programme. For that, please consult our [Members page](/members/).
