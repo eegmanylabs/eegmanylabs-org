@@ -6,7 +6,7 @@ The website is a static, data-driven site for the international EEGManyLabs repl
 
 ## 1. Working safely
 
-The website has separate review and public environments. Use the review environment for all visual and content checks before publishing to the public website. The `main` branch is the public release branch. The `review/repository-inspection` branch is the current review branch used for the active redesign work.
+The website has separate review and public environments. Use the review environment for all visual and content checks before publishing to the public website. The `main` branch is the public release branch. The `review/repository-inspection` branch is the current shared review branch used for the active redesign work. Treat this shared branch as review infrastructure rather than a personal working branch unless a project lead has explicitly asked you to update it.
 
 | Environment | URL | Typical purpose | How it updates |
 |---|---|---|---|
@@ -17,6 +17,34 @@ The website has separate review and public environments. Use the review environm
 Always make a focused branch for a new piece of work, build the site locally, review the staging deployment, and merge only after the change has been approved. Avoid editing the generated `dist/` directory. Syrinx recreates that folder on every build.
 
 > **Release principle.** A content update should be traceable from the source file, through a pull request and staging review, to the final production commit.
+
+### The safest update route
+
+Follow this sequence for every ordinary content or design change. If one step gives an error, stop at that step, keep the error message, and ask the project maintainer for help rather than trying unrelated commands.
+
+| Step | Action | Stop when |
+|---|---|---|
+| 1 | Update your local copy of `main`, then create a clearly named working branch. | `git status --short` shows no unexpected changes. |
+| 2 | Change only the relevant source files. | The content, data, asset, or template has been saved. |
+| 3 | Build the site locally and inspect it in a browser. | The intended page looks correct at `http://localhost:8000`. |
+| 4 | Check the changed-file list and stage only the intended source files. | `git diff --cached --stat` shows exactly the files you expect. |
+| 5 | Commit, push, and open a pull request to `main`. | GitHub Actions starts the Deploy workflow for the pull request. |
+| 6 | Wait for the staging deployment to finish, then check `eegmanylabs.dev`. | The staging site shows the intended change. |
+| 7 | Merge the approved pull request into `main`. | A second successful Deploy workflow completes for `main`. |
+| 8 | Verify the public site at `eegmanylabs.org`. | The production change is visible and working. |
+
+### Plain-language glossary
+
+| Term | Meaning in this project |
+|---|---|
+| Repository | The shared folder of website source files stored on GitHub. |
+| Branch | A safe parallel copy of the source files for one change. It protects the public website while work is in progress. |
+| Commit | A saved, named checkpoint of a set of file changes. |
+| Pull request, or PR | A request to review a branch and merge it into `main`. It is also what triggers the shared staging deployment. |
+| Staging | The review website at `eegmanylabs.dev`. It is safe to inspect before public release. |
+| Production | The public website at `eegmanylabs.org`. It is updated only after a change reaches `main`. |
+| Build | The process that converts source files into static website files in `dist/`. |
+| Deployment | The process that puts a successful built website online. |
 
 ## 2. Technology and repository architecture
 
@@ -59,7 +87,18 @@ The Cappy mascot is defined in `cappy-mascot-spec.md`. When commissioning or gen
 
 ## 4. Local setup and preview
 
-### 4.1 First-time setup
+### 4.1 Before you begin
+
+You need a GitHub account with access to `eegmanylabs/eegmanylabs-org`, a code editor, Git, Python 3.11 or later, and permission to create branches and pull requests. Ordinary maintenance does **not** require a DigitalOcean login, a GitHub token, Docker, or access to deployment secrets. If you cannot create a branch or pull request, pause and ask a repository administrator to grant access.
+
+Open a terminal and confirm the core tools are available:
+
+```bash
+git --version
+python3 --version
+```
+
+### 4.2 First-time setup
 
 Clone the repository and create an isolated Python environment. The commands below use macOS or Linux syntax. On Windows, activate the virtual environment with `.venv\Scripts\activate`.
 
@@ -88,9 +127,9 @@ git pull --ff-only origin main
 git switch -c content/short-description-of-change
 ```
 
-### 4.2 Build and inspect
+### 4.3 Build and inspect
 
-Use the same build command as the deployment workflow when possible.[1]
+Use the same build command as the deployment workflow when possible.[1] If `syrinx` is reported as unavailable, activate the virtual environment again and run `python -m pip install -r requirements.txt`.
 
 ```bash
 syrinx -c -e staging .
@@ -111,6 +150,32 @@ git status --short
 ```
 
 The first command detects whitespace problems. The second lists every changed or untracked file. Only stage source files that belong to the planned update. Do not stage `dist/`, temporary exports, browser screenshots, audit scratch files, or locally generated diagnostics.
+
+### 4.4 Generated files and safe cleanup
+
+A Syrinx build can create untracked record files under `content/people/`, `content/publications/`, and `content/replications/`. These are build intermediates. They are not the source of truth and should not be committed. First inspect what would be removed:
+
+```bash
+git clean -nd content/people content/publications content/replications
+```
+
+If the preview lists only generated files, remove them with:
+
+```bash
+git clean -fd content/people content/publications content/replications
+```
+
+The `-n` command is a dry run. Use it before the deletion command every time. `git clean` removes only untracked files. If `git pull --ff-only` stops because another person has changed the branch, do not force it. Save your work with a normal commit or ask the project maintainer for help, then repeat the update step. If `git status --short` shows a tracked file marked `D`, restore it before continuing:
+
+```bash
+git restore path/to/file
+```
+
+To remove a file from the staging area while keeping your local edit, use:
+
+```bash
+git restore --staged path/to/file
+```
 
 ## 5. Content maintenance workflows
 
@@ -210,22 +275,69 @@ Use browser developer tools or an accessibility audit extension to check keyboar
 
 The GitHub Actions workflow installs dependencies with Python 3.11, builds the site with Syrinx, creates a container image, and deploys it to DigitalOcean App Platform.[1] The Docker runtime serves only the pre-built static output through Nginx.[3]
 
-| Release step | Command or action | Expected result |
-|---|---|---|
-| Synchronise | `git pull --ff-only origin <branch>` | Your local branch matches the remote branch. |
-| Create a branch | `git switch -c type/short-description` | Your work is isolated. |
-| Build locally | `syrinx -c -e staging .` | Fresh files appear in `dist/`. |
-| Review | Serve `dist/` locally and inspect key routes | Content, layout, filters, map, and links are checked. |
-| Stage source files | `git add <specific paths>` | Only intentional source changes are staged. |
-| Commit | `git commit -m "Improve network map search"` | Commit message clearly describes the user-facing change. |
-| Push | `git push -u origin <branch>` | Branch is available for review. |
-| Open or update PR | Review on GitHub | CI builds the staging deployment. |
-| Verify staging | Visit [eegmanylabs.dev](https://eegmanylabs.dev) | Review the deployed version, not only local files. |
-| Release | Merge approved PR into `main` | CI deploys [eegmanylabs.org](https://eegmanylabs.org). |
+### 7.1 Exact release steps
 
-Use concise, truthful commit messages. Do not mention external design references in code comments or commit messages. Never add deployment secrets, tokens, passwords, or private spreadsheets to the repository. GitHub and DigitalOcean secrets are configured outside the source tree and should never be copied into local documentation.
+The following is the ordinary safe route. Replace `type/short-description` with a simple name such as `content/add-new-partner` or `fix/map-count`.
 
-If a production issue needs rollback, use a reviewed `git revert <commit>` on `main`, push the revert, and verify the subsequent deployment. Avoid force pushes to shared branches.
+```bash
+# Start from a clean, current copy of the public branch.
+git switch main
+git pull --ff-only origin main
+git status --short
+
+# Create an isolated working branch.
+git switch -c type/short-description
+
+# Make your edits, then build and inspect them locally.
+syrinx -c -e staging .
+python -m http.server 8000 --directory dist
+```
+
+After reviewing the local site, stop the preview server with `Ctrl+C`. Then check and stage only the intended files:
+
+```bash
+git diff --check
+git status --short
+git add path/to/changed-file path/to/another-changed-file
+git diff --cached --stat
+git commit -m "Describe the visible change clearly"
+git push -u origin type/short-description
+```
+
+Go to the repository on GitHub and open the **Pull requests** tab. Select **New pull request**, choose `main` as the **base** branch, and choose your `type/short-description` branch as the **compare** branch. Confirm that GitHub shows the intended files. Give the pull request a clear title and write a short description stating the purpose, source files changed, data implications, and pages tested. Select **Create pull request**. Opening the pull request, or pushing further commits to it, triggers the staging deployment automatically.[1]
+
+If GitHub reports a merge conflict, do not merge. Tell the project maintainer which files are conflicted. Resolve conflicts only when you understand both versions of the content and have rebuilt the result locally.
+
+### 7.2 Staging verification
+
+Open the Actions tab in GitHub and select the latest **Deploy** workflow for your pull request. Wait until every step is green, especially **Build site**, **Build and push Docker image**, and **Deploy the app**. A red workflow means staging is not ready for review. Open the first failed step, copy its exact error message, and resolve that specific issue before pushing another change.
+
+When the workflow succeeds, inspect [eegmanylabs.dev](https://eegmanylabs.dev). Verify every page affected by your change, including mobile layout and any links or interactive controls. Browsers can retain an earlier static asset after a deployment. If staging appears unchanged, first hard-refresh the page. If the earlier version remains visible, add a harmless cache-busting query to the URL, for example `https://eegmanylabs.dev/?release=your-commit-short-id`.
+
+> **Important.** A branch without an open pull request does not create the shared staging deployment. Opening or updating the pull request is the required staging step.
+
+### 7.3 Production release
+
+Merge a pull request only after the staging checks are complete and the change has been approved. Merging into `main` creates a push to the public release branch and automatically deploys [eegmanylabs.org](https://eegmanylabs.org).[1]
+
+After the production workflow is green, open the public website in a private browser window or after a hard refresh. Check the changed route and one unrelated route, such as the homepage, to confirm that global navigation, styling, and assets have not been affected.
+
+### 7.4 Rollback
+
+For a safe rollback of a normal production commit, create a revert commit rather than force-pushing or deleting history:
+
+```bash
+git switch main
+git pull --ff-only origin main
+git revert --no-edit COMMIT_TO_REVERT
+git push origin main
+```
+
+GitHub will automatically deploy the revert. If Git reports that the target is a merge commit, stop and ask a project maintainer for help before proceeding, because the revert requires selecting the correct parent. Avoid force pushes to shared branches.
+
+### 7.5 Information that must remain private
+
+Use concise, truthful commit messages. Do not mention external design references in code comments or commit messages. Never add deployment secrets, tokens, passwords, personal email addresses, or private spreadsheets to the repository. GitHub and DigitalOcean secrets are configured outside the source tree and should never be copied into local documentation.
 
 ## 8. Troubleshooting
 
