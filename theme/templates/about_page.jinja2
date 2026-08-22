@@ -1,3 +1,8 @@
+<section class="about-intro">
+  {{ index.content_html|safe }}
+</section>
 {% for leaf in index.leaves %}
+  <section class="about-detail">
     {{ leaf.content_html|safe }}
+  </section>
 {% endfor %}

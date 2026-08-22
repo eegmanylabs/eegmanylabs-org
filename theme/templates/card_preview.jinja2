@@ -5,11 +5,17 @@
     <img
       slot="image"
       src="{{ item.front['image'] }}"
-      loading="lazy"
+      alt=""
+      decoding="async"
     />
   {% endif %}
   
-  {% set replications_count = item.leaves | length | string %}
-  {{ item.content_html|replace("replications_count", replications_count)|safe }}
+  {% if item.front.get('front_summary') %}
+    <h2>{{ front_title }}</h2>
+    <p>{{ item.front.get('front_summary') }}</p>
+  {% else %}
+    {% set replications_count = item.leaves | length | string %}
+    {{ item.content_html|replace("replications_count", replications_count)|safe }}
+  {% endif %}
   
 </sl-card>

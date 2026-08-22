@@ -1,0 +1,62 @@
+{% set people_branch = namespace(value=none) %}
+{% set scientists_branch = namespace(value=none) %}
+{% for branch in root.branches %}
+  {% if branch.name == "people" %}{% set people_branch.value = branch %}{% endif %}
+  {% if branch.name == "members" %}{% set scientists_branch.value = branch %}{% endif %}
+{% endfor %}
+
+<section class="network-map-layout" data-network-map>
+  <div class="network-map__note">
+    <svg class="network-map__note-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.8 12h16.4M12 3.5c2.2 2.4 3.4 5.2 3.4 8.5S14.2 18.1 12 20.5c-2.2-2.4-3.4-5.2-3.4-8.5S9.8 5.9 12 3.5"/></svg>
+    <p>Markers represent countries of co-authors of the registered report, rather than personal addresses. Select a marker to view the members represented there.</p>
+  </div>
+
+  <p class="network-map__summary" data-network-summary aria-live="polite">Loading the EEGManyLabs network.</p>
+
+  <div class="network-map__controls" aria-label="Network map controls">
+    <label class="network-map__search" for="network-map-search">
+      <span>Find a member, institution, or country</span>
+      <input id="network-map-search" type="search" placeholder="Search the network" autocomplete="off" data-network-search>
+    </label>
+    <label class="network-map__country" for="network-map-country">
+      <span>Filter by country</span>
+      <select id="network-map-country" data-network-country>
+        <option value="">All countries</option>
+      </select>
+    </label>
+    <button class="network-map__reset" type="button" data-network-reset>Reset map</button>
+  </div>
+
+  <div class="network-map__shell">
+    <div class="network-map__canvas" data-network-canvas role="application" aria-label="Interactive map of the EEGManyLabs network"></div>
+    <aside class="network-map__panel" data-network-panel aria-live="polite" aria-label="Network location details">
+      <div class="network-map__panel-empty">
+        <span class="network-map__panel-kicker">Explore the network</span>
+        <h2>Select a marker</h2>
+        <p>Choose a country marker or use the search and country controls to find co-authors across #EEGManyLabs.</p>
+      </div>
+    </aside>
+  </div>
+
+  <div class="network-map__unmapped" data-network-unmapped hidden></div>
+
+  <noscript>
+    <div class="network-map__noscript">
+      <h2>Interactive map unavailable</h2>
+      <p>Please enable JavaScript to explore the map. You can still browse the <a href="/people/">Core Team</a> and <a href="/members/">Members directory</a>.</p>
+    </div>
+  </noscript>
+
+  <script id="network-map-data" type="application/json">[
+  {% if people_branch.value %}
+    {% for leaf in people_branch.value.leaves|sort(attribute='front.FullName') %}
+      {"name": {{ leaf.front['FullName']|tojson }}, "affiliation": {{ leaf.front['Affiliation']|tojson }}, "country": {{ leaf.front['Country']|tojson }}, "category": "Core team", "url": {{ ('/people/#' ~ leaf.name)|tojson }}}{% if not loop.last or scientists_branch.value %},{% endif %}
+    {% endfor %}
+  {% endif %}
+  {% if scientists_branch.value %}
+    {% for leaf in scientists_branch.value.leaves|sort(attribute='front.FullName') %}
+      {"name": {{ leaf.front['FullName']|tojson }}, "affiliation": {{ leaf.front['Affiliation']|tojson }}, "country": {{ leaf.front['Country']|tojson }}, "category": "Member", "url": null}{% if not loop.last %},{% endif %}
+    {% endfor %}
+  {% endif %}
+  ]</script>
+</section>

@@ -2,9 +2,7 @@
 SequenceNumber = 50
 +++
 
-# About \#EEGManyLabs
-
-## About EEG
+## What is EEG?
 
 Electroencephalography (EEG) is the most widely used functional neuroimaging modality in the world, featuring in over 5,000 publications annually. Its popularity stems from its unique ability to provide non-invasive, cost-effective, millisecond-level insights into brain activity. In recent years, researchers in engineering and computer science have sought to harness EEG signals beyond the lab—embedding them in wearable and assistive technologies that promise real-world utility.
 The potential applications of EEG are vast and potentially transformative. They include Brain-Computer Interfaces (BCIs) for real-time monitoring of cognition and emotion, systems for motor rehabilitation, communication tools for individuals with locked-in syndrome, technologies for augmenting athletic performance, and consumer-grade devices for sleep tracking and mental well-being.
@@ -29,7 +27,7 @@ Each replication involves at least three independent laboratories, increasing st
 
 - Advisory board members  
 
-- Over 240 scientists across 40 countries  
+- Over 340 scientists across 30 countries
 
 
 We also work closely with aligned initiatives, institutions, and programmes that share our mission of building a more open, reliable, and inclusive EEG science. This project has also inspired multiple new lines of scientific inquiry, spin-offs and collaborations. To learn more about these projects and partnerships, visit our [Related Projects](/related_projects/) page.
