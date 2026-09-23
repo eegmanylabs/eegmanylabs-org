@@ -1,0 +1,27 @@
+{% set map_sections = [
+  {"title": "Explore the project", "items": [
+    {"title": "About", "description": "The purpose, context, and mission of #EEGManyLabs.", "url": "/about/", "icon": "fas-circle-info"},
+    {"title": "Replications", "description": "The coordinated studies at the heart of the programme.", "url": "/replications/", "icon": "fas-flask"},
+    {"title": "Publications", "description": "Research outputs, materials, data, and project resources.", "url": "/publications/", "icon": "fas-book-open"},
+    {"title": "Related Projects", "description": "Connected research, infrastructure, and community initiatives.", "url": "/related_projects/", "icon": "fas-diagram-project"}
+  ]},
+  {"title": "People and connections", "items": [
+    {"title": "Core Team", "description": "The people coordinating the scientific, operational, and collaborative work.", "url": "/people/", "icon": "fas-people-group"},
+    {"title": "Members", "description": "The international network contributing to #EEGManyLabs.", "url": "/members/", "icon": "fas-address-book"},
+    {"title": "Network Map", "description": "Explore the collaboration by country, institution, and researcher.", "url": "/network-map/", "icon": "fas-map-location-dot"},
+    {"title": "Partners", "description": "Initiatives, organisations, and tools connected to the project.", "url": "/partners/", "icon": "fas-handshake"},
+    {"title": "Contact", "description": "Social channels, community links, and a direct email form.", "url": "/contact/", "icon": "fas-envelope"}
+  ]}
+] %}
+<section class="site-map-layout">
+  {% for section in map_sections %}
+    <section class="site-map-section" aria-labelledby="site-map-{{ loop.index }}">
+      <h2 id="site-map-{{ loop.index }}">{{ section.title }}</h2>
+      <div class="site-map-grid">
+        {% for item in section["items"] %}
+          <a class="site-map-card" href="{{ item.url }}"><sl-icon name="{{ item.icon }}" aria-hidden="true"></sl-icon><span><strong>{{ item.title }}</strong><small>{{ item.description }}</small></span></a>
+        {% endfor %}
+      </div>
+    </section>
+  {% endfor %}
+</section>

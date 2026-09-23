@@ -1,0 +1,37 @@
+<section class="contact-layout">
+  <section class="contact-social" aria-labelledby="keep-in-touch-heading">
+    <p class="eyebrow">Keep in touch</p>
+    <h2 id="keep-in-touch-heading">Follow the project and join the conversation.</h2>
+    <div class="contact-social__grid">
+      <a class="contact-social__card" href="https://discord.gg/kKNtue4AW7" target="_blank" rel="noopener">
+        <img src="/assets/images/discord_logo.png" alt="" aria-hidden="true">
+        <span><strong>Discord</strong><small>Join the community server</small></span>
+      </a>
+      <a class="contact-social__card" href="https://twitter.com/eegmanylabs" target="_blank" rel="noopener">
+        <img src="/assets/images/x_logo.png" alt="" aria-hidden="true">
+        <span><strong>X</strong><small>Follow @eegmanylabs</small></span>
+      </a>
+      <a class="contact-social__card" href="https://bsky.app/profile/eegmanylabs.bsky.social" target="_blank" rel="noopener">
+        <img src="/assets/images/bluesky_logo.png" alt="" aria-hidden="true">
+        <span><strong>Bluesky</strong><small>Follow @eegmanylabs</small></span>
+      </a>
+    </div>
+  </section>
+
+  <section class="contact-form-panel" aria-labelledby="contact-form-heading">
+    <p class="eyebrow">Email</p>
+    <h2 id="contact-form-heading">Send us a message.</h2>
+    <form class="contact-form" data-contact-form>
+      <div class="contact-form__row">
+        <label for="contact-name">Name<input id="contact-name" name="name" autocomplete="name" required></label>
+        <label for="contact-email">Email<input id="contact-email" name="email" type="email" autocomplete="email" required></label>
+      </div>
+      <label for="contact-subject">Subject<input id="contact-subject" name="subject" required></label>
+      <label for="contact-message">Message<textarea id="contact-message" name="message" rows="6" required></textarea></label>
+      <div class="contact-form__actions">
+        <button class="button button--primary" type="submit">Compose email</button>
+        <p data-contact-status aria-live="polite">This opens your email application with the message addressed to contact@eegmanylabs.org.</p>
+      </div>
+    </form>
+  </section>
+</section>

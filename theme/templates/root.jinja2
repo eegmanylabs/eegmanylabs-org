@@ -1,30 +1,55 @@
 {% extends 'master.jinja2' %}
 
 {% block main %}
+{% set feature_titles = {"people": "Core Team", "related_projects": "Related Projects"} %}
+{% set feature_order = ["replications", "people", "members", "publications", "related_projects", "partners"] %}
+<article class="home-page">
+  <section class="home-hero">
+    <div class="home-hero__media" aria-hidden="true">
+      <video autoplay muted loop playsinline webkit-playsinline preload="auto" poster="/assets/images/eeg-preparation-hero-poster.jpg" disablepictureinpicture tabindex="-1">
+        <source src="/assets/video/eeg-preparation-hero.mp4" type="video/mp4">
+      </video>
+    </div>
+    <div class="home-hero__copy">
+      {{ index.content_html|safe }}
+    </div>
+  </section>
 
-<article id="front">
-
-    {{ index.content_html|safe }}
-
-    <div class="front-grid">
+  <section class="home-section home-section--features">
     {% for branch in index.branches %}
-      {% if branch.front %}
-        <a href="{{branch.name}}">
-          {% set item = branch %}
-          {% include 'card_preview.jinja2' %}
-        </a>
-      {% else %}
-        <h2>{{ branch.name|replace("_", " ")|title }} </h2>
-        <div class={{branch.name}}>
+      {% if branch.name == 'about' %}
+        <div class="home-about-intro">
+          {{ branch.content_html|replace('<h1>About</h1>', '')|safe }}
+        </div>
+      {% endif %}
+    {% endfor %}
+    <div class="front-grid">
+      {% for feature_name in feature_order %}
+        {% for branch in index.branches %}
+          {% if branch.front and branch.name == feature_name %}
+            <a class="feature-card" href="{{ branch.name }}">
+              {% set item = branch %}
+              {% set front_title = feature_titles.get(branch.name, branch.name|replace('_', ' ')|title) %}
+              {% include 'card_preview.jinja2' %}
+            </a>
+          {% endif %}
+        {% endfor %}
+      {% endfor %}
+    </div>
+  </section>
+
+  {% for branch in index.branches %}
+    {% if not branch.front and branch.name in ['get_involved'] %}
+      <section class="home-section home-section--secondary {{ branch.name|replace('_', '-') }}">
+        <h2>{{ branch.name|replace("_", " ")|title }}</h2>
+        <div class="home-cta-grid">
           {% for leaf in branch.leaves %}
             {% set item = leaf %}
             {% include 'card_preview.jinja2' %}
           {% endfor %}
-        </div> 
-      {% endif %}
-    {% endfor %}
-    </div>
-
+        </div>
+      </section>
+    {% endif %}
+  {% endfor %}
 </article>
-
 {% endblock %}

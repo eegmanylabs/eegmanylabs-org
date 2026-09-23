@@ -1,9 +1,5 @@
-
-<section id="{{ leaf.name }}">
-
-    <h2>{{ leaf.name|title }}</h2>
-
-    {{ leaf.content_html|safe }}
-
+{% set section_name = "contact" if leaf.name == "contact_links" else leaf.name %}
+<section id="{{ section_name }}" class="footer-section footer-section--{{ section_name }}">
+  <h2>{{ section_name|title }}</h2>
+  <div class="footer-section__content">{{ leaf.content_html|safe }}</div>
 </section>
-

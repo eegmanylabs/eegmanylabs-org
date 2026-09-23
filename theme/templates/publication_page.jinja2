@@ -1,27 +1,12 @@
-{% import 'macros/icon_button.jinja2' as IconButton %}
-
-<a class="proj-link" href="{{ index.front.scholar_link }}" target="_blank">Google Scholar project page</a>
-<a class="proj-link" href="{{ index.front.osf_link }}" target="_blank">Project OSF page</a>
-<a class="proj-link" href="{{ index.front.gnode_link }}" target="_blank">Project GNode page</a>
-
+<section class="publication-resource-strip" aria-label="Project resources">
+  <a class="publication-resource-tile publication-resource-tile--scholar" href="{{ index.front.scholar_link }}" target="_blank" rel="noopener"><svg class="publication-resource-tile__icon publication-resource-tile__icon--scholar" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9.3 12 4l9 5.3-9 5.3z"/><path d="M6.5 11.35v4.1c0 1.8 2.46 3.25 5.5 3.25s5.5-1.45 5.5-3.25v-4.1"/><path d="M19 10v6"/></svg><span><strong>Google Scholar</strong><small>Project publications</small></span></a>
+  <a class="publication-resource-tile publication-resource-tile--osf" href="{{ index.front.osf_link }}" target="_blank" rel="noopener"><img src="/assets/images/osf_logo.png" alt=""><span><strong>OSF</strong><small>Project materials</small></span></a>
+  <a class="publication-resource-tile publication-resource-tile--gin" href="{{ index.front.gnode_link }}" target="_blank" rel="noopener"><img src="/assets/images/gin_logo.png" alt=""><span><strong>GIN</strong><small>Project datasets</small></span></a>
+</section>
 
 <h2>About #EEGManyLabs</h2>
-{% for leaf in index.leaves if leaf.front['PublicationId'] == "Pavlov2021" %}
-  {% include 'publication_card.jinja2' %}
-{% endfor %}
-
+{% for leaf in index.leaves if leaf.front['PublicationId'] == "Pavlov2021" %}{% include 'publication_card.jinja2' %}{% endfor %}
 <h2>Related projects</h2>
-{% for leaf in index.leaves if leaf.front['ReplicationId'] == "None" and leaf.front['PublicationId'] != "Pavlov2021" %}
-  {% include 'publication_card.jinja2' %}
-{% endfor %}
-
+{% for leaf in index.leaves if leaf.front['ReplicationId'] == "None" and leaf.front['PublicationId'] != "Pavlov2021" %}{% include 'publication_card.jinja2' %}{% endfor %}
 <h2>Replications</h2>
-{% for repID, group in index.leaves|groupby("front.ReplicationId") %}
-  {% if repID != "None" %}
-    {% set replicationUrl = "/replications/#" ~ repID %}
-    <h3>{{ repID }} {{ IconButton.render(replicationUrl, "Replicaton page", "fas-clipboard", external = false) }}</h3>
-    {% for leaf in group %}
-      {% include 'publication_card.jinja2' %}
-    {% endfor %}
-  {% endif %}
-{% endfor %}
+{% for repID, group in index.leaves|groupby("front.ReplicationId") %}{% if repID != "None" %}{% for leaf in group %}{% include 'publication_card.jinja2' %}{% endfor %}{% endif %}{% endfor %}
