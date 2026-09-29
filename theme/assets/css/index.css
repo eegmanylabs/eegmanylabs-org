@@ -713,8 +713,8 @@ html { scrollbar-gutter: stable; }
 .network-map-marker { border: 0 !important; background: transparent !important; }
 .network-map-marker span {
   display: grid;
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   place-items: center;
   border: 2px solid var(--paper-strong);
   border-radius: 50%;

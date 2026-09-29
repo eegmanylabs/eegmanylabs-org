@@ -63,27 +63,42 @@
   }
 
   people = Object.values(people.reduce((uniquePeople, person) => {
-    const identity = String(person.name || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase().replace(/[^a-z0-9]+/g, '');
+    const nameParts = String(person.name || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase().replace(/[^a-z0-9 ]+/g, '').split(/\s+/).filter(Boolean);
+    const identity = nameParts.length > 1 ? `${nameParts[0]} ${nameParts[nameParts.length - 1]}` : nameParts.join('');
     if (!uniquePeople[identity] || person.category === 'Core team') uniquePeople[identity] = person;
     return uniquePeople;
   }, {}));
 
+  const affiliationLocations = window.EEGML_AFFILIATION_LOCATIONS || {};
+  const locate = (person) => {
+    const location = affiliationLocations[String(person.affiliation || '').trim()];
+    if (location) return { key: `${location.city}|${person.country}`, city: location.city, coordinates: [location.lat, location.lng] };
+    return { key: person.country, city: null, coordinates: coordinates[person.country] };
+  };
   const mappedPeople = people.map((person) => ({
     ...person,
     country: countryAliases[person.country] || person.country
-  })).filter((person) => coordinates[person.country]);
-  const unmappedPeople = people.filter((person) => !coordinates[countryAliases[person.country] || person.country]);
+  })).map((person) => ({ ...person, location: locate(person) })).filter((person) => person.location.coordinates);
+  const unmappedPeople = people.filter((person) => !locate({ ...person, country: countryAliases[person.country] || person.country }).coordinates);
   const sites = Object.values(mappedPeople.reduce((grouped, person) => {
-    if (!grouped[person.country]) grouped[person.country] = {
+    const { key, city, coordinates: siteCoordinates } = person.location;
+    if (!grouped[key]) grouped[key] = {
+      key,
       country: person.country,
-      coordinates: coordinates[person.country],
+      city,
+      label: city ? `${city}, ${person.country}` : person.country,
+      coordinates: siteCoordinates,
       people: []
     };
-    grouped[person.country].people.push(person);
+    grouped[key].people.push(person);
     return grouped;
-  }, {})).sort((a, b) => a.country.localeCompare(b.country));
+  }, {})).sort((a, b) => a.label.localeCompare(b.label));
+  const countries = Object.entries(sites.reduce((counts, site) => {
+    counts[site.country] = (counts[site.country] || 0) + site.people.length;
+    return counts;
+  }, {})).sort((a, b) => a[0].localeCompare(b[0]));
 
-  const renderEmptyPanel = (message = 'Choose a country marker or use the search and country controls to find researchers across #EEGManyLabs.') => {
+  const renderEmptyPanel = (message = 'Choose a marker or use the search and country controls to find researchers across #EEGManyLabs.') => {
     panel.innerHTML = `
       <div class="network-map__panel-empty">
         <span class="network-map__panel-kicker">Explore the network</span>
@@ -106,7 +121,7 @@
     const count = visiblePeople.length;
     panel.innerHTML = `
       <div class="network-map__panel-header">
-        <span class="network-map__panel-kicker">${escapeHTML(site.country)}</span>
+        <span class="network-map__panel-kicker">${escapeHTML(site.label)}</span>
         <h2>${heading || `${count} ${count === 1 ? 'member' : 'members'}`}</h2>
       </div>
       <div class="network-map__people">${peopleMarkup}</div>`;
@@ -152,29 +167,38 @@
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>'
   }).addTo(map);
 
-  const markerLayer = window.L.layerGroup().addTo(map);
+  const markerIcon = (count) => window.L.divIcon({
+    html: `<span>${count}</span>`,
+    className: 'network-map-marker',
+    iconSize: [34, 34],
+    iconAnchor: [17, 17]
+  });
+  const markerLayer = (typeof window.L.markerClusterGroup === 'function'
+    ? window.L.markerClusterGroup({
+      showCoverageOnHover: false,
+      maxClusterRadius: 36,
+      iconCreateFunction: (cluster) => markerIcon(cluster.getAllChildMarkers().reduce((total, marker) => total + marker.options.peopleCount, 0))
+    })
+    : window.L.layerGroup()).addTo(map);
   const markers = new Map();
 
   sites.forEach((site) => {
+    const researchers = `${site.people.length} ${site.people.length === 1 ? 'researcher' : 'researchers'}`;
     const marker = window.L.marker(site.coordinates, {
-      icon: window.L.divIcon({
-        html: `<span>${site.people.length}</span>`,
-        className: 'network-map-marker',
-        iconSize: [38, 38],
-        iconAnchor: [19, 19]
-      }),
-      title: `${site.country}: ${site.people.length} ${site.people.length === 1 ? 'researcher' : 'researchers'}`
+      icon: markerIcon(site.people.length),
+      title: `${site.label}: ${researchers}`,
+      peopleCount: site.people.length
     });
-    marker.bindTooltip(`${site.country} · ${site.people.length} ${site.people.length === 1 ? 'researcher' : 'researchers'}`, { direction: 'top', offset: [0, -16] });
+    marker.bindTooltip(`${site.label} · ${researchers}`, { direction: 'top', offset: [0, -16] });
     marker.on('click', () => renderSite(site));
-    markers.set(site.country, marker);
+    markers.set(site.key, marker);
   });
 
   const updateVisibleSites = () => {
     const query = search.value.trim().toLowerCase();
     const selectedCountry = countrySelect.value;
     const visibleSites = sites.reduce((matches, site) => {
-      const countryMatches = site.country.toLowerCase().includes(query);
+      const countryMatches = site.label.toLowerCase().includes(query);
       const matchingPeople = query
         ? site.people.filter((person) => [person.name, person.affiliation, person.category].join(' ').toLowerCase().includes(query))
         : site.people;
@@ -185,11 +209,11 @@
     }, []);
 
     markerLayer.clearLayers();
-    visibleSites.forEach((site) => markerLayer.addLayer(markers.get(site.country)));
+    visibleSites.forEach((site) => markerLayer.addLayer(markers.get(site.key)));
 
     if (!visibleSites.length) {
-      summary.textContent = 'No researchers or countries match the current search or filter.';
-      renderEmptyPanel('No researchers or countries match the current search or filter. Try clearing the search or selecting a different country.');
+      summary.textContent = 'No researchers or places match the current search or filter.';
+      renderEmptyPanel('No researchers or places match the current search or filter. Try clearing the search or selecting a different country.');
       return;
     }
 
@@ -201,20 +225,21 @@
       const heading = isDirectPersonSearch
         ? `${visiblePeople.length} ${visiblePeople.length === 1 ? 'matching researcher' : 'matching researchers'}`
         : null;
-      map.setView(site.coordinates, 4);
+      map.setView(site.coordinates, site.city ? 7 : 4);
       renderSite(site, visiblePeople, heading);
     } else {
-      map.fitBounds(bounds, { padding: [34, 34], maxZoom: 4 });
-      renderEmptyPanel('Choose a country marker to view the matching researchers represented there.');
+      map.fitBounds(bounds, { padding: [34, 34], maxZoom: 7 });
+      renderEmptyPanel('Choose a marker to view the matching researchers represented there.');
     }
     const count = visibleSites.reduce((total, site) => total + (query && !site.countryMatches ? site.matchingPeople.length : site.people.length), 0);
-    summary.textContent = `Showing ${visibleSites.length} ${visibleSites.length === 1 ? 'country' : 'countries'} and ${count} ${count === 1 ? 'researcher' : 'researchers'}.`;
+    const countryCount = new Set(visibleSites.map((site) => site.country)).size;
+    summary.textContent = `Showing ${count} ${count === 1 ? 'researcher' : 'researchers'} in ${visibleSites.length} ${visibleSites.length === 1 ? 'location' : 'locations'} across ${countryCount} ${countryCount === 1 ? 'country' : 'countries'}.`;
   };
 
-  sites.forEach((site) => {
+  countries.forEach(([country, count]) => {
     const option = document.createElement('option');
-    option.value = site.country;
-    option.textContent = `${site.country} (${site.people.length})`;
+    option.value = country;
+    option.textContent = `${country} (${count})`;
     countrySelect.appendChild(option);
   });
 
