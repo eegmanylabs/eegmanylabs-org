@@ -168,3 +168,15 @@ cython_debug/
 
 # Generated from data/members.tsv by the Members archetype
 /content/members/[0-9]*.md
+
+# Members' portal (portal/): dependencies, build outputs, emulator data and private local files
+node_modules/
+portal/**/out/
+portal/.firebase/
+portal/.emulator/
+portal/**/*-debug.log
+portal/**/.env.*
+!portal/**/.env.example
+portal/**/test-results/
+portal/**/playwright-report/
+portal/.private/
