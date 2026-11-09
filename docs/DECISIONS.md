@@ -1,0 +1,126 @@
+# #EEGManyLabs Hub: decision log
+
+Each entry records a decision, the evidence behind it and what follows from it. Entries are numbered and are never rewritten once accepted. A later entry supersedes an earlier one and says so. The status of an entry is one of `accepted`, `recommended` (the build proceeds on this basis and a programme administrator is asked to confirm) or `provisional` (awaiting evidence from a spike or a test).
+
+## D-001 The portal is a static application on GitHub Pages with Firebase as its backend
+
+**Status:** accepted. Decided by the programme administrator on 9 November 2026.
+
+The members' portal is a client-rendered single-page application published as static files on GitHub Pages. Firebase provides authentication, the Firestore database, Cloud Functions for server-side logic and Cloud Storage for files. This supersedes the initial plan for a server-rendered application with PostgreSQL on DigitalOcean, which was stopped before any code was written.
+
+Discovery confirmed that the combination is feasible, with prerequisites that only the administrators can satisfy. The free Spark plan cannot run the portal, because it limits sign-in link emails to five a day and excludes Cloud Functions and Cloud Storage. The pay-as-you-go Blaze plan with a billing account is therefore required, at an expected cost of roughly US$0 to US$10 a month for about fifty daily active users. Second-factor authentication and blocking functions require the free upgrade to Firebase Authentication with Identity Platform. Firebase Authentication processes account data in the United States and its location cannot be chosen, while Firestore, Functions and Storage can be pinned to London. GitHub Pages cannot set HTTP response headers, so the Content Security Policy is delivered by a `<meta>` element and there is no `frame-ancestors` protection, no HSTS header set by us and no policy reporting.
+
+## D-002 The portal is served from its own subdomain, with a redirect from `eegmanylabs.org/portal`
+
+**Status:** recommended.
+
+GitHub Pages cannot serve a path beneath `eegmanylabs.org` while that domain is served by DigitalOcean. The recommended arrangement is a Pages site with the custom domain `portal.eegmanylabs.org`, and a small redirect page at `eegmanylabs.org/portal` added to the public site as the final step of the rollout. An origin of its own is the strongest isolation available on Pages, because sign-in state is then not shared with any other site. The interim arrangement, which needs no DNS change, is the default Pages address of the repository.
+
+The application uses hash-based routes and relative asset URLs, so the same built artefact works at either address and deep links do not depend on a server rewrite. Routes take the form `#/replications/AmodioJost2007`, `#/labs/<id>`, `#/members/<id>`, `#/tasks/<id>`, `#/datasets/<id>` and `#/login`.
+
+## D-003 Firestore, Standard edition, in London, holds the data
+
+**Status:** recommended. The location is permanent once chosen and needs explicit confirmation before the production project is created.
+
+Firestore suits this product because realtime listeners keep every linked view of a record consistent without extra machinery, user-configurable views can be computed in the browser over a few thousand documents, and security rules give per-document decisions that can be unit tested. The PostgreSQL-backed alternative inside Firebase was assessed and rejected for this product: its operations are fixed at deployment time, which fits poorly with user-defined filters and groupings, its realtime support is recent and partial, and it has a monthly cost floor.
+
+The cost of this choice is stated plainly. Firestore has no foreign keys, no unique constraints and no joins. The logical model in `docs/DATA_MODEL.md` remains relational in its thinking, and its integrity is enforced by four mechanisms that are built and tested deliberately: natural keys used as document identifiers so that duplicates cannot exist, security rules that check references and shapes on every client write, callable functions that perform multi-document changes in transactions, and a scheduled integrity checker that reports any orphaned reference.
+
+## D-004 Portal source lives in `portal/` in this repository, and existing deployment files are left unchanged
+
+**Status:** accepted for the build. Whether the portal later moves to a repository of its own is a decision for the administrators.
+
+The existing workflow redeploys the shared staging site on every pull request and production on every merge to `main`, with no path filter. A portal change therefore redeploys the public site with unchanged content. The existing `deploy.yml`, `.do/app.yml`, `Dockerfile` and `nginx.conf` are not modified. The Pages publishing workflow is triggered manually and is gated by a protected environment with required reviewers, so nothing is published without approval.
+
+## D-005 A person record and a login are different things
+
+**Status:** accepted.
+
+A person is anyone known to the programme and exists whether or not they have signed in. A user is a Firebase Authentication account. A claim links exactly one user to exactly one person. Profiles are created from the sources before anyone is invited, and a member takes ownership through the claim flow described in `docs/SECURITY.md`. Roles with management powers that are implied by imported data start in a pending state and are confirmed by an administrator, because several source spreadsheets can be read by anyone who has the link.
+
+## D-006 Authorisation is enforced by security rules and callable functions, never by the interface
+
+**Status:** provisional on the mechanism for carrying roles, pending the application spike.
+
+Firestore security rules are the enforcement point for every direct read and write. Callable Cloud Functions are the enforcement point for privileged operations and for any change that spans several documents. The interface hides what a user may not do as a convenience only.
+
+Because rules grant reads per document, field-level secrecy is achieved by splitting documents. A person has a directory document, a restricted contact document and a special-category demographics document. The demographics document is never readable by a client. It is served only through a callable function that checks the caller's grant and second factor, writes an audit entry and returns the data.
+
+Roles are resolved into one access document per user, maintained by functions, which rules read. The spike compares this with custom claims on the sign-in token for cost, size limits and the delay before a revoked role stops working.
+
+## D-007 The audit trail is written by trusted code
+
+**Status:** accepted.
+
+Clients cannot write to the audit collection. Callable functions write an audit entry in the same transaction as the change they make. All other writes are captured by Firestore triggers that carry the identity of the writer and record the before and after state, with special-category and other configured fields omitted. Trigger delivery is at least once and may lag the write by seconds, so entries use the event identifier as their document identifier to stay idempotent.
+
+## D-008 A laboratory and its participation in a replication are separate documents
+
+**Status:** accepted.
+
+A laboratory profile holds facts about the laboratory. A participation document holds everything specific to that laboratory in one replication, and its identifier is the replication identifier and the laboratory identifier joined together, which makes a duplicate participation impossible.
+
+## D-009 Recruitment is an append-only series of reports
+
+**Status:** accepted.
+
+A report is created once and never edited or deleted, which security rules enforce. A correction is a new report that names the report it corrects. Counts are stored by category and by modality, where the modalities are main experiment, resting state and unique participants. A total number of participants is never produced by adding main-experiment and resting-state counts. Unknown values are absent and are never treated as zero. Replication-level figures found in historical workbooks are stored as historical aggregates and are kept apart from live reports.
+
+## D-010 Pages use a block editor with Yjs documents stored in Firestore
+
+**Status:** provisional, pending the editor spike.
+
+Workspace pages use an established block editor with slash commands, drag handles and nested blocks. Concurrent editing uses Yjs, a conflict-free replicated data type, with updates stored as Firestore documents and delivered to other editors through realtime listeners, so no WebSocket service has to be operated. Version history is a series of stored snapshots, and restoring a version writes a new forward change.
+
+## D-011 Views are computed in the browser over one authoritative set of documents
+
+**Status:** accepted.
+
+Each collection of records exists once. A view is a stored definition of filters, sorts, grouping and visible properties that the client applies to the documents it is permitted to load. The same record therefore appears in a programme dashboard, a replication page and a laboratory page as one document, and an edit in one place is visible everywhere at once. Scientific core fields keep strict schemas. Custom properties added by authorised users are stored in a dedicated map on the record, and user-created databases are collections of their own.
+
+## D-012 Imports run from a trusted environment and preserve every source value
+
+**Status:** accepted.
+
+Importers are command-line tools that use the Firebase Admin SDK and run from an administrator's machine or a protected workflow, never from the public site. Each imported row is stored verbatim in a restricted collection, and every record created or updated is linked to the rows it came from. Document identifiers are derived deterministically from natural keys, so running an import twice changes nothing. Conflicts between sources are queued for human review and are never resolved by choosing a value arbitrarily. The identifiers and addresses of the source documents are held in private configuration, and this public repository refers to the sources by letter and title only.
+
+## D-013 The replication identifier is the programme's existing study identifier, unchanged
+
+**Status:** accepted.
+
+The canonical identifier of a replication is the `StudyId` already used on the public website, in the list of studies and in the naming conventions, for example `AmodioJost2007`. All twenty-seven identifiers are identical across those sources. Every other spelling that appears in a source, such as a tab name with a trailing underscore or a spelling with a diacritic, is stored as an alias and resolved through a case-folded and diacritic-folded lookup. Existing identifiers are never renamed. An alias is unique only together with its replication, because the two Amodio replications share one BIDS name and one EEGNet name in the naming conventions.
+
+## D-014 Background work runs in Cloud Functions in London, behind adapters
+
+**Status:** accepted.
+
+Scheduled jobs, retrying task queues and integrations with Google Workspace, Quire, storage servers and the public website run in second-generation Cloud Functions in `europe-west2`. Each external system sits behind an interface with a real implementation and a fake used in tests. Any adapter that writes to an external system defaults to a dry run, and a live external write needs explicit approval.
+
+## D-015 Sign-in is passwordless
+
+**Status:** accepted.
+
+Members sign in with a single-use link sent to their email address, or with Google through a pop-up window. The portal has no password field, which follows GitHub's guidance that Pages should not be used for sending passwords. Programme administrators and the core team must enrol a time-based one-time password as a second factor.
+
+## D-016 Tests run against the Firebase Emulator Suite
+
+**Status:** accepted.
+
+Development and automated tests use the local emulators for Authentication, Firestore, Functions and Storage with a demonstration project identifier, so no test contacts a real project. Security rules have unit tests that prove each denial. Functions have integration tests. Critical journeys have browser tests. The emulator does not implement time-based one-time passwords, so the second-factor journey is verified on the staging project once it exists.
+
+## D-017 Staging is a second Firebase project and a second Pages site
+
+**Status:** recommended.
+
+Staging uses its own Firebase project holding synthetic data only, and a separate Pages site so that it shares the header, cache and routing behaviour of production. Creating the second repository and its domain records needs an organisation owner.
+
+## Decisions needed from the programme administrators
+
+1. Confirm a billing account on the Firebase Blaze plan, with a named owner and budget alerts, and the upgrade to Authentication with Identity Platform.
+2. Confirm London (`europe-west2`) as the permanent location for Firestore, Functions and Storage.
+3. Decide whether processing of sign-in account data in the United States by Firebase Authentication is acceptable for the programme.
+4. Confirm `portal.eegmanylabs.org` as the portal address, or choose the default Pages address.
+5. Accept the security posture of GitHub Pages described in D-001, or ask for the portal's static files to be served another way.
+6. Decide whether the portal source stays in this repository or moves to one of its own.
+7. Provide read access to sources A and G through a Google service account, a Quire export or API token, and a mail provider for notification email.
+8. Restrict link sharing on source F and the contributor sheets once the import has been verified.
