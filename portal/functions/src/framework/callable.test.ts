@@ -1,10 +1,24 @@
+// Fixtures are synthetic: fictitious accounts on the example.org domain.
 import type { CallableContract } from "@eegml/shared";
-import { z } from "@eegml/shared";
+import { PUBLIC_ERROR_DETAILS, z } from "@eegml/shared";
 import type { Firestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/https";
 import { describe, expect, it, vi } from "vitest";
-import { type CallableDependencies, type IncomingCall, runCallable, runningInEmulator } from "./callable";
-import { AppError, INTERNAL_ERROR_MESSAGE, INVALID_REQUEST_MESSAGE, SIGN_IN_REQUIRED_MESSAGE } from "./errors";
+import {
+  type CallableDependencies,
+  type CallerAccess,
+  type IncomingCall,
+  runCallable,
+  runningInEmulator,
+} from "./callable";
+import {
+  ACCOUNT_SUSPENDED_MESSAGE,
+  AppError,
+  INTERNAL_ERROR_MESSAGE,
+  INVALID_REQUEST_MESSAGE,
+  SESSION_ENDED_MESSAGE,
+  SIGN_IN_REQUIRED_MESSAGE,
+} from "./errors";
 
 const echoContract = {
   name: "echo",
@@ -12,7 +26,10 @@ const echoContract = {
   output: z.strictObject({ text: z.string(), uid: z.string().nullable() }),
 } as const satisfies CallableContract;
 
-function dependencies(): CallableDependencies & { logged: { level: string; message: string; fields: unknown }[] } {
+/** The pipeline's dependencies, with the caller's access document as the test wants it. */
+function dependencies(
+  access: CallerAccess | null | Error = null,
+): CallableDependencies & { logged: { level: string; message: string; fields: unknown }[] } {
   const logged: { level: string; message: string; fields: unknown }[] = [];
   const log = (level: string) => (message: string, fields?: Record<string, unknown>) => {
     logged.push({ level, message, fields });
@@ -22,14 +39,28 @@ function dependencies(): CallableDependencies & { logged: { level: string; messa
     db: {} as Firestore,
     clock: { now: () => new Date("2026-01-02T03:04:05Z") },
     logger: { info: log("info"), warn: log("warn"), error: log("error") },
+    readAccess: async () => {
+      if (access instanceof Error) throw access;
+      return access;
+    },
     logged,
   };
 }
 
+const SIGNED_IN_AT = Date.parse("2026-01-01T00:00:00Z") / 1000;
+
 const signedIn: IncomingCall["auth"] = {
   uid: "uid-caller",
-  token: { email: "Caller.Account@example.org", email_verified: true },
+  token: { email: "Caller.Account@example.org", email_verified: true, auth_time: SIGNED_IN_AT },
 };
+
+const echo = { handler: async (input: { text: string }, context: { uid: string | null }) => ({ text: input.text, uid: context.uid }) };
+
+/** A stand-in with the part of a Firestore timestamp the pipeline reads. */
+function boundary(iso: string): NonNullable<CallerAccess["sessionsValidAfter"]> {
+  const date = new Date(iso);
+  return { seconds: date.getTime() / 1000, nanoseconds: 0, toDate: () => date, toMillis: () => date.getTime() };
+}
 
 async function rejection(promise: Promise<unknown>): Promise<HttpsError> {
   try {
@@ -57,6 +88,7 @@ describe("runCallable", () => {
     const error = await rejection(runCallable(echoContract, { handler }, { data: { text: "hello" } }, dependencies()));
     expect(error.code).toBe("unauthenticated");
     expect(error.message).toBe(SIGN_IN_REQUIRED_MESSAGE);
+    expect(error.details).toEqual(PUBLIC_ERROR_DETAILS);
     expect(handler).not.toHaveBeenCalled();
   });
 
@@ -103,6 +135,31 @@ describe("runCallable", () => {
     expect(seen).toEqual(["Caller.Account@example.org", null]);
   });
 
+  it("gives the handler the name from the token as cleaned, self-asserted text", async () => {
+    const seen: (string | null)[] = [];
+    const definition = {
+      handler: async (input: { text: string }, context: { selfAssertedName: string | null; uid: string }) => {
+        seen.push(context.selfAssertedName);
+        return { text: input.text, uid: context.uid };
+      },
+    };
+    const callWithName = (name: unknown) =>
+      runCallable(
+        echoContract,
+        definition,
+        { data: { text: "a" }, auth: { uid: "uid-caller", token: { ...signedIn.token, name } } },
+        dependencies(),
+      );
+    await callWithName("  Synthetic \n Person\u0000 ");
+    await callWithName("x".repeat(5000));
+    await callWithName("   ");
+    await callWithName({ injected: true });
+    await callWithName(undefined);
+    expect(seen[0]).toBe("Synthetic Person");
+    expect(seen[1]).toHaveLength(200);
+    expect(seen.slice(2)).toEqual([null, null, null]);
+  });
+
   it("gives the handler the clock and the logger it was started with", async () => {
     const deps = dependencies();
     let now: Date | undefined;
@@ -137,6 +194,29 @@ describe("runCallable", () => {
     );
     expect(error.code).toBe("failed-precondition");
     expect(error.message).toBe("A verified email address is needed.");
+    // The mark that tells the web client this message was written for the person.
+    expect(error.details).toEqual(PUBLIC_ERROR_DETAILS);
+  });
+
+  it("treats an HttpsError that the handler did not raise through AppError as a fault", async () => {
+    const deps = dependencies();
+    const error = await rejection(
+      runCallable(
+        echoContract,
+        {
+          handler: async () => {
+            // What a library or a nested call might throw: a client-facing code with its own text.
+            throw new HttpsError("permission-denied", "Forbidden: caller lacks roles/datastore.user", { table: "x" });
+          },
+        },
+        { data: { text: "a" }, auth: signedIn },
+        deps,
+      ),
+    );
+    expect(error.code).toBe("internal");
+    expect(error.message).toBe(INTERNAL_ERROR_MESSAGE);
+    expect(error.details).toEqual(PUBLIC_ERROR_DETAILS);
+    expect(JSON.stringify(deps.logged)).toContain("roles/datastore.user");
   });
 
   it("hides the detail of an unexpected error from the caller and logs it", async () => {
@@ -155,7 +235,7 @@ describe("runCallable", () => {
     );
     expect(error.code).toBe("internal");
     expect(error.message).toBe(INTERNAL_ERROR_MESSAGE);
-    expect(error.details).toBeUndefined();
+    expect(error.details).toEqual(PUBLIC_ERROR_DETAILS);
     expect(deps.logged.filter((entry) => entry.level === "error")).toHaveLength(1);
     expect(JSON.stringify(deps.logged)).toContain("hunter2");
   });
@@ -174,6 +254,87 @@ describe("runCallable", () => {
     expect(error.code).toBe("internal");
     expect(error.message).toBe(INTERNAL_ERROR_MESSAGE);
     expect(JSON.stringify(deps.logged)).not.toContain("leak");
+  });
+});
+
+describe("the caller's standing", () => {
+  const call = { data: { text: "hello" }, auth: signedIn };
+
+  it("lets an account through that has no access document yet", async () => {
+    expect(await runCallable(echoContract, echo, call, dependencies(null))).toEqual({ text: "hello", uid: "uid-caller" });
+  });
+
+  it("lets an account through that is not suspended and has no session boundary", async () => {
+    const access = { suspended: false, sessionsValidAfter: null };
+    expect(await runCallable(echoContract, echo, call, dependencies(access))).toMatchObject({ uid: "uid-caller" });
+  });
+
+  it("refuses a suspended account before the handler runs, with a message that names the next step", async () => {
+    const handler = vi.fn();
+    const deps = dependencies({ suspended: true, sessionsValidAfter: null });
+    const error = await rejection(runCallable(echoContract, { handler }, call, deps));
+    expect(error.code).toBe("permission-denied");
+    expect(error.message).toBe(ACCOUNT_SUSPENDED_MESSAGE);
+    expect(error.message).toContain("Contact a programme administrator");
+    expect(error.details).toEqual(PUBLIC_ERROR_DETAILS);
+    expect(handler).not.toHaveBeenCalled();
+    expect(deps.logged).toContainEqual({
+      level: "warn",
+      message: "callable refused",
+      fields: { function: "echo", uid: "uid-caller", standing: "suspended" },
+    });
+  });
+
+  it("refuses a suspended account even when its input is invalid, so nothing about the function leaks", async () => {
+    const error = await rejection(
+      runCallable(
+        echoContract,
+        echo,
+        { data: { text: "" }, auth: signedIn },
+        dependencies({ suspended: true, sessionsValidAfter: null }),
+      ),
+    );
+    expect(error.code).toBe("permission-denied");
+  });
+
+  it("refuses a session that began before the account's sessions were ended", async () => {
+    const handler = vi.fn();
+    const access = { suspended: false, sessionsValidAfter: boundary("2026-01-01T00:00:01Z") };
+    const error = await rejection(runCallable(echoContract, { handler }, call, dependencies(access)));
+    expect(error.code).toBe("unauthenticated");
+    expect(error.message).toBe(SESSION_ENDED_MESSAGE);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("accepts a session that began after the account's sessions were ended", async () => {
+    const access = { suspended: false, sessionsValidAfter: boundary("2025-12-31T23:59:59Z") };
+    expect(await runCallable(echoContract, echo, call, dependencies(access))).toMatchObject({ uid: "uid-caller" });
+  });
+
+  it("refuses when the access document cannot be read, and does not run the handler", async () => {
+    const handler = vi.fn();
+    const deps = dependencies(new Error("deadline exceeded reading access/uid-caller"));
+    const error = await rejection(runCallable(echoContract, { handler }, call, deps));
+    expect(error.code).toBe("internal");
+    expect(error.message).toBe(INTERNAL_ERROR_MESSAGE);
+    expect(handler).not.toHaveBeenCalled();
+    expect(deps.logged.filter((entry) => entry.level === "error")).toHaveLength(1);
+  });
+
+  it("lets a suspended account through only where the definition says any standing will do", async () => {
+    const result = await runCallable(
+      echoContract,
+      { ...echo, callerStanding: "any" },
+      call,
+      dependencies({ suspended: true, sessionsValidAfter: null }),
+    );
+    expect(result).toEqual({ text: "hello", uid: "uid-caller" });
+  });
+
+  it("does not look for an access document when nobody is signed in", async () => {
+    const deps = dependencies(new Error("must not be read"));
+    const result = await runCallable(echoContract, { ...echo, auth: "optional" }, { data: { text: "hello" } }, deps);
+    expect(result).toEqual({ text: "hello", uid: null });
   });
 });
 

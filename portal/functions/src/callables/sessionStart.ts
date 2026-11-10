@@ -8,17 +8,34 @@ import {
   USER_SCHEMA_VERSION,
   type UserDoc,
   userDocSchema,
+  userWriteContext,
 } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
-import { AppError, defineCallable, writeAudit } from "../framework";
+import { ACCOUNT_SUSPENDED_MESSAGE, AppError, defineCallable, withheldChanges, writeAudit } from "../framework";
+
+/** A returning account's `lastSeenAt` is written again only when the stored value is older than this. */
+export const LAST_SEEN_RESOLUTION_MS = 15 * 60 * 1000;
+
+/** The fields of `users/{uid}` that a later call may change. */
+const returningUserChangesSchema = userDocSchema
+  .pick({ emailLower: true, displayName: true, lastSeenAt: true, updatedAt: true, updatedBy: true })
+  .partial();
 
 /**
- * Called by the web application once after each sign-in.
+ * Called by the web application each time it starts with a signed-in account, so once for
+ * every page load and once in every tab.
  *
- * It records the account in `users/{uid}`, makes sure `access/{uid}` exists, and reports what
- * the account is linked to. A new access document always starts with no membership and no
+ * The first call for an account registers it: it creates `users/{uid}` and `access/{uid}` and
+ * records one audit entry. A new access document always starts with no membership and no
  * linked person. An existing access document is never changed here: granting membership and
  * linking a person belong to the claim flow.
+ *
+ * A later call reports what the account is linked to. It writes only when something has
+ * changed: the address, the name the account gives itself, or a `lastSeenAt` that is more
+ * than fifteen minutes old. A page that is reloaded many times therefore costs reads only.
+ *
+ * A suspended account is refused before this handler runs, by `defineCallable`, which reads
+ * `access/{uid}`. The handler refuses as well when the profile says the account is suspended.
  */
 export const sessionStart = defineCallable(sessionStartContract, {
   handler: async (_input, context) => {
@@ -27,59 +44,91 @@ export const sessionStart = defineCallable(sessionStartContract, {
       throw new AppError("failed-precondition", "A verified email address is needed to use the portal.");
     }
     const emailLower = normaliseEmail(context.verifiedEmail);
+    const displayName = context.selfAssertedName;
     const userReference = db.doc(paths.user(uid));
     const accessReference = db.doc(paths.access(uid));
+    // One instant for everything this call writes, the audit entry included.
+    const at = context.clock.now();
+    const now = Timestamp.fromDate(at);
 
     return db.runTransaction(async (transaction) => {
       const [userSnapshot, accessSnapshot] = await Promise.all([
         transaction.get(userReference),
         transaction.get(accessReference),
       ]);
-      const now = Timestamp.fromDate(context.clock.now());
+      const existingAccess = accessSnapshot.exists ? accessDocSchema.parse(accessSnapshot.data()) : null;
+      if (userSnapshot.get("status") === "suspended" || existingAccess?.suspended === true) {
+        throw new AppError("permission-denied", ACCOUNT_SUSPENDED_MESSAGE);
+      }
+
+      // The audit entry records the registration, which is the creation of the access document.
+      const auditEventId =
+        existingAccess === null
+          ? writeAudit(
+              transaction,
+              {
+                action: "account.created",
+                actor: { kind: "user", uid },
+                entityType: "user",
+                entityId: uid,
+                // The profile is readable by its owner only, so the entry carries no value.
+                changes: withheldChanges(["emailLower", "displayName", "status"]),
+                at,
+                idempotencyKey: `account.created:${uid}`,
+              },
+              db,
+            )
+          : null;
 
       if (userSnapshot.exists) {
-        // Status is left alone: signing in does not undo a suspension.
-        const changes: Partial<UserDoc> = { emailLower, lastSeenAt: now };
-        if (context.providerDisplayName !== null) changes.displayName = context.providerDisplayName;
-        transaction.update(userReference, changes);
+        const changes: Partial<UserDoc> = {};
+        if (userSnapshot.get("emailLower") !== emailLower) changes.emailLower = emailLower;
+        if (displayName !== null && userSnapshot.get("displayName") !== displayName) changes.displayName = displayName;
+        const lastSeenAt: unknown = userSnapshot.get("lastSeenAt");
+        const stale = !(lastSeenAt instanceof Timestamp) || at.getTime() - lastSeenAt.toMillis() >= LAST_SEEN_RESOLUTION_MS;
+        if (stale || Object.keys(changes).length > 0) {
+          // Status is left alone: starting the portal does not undo a suspension.
+          transaction.update(
+            userReference,
+            returningUserChangesSchema.parse({ ...changes, lastSeenAt: now, updatedAt: now, updatedBy: uid }),
+          );
+        }
       } else {
         const user: UserDoc = userDocSchema.parse({
           schemaVersion: USER_SCHEMA_VERSION,
-          emailLower,
-          displayName: context.providerDisplayName,
-          status: "active",
           createdAt: now,
+          updatedAt: now,
+          createdBy: uid,
+          updatedBy: uid,
+          archivedAt: null,
+          writeContext: userWriteContext(auditEventId),
+          emailLower,
+          displayName,
+          personId: existingAccess?.personId ?? null,
+          status: "active",
+          mfaEnrolled: false,
           lastSeenAt: now,
           dataOrigin: "live",
         });
         transaction.create(userReference, user);
       }
 
-      if (accessSnapshot.exists) {
-        const access = accessDocSchema.parse(accessSnapshot.data());
-        return { member: access.member, personId: access.personId };
-      }
+      if (existingAccess !== null) return { member: existingAccess.member, personId: existingAccess.personId };
 
       const access: AccessDoc = accessDocSchema.parse({
         schemaVersion: ACCESS_SCHEMA_VERSION,
-        member: false,
-        personId: null,
         createdAt: now,
         updatedAt: now,
-        dataOrigin: "live",
+        createdBy: uid,
+        updatedBy: uid,
+        archivedAt: null,
+        writeContext: userWriteContext(auditEventId),
+        member: false,
+        personId: null,
+        suspended: false,
+        sessionsValidAfter: null,
       });
       transaction.create(accessReference, access);
-      writeAudit(
-        transaction,
-        {
-          type: "account.created",
-          actor: { kind: "user", uid },
-          targetPath: accessReference.path,
-          occurredAt: context.clock.now(),
-          idempotencyKey: `account.created:${uid}`,
-        },
-        db,
-      );
       return { member: access.member, personId: access.personId };
     });
   },

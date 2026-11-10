@@ -1,4 +1,5 @@
 // Decides which Firebase project a tool is allowed to touch.
+import net from "node:net";
 import { DEMO_PROJECT_ID, DEMO_PROJECT_PREFIX } from "@eegml/shared";
 
 /** Raised when a tool declines to run. The message says what to do about it. */
@@ -44,4 +45,47 @@ export function requireEmulatorTarget(env: Environment = process.env): EmulatorT
     );
   }
   return { projectId, firestoreHost, authHost };
+}
+
+/** Whether something accepts connections at "host:port". */
+function accepts(address: string, timeoutMs: number): Promise<boolean> {
+  const separator = address.lastIndexOf(":");
+  const host = address.slice(0, separator);
+  const port = Number(address.slice(separator + 1));
+  if (separator < 1 || !Number.isInteger(port) || port < 1 || port > 65535) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const socket = net.connect({ host, port });
+    const finish = (reachable: boolean) => {
+      socket.destroy();
+      resolve(reachable);
+    };
+    socket.setTimeout(timeoutMs, () => finish(false));
+    socket.once("connect", () => finish(true));
+    socket.once("error", () => finish(false));
+  });
+}
+
+/**
+ * Refuses when the emulators a tool was pointed at are not running. Without this check the
+ * Admin SDK would try to connect for a while and then fail with an error that says nothing
+ * about emulators.
+ */
+export async function requireRunningEmulators(
+  target: EmulatorTarget,
+  env: Environment = process.env,
+  timeoutMs = 1_000,
+): Promise<void> {
+  const checks = [
+    { name: "Firestore", address: target.firestoreHost },
+    { name: "Authentication", address: target.authHost },
+  ];
+  const reachable = await Promise.all(checks.map((check) => accepts(check.address, timeoutMs)));
+  const down = checks.filter((_check, index) => !reachable[index]);
+  if (down.length === 0) return;
+  const base = env.PORTAL_PORT_BASE?.trim();
+  throw new ToolRefusal(
+    `Refusing to run: the emulators${base ? ` of PORTAL_PORT_BASE=${base}` : ""} are not running. ` +
+      `Nothing answers at ${down.map((check) => `${check.address} (${check.name})`).join(" or ")}. ` +
+      "Start them with `npm run emulators` and run the command again.",
+  );
 }

@@ -1,6 +1,8 @@
 // Command line of the portal's Admin SDK tools.
 //
-//   npm run -w @eegml/tools cli -- <command> [arguments]
+//   npm run -w @eegml/tools cli -- <command> [arguments] [--verbose]
+//
+// --verbose prints the stack of an unexpected error. Without it the message is enough.
 //
 // Tools run with full access to the database, outside the security rules. They run only from a
 // trusted environment (an administrator's machine or a protected workflow), never from the
@@ -18,7 +20,7 @@ const EXIT_REFUSED = 2;
 function usage(): string {
   const width = Math.max(...COMMANDS.map((command) => command.name.length));
   return [
-    "Usage: cli <command> [arguments]",
+    "Usage: cli <command> [arguments] [--verbose]",
     "",
     "Commands:",
     ...COMMANDS.map((command) => `  ${command.name.padEnd(width)}  ${command.summary}`),
@@ -26,7 +28,9 @@ function usage(): string {
 }
 
 async function main(): Promise<number> {
-  const [name, ...args] = process.argv.slice(2);
+  const given = process.argv.slice(2);
+  const verbose = given.includes("--verbose");
+  const [name, ...args] = given.filter((argument) => argument !== "--verbose");
   if (name === undefined || name === "help" || name === "--help") {
     console.log(usage());
     return name === undefined ? EXIT_REFUSED : 0;
@@ -44,7 +48,10 @@ async function main(): Promise<number> {
       console.error(error.message);
       return EXIT_REFUSED;
     }
-    console.error(error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`${command.name} failed: ${message}`);
+    if (verbose) console.error(error);
+    else console.error("Run the command again with --verbose to see where it failed.");
     return EXIT_FAILED;
   }
 }

@@ -1,8 +1,10 @@
+// Fixtures are synthetic: invented values on the example.org domain.
 import { describe, expect, it } from "vitest";
 import { sessionStartContract } from "./callables";
 import { CAPABILITIES, capabilitiesOf, hasCapability } from "./capabilities";
 import { DEMO_PROJECT_ID, DEMO_PROJECT_PREFIX, FUNCTIONS_REGION } from "./constants";
-import { normaliseEmail } from "./identifiers";
+import { ENTITY_TYPES, entityPath } from "./entities";
+import { DISPLAY_NAME_MAX_LENGTH, normaliseDisplayName, normaliseEmail } from "./identifiers";
 import { COLLECTIONS, paths } from "./paths";
 import { isFirestoreTimestamp } from "./timestamp";
 import { z } from "./zod";
@@ -28,6 +30,49 @@ describe("normaliseEmail", () => {
   it("gives the same result when applied twice", () => {
     const once = normaliseEmail(" A.B@example.org");
     expect(normaliseEmail(once)).toBe(once);
+  });
+});
+
+describe("normaliseDisplayName", () => {
+  it("trims the name and collapses runs of white space", () => {
+    expect(normaliseDisplayName("  Synthetic \t\n  Person  ")).toBe("Synthetic Person");
+  });
+
+  it("removes control characters and the characters that reorder text", () => {
+    expect(normaliseDisplayName("Syn\u0000thetic\u0007 Person")).toBe("Syn thetic Person");
+    expect(normaliseDisplayName("\u202Enosrep citehtnys\u202C")).toBe("nosrep citehtnys");
+    expect(normaliseDisplayName("\u2066Synthetic\u2069")).toBe("Synthetic");
+  });
+
+  it("cuts a long name to the stored maximum without splitting a character", () => {
+    expect(normaliseDisplayName("x".repeat(5000))).toHaveLength(DISPLAY_NAME_MAX_LENGTH);
+    // Each of these takes two code units. An odd limit must not leave half of one.
+    const cut = normaliseDisplayName(`a${"\u{1F600}".repeat(150)}`) ?? "";
+    expect(cut.length).toBeLessThanOrEqual(DISPLAY_NAME_MAX_LENGTH);
+    expect([...cut].every((character) => character === "a" || character === "\u{1F600}")).toBe(true);
+  });
+
+  it.each([["an empty string", ""], ["white space only", " \n\t "], ["control characters only", "\u0000\u0001"]])(
+    "gives null for %s",
+    (_label, value) => {
+      expect(normaliseDisplayName(value)).toBeNull();
+    },
+  );
+
+  it.each([undefined, null, 42, { name: "x" }, ["x"]])("gives null for %j, which is not text", (value) => {
+    expect(normaliseDisplayName(value)).toBeNull();
+  });
+
+  it("gives the same result when applied twice", () => {
+    const once = normaliseDisplayName("  Synthetic   Person ");
+    expect(normaliseDisplayName(once)).toBe(once);
+  });
+});
+
+describe("the entity registry", () => {
+  it("resolves every entity type to a document path", () => {
+    expect(ENTITY_TYPES).toEqual(["user"]);
+    expect(entityPath("user", "uid-1")).toBe("users/uid-1");
   });
 });
 

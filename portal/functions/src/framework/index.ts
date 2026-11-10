@@ -1,5 +1,5 @@
 export { firestore } from "./admin";
-export { type AuditEntry, auditEventId, SYSTEM_ACTOR, writeAudit } from "./audit";
+export { type AuditActor, type AuditEntry, auditEventId, withheldChanges, writeAudit } from "./audit";
 export {
   type AuthenticatedDefinition,
   type CallableDefinition,
@@ -8,4 +8,4 @@ export {
   runningInEmulator,
 } from "./callable";
 export { type AuthenticatedContext, type CallableContext, type Clock, type Logger, systemClock } from "./context";
-export { AppError, type AppErrorCode } from "./errors";
+export { ACCOUNT_SUSPENDED_MESSAGE, AppError, type AppErrorCode } from "./errors";

@@ -4,6 +4,8 @@ import {
   accessDocSchema,
   normaliseEmail,
   paths,
+  systemActor,
+  systemWriteContext,
   USER_SCHEMA_VERSION,
   type UserDoc,
   userDocSchema,
@@ -12,7 +14,7 @@ import type { DocumentReference } from "firebase-admin/firestore";
 import { Timestamp } from "firebase-admin/firestore";
 import { type AdminHandles, connectToEmulators } from "../admin";
 import type { Command } from "../command";
-import { requireEmulatorTarget } from "../environment";
+import { requireEmulatorTarget, requireRunningEmulators } from "../environment";
 import { DEMO_ACCOUNTS } from "../fixtures/demo-accounts";
 
 export interface SeedSummary {
@@ -21,14 +23,25 @@ export interface SeedSummary {
   unchanged: number;
 }
 
+/** The actor recorded on everything this command writes. */
+export const SEED_DEMO_ACTOR = systemActor("seedDemo");
+
 /**
  * Writes the demonstration accounts: an Authentication account, a `users` document and an
- * `access` document for each. Everything is labelled `dataOrigin: "demo"`. Running it again
- * changes nothing.
+ * `access` document for each. Every profile is labelled `dataOrigin: "demo"`, and every
+ * document names this command as its author. Running it again changes nothing.
  */
 export async function seedDemo(handles: AdminHandles, projectId: string, now: Date = new Date()): Promise<SeedSummary> {
   const summary: SeedSummary = { projectId, created: 0, unchanged: 0 };
   const timestamp = Timestamp.fromDate(now);
+  const standard = {
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    createdBy: SEED_DEMO_ACTOR,
+    updatedBy: SEED_DEMO_ACTOR,
+    archivedAt: null,
+    writeContext: systemWriteContext(),
+  };
 
   const createIfMissing = async (reference: DocumentReference, data: UserDoc | AccessDoc) => {
     const written = await handles.db.runTransaction(async (transaction) => {
@@ -60,11 +73,13 @@ export async function seedDemo(handles: AdminHandles, projectId: string, now: Da
     await createIfMissing(
       handles.db.doc(paths.user(account.uid)),
       userDocSchema.parse({
+        ...standard,
         schemaVersion: USER_SCHEMA_VERSION,
         emailLower: normaliseEmail(account.email),
         displayName: account.displayName,
+        personId: null,
         status: "active",
-        createdAt: timestamp,
+        mfaEnrolled: false,
         lastSeenAt: timestamp,
         dataOrigin: "demo",
       }),
@@ -72,12 +87,12 @@ export async function seedDemo(handles: AdminHandles, projectId: string, now: Da
     await createIfMissing(
       handles.db.doc(paths.access(account.uid)),
       accessDocSchema.parse({
+        ...standard,
         schemaVersion: ACCESS_SCHEMA_VERSION,
         member: false,
         personId: null,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-        dataOrigin: "demo",
+        suspended: false,
+        sessionsValidAfter: null,
       }),
     );
   }
@@ -90,6 +105,7 @@ export const seedDemoCommand: Command = {
   async run() {
     // Refuses here, before the Admin SDK is touched, unless the emulators are the target.
     const target = requireEmulatorTarget();
+    await requireRunningEmulators(target);
     const summary = await seedDemo(connectToEmulators(target), target.projectId);
     console.log(
       `seed:demo wrote to ${summary.projectId} (emulator): ${summary.created} created, ${summary.unchanged} unchanged.`,

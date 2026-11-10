@@ -26,3 +26,15 @@ export const sessionStartContract = {
 } as const satisfies CallableContract;
 
 export type SessionStartOutput = CallableOutput<typeof sessionStartContract>;
+
+/**
+ * The `details` of an error whose message a function wrote for the person using the portal.
+ * The functions attach it to every error they raise on purpose, and the web client shows a
+ * server message only when it is present. An error that the platform or a library produced
+ * carries no such mark, so its text never reaches the interface.
+ */
+export const PUBLIC_ERROR_DETAILS = { public: true } as const;
+
+export function isPublicErrorDetails(details: unknown): boolean {
+  return typeof details === "object" && details !== null && (details as { public?: unknown }).public === true;
+}
