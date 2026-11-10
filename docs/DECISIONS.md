@@ -40,13 +40,13 @@ A person is anyone known to the programme and exists whether or not they have si
 
 ## D-006 Authorisation is enforced by security rules and callable functions, never by the interface
 
-**Status:** provisional on the mechanism for carrying roles, pending the application spike.
+**Status:** accepted. The application spike verified the mechanism on the emulators.
 
 Firestore security rules are the enforcement point for every direct read and write. Callable Cloud Functions are the enforcement point for privileged operations and for any change that spans several documents. The interface hides what a user may not do as a convenience only.
 
 Because rules grant reads per document, field-level secrecy is achieved by splitting documents. A person has a directory document, a restricted contact document and a special-category demographics document. The demographics document is never readable by a client. It is served only through a callable function that checks the caller's grant and second factor, writes an audit entry and returns the data.
 
-Roles are resolved into one access document per user, maintained by functions, which rules read. The spike compares this with custom claims on the sign-in token for cost, size limits and the delay before a revoked role stops working.
+Roles are resolved into one access document per user, maintained by functions, which rules read with a single lookup. The spike wrote the same policy both ways and compared them. The access document was chosen over custom claims on the sign-in token because a revoked role stops working on the next request, where a claim keeps working until the token is refreshed up to an hour later, and because claims are capped at 1,000 bytes. Privileged reads and writes also require a second factor in the sign-in token whenever the access document says one is required.
 
 ## D-007 The audit trail is written by trusted code
 
@@ -113,6 +113,18 @@ Development and automated tests use the local emulators for Authentication, Fire
 **Status:** recommended.
 
 Staging uses its own Firebase project holding synthetic data only, and a separate Pages site so that it shares the header, cache and routing behaviour of production. Creating the second repository and its domain records needs an organisation owner.
+
+## D-018 The portal follows the typography and contrast of the public site as it is actually rendered
+
+**Status:** accepted.
+
+Measurement of the built public site showed that DM Sans is the only typeface rendered, including in headings, and that Fraunces is declared in the stylesheet without being used. The portal therefore sets all text, including page titles, in DM Sans, self-hosted. White text on the coral `#d84b4d` measures 4.17 to 1, which meets the contrast requirement for large text only. Dense controls in the portal, where labels are small, use the deep coral `#a9353a`, on which white measures 6.45 to 1. The coral remains the accent for focus rings, indicators and large calls to action.
+
+## D-019 Recruitment reports and status changes are written by callable functions
+
+**Status:** accepted. This refines D-009.
+
+A recruitment report is submitted through a callable function that checks the caller's scope, validates every category and count against the configured categories, writes the report, updates the replication's summary and writes the audit entry in one transaction. A change of a replication's status is likewise a callable function that writes the status history entry in the same transaction. Clients can read these records within their scope and can never create, edit or delete them directly, which gives stronger validation than security rules can express and keeps the history complete.
 
 ## Decisions needed from the programme administrators
 
