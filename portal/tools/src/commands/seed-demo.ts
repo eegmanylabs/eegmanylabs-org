@@ -1,12 +1,11 @@
 import {
-  ACCESS_SCHEMA_VERSION,
-  type AccessDoc,
+  type AccessDocument,
   accessDocSchema,
+  COLLECTIONS,
+  emptyAccess,
   normaliseEmail,
-  paths,
   systemActor,
   systemWriteContext,
-  USER_SCHEMA_VERSION,
   type UserDoc,
   userDocSchema,
 } from "@eegml/shared";
@@ -43,7 +42,7 @@ export async function seedDemo(handles: AdminHandles, projectId: string, now: Da
     writeContext: systemWriteContext(),
   };
 
-  const createIfMissing = async (reference: DocumentReference, data: UserDoc | AccessDoc) => {
+  const createIfMissing = async (reference: DocumentReference, data: UserDoc | AccessDocument) => {
     const written = await handles.db.runTransaction(async (transaction) => {
       if ((await transaction.get(reference)).exists) return false;
       transaction.create(reference, data);
@@ -71,10 +70,10 @@ export async function seedDemo(handles: AdminHandles, projectId: string, now: Da
     }
 
     await createIfMissing(
-      handles.db.doc(paths.user(account.uid)),
+      handles.db.doc(COLLECTIONS.users.docPath(account.uid)),
       userDocSchema.parse({
         ...standard,
-        schemaVersion: USER_SCHEMA_VERSION,
+        schemaVersion: COLLECTIONS.users.schemaVersion,
         emailLower: normaliseEmail(account.email),
         displayName: account.displayName,
         personId: null,
@@ -85,14 +84,11 @@ export async function seedDemo(handles: AdminHandles, projectId: string, now: Da
       }),
     );
     await createIfMissing(
-      handles.db.doc(paths.access(account.uid)),
+      handles.db.doc(COLLECTIONS.access.docPath(account.uid)),
       accessDocSchema.parse({
         ...standard,
-        schemaVersion: ACCESS_SCHEMA_VERSION,
-        member: false,
-        personId: null,
-        suspended: false,
-        sessionsValidAfter: null,
+        schemaVersion: COLLECTIONS.access.schemaVersion,
+        ...emptyAccess(),
       }),
     );
   }

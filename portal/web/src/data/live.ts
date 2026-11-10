@@ -1,10 +1,12 @@
-// Live documents. Every hook here reads from one shared subscription cache.
-//
-// A hook for live queries belongs in this file as well, on the same cache, with a key that
-// describes the query completely. It is added together with the first collection that the
-// security rules let a browser list, so that it can be tested against those rules.
+// Live documents and live queries. Every hook here reads from one shared subscription cache,
+// and every registry entry of @eegml/shared is served by the same two hooks: there is no hook
+// per collection.
+import type { CollectionKey, DocPathIds, ListableCollectionKey } from "@eegml/shared";
 import { type DocumentReference, type FirestoreError, onSnapshot, type SnapshotMetadata } from "firebase/firestore";
-import { DataShapeError } from "./converter";
+import { DataShapeError, type RecordOf } from "./converter";
+import { db } from "./firebase";
+import { type LiveQuery, liveQueryKey } from "./query-spec";
+import { documentReference, queryReference } from "./refs";
 import { type Live, type LiveError, type Publish, SubscriptionCache } from "./subscription-cache";
 import { useSubscription } from "./use-subscription";
 
@@ -41,7 +43,7 @@ function publishSnapshot<T>(publish: Publish<T>, metadata: SnapshotMetadata, rea
  * When the server ends the listener, for example because it refused the read, the cache opens
  * a new one a few times before it reports the failure (see subscription-cache.ts).
  */
-export function useLiveDoc<T>(reference: DocumentReference<T> | null): Live<T | null> {
+function useLiveDoc<T>(reference: DocumentReference<T> | null): Live<T | null> {
   return useSubscription<T | null>(cache, reference ? `doc:${reference.path}` : null, (publish, fail) => {
     if (!reference) return () => {};
     return onSnapshot(
@@ -52,6 +54,39 @@ export function useLiveDoc<T>(reference: DocumentReference<T> | null): Live<T | 
       (error) => fail(toLiveError(error)),
     );
   });
+}
+
+/**
+ * One document of a registry entry, live and validated against the schema of the entry. `ids`
+ * are the identifiers that the path of the entry takes, in order. Pass null to watch nothing.
+ * `data` is null when the document does not exist.
+ */
+export function useLiveDocument<K extends CollectionKey>(key: K, ids: DocPathIds<K> | null): Live<RecordOf<K> | null> {
+  return useLiveDoc(ids === null ? null : documentReference(db, key, ...ids));
+}
+
+/**
+ * The documents that a query describes, live and validated. Pass null to watch nothing.
+ * Components that describe the same query share one listener. One document that does not match
+ * its schema makes the whole result an error, which names that document.
+ */
+export function useLiveQuery<K extends ListableCollectionKey>(
+  description: LiveQuery<K> | null,
+): Live<readonly RecordOf<K>[]> {
+  return useSubscription<readonly RecordOf<K>[]>(
+    cache,
+    description ? liveQueryKey(description) : null,
+    (publish, fail) => {
+      if (!description) return () => {};
+      return onSnapshot(
+        queryReference(db, description),
+        { includeMetadataChanges: true },
+        (snapshot) =>
+          publishSnapshot(publish, snapshot.metadata, () => snapshot.docs.map((document) => document.data())),
+        (error) => fail(toLiveError(error)),
+      );
+    },
+  );
 }
 
 /** Opens anew every listener that has given up after repeated failures. For "Try again" buttons. */

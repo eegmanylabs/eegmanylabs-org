@@ -1,18 +1,21 @@
 // The signed-in account's own records.
 import { type SessionStartOutput, sessionStartContract } from "@eegml/shared";
 import { callFunction } from "./callable";
-import { useLiveDoc } from "./live";
-import { type AccessRecord, refs, type UserRecord } from "./refs";
+import type { RecordOf } from "./converter";
+import { useLiveDocument } from "./live";
 import type { Live } from "./subscription-cache";
+
+export type UserRecord = RecordOf<"users">;
+export type AccessRecord = RecordOf<"access">;
 
 /** `users/{uid}` of an account, live. Null data means the document does not exist yet. */
 export function useUserRecord(uid: string | null): Live<UserRecord | null> {
-  return useLiveDoc(uid === null ? null : refs.user(uid));
+  return useLiveDocument("users", uid === null ? null : [uid]);
 }
 
 /** `access/{uid}` of an account, live. Null data means the document does not exist yet. */
 export function useAccessRecord(uid: string | null): Live<AccessRecord | null> {
-  return useLiveDoc(uid === null ? null : refs.access(uid));
+  return useLiveDocument("access", uid === null ? null : [uid]);
 }
 
 /**

@@ -65,20 +65,24 @@ function accepts(address: string, timeoutMs: number): Promise<boolean> {
   });
 }
 
+/** The emulators a tool can need. */
+export type EmulatorService = "firestore" | "auth";
+
 /**
  * Refuses when the emulators a tool was pointed at are not running. Without this check the
  * Admin SDK would try to connect for a while and then fail with an error that says nothing
- * about emulators.
+ * about emulators. A tool that writes documents only names `firestore` alone in `services`.
  */
 export async function requireRunningEmulators(
   target: EmulatorTarget,
   env: Environment = process.env,
   timeoutMs = 1_000,
+  services: readonly EmulatorService[] = ["firestore", "auth"],
 ): Promise<void> {
   const checks = [
-    { name: "Firestore", address: target.firestoreHost },
-    { name: "Authentication", address: target.authHost },
-  ];
+    { service: "firestore", name: "Firestore", address: target.firestoreHost },
+    { service: "auth", name: "Authentication", address: target.authHost },
+  ].filter((check) => (services as readonly string[]).includes(check.service));
   const reachable = await Promise.all(checks.map((check) => accepts(check.address, timeoutMs)));
   const down = checks.filter((_check, index) => !reachable[index]);
   if (down.length === 0) return;

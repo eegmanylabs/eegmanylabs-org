@@ -9,10 +9,11 @@
 // public site.
 import type { Command } from "./command";
 import { seedDemoCommand } from "./commands/seed-demo";
+import { seedLookupsCommand } from "./commands/seed-lookups";
 import { ToolRefusal } from "./environment";
 
 /** Registry of commands. Add a new command here. */
-const COMMANDS: readonly Command[] = [seedDemoCommand];
+const COMMANDS: readonly Command[] = [seedDemoCommand, seedLookupsCommand];
 
 const EXIT_FAILED = 1;
 const EXIT_REFUSED = 2;

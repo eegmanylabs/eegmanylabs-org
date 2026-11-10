@@ -70,9 +70,26 @@ describe("the web application", () => {
 });
 
 describe("the shared package", () => {
-  it("imports nothing but zod and its own files", () => {
-    const banned = (specifier: string) => !specifier.startsWith(".") && specifier !== "zod" && specifier !== "vitest";
+  const isHashLibrary = (specifier: string) => /^@noble\/hashes\//.test(specifier);
+
+  it("imports nothing but zod, the hash library and its own files", () => {
+    const banned = (specifier: string) =>
+      !specifier.startsWith(".") && specifier !== "zod" && specifier !== "vitest" && !isHashLibrary(specifier);
     expect(offenders("shared/src", () => false, banned)).toEqual([]);
+  });
+
+  it("uses the hash library in one file only, where every identifier is derived", () => {
+    const users = sourceFiles()
+      .filter(isCode)
+      .filter((file) => importsOf(file).some((specifier) => specifier.startsWith("@noble/")))
+      .map((file) => file.path);
+    expect(users).toEqual(["shared/src/ids.ts"]);
+  });
+
+  it("names the hash library as a dependency at one exact version", () => {
+    const manifest = sourceFiles("shared").find((file) => file.path === "shared/package.json");
+    const dependencies = (JSON.parse(manifest?.text ?? "{}") as { dependencies?: Record<string, string> }).dependencies;
+    expect(dependencies?.["@noble/hashes"]).toMatch(/^\d+\.\d+\.\d+$/);
   });
 });
 

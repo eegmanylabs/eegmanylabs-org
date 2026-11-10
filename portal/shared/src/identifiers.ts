@@ -1,4 +1,4 @@
-// Identifier derivation and the canonical forms of values that people type. Every function
+// The canonical forms of values that people type. Identifier derivation is in ids.ts. Every function
 // here is pure and deterministic: the same input always gives the same result, which is what
 // makes imports and retried operations idempotent.
 

@@ -3,16 +3,13 @@
 // and names the entry in the `writeContext.auditEventId` of each document it writes.
 import { createHash } from "node:crypto";
 import {
-  AUDIT_SCHEMA_VERSION,
   type AuditAction,
   type AuditActorKind,
   type AuditChange,
   type AuditContext,
-  auditEventSchema,
   COLLECTIONS,
   type EntityType,
   entityPath,
-  paths,
   systemActor,
 } from "@eegml/shared";
 import {
@@ -67,10 +64,11 @@ export function withheldChanges(fields: readonly string[]): AuditChange[] {
  * caller's transaction or batch commits. In a transaction, call it after the last read.
  */
 export function writeAudit(writer: Transaction | WriteBatch, entry: AuditEntry, db: Firestore = firestore()): string {
+  const { auditEvents } = COLLECTIONS;
   const reference =
     entry.idempotencyKey === undefined
-      ? db.collection(COLLECTIONS.auditEvents).doc()
-      : db.doc(paths.auditEvent(auditEventId(entry.idempotencyKey)));
+      ? db.collection(auditEvents.collectionPath()).doc()
+      : db.doc(auditEvents.docPath(auditEventId(entry.idempotencyKey)));
   const chain = {
     origin: entry.actor.kind,
     depth: entry.context?.depth ?? 0,
@@ -78,8 +76,8 @@ export function writeAudit(writer: Transaction | WriteBatch, entry: AuditEntry, 
     causationId: entry.context?.causationId ?? null,
   };
 
-  const data = auditEventSchema.parse({
-    schemaVersion: AUDIT_SCHEMA_VERSION,
+  const data = auditEvents.schema.parse({
+    schemaVersion: auditEvents.schemaVersion,
     createdAt: Timestamp.fromDate(entry.at),
     createdBy: entry.actor.kind === "user" ? entry.actor.uid : systemActor(entry.actor.kind),
     writeContext: { ...chain, auditEventId: reference.id },

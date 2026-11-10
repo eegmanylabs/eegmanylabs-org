@@ -307,6 +307,7 @@ describe("AuthProvider when the account is stopped while the page is open", () =
     data: {
       member: false,
       personId: null,
+      capabilities: {},
       suspended: fields.suspended ?? false,
       sessionsValidAfter: fields.sessionsValidAfter == null ? null : instant(fields.sessionsValidAfter),
     },

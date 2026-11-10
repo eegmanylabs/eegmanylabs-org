@@ -1,11 +1,11 @@
 import {
-  ACCESS_SCHEMA_VERSION,
-  type AccessDoc,
+  type AccessDocument,
   accessDocSchema,
+  COLLECTIONS,
+  emptyAccess,
   normaliseEmail,
-  paths,
+  parseStoredDocument,
   sessionStartContract,
-  USER_SCHEMA_VERSION,
   type UserDoc,
   userDocSchema,
   userWriteContext,
@@ -27,6 +27,16 @@ const returningUserChangesSchema = userDocSchema
     writeContext: true,
   })
   .partial();
+
+/**
+ * Reads a stored access document. A field that a newer version of the functions added is left
+ * out, and anything else that does not fit the schema is a fault.
+ */
+function readAccess(data: unknown): AccessDocument {
+  const parsed = parseStoredDocument(accessDocSchema, data);
+  if (!parsed.success) throw parsed.error;
+  return parsed.data;
+}
 
 /**
  * Called by the web application each time it starts with a signed-in account, so once for
@@ -52,8 +62,8 @@ export const sessionStart = defineCallable(sessionStartContract, {
     }
     const emailLower = normaliseEmail(context.verifiedEmail);
     const displayName = context.selfAssertedName;
-    const userReference = db.doc(paths.user(uid));
-    const accessReference = db.doc(paths.access(uid));
+    const userReference = db.doc(COLLECTIONS.users.docPath(uid));
+    const accessReference = db.doc(COLLECTIONS.access.docPath(uid));
     // One instant for everything this call writes, the audit entry included.
     const at = context.clock.now();
     const now = Timestamp.fromDate(at);
@@ -63,7 +73,7 @@ export const sessionStart = defineCallable(sessionStartContract, {
         transaction.get(userReference),
         transaction.get(accessReference),
       ]);
-      const existingAccess = accessSnapshot.exists ? accessDocSchema.parse(accessSnapshot.data()) : null;
+      const existingAccess = accessSnapshot.exists ? readAccess(accessSnapshot.data()) : null;
       if (userSnapshot.get("status") === "suspended" || existingAccess?.suspended === true) {
         throw new AppError("permission-denied", ACCOUNT_SUSPENDED_MESSAGE);
       }
@@ -110,7 +120,7 @@ export const sessionStart = defineCallable(sessionStartContract, {
         }
       } else {
         const user: UserDoc = userDocSchema.parse({
-          schemaVersion: USER_SCHEMA_VERSION,
+          schemaVersion: COLLECTIONS.users.schemaVersion,
           createdAt: now,
           updatedAt: now,
           createdBy: uid,
@@ -130,18 +140,15 @@ export const sessionStart = defineCallable(sessionStartContract, {
 
       if (existingAccess !== null) return { member: existingAccess.member, personId: existingAccess.personId };
 
-      const access: AccessDoc = accessDocSchema.parse({
-        schemaVersion: ACCESS_SCHEMA_VERSION,
+      const access: AccessDocument = accessDocSchema.parse({
+        schemaVersion: COLLECTIONS.access.schemaVersion,
         createdAt: now,
         updatedAt: now,
         createdBy: uid,
         updatedBy: uid,
         archivedAt: null,
         writeContext: userWriteContext(auditEventId),
-        member: false,
-        personId: null,
-        suspended: false,
-        sessionsValidAfter: null,
+        ...emptyAccess(),
       });
       transaction.create(accessReference, access);
       return { member: access.member, personId: access.personId };

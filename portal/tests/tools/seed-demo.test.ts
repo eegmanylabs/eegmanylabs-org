@@ -3,7 +3,7 @@
 import { spawnSync } from "node:child_process";
 import { createServer } from "node:net";
 import path from "node:path";
-import { accessDocSchema, userDocSchema } from "@eegml/shared";
+import { accessDocSchema, emptyAccess, userDocSchema } from "@eegml/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import { emulatorEnvironment } from "../../scripts/ports.mjs";
 import { DEMO_ACCOUNTS } from "../../tools/src/fixtures/demo-accounts";
@@ -113,6 +113,8 @@ describe("seed:demo", () => {
         suspended: false,
         sessionsValidAfter: null,
       });
+      // A demonstration account has been granted nothing.
+      expect(access).toEqual({ ...access, ...emptyAccess() });
     }
     expect((await adminDb.collection("users").get()).size).toBe(2);
     expect((await adminDb.collection("access").get()).size).toBe(2);

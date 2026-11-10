@@ -1,23 +1,95 @@
 // The registry of entity types: the kinds of record that a polymorphic reference (the pair
-// `entityType` and `entityId`) can point at, with the path of each (docs/DATA_MODEL.md,
-// section 1). Add a row here when a new kind of record can be referenced that way.
-import { paths } from "./paths";
+// `entityType` and `entityId`) can point at (docs/DATA_MODEL.md, section 1). The collection of
+// each type and the path of a referenced document are in collections.ts, next to the registry
+// they are checked against. Add a row here, and there, when a new kind of record can be
+// referenced that way.
 import { z } from "./zod";
 
 /**
- * | Entity type | Document          | Identifier         |
- * |-------------|-------------------|--------------------|
- * | `user`      | `users/{uid}`     | Authentication uid |
+ * | Entity type              | Document                                               |
+ * |--------------------------|--------------------------------------------------------|
+ * | `user`                   | `users/{uid}`                                          |
+ * | `person`                 | `persons/{personId}`                                   |
+ * | `institution`            | `institutions/{id}`                                    |
+ * | `group`                  | `groups/{groupKey}`                                    |
+ * | `programme`              | `programmes/{key}`                                     |
+ * | `laboratory`             | `laboratories/{laboratoryId}`                          |
+ * | `equipmentConfiguration` | `laboratories/{laboratoryId}/equipment/{configurationId}` |
+ * | `replication`            | `replications/{studyKey}`                              |
+ * | `hypothesis`             | `replications/{studyKey}/hypotheses/{hNN}`             |
+ * | `protocol`               | `replications/{studyKey}/protocols/{id}`               |
+ * | `protocolVersion`        | `replications/{studyKey}/protocolVersions/{id}`        |
+ * | `candidateStudy`         | `candidateStudies/{id}`                                |
+ * | `participation`          | `participations/{studyKey__laboratoryId}`              |
+ * | `recruitmentReport`      | `recruitmentReports/{id}`                              |
+ * | `taskList`               | `taskLists/{id}`                                       |
+ * | `task`                   | `tasks/{id}`                                           |
+ * | `page`                   | `pages/{pageId}`                                       |
+ * | `thread`                 | `threads/{id}`                                         |
+ * | `comment`                | `threads/{id}/comments/{id}`                           |
+ * | `attachment`             | `attachments/{id}`                                     |
+ * | `database`               | `databases/{databaseId}`                               |
+ * | `databaseRow`            | `databases/{databaseId}/rows/{rowId}`                  |
+ * | `view`                   | `views/{viewId}`                                       |
+ * | `dashboard`              | `dashboards/{id}`                                      |
+ * | `storageEndpoint`        | `storageEndpoints/{key}`                               |
+ * | `dataset`                | `datasets/{datasetKey}`                                |
+ * | `processingRun`          | `processingRuns/{id}`                                  |
+ * | `manuscript`             | `manuscripts/{id}`                                     |
+ * | `contributorTable`       | `contributorTables/{id}`                               |
+ * | `contributor`            | `contributors/{id}`                                    |
+ * | `decision`               | `decisions/{id}`                                       |
+ * | `risk`                   | `risks/{id}`                                           |
+ * | `incident`               | `incidents/{id}`                                       |
+ * | `meeting`                | `meetings/{id}`                                        |
+ * | `progressReport`         | `progressReports/{id}`                                 |
+ * | `documentLink`           | `documentLinks/{id}`                                   |
+ * | `source`                 | `sources/{key}`                                        |
+ * | `importBatch`            | `importBatches/{batchId}`                              |
+ *
+ * The identifier of an entity in a subcollection joins the identifier of its parent document
+ * to its own with two underscores, as in `AmodioJost2007__h01` for a hypothesis. Build it with
+ * `nestedEntityId` and resolve it with `entityPath`.
  */
-const ENTITY_PATHS = {
-  user: paths.user,
-} as const satisfies Record<string, (entityId: string) => string>;
-
-export const ENTITY_TYPES = Object.keys(ENTITY_PATHS) as readonly EntityType[];
-export type EntityType = keyof typeof ENTITY_PATHS;
-export const entityTypeSchema = z.enum(Object.keys(ENTITY_PATHS) as [EntityType, ...EntityType[]]);
-
-/** The path of the document that an entity reference points at. */
-export function entityPath(entityType: EntityType, entityId: string): string {
-  return ENTITY_PATHS[entityType](entityId);
-}
+export const ENTITY_TYPES = [
+  "user",
+  "person",
+  "institution",
+  "group",
+  "programme",
+  "laboratory",
+  "equipmentConfiguration",
+  "replication",
+  "hypothesis",
+  "protocol",
+  "protocolVersion",
+  "candidateStudy",
+  "participation",
+  "recruitmentReport",
+  "taskList",
+  "task",
+  "page",
+  "thread",
+  "comment",
+  "attachment",
+  "database",
+  "databaseRow",
+  "view",
+  "dashboard",
+  "storageEndpoint",
+  "dataset",
+  "processingRun",
+  "manuscript",
+  "contributorTable",
+  "contributor",
+  "decision",
+  "risk",
+  "incident",
+  "meeting",
+  "progressReport",
+  "documentLink",
+  "source",
+  "importBatch",
+] as const;
+export const entityTypeSchema = z.enum(ENTITY_TYPES);
+export type EntityType = z.output<typeof entityTypeSchema>;

@@ -85,6 +85,16 @@ describe("requireRunningEmulators", () => {
     expect(refusal.message).not.toContain("PORTAL_PORT_BASE");
   });
 
+  it("asks only for the emulators a tool needs", async () => {
+    const target = { projectId: "demo-eegml", firestoreHost: await listen(), authHost: await closedAddress() };
+    await expect(requireRunningEmulators(target, {}, 1_000, ["firestore"])).resolves.toBeUndefined();
+    const withoutFirestore = { ...target, firestoreHost: await closedAddress(), authHost: await listen() };
+    const refusal = await requireRunningEmulators(withoutFirestore, {}, 1_000, ["firestore"]).catch((error) => error);
+    expect(refusal).toBeInstanceOf(ToolRefusal);
+    expect(refusal.message).toContain("(Firestore)");
+    expect(refusal.message).not.toContain("(Authentication)");
+  });
+
   it("refuses an address that is not a host and a port", async () => {
     const target = { projectId: "demo-eegml", firestoreHost: "not-an-address", authHost: await listen() };
     await expect(requireRunningEmulators(target, {})).rejects.toBeInstanceOf(ToolRefusal);

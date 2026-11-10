@@ -1,18 +1,19 @@
 // Fixtures are synthetic: invented values on the example.org domain.
 import { describe, expect, it } from "vitest";
+import { accountStanding, emptyAccess } from "../access";
 import { DATA_ORIGINS } from "../data-origin";
 import type { FirestoreTimestamp } from "../timestamp";
-import { accessDocSchema, accountStanding } from "./access";
-import { auditEventSchema } from "./audit";
 import {
   APPEND_ONLY_BASE_FIELDS,
   DOCUMENT_BASE_FIELDS,
   isSystemActor,
+  parseStoredDocument,
   systemActor,
   systemWriteContext,
   userWriteContext,
 } from "./base";
-import { userDocSchema } from "./user";
+import { accessDocSchema, userDocSchema } from "./identity";
+import { auditEventSchema } from "./system";
 
 /** A stand-in with the shape both Firebase SDKs give a timestamp. */
 function timestamp(iso: string): FirestoreTimestamp {
@@ -48,13 +49,7 @@ const user = {
   dataOrigin: "live",
 };
 
-const access = {
-  ...base,
-  member: false,
-  personId: null,
-  suspended: false,
-  sessionsValidAfter: null,
-};
+const access = { ...base, ...emptyAccess() };
 
 describe("the standard fields", () => {
   it("are the ones the data model names", () => {
@@ -118,8 +113,16 @@ describe("userDocSchema", () => {
     expect(userDocSchema.parse(claimed)).toEqual(claimed);
   });
 
-  it("drops fields it does not know, so a newer writer does not break an older reader", () => {
-    expect(userDocSchema.parse({ ...user, addedLater: true })).toEqual(user);
+  it("drops fields it does not know when a document is read, so a newer writer does not break an older reader", () => {
+    const read = parseStoredDocument(userDocSchema, { ...user, addedLater: true });
+    expect(read.success && read.data).toEqual(user);
+  });
+
+  it("refuses a field it does not know when a document is written, so a misspelt field is never stored", () => {
+    expect(userDocSchema.safeParse({ ...user, addedLater: true }).success).toBe(false);
+    expect(userDocSchema.safeParse({ ...user, writeContext: { ...base.writeContext, addedLater: 1 } }).success).toBe(
+      false,
+    );
   });
 
   it.each([
@@ -146,8 +149,24 @@ describe("accessDocSchema", () => {
     expect(accessDocSchema.parse(suspended)).toEqual(suspended);
   });
 
+  it("accepts the resolved access set of a replication lead, with capabilities keyed in camelCase", () => {
+    const lead = {
+      ...access,
+      member: true,
+      personId: "person-synthetic-1",
+      leadReplicationIds: ["SyntheticStudy2001"],
+      scopeKeys: ["members", "rep:SyntheticStudy2001", "role:replication_lead", "user:uid-synthetic"],
+      manageScopeKeys: ["rep:SyntheticStudy2001"],
+      pendingRoles: [{ role: "lab_coordinator", scopeType: "laboratory", scopeId: "lab-synthetic-1" }],
+      capabilities: { directoryRead: ["programme"], replicationsManage: ["rep:SyntheticStudy2001"] },
+    };
+    expect(accessDocSchema.parse(lead)).toEqual(lead);
+  });
+
   it("carries no data origin: it is derived authorisation state, not a fact about the programme", () => {
-    expect(accessDocSchema.parse({ ...access, dataOrigin: "demo" })).toEqual(access);
+    expect(accessDocSchema.safeParse({ ...access, dataOrigin: "demo" }).success).toBe(false);
+    const read = parseStoredDocument(accessDocSchema, { ...access, dataOrigin: "demo" });
+    expect(read.success && read.data).toEqual(access);
   });
 
   it.each([
@@ -157,6 +176,15 @@ describe("accessDocSchema", () => {
     ["a missing suspension field", { suspended: undefined }],
     ["a missing session boundary", { sessionsValidAfter: undefined }],
     ["a session boundary that is not a timestamp", { sessionsValidAfter: 1_700_000_000 }],
+    ["a programme role that is none", { programmeRoles: ["replication_lead"] }],
+    ["a scope key in no known form", { scopeKeys: ["everyone"] }],
+    ["a capability under its dotted name", { capabilities: { "demographics.read": ["programme"] } }],
+    ["a capability that is not in the registry", { capabilities: { everythingManage: ["programme"] } }],
+    ["a capability held in no scope", { capabilities: { directoryRead: [] } }],
+    ["a capability stored as a flag", { capabilities: { directoryRead: true } }],
+    ["a pending role of an unknown kind", { pendingRoles: [{ role: "owner", scopeType: "programme", scopeId: "x" }] }],
+    ["a missing second-factor requirement", { secondFactorRequired: undefined }],
+    ["a missing list of led replications", { leadReplicationIds: undefined }],
   ])("rejects %s", (_label, change) => {
     expect(accessDocSchema.safeParse({ ...access, ...change }).success).toBe(false);
   });

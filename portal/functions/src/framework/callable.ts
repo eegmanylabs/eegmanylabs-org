@@ -4,8 +4,14 @@
 // otherwise, refuses suspended accounts and ended sessions, validates the input and the output
 // against the contract in @eegml/shared, and turns every failure into an error that is safe to
 // send to a browser.
-import type { AccessDoc, CallableContract, CallableInput, CallableOutput } from "@eegml/shared";
-import { accountStanding, FUNCTIONS_REGION, isFirestoreTimestamp, normaliseDisplayName, paths } from "@eegml/shared";
+import type { AccessDocument, CallableContract, CallableInput, CallableOutput } from "@eegml/shared";
+import {
+  accountStanding,
+  COLLECTIONS,
+  FUNCTIONS_REGION,
+  isFirestoreTimestamp,
+  normaliseDisplayName,
+} from "@eegml/shared";
 import type { Firestore } from "firebase-admin/firestore";
 import { logger as functionsLogger } from "firebase-functions";
 import { type CallableFunction, onCall } from "firebase-functions/https";
@@ -69,7 +75,7 @@ export interface IncomingCall {
 }
 
 /** What the pipeline needs to know from a caller's access document. */
-export type CallerAccess = Pick<AccessDoc, "suspended" | "sessionsValidAfter">;
+export type CallerAccess = Pick<AccessDocument, "suspended" | "sessionsValidAfter">;
 
 export interface CallableDependencies {
   readonly db: CallableContext["db"];
@@ -89,7 +95,7 @@ export function runningInEmulator(env: Record<string, string | undefined> = proc
  * the reason an account is locked out or let in.
  */
 export async function readCallerAccess(db: Firestore, uid: string): Promise<CallerAccess | null> {
-  const snapshot = await db.doc(paths.access(uid)).get();
+  const snapshot = await db.doc(COLLECTIONS.access.docPath(uid)).get();
   if (!snapshot.exists) return null;
   const boundary: unknown = snapshot.get("sessionsValidAfter");
   return {

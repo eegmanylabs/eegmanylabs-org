@@ -30,6 +30,8 @@ This starts the functions bundler in watch mode, the emulators and the Vite deve
 
 `npm run seed:demo`, run in a second terminal while the emulators are up, writes two fictitious accounts with their `users` and `access` documents. Each profile is labelled `dataOrigin: "demo"`, and every document names the command as its author (`system:seedDemo`). The command refuses to run unless the emulator variables are set, so it cannot touch a real project, and it says so in one line when the emulators of the port base are not running.
 
+`npm run seed:lookups`, run the same way, writes the lookup data that the application depends on: the programme, the statuses of replications, datasets and tasks, the eleven categories of participant counts with their definitions, the onboarding checklist and the fourteen CRediT contributor roles. The values are constants in `shared/src/seed/lookups.ts`. A document that already exists is never written again, so a second run performs no write, and a document whose values an administrator has changed is reported and left as it is. The command needs the Firestore emulator only and refuses any target that is not an emulator.
+
 The development server sends no Content-Security-Policy, because its hot reloading relies on inline scripts. To see the application exactly as it will be published, use the preview:
 
 ```bash
@@ -49,6 +51,7 @@ The preview builds the application and serves it with `scripts/pages-server.mjs`
 | `npm run test:rules` | Security-rules tests for Firestore and Cloud Storage | Starts the Firestore and Storage emulators |
 | `npm run test:functions` | Integration tests of the functions | Bundles the functions, starts the Authentication, Firestore and Functions emulators |
 | `npm run test:tools` | Integration tests of the command-line tools | Starts the Authentication and Firestore emulators |
+| `npm run test:seed-lookups` | The integration test of `seed:lookups` alone, which proves that a second run writes nothing | Starts the Firestore emulator and no other |
 | `npm run test:e2e` | Playwright tests against the built application, including the accessibility and security checks | Builds, starts all emulators and the preview server |
 | `npm test` | All of the test commands above, with one start of the emulators | Builds first |
 
@@ -123,7 +126,7 @@ The wrapper also works around one defect. When an outbound proxy is configured t
 
 | Path | Contents |
 |---|---|
-| `shared/` | `@eegml/shared`. Pure TypeScript with no Firebase imports: zod schemas of stored documents, collection paths, contracts of callable functions, identifier derivation, the capability matrix and constants such as the functions region |
+| `shared/` | `@eegml/shared`. Pure TypeScript with no Firebase imports: a zod schema for every stored document (`src/schemas/`, one file for each section of the data model), the collection registry (`src/collections.ts`), identifier derivation (`src/ids.ts`), roles, capabilities and the resolution of `access/{uid}` (`src/capabilities.ts`, `src/access.ts`), lookup data (`src/seed/`), contracts of callable functions and constants such as the functions region |
 | `web/` | `@eegml/web`. The single-page application: Vite, React, Tailwind CSS and Radix primitives |
 | `web/config/` | Build-time code: the build modes, the Content-Security-Policy, the reader of the design tokens and the Vite plugin that completes `index.html` and writes `404.html` |
 | `web/src/app/` | The shell, the route table, the navigation registry and the build configuration as the application sees it |
@@ -137,11 +140,11 @@ The wrapper also works around one defect. When an outbound proxy is configured t
 | `functions/src/framework/` | `defineCallable`, the audit helper, the error type and the Admin SDK set-up |
 | `functions/src/callables/` | One file per callable function |
 | `tools/` | `@eegml/tools`. Admin SDK command-line tools, run with `tsx` from a trusted environment |
-| `tests/rules/` | Security-rules tests |
+| `tests/rules/` | Security-rules tests, and the test of the registry-driven references and queries of the web data layer against the Firestore emulator |
 | `tests/functions/` | Integration tests of the functions, run against the emulators |
 | `tests/tools/` | Integration tests of the tools |
 | `tests/e2e/` | Playwright tests of the built application |
-| `tests/architecture/` | Tests that read the source tree: import boundaries, design rules, the contrast of every colour pair in use, the standard fields of every document schema, rules about what may be committed, and a production build whose output is read for anything that belongs to the emulators only |
+| `tests/architecture/` | Tests that read the source tree: import boundaries, design rules, the contrast of every colour pair in use, the standard fields of every document schema, the agreement of the collection registry with `docs/DATA_MODEL.md`, rules about what may be committed, and a production build whose output is read for anything that belongs to the emulators only |
 | `tests/support/` | Helpers shared by the suites that use the emulators |
 | `scripts/` | Port derivation, the emulator launcher, the stopping of whole process groups, the `firebase` wrapper, the development launcher and the preview server |
 | `firestore.rules`, `storage.rules`, `firestore.indexes.json` | Security rules and indexes |
@@ -158,15 +161,17 @@ Each kind of change has one place where it starts. The registries below are that
 
 | To add | Start in |
 |---|---|
-| A stored document or a field | The schema in `shared/src/schemas/`, built on the standard fields in `base.ts` and entered in `registry.ts`, the path in `shared/src/paths.ts`, then the rules and their tests |
+| A stored document or a field | `docs/DATA_MODEL.md`, the schema in `shared/src/schemas/`, built on the standard fields in `base.ts`, and the entry in the collection registry in `shared/src/collections.ts`, then the rules and their tests |
+| A document identifier that is derived from a natural key | A builder in `shared/src/ids.ts`, with a golden value in `shared/src/ids.test.ts` |
 | A kind of record that a polymorphic reference can point at | The registry in `shared/src/entities.ts` |
 | A callable function | A contract in `shared/src/callables.ts`, a file in `functions/src/callables/` that uses `defineCallable`, an export in `functions/src/index.ts`, and an integration test |
-| A kind of audit event | The registry in `shared/src/schemas/audit.ts` |
-| A capability | The matrix in `shared/src/capabilities.ts` |
+| A kind of audit event | The registry in `shared/src/schemas/system.ts` |
+| A capability | The registry and the default matrix in `shared/src/capabilities.ts`. `shared/src/access.ts` resolves them into `access/{uid}` and answers `can` |
+| Lookup data that a new database starts with | `shared/src/seed/lookups.ts`, which `npm run seed:lookups` writes |
 | A page | The route table in `web/src/app/router.tsx` |
 | A sidebar entry | The registry in `web/src/app/navigation.ts` |
 | A panel on Home | The registry in `web/src/pages/home/panels.ts` |
-| A read of live data | A typed reference in `web/src/data/refs.ts`, used through `useLiveDoc`. A hook for live queries is added to `web/src/data/live.ts`, on the same subscription cache, together with the first collection that the rules let a browser list |
+| A read of live data | Nothing new: `useLiveDocument` and `useLiveQuery` in `web/src/data/live.ts` serve every entry of the collection registry, with the converter built from its schema. A query is described as data (`web/src/data/query-spec.ts`), which is also its key in the subscription cache |
 | An interface primitive | `web/src/components/ui/`, and in the same change the page of interface components in `web/src/pages/dev/`, so the browser tests see it |
 | A colour, or a new combination of two colours | `web/src/styles/tokens.css`, and the table of pairs in `tests/architecture/contrast.test.ts` |
 | A command-line tool | A file in `tools/src/commands/` and an entry in the registry in `tools/src/cli.ts` |
@@ -190,7 +195,7 @@ Some things cannot be proven with the emulators and wait for a staging project. 
 
 Three further behaviours are verified on the emulators only. The Firestore emulator ends an open listener as soon as the rules refuse its account. Whether production does the same, or goes on delivering until the listener reconnects, is not known, and the page handles both: the second case is covered by unit tests alone. Callable functions accept browser calls only from the origins in the parameter `PORTAL_ORIGINS`, which is empty by default so that a deployment that forgets it fails closed. The emulator accepts every origin, so the restriction itself has not been exercised. The lifetime of six hours for a remembered sign-in request is a conservative reading of how long a link lasts. When it is too short, a link that still works asks for the address again, and nothing worse.
 
-The web application is currently one JavaScript file of about 1.2 MB, most of which is the Firestore SDK, so Vite prints a warning about its size. Splitting it by route becomes worthwhile when more pages exist.
+The web application is currently one JavaScript file of about 1.3 MB, most of which is the Firestore SDK, so Vite prints a warning about its size. Splitting it by route becomes worthwhile when more pages exist.
 
 ## Known advisories
 

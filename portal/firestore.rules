@@ -7,7 +7,7 @@ rules_version = '2';
 // span several documents, go through callable functions, which use the Admin SDK and are not
 // subject to these rules.
 //
-// Collection names match COLLECTIONS in portal/shared/src/paths.ts. Every allow statement has
+// Collection names match COLLECTIONS in portal/shared/src/collections.ts. Every allow statement has
 // a test in portal/tests/rules that proves the allow and proves the matching denials.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -31,7 +31,7 @@ service cloud.firestore {
 
     // EVERY allow statement goes through this helper, directly or through another helper, so a
     // suspended account and an ended session are refused everything on their next request.
-    // It is the decision `accountStanding` makes in portal/shared/src/schemas/access.ts, which
+    // It is the decision `accountStanding` makes in portal/shared/src/access.ts, which
     // callable functions apply, and the two change together. An account that has no access
     // document yet is active: it has been granted nothing. Cost: one document read.
     function isActive() {

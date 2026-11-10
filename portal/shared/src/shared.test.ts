@@ -1,11 +1,14 @@
 // Fixtures are synthetic: invented values on the example.org domain.
 import { describe, expect, it } from "vitest";
+import { capabilitiesOf, hasCapability } from "./access";
+import { isFirestoreBytes } from "./bytes";
 import { sessionStartContract } from "./callables";
-import { CAPABILITIES, capabilitiesOf, hasCapability } from "./capabilities";
+import { CAPABILITIES } from "./capabilities";
+import { COLLECTIONS, ENTITY_COLLECTIONS, entityPath } from "./collections";
 import { DEMO_PROJECT_ID, DEMO_PROJECT_PREFIX, FUNCTIONS_REGION } from "./constants";
-import { ENTITY_TYPES, entityPath } from "./entities";
+import { ENTITY_TYPES } from "./entities";
 import { DISPLAY_NAME_MAX_LENGTH, normaliseDisplayName, normaliseEmail } from "./identifiers";
-import { COLLECTIONS, paths } from "./paths";
+import { nestedEntityId } from "./ids";
 import { isFirestoreTimestamp } from "./timestamp";
 import { z } from "./zod";
 
@@ -72,22 +75,41 @@ describe("normaliseDisplayName", () => {
 
 describe("the entity registry", () => {
   it("resolves every entity type to a document path", () => {
-    expect(ENTITY_TYPES).toEqual(["user"]);
+    expect(ENTITY_TYPES).toContain("user");
+    expect(Object.keys(ENTITY_COLLECTIONS).sort()).toEqual([...ENTITY_TYPES].sort());
     expect(entityPath("user", "uid-1")).toBe("users/uid-1");
+    for (const entityType of ENTITY_TYPES) {
+      const entry = COLLECTIONS[ENTITY_COLLECTIONS[entityType]];
+      const nested = entry.parent !== null;
+      const ids = nested ? ["parent-1", "own-1"] : ["own-1"];
+      const expected = entry.path.replace(/\{[^}]+\}/g, () => ids.shift() ?? "");
+      expect(entityPath(entityType, nested ? nestedEntityId("parent-1", "own-1") : "own-1")).toBe(expected);
+    }
+  });
+
+  it("resolves an entity in a subcollection from the identifier of its parent joined to its own", () => {
+    expect(entityPath("hypothesis", "AmodioJost2007__h01")).toBe("replications/AmodioJost2007/hypotheses/h01");
+    expect(entityPath("equipmentConfiguration", "lab__0f3a__config-1")).toBe(
+      "laboratories/lab__0f3a/equipment/config-1",
+    );
+    expect(() => entityPath("hypothesis", "h01")).toThrow(RangeError);
   });
 });
 
 describe("paths", () => {
   it("builds document paths from the collection names", () => {
-    expect(paths.user("uid-1")).toBe(`${COLLECTIONS.users}/uid-1`);
-    expect(paths.access("uid-1")).toBe(`${COLLECTIONS.access}/uid-1`);
-    expect(paths.auditEvent("event-1")).toBe(`${COLLECTIONS.auditEvents}/event-1`);
+    expect(COLLECTIONS.users.docPath("uid-1")).toBe(`${COLLECTIONS.users.collectionPath()}/uid-1`);
+    expect(COLLECTIONS.access.docPath("uid-1")).toBe(`${COLLECTIONS.access.collectionPath()}/uid-1`);
+    expect(COLLECTIONS.auditEvents.docPath("event-1")).toBe(`${COLLECTIONS.auditEvents.collectionPath()}/event-1`);
+    expect(COLLECTIONS.users.collectionPath()).toBe("users");
+    expect(COLLECTIONS.access.collectionPath()).toBe("access");
+    expect(COLLECTIONS.auditEvents.collectionPath()).toBe("auditEvents");
   });
 
   it.each(["", "a/b", ".", ".."])(
     "refuses the identifier %j, which would change the shape of the path",
     (identifier) => {
-      expect(() => paths.user(identifier)).toThrow(RangeError);
+      expect(() => COLLECTIONS.users.docPath(identifier)).toThrow(RangeError);
     },
   );
 });
@@ -102,10 +124,20 @@ describe("isFirestoreTimestamp", () => {
   });
 });
 
-describe("the capability matrix", () => {
+describe("isFirestoreBytes", () => {
+  it("recognises the byte strings of both SDKs and nothing else", () => {
+    expect(isFirestoreBytes(new Uint8Array([1, 2, 3]))).toBe(true);
+    expect(isFirestoreBytes({ toUint8Array: () => new Uint8Array() })).toBe(true);
+    expect(isFirestoreBytes([1, 2, 3])).toBe(false);
+    expect(isFirestoreBytes("AQID")).toBe(false);
+    expect(isFirestoreBytes(null)).toBe(false);
+  });
+});
+
+describe("what the interface shows", () => {
   const signedOut = { signedIn: false, access: null };
   const signedIn = { signedIn: true, access: null };
-  const member = { signedIn: true, access: { member: true, personId: "person-synthetic-1" } };
+  const member = { signedIn: true, access: { suspended: false, capabilities: {} } };
 
   it("gives a signed-out visitor nothing", () => {
     expect(capabilitiesOf(signedOut).size).toBe(0);

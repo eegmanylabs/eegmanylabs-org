@@ -4,6 +4,7 @@ import {
   accessDocSchema,
   auditEventSchema,
   DISPLAY_NAME_MAX_LENGTH,
+  emptyAccess,
   isPublicErrorDetails,
   sessionStartContract,
   userDocSchema,
@@ -90,6 +91,8 @@ describe("sessionStart", () => {
       suspended: false,
       sessionsValidAfter: null,
     });
+    // A new account has been granted nothing: no role, no scope and no capability.
+    expect(access).toEqual({ ...access, ...emptyAccess() });
     expect(access).not.toHaveProperty("dataOrigin");
 
     const events = await auditEvents();
@@ -177,8 +180,10 @@ describe("sessionStart", () => {
       updatedBy: "system:claims",
       archivedAt: null,
       writeContext: { origin: "system", depth: 0, correlationId: null, causationId: null, auditEventId: null },
+      ...emptyAccess(),
       member: true,
       personId: "person-synthetic-1",
+      scopeKeys: ["members", `user:${user.uid}`],
       suspended: false,
       sessionsValidAfter: null,
     };
