@@ -1,3 +1,5 @@
-{# Members' portal gate: the full public address of the portal for each build environment, beginning with https://.
-   While the value for the environment being built is empty, nothing about the portal is rendered and no /portal/ page is built. #}
+{# Members' portal gate: the full public address of the portal for each build environment.
+   While the value for the environment being built is empty, nothing about the portal is rendered and no /portal/ page is built.
+   A value opens the gate only if it begins with https://, names a host with a dot in it and contains no spaces.
+   Any other value keeps the gate closed. Read section 5.7 of README.md before changing a value. #}
 {% set portal_addresses = {"production": "", "staging": ""} %}

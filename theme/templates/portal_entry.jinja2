@@ -5,6 +5,10 @@
   holds everything the public pages show about the portal: the navigation link, the footer link, the sitemap card
   and their style rules. The /portal/ page itself is content/portal/index.md, rendered by portal.jinja2.
 
+  The gate fails closed. A value opens it only if it is a full address: it begins with https://, names a host
+  with a dot in it and contains no spaces. Any other value is treated as empty, so that a mistyped value cannot
+  publish an entry that leads nowhere.
+
   While the gate is closed, `address` is empty, the templates that import this file render nothing from it, and the
   "portal" content node is taken out of the build tree below. Syrinx renders the home page before it walks the
   other content branches, so no /portal/ directory, page or sitemap entry is created.
@@ -14,6 +18,10 @@
 #}
 {% from 'settings.jinja2' import portal_addresses %}
 {% set address = (portal_addresses.get(index.meta.environment) or "")|trim %}
+{% set address_host = address[8:].split("/")[0] %}
+{% if not (address[:8]|lower == "https://" and "." in address_host and address.split()|length == 1) %}
+  {% set address = "" %}
+{% endif %}
 {% if not address %}
   {% for node in root.branches|selectattr("name", "equalto", "portal")|list %}
     {% set _ = root.branches.remove(node) %}
@@ -38,13 +46,21 @@
       .has-portal-entry .nav-portal svg { width: 16px; height: 16px; flex: 0 0 auto; }
       .has-portal-entry .mobile-nav a.nav-portal { justify-content: space-between; gap: 16px; margin-top: 28px; border-top: 1px solid rgba(255,255,255,.22); }
       .has-portal-entry .mobile-nav a.nav-portal svg { width: 22px; height: 22px; color: var(--aqua); }
-      /* Nine rows can be taller than the screen, so the open menu has to scroll. */
+      /* Nine rows can be taller than the screen, so the open menu has to scroll. The scroll margin keeps the whole
+         focus ring of a link in view when the keyboard scrolls the menu. */
       .has-portal-entry .mobile-menu { overflow-y: auto; overscroll-behavior: contain; }
-      /* On short screens the rows are tightened so that the entry is in view when the menu opens. */
+      .has-portal-entry .mobile-nav a { scroll-margin-block: 10px; }
+      /* On short screens the rows are tightened in two steps so that the entry is in view when the menu opens.
+         The menu is 773px tall as designed, 651px after the first step and 567px after the second. */
       @media (max-height: 780px) {
         .has-portal-entry .mobile-nav { margin-top: 28px; }
         .has-portal-entry .mobile-nav a { min-height: 56px; }
         .has-portal-entry .mobile-nav a.nav-portal { margin-top: 20px; }
+      }
+      @media (max-height: 650px) {
+        .has-portal-entry .mobile-nav { margin-top: 20px; }
+        .has-portal-entry .mobile-nav a { min-height: 48px; }
+        .has-portal-entry .mobile-nav a.nav-portal { margin-top: 16px; }
       }
       @media (min-width: 760px) {
         .has-portal-entry .desktop-nav a.nav-portal { display: inline-flex; align-items: center; gap: 7px; padding: 8px 13px; border: 1px solid var(--aqua-deep); border-radius: 8px; color: var(--aqua-deep); font-weight: 500; transition: background 160ms ease, color 160ms ease, transform 160ms ease; }

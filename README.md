@@ -64,7 +64,7 @@ The site is built from Markdown content, TSV datasets, Jinja templates, CSS, Jav
 | Documents | `assets/pdfs/` | Publication PDFs and supporting files shown through the site. |
 | Deployment | `.github/workflows/deploy.yml`, `.do/app.yml`, `Dockerfile` | Build, containerisation, and DigitalOcean deployment. |
 
-The root page is composed in `theme/templates/root.jinja2`. Most section pages are routed through `theme/templates/page.jinja2`. A small set of pages use dedicated layouts, including About, Contact, Members and Network Map, Partners, Privacy, Sitemap, and related-project detail pages.[4]
+The root page is composed in `theme/templates/root.jinja2`. Most section pages are routed through `theme/templates/page.jinja2`. A small set of pages use dedicated layouts, including About, Contact, Members and Network Map, Partners, Privacy, Sitemap, and related-project detail pages.[4] One page stands outside this routing: the forwarding page for the members’ portal at `/portal/` has a standalone template, `theme/templates/portal.jinja2`, and is built only while the gate described in section 5.7 is open.
 
 ## 3. Visual system and non-negotiable design rules
 
@@ -258,23 +258,53 @@ Partner names, descriptions, logos, and URLs currently live in `theme/templates/
 
 The members’ portal is a separate application with an address of its own. The public site only points to it: a Members’ portal action in the desktop navigation and the mobile menu, a link in the footer base row, a card on the Sitemap page, and a small page at `/portal/` that forwards visitors to the portal’s address.
 
-The whole entry sits behind one gate, the portal’s address for each build environment in `theme/templates/settings.jinja2`:
+The whole entry sits behind one gate, the portal’s address for each build environment in `theme/templates/settings.jinja2`. With the gate closed for both environments, the line reads:
 
 ```jinja
 {% set portal_addresses = {"production": "", "staging": ""} %}
 ```
 
-While the value for the environment being built is empty, the build contains nothing about the portal: no links, no card, no style rules, no `/portal/` page, and no sitemap entry. The built site is then file for file what it was before the entry existed. Both values are empty at present.
+While the value for the environment being built is empty, the build contains nothing about the portal: no links, no card, no style rules, no `/portal/` page, and no sitemap entry. The built site is then file for file what it was before the entry existed. That line is the only record of whether the gate is open. This guide does not repeat the current values.
+
+A value opens the gate only if it is a full address: it begins with `https://`, names a host with a dot in it, and contains no spaces. Any other value, such as `portal.example.org` without `https://`, is treated as empty and keeps the gate closed, so that a mistyped value cannot publish an entry that leads nowhere. With the gate open for staging only, the line looks like this, where `STAGING-PORTAL-HOST` stands for the host name of the staging portal:
+
+```jinja
+{% set portal_addresses = {"production": "", "staging": "https://STAGING-PORTAL-HOST/"} %}
+```
+
+Keep the quotation marks and end the address with a slash. The two environments can point to different portal addresses.
 
 | Part | Source |
 |---|---|
 | Gate | `theme/templates/settings.jinja2` |
 | Navigation link, footer link, Sitemap card, and their style rules | `theme/templates/portal_entry.jinja2` |
+| Where those parts are placed on the pages | `theme/templates/master.jinja2` for the style rules, both navigation menus, and the footer link. `theme/templates/site_map_page.jinja2` for the card. |
 | Forwarding page | `content/portal/index.md` and `theme/templates/portal.jinja2` |
+
+The forwarding page is standalone. `portal.jinja2` does not extend `master.jinja2`, so a later change to the shared head, fonts, or header in `master.jinja2` does not reach `/portal/`. Repeat such a change in `portal.jinja2` if the forwarding page should have it.
 
 > **Opening the gate is the last step of the portal rollout.** Do it only after the portal is live at its confirmed address and the wording of the Privacy page has been reviewed. `content/privacy/index.md` currently states that the site does not provide user accounts.
 
-To open the gate, enter the full address, beginning with `https://`, as an ordinary change through the update route in section 1. Set `staging` first, review the result on staging, and set `production` only after that review. The two environments can point to different portal addresses. Check the header at 375, 1219, and 1220 pixels wide, the mobile menu on a short screen, the footer, the Sitemap page, and that `/portal/` forwards to the portal. With the entry present the header holds nine items, so the menu button replaces the row of links below 1220 pixels instead of below 760 pixels.
+Open the gate in three stages through the update route in section 1. Set `production` only after the staging review, in the same pull request or a later one.
+
+| Stage | Action | Stop when |
+|---|---|---|
+| 1. Staging | Enter the staging portal’s address as the `staging` value and leave `production` empty. Build locally, open the pull request, and review `eegmanylabs.dev`. | The staging checks below pass. |
+| 2. Production, before merging | Enter the production portal’s address as the `production` value. The staging site is always built with the `staging` value, so it never shows the `production` value. Check that value on your own computer with the commands below. | `http://localhost:8000/portal/` takes the browser to the production portal. |
+| 3. Production, after merging | Wait for the Deploy workflow for `main` to finish, then open `https://eegmanylabs.org/portal/` in a private browser window. | The public site shows the entry, and `/portal/` forwards to the portal. |
+
+Staging checks: the header at 375, 1219, and 1220 pixels wide, the mobile menu on a short screen, the footer, the Sitemap page, and that `/portal/` forwards to the staging portal. With the entry present the header holds nine items, so the menu button replaces the row of links below 1220 pixels instead of below 760 pixels.
+
+The production check in stage 2 builds the site exactly as the production deployment will:
+
+```bash
+syrinx -c -e production .
+python -m http.server 8000 --directory dist
+```
+
+Open `http://localhost:8000/portal/` and confirm that the browser arrives at the production portal. The address the public site will use is also written in `dist/portal/index.html`, in the line that begins `<meta http-equiv="refresh"`. If the build has no `dist/portal/` folder, the value was not accepted as an address: correct it and build again. Afterwards, stop the server with `Ctrl+C` and remove the generated files as described in section 4.4.
+
+To close the gate again, set the value for that environment back to `""` through the same route, or revert the commit as described in section 7.4. The next build for that environment then contains nothing about the portal.
 
 Two details explain the structure. The style rules for the entry live in `portal_entry.jinja2` and not in `index.css`, because `index.css` is copied into every build and must not change while the gate is closed. Syrinx has no setting that skips a content page, so `portal_entry.jinja2` removes the portal page from the build while the gate is closed. This relies on Syrinx `0.0.15` building the homepage before the other pages. If the Syrinx version changes, build with both values empty and confirm that `dist/portal/` does not exist.
 
@@ -378,6 +408,7 @@ Use concise, truthful commit messages. Do not mention external design references
 | The hero appears static | Autoplay policy, video encoding, or reduced-motion preference | Verify the muted and playsinline attributes, test on a second device, and respect reduced-motion behaviour. |
 | The Contact form does not send | This is expected if no email client is configured | The form opens a `mailto:` link. It does not send messages through the site. |
 | Staging does not change | The pull request workflow did not run or deploy is still in progress | Check GitHub Actions, then refresh staging after the deployment has succeeded. |
+| The Members’ portal entry does not appear after an address was entered | The value is not a full `https://` address, or it was entered for the other environment | Compare the line in `theme/templates/settings.jinja2` with section 5.7, then rebuild. |
 
 ## 9. Quality standard before every release
 
