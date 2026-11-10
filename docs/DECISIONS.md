@@ -66,11 +66,17 @@ A laboratory profile holds facts about the laboratory. A participation document 
 
 A report is created once and never edited or deleted, which security rules enforce. A correction is a new report that names the report it corrects. Counts are stored by category and by modality, where the modalities are main experiment, resting state and unique participants. A total number of participants is never produced by adding main-experiment and resting-state counts. Unknown values are absent and are never treated as zero. Replication-level figures found in historical workbooks are stored as historical aggregates and are kept apart from live reports.
 
-## D-010 Pages use a block editor with Yjs documents stored in Firestore
+## D-010 Pages use the BlockNote editor with Yjs documents stored in Firestore
 
-**Status:** provisional, pending the editor spike.
+**Status:** accepted. The editor spike verified the design on the emulators.
 
-Workspace pages use an established block editor with slash commands, drag handles and nested blocks. Concurrent editing uses Yjs, a conflict-free replicated data type, with updates stored as Firestore documents and delivered to other editors through realtime listeners, so no WebSocket service has to be operated. Version history is a series of stored snapshots, and restoring a version writes a new forward change.
+Workspace pages use BlockNote, an established block editor with slash commands, drag handles, nested blocks, tables and custom blocks. Only its packages under the Mozilla Public Licence are used. The packages whose names begin with `xl-` are licensed under the GNU General Public Licence or a commercial licence and are not used.
+
+Concurrent editing uses Yjs, a conflict-free replicated data type. Each editor appends its updates as Firestore documents and receives the updates of others through realtime listeners, so no WebSocket service has to be operated. The spike showed two browsers typing at once in different blocks, in the same paragraph and at the same position converging on identical content, edits made offline reconciling on reconnection, and content surviving a reload. Accumulated updates are merged into a snapshot by a client transaction that any editor may run, and race tests showed that no concurrent update is lost. Version history is a series of named snapshots, and restoring one writes a new forward change.
+
+Comments are anchored by positions stored in the Firestore thread document, because the editor's built-in anchoring writes a mark into the page content, which a person with comment-only rights is not allowed to do. Security rules give viewers read access only, let commenters write comments only, let editors append updates, and keep every update document immutable.
+
+Two continuous typists used about 780 writes and 1,560 reads an hour at the recommended settings, well inside the daily allowance. Three matters carry into the build. Two defects in the pinned editor version can break collaboration and are covered by small tested guards that must ship with it. The formatting toolbar and side menu are not fully reachable from the keyboard and need work to meet the accessibility standard. The comment anchoring depends on a semi-internal part of the editor that must be re-checked on every upgrade.
 
 ## D-011 Views are computed in the browser over one authoritative set of documents
 
