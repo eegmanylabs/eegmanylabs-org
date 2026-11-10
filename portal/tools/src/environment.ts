@@ -47,6 +47,67 @@ export function requireEmulatorTarget(env: Environment = process.env): EmulatorT
   return { projectId, firestoreHost, authHost };
 }
 
+/** Where an importer may write: the emulators, or a real project that the operator has named in full. */
+export type ImportTarget =
+  | ({ readonly kind: "emulator" } & EmulatorTarget)
+  | { readonly kind: "production"; readonly projectId: string };
+
+export interface ImportTargetRequest {
+  /** True when the operator gave the production flag. */
+  readonly production: boolean;
+  /** The project the operator named beside the flag. */
+  readonly projectId?: string;
+}
+
+const EMULATOR_VARIABLES = ["FIRESTORE_EMULATOR_HOST", "FIREBASE_AUTH_EMULATOR_HOST"] as const;
+
+/**
+ * Decides where an importer may write, or refuses.
+ *
+ * Without the production flag the answer is the emulator or a refusal, exactly as for every
+ * other tool. A real project is reached only when the operator asks for it three times over:
+ * with the flag, with the identifier of the project, and with credentials in the environment.
+ * Anything that leaves the target in doubt is refused: emulator variables beside the flag, a
+ * demonstration project, or a project in the environment that differs from the one named.
+ */
+export function requireImportTarget(request: ImportTargetRequest, env: Environment = process.env): ImportTarget {
+  if (!request.production) {
+    if (request.projectId !== undefined) {
+      throw new ToolRefusal(
+        "Refusing to run: --project names a real project and is read only together with --production.",
+      );
+    }
+    return { kind: "emulator", ...requireEmulatorTarget(env) };
+  }
+  const emulators = EMULATOR_VARIABLES.filter((name) => env[name]?.trim());
+  if (emulators.length > 0) {
+    throw new ToolRefusal(
+      `Refusing to run: --production was given while ${emulators.join(" and ")} ${emulators.length === 1 ? "is" : "are"} set, ` +
+        "so the target is in doubt. Run the command outside the emulator environment, or leave the flag out.",
+    );
+  }
+  const projectId = request.projectId?.trim() ?? "";
+  if (projectId === "") {
+    throw new ToolRefusal("Refusing to run: --production needs the project named with --project <identifier>.");
+  }
+  if (projectId.startsWith(DEMO_PROJECT_PREFIX)) {
+    throw new ToolRefusal(
+      `Refusing to run: "${projectId}" is a demonstration project, which exists in the emulators only.`,
+    );
+  }
+  const inEnvironment = env.GCLOUD_PROJECT?.trim() || env.GOOGLE_CLOUD_PROJECT?.trim();
+  if (inEnvironment && inEnvironment !== projectId) {
+    throw new ToolRefusal("Refusing to run: the project in the environment is not the project named with --project.");
+  }
+  if (!env.GOOGLE_APPLICATION_CREDENTIALS?.trim()) {
+    throw new ToolRefusal(
+      "Refusing to run: --production needs credentials, and GOOGLE_APPLICATION_CREDENTIALS is not set. " +
+        "An import against a real project is run by a programme administrator, with short-lived credentials.",
+    );
+  }
+  return { kind: "production", projectId };
+}
+
 /** Whether something accepts connections at "host:port". */
 function accepts(address: string, timeoutMs: number): Promise<boolean> {
   const separator = address.lastIndexOf(":");

@@ -59,6 +59,41 @@ Every command that needs emulators starts them through `firebase emulators:exec`
 
 A run can be interrupted at any point. `scripts/emulators.mjs` starts the Firebase tools in a process group of their own and, on an interrupt or a termination signal, stops that whole group: the emulators, the test runner, the preview server and the browser. It asks politely first, then insists after fifteen seconds, and it only ends once nothing of the run is left. The Firestore emulator runs outside that group, because the Firebase tools start it in a session of its own. The tools stop it themselves, and the launcher follows up on it directly if they have not done so in time. `scripts/process-group.mjs` holds that logic and `scripts/process-group.test.mjs` tests it with a real process tree.
 
+### Security rules and their tests
+
+`firestore.rules` implements the collection registry, `shared/src/collections.ts`, for the entries whose `enforcement` is `enforced`. Every other entry is `deniedUntilBuilt`: no rule names it, so every client is refused every read and write until the phase that builds its feature writes its rules. `storage.rules` denies everything until attachments are built.
+
+The rules are tested from the registry, so a rule cannot drift from it unnoticed.
+
+| File | What it proves |
+|---|---|
+| `tests/rules/matrix.test.ts` | Every kind of caller of `tests/rules/world.ts`, from a caller who is not signed in to a programme administrator with and without a second factor, against every entry of the registry: a read, a list with and without a constraint, a list across parents, a create, an update and a delete. The expected answer of each request comes from `tests/rules/policy.ts`, which reads the registry and never the rules file. Its closing tests fail when an entry has no fixture, when a granted operation was never allowed or never refused, and when an allow statement of the rules file was never granted or never refused |
+| `tests/rules/write-envelope.test.ts` | For every entry a client may write: a forged author, time, version or context, a missing or unexpected key, the provenance of an import, and a change to each field that the registry keeps from clients, are all refused |
+| `tests/rules/access-tiers.test.ts` | Suspension and ended sessions, the second factor, the split of a person into directory, contact and special-category documents, and the lists a scoped caller must constrain |
+| `tests/rules/collection-rules.test.ts` | What is special to one collection: field whitelists, the shapes of laboratories, participations, checklist items, hypotheses and correction requests, references that must exist and scope that is inherited |
+| `tests/rules/queries.test.ts` | Every query of the catalogue in `tests/rules/queries.ts` is accepted for its caller and refused without the clause that limits it to a scope |
+| `tests/rules/storage.rules.test.ts` | Every kind of caller is refused every operation on Cloud Storage |
+| `tests/rules/hardening.test.ts` | What holds for every block alike: a client creates a record with an opaque identifier only under an identifier that Firestore generated, an archived record is frozen and is restored by whoever archived it or by the programme, the verbatim source values of an imported record stay as the source gave them, the value checks agree with the shared schemas, and the largest write of each collection stays within the 1000 expressions that a request may evaluate |
+| `tests/rules/redteam/` | The attacks of two red-team reviews, kept as regression tests. The files beginning with `exfiltration-and-escalation-` try to read what a caller may not read and to gain rights, and those beginning with `integrity-and-audit-` try to corrupt a record or to shed the name on it. Each test states the secure behaviour, and each attack stands beside a control that proves the honest request is accepted |
+| `tests/architecture/rules-source.test.ts` | Without an emulator: every match block belongs to one enforced entry, the methods it allows are the ones the registry opens, every list of fields in the rules equals its schema, every allow statement starts by asking whether the account may act, every create of a record with an opaque identifier asks for a generated one, and every entry with verbatim source values keeps them on imported documents |
+| `tests/architecture/indexes.test.ts` | `firestore.indexes.json` holds exactly the composite indexes, the collection-group indexes and the exemptions that the catalogue of queries and the registry call for. The emulator does not enforce indexes, so this is the only check they have |
+
+To write the rules of an entry that is `deniedUntilBuilt`: set its `enforcement` to `enforced`, write its match block with the worst-case number of documents it reads in a comment, add its fixture to `tests/rules/fixtures.ts`, add the queries that its scoped lists need to `tests/rules/queries.ts`, and add tests of whatever is special to it. The matrix, the envelope attacks and the checks of the rules file then cover it without further work.
+
+A block that lets a client write holds to five principles, which the red-team reviews established and `tests/rules/hardening.test.ts` checks across collections.
+
+| Principle | In the rules |
+|---|---|
+| A document that the rules accept is a document its schema accepts | Every field a client may set is checked for its type, its enumeration and its cap with the helpers of the section "Values". A rule cannot iterate: a list of texts is checked as a whole with `strings`, a map of plain values with `customValues`, and a field whose elements no rule can check (a list of maps, a free map) is entered in `functionOnlyFields` of the registry |
+| A reference stays where it belongs | A reference that a write introduces names a document that exists, and a document of the same replication or laboratory wherever the record is read beyond its scope. A rule asks for a parent with `get() != null` before it reads a field of it, because `a \|\| b` holds when `a` fails and `b` is true |
+| A signature covers what it signs | A review, an approval, a completion and an acknowledgement name the caller and the request time. What the signature covers changes only together with it, and whoever is under review does not sign |
+| A decision belongs to whoever makes it | What the programme decides, what a machine checks and what imports find a record again by are `functionOnlyFields`: a callable function writes them with their audit entry or their identity key |
+| An identifier that a client chooses is one that Firestore generated | `autoId` on every create where the registry says `auto`, so that no client takes an identifier that an importer derives. In a test, `autoId("label")` of `tests/rules/world.ts` names a new record, and `createAt` creates one under an identifier of the test's own choosing where the identifier itself is under attack |
+
+A request may evaluate 1000 rule expressions, a documented limit of Firestore that the emulator enforces as well. Every check costs some of them whether its field is present or not, and every use of `access()` is evaluated again, which is why the helpers that decide who the caller is take the access document as an argument. The largest write of each collection is in `tests/rules/hardening.test.ts`: extend it when a block gains a field, and it fails when the block has outgrown the limit.
+
+The emulator keeps every value of every rule expression it evaluates, so the matrix collects that record every twelve entries and makes the emulator forget it. Each of these files uses a project identifier of its own, all beginning with `demo-`.
+
 The suites that run against emulators are Vitest projects defined in `vitest.config.ts`. To run one test file while you work on it, start the emulators with `npm run emulators` and, in a second terminal, run for example `node scripts/emulators.mjs run npx vitest run --project functions tests/functions/sessionStart.test.ts`.
 
 ## Build modes
@@ -140,11 +175,11 @@ The wrapper also works around one defect. When an outbound proxy is configured t
 | `functions/src/framework/` | `defineCallable`, the audit helper, the error type and the Admin SDK set-up |
 | `functions/src/callables/` | One file per callable function |
 | `tools/` | `@eegml/tools`. Admin SDK command-line tools, run with `tsx` from a trusted environment |
-| `tests/rules/` | Security-rules tests, and the test of the registry-driven references and queries of the web data layer against the Firestore emulator |
+| `tests/rules/` | Security-rules tests: the registry-driven matrix with its policy model, fixtures and synthetic world, the hand-written tests of special rules, the catalogue of scoped queries, and the test of the registry-driven references and queries of the web data layer against the Firestore emulator |
 | `tests/functions/` | Integration tests of the functions, run against the emulators |
 | `tests/tools/` | Integration tests of the tools |
 | `tests/e2e/` | Playwright tests of the built application |
-| `tests/architecture/` | Tests that read the source tree: import boundaries, design rules, the contrast of every colour pair in use, the standard fields of every document schema, the agreement of the collection registry with `docs/DATA_MODEL.md`, rules about what may be committed, and a production build whose output is read for anything that belongs to the emulators only |
+| `tests/architecture/` | Tests that read the source tree: import boundaries, design rules, the contrast of every colour pair in use, the standard fields of every document schema, the agreement of the collection registry with `docs/DATA_MODEL.md`, the agreement of the rules file and the index file with the registry, rules about what may be committed, and a production build whose output is read for anything that belongs to the emulators only |
 | `tests/support/` | Helpers shared by the suites that use the emulators |
 | `scripts/` | Port derivation, the emulator launcher, the stopping of whole process groups, the `firebase` wrapper, the development launcher and the preview server |
 | `firestore.rules`, `storage.rules`, `firestore.indexes.json` | Security rules and indexes |
@@ -162,6 +197,8 @@ Each kind of change has one place where it starts. The registries below are that
 | To add | Start in |
 |---|---|
 | A stored document or a field | `docs/DATA_MODEL.md`, the schema in `shared/src/schemas/`, built on the standard fields in `base.ts`, and the entry in the collection registry in `shared/src/collections.ts`, then the rules and their tests |
+| The rules of a collection | `firestore.rules`, after setting `enforcement` to `enforced` in the registry, with a fixture in `tests/rules/fixtures.ts`. "Security rules and their tests" above lists the steps |
+| A list query that is limited to a scope, or that filters on one field and sorts on another | The catalogue in `tests/rules/queries.ts`, and the index it calls for in `firestore.indexes.json` |
 | A document identifier that is derived from a natural key | A builder in `shared/src/ids.ts`, with a golden value in `shared/src/ids.test.ts` |
 | A kind of record that a polymorphic reference can point at | The registry in `shared/src/entities.ts` |
 | A callable function | A contract in `shared/src/callables.ts`, a file in `functions/src/callables/` that uses `defineCallable`, an export in `functions/src/index.ts`, and an integration test |

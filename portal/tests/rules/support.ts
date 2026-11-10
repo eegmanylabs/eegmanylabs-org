@@ -35,10 +35,19 @@ export const ACCOUNTS = {
 export type AccountName = keyof typeof ACCOUNTS;
 export type Caller = AccountName | "signedOut";
 
-export function createRulesEnvironment(): Promise<RulesTestEnvironment> {
-  const read = (file: string) => readFileSync(path.join(PORTAL_ROOT, file), "utf8");
+/** The text of a rules file of the portal. */
+export function readRulesFile(file: "firestore.rules" | "storage.rules"): string {
+  return readFileSync(path.join(PORTAL_ROOT, file), "utf8");
+}
+
+/**
+ * Loads the rules of the portal into the emulators. A suite that must not share documents, or
+ * the record of which rules were evaluated, with the other suites names a project of its own.
+ */
+export function createRulesEnvironment(projectId: string = RULES_PROJECT_ID): Promise<RulesTestEnvironment> {
+  const read = readRulesFile;
   return initializeTestEnvironment({
-    projectId: RULES_PROJECT_ID,
+    projectId,
     firestore: { rules: read("firestore.rules"), host: HOST, port: PORTS.firestore },
     storage: { rules: read("storage.rules"), host: HOST, port: PORTS.storage },
   });

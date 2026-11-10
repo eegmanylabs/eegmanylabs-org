@@ -7,7 +7,9 @@
 // and applies it.
 import type { CollectionKey, EntityRef, ReconciliationKind } from "@eegml/shared";
 import type { Firestore } from "firebase-admin/firestore";
+import type { PrivateConfig, PrivateSource } from "./config";
 import type { IdentityResolver } from "./identity";
+import type { ItemBuilders } from "./reconcile";
 import type { StudyResolver } from "./studies";
 
 /**
@@ -24,7 +26,16 @@ import type { StudyResolver } from "./studies";
  * | `filler`      | holds nothing except default values, such as unticked checkboxes  | no, counted               |
  * | `blank`       | holds nothing                                                     | no, counted               |
  */
-export const ROW_CLASSES = ["header", "banner", "data", "annotation", "derived", "placeholder", "filler", "blank"] as const;
+export const ROW_CLASSES = [
+  "header",
+  "banner",
+  "data",
+  "annotation",
+  "derived",
+  "placeholder",
+  "filler",
+  "blank",
+] as const;
 export type RowClass = (typeof ROW_CLASSES)[number];
 export type StoredRowClass = Exclude<RowClass, "filler" | "blank">;
 
@@ -61,6 +72,13 @@ export interface SourceRow {
   readonly labels: readonly string[];
   /** True for a cell that is recorded by itself, such as a footnote beside a data row. It counts as no row. */
   readonly cellLevel?: boolean;
+  /**
+   * The special-category cells of the row, verbatim, by the name of each cell. They are stored
+   * apart from the source record, where no client can read them. In `cells` the importer puts a
+   * marker with a keyed hash in their place, so that a changed value is a new revision of the
+   * row and nothing in the record, its hash or its identifier lets a reader confirm a guess.
+   */
+  readonly special?: Readonly<Record<string, RawCell>>;
 }
 
 export interface SourceTab {
@@ -112,6 +130,15 @@ export interface ImportInput {
   readonly observedOn: string;
   /** The commit at which a source held in a repository was read. */
   readonly commit?: string;
+}
+
+/** What an importer may use while it reads. A reading never contacts the database. */
+export interface ReadContext {
+  /**
+   * The secret of the keyed hash, for a row key that is built from a personal value such as the
+   * name of a contact. It never reaches a log or a document.
+   */
+  readonly secret: string;
 }
 
 /** A source row together with the source record that holds it. */
@@ -178,6 +205,8 @@ export interface ImportPlan {
   readonly items: readonly PlannedItem[];
   /** Data rows that are kept as source records only, each with the reason. */
   readonly rawOnly: ReadonlyMap<string, string>;
+  /** Data rows whose own record waits in the queue, although other documents may name them. */
+  readonly held: ReadonlySet<string>;
   readonly blocking: readonly BlockingCheck[];
 }
 
@@ -191,8 +220,31 @@ export interface PlanContext {
   readonly secret: string;
   readonly studies: StudyResolver;
   readonly identities: IdentityResolver;
+  /** The builders of reconciliation items, bound to the secret. */
+  readonly items: ItemBuilders;
   /** For reads that no resolver covers. An importer never writes through it. */
   readonly db: Firestore;
+}
+
+/**
+ * The registry entry of a source whose key the repository cannot list, because the key is
+ * derived from a private identifier: a contributor sheet. Everything in it is public.
+ */
+export interface DerivedSource {
+  readonly key: string;
+  readonly title: string;
+  readonly kind: "googleSheet" | "driveFile" | "repositoryTsv" | "quire" | "osf" | "other";
+  readonly authority: "historical" | "live" | "reference";
+  readonly syncPolicy: "oneOff" | "repeatable" | "scheduledPull" | "twoWay";
+  readonly accessStatus: "unknown" | "public" | "restricted" | "unreachable";
+  readonly notes?: string;
+}
+
+/** What the operator selects where one importer serves a family of sources. */
+export interface SourceSelection {
+  /** The name of the member in the private configuration, as `--sheet` states it. */
+  readonly selector: string | undefined;
+  readonly config: PrivateConfig;
 }
 
 /**
@@ -202,13 +254,27 @@ export interface PlanContext {
 export interface ImporterDefinition {
   /** The key of the importer, which the source registry names. */
   readonly key: string;
-  /** The key of the source in the registry: the lower-case letter for a lettered source. */
+  /**
+   * The key of the source in the registry: the lower-case letter for a lettered source. For an
+   * importer that serves a family of sources it is the key of the family until `select` has
+   * bound the importer to one member.
+   */
   readonly sourceKey: string;
   readonly summary: string;
   /** What `--input` names, for the usage text. */
   readonly inputDescription: string;
+  /**
+   * For an importer that serves a family of sources, each a source of its own, as the
+   * contributor sheets are: the importer of the one member that the operator selects. It
+   * refuses a member that the private configuration does not register.
+   */
+  readonly select?: (selection: SourceSelection) => ImporterDefinition;
+  /** The registry entry of the source, for a source that the repository cannot list. Its key is `sourceKey`. */
+  readonly source?: DerivedSource;
+  /** The private location of such a source. It reaches the location document of the registry and nothing else. */
+  readonly location?: PrivateSource;
   /** Reads the input and classifies every row. Never contacts the database. */
-  read(input: ImportInput): Promise<SourceReading>;
+  read(input: ImportInput, context: ReadContext): Promise<SourceReading>;
   /** Interprets the rows and returns the plan. */
   plan(context: PlanContext): Promise<ImportPlan>;
 }

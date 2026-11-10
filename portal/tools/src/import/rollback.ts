@@ -35,7 +35,8 @@ export async function rollbackBatch(db: Firestore, batchId: string, at: Date = n
   const batchReference = db.doc(COLLECTIONS.importBatches.docPath(batchId));
   const batch = await batchReference.get();
   if (!batch.exists) return { status: "notFound" };
-  if (batch.get("mode") !== "apply") return { status: "nothingToReverse", reason: "it is a preview, which writes no entity" };
+  if (batch.get("mode") !== "apply")
+    return { status: "nothingToReverse", reason: "it is a preview, which writes no entity" };
   if (batch.get("status") === "rolledBack") return { status: "nothingToReverse", reason: "it was rolled back already" };
 
   const log = await db.collection(COLLECTIONS.importBatchChanges.collectionPath(batchId)).get();
@@ -60,8 +61,11 @@ export async function rollbackBatch(db: Firestore, batchId: string, at: Date = n
   );
 
   const isItem = (path: string) => path.startsWith(ITEMS_PREFIX);
-  const unchangedSince = (state: (typeof states)[number]) => sameValue(current.get(state.path)?.data ?? null, state.after);
-  const changedDocuments = states.filter((state) => !isItem(state.path) && !unchangedSince(state)).map((state) => state.path);
+  const unchangedSince = (state: (typeof states)[number]) =>
+    sameValue(current.get(state.path)?.data ?? null, state.after);
+  const changedDocuments = states
+    .filter((state) => !isItem(state.path) && !unchangedSince(state))
+    .map((state) => state.path);
   if (changedDocuments.length > 0) return { status: "refused", changedDocuments: changedDocuments.sort() };
 
   let restored = 0;
@@ -80,7 +84,11 @@ export async function rollbackBatch(db: Firestore, batchId: string, at: Date = n
           // A reviewer has decided the item, or a later batch has closed it. The decision stands.
           itemsLeft.push(state.path);
         } else if (state.before === null) {
-          write.update(reference, { status: "withdrawn", resolvedBy: IMPORT_ACTOR, resolvedAt: now, ...updatedFields(now) }, precondition);
+          write.update(
+            reference,
+            { status: "withdrawn", resolvedBy: IMPORT_ACTOR, resolvedAt: now, ...updatedFields(now) },
+            precondition,
+          );
           itemsWithdrawn += 1;
         } else {
           write.update(reference, { ...state.before }, precondition);

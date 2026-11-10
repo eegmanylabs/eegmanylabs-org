@@ -21,7 +21,12 @@ interface Draft {
   fieldSources: Record<string, string>;
 }
 
-function join(path: string, kind: string, into: Record<string, unknown>, from: Readonly<Record<string, unknown>>): void {
+function join(
+  path: string,
+  kind: string,
+  into: Record<string, unknown>,
+  from: Readonly<Record<string, unknown>>,
+): void {
   for (const [field, value] of Object.entries(from)) {
     if (field in into && !sameValue(into[field], value)) {
       throw new PlanError(`The plan states two different values for the ${kind} field ${field} of ${path}.`);
@@ -34,6 +39,7 @@ export class PlanBuilder {
   readonly #documents = new Map<string, Draft>();
   readonly #items = new Map<string, PlannedItem>();
   readonly #rawOnly = new Map<string, string>();
+  readonly #held = new Set<string>();
   readonly #blocking: BlockingCheck[] = [];
 
   /** States a document, or adds to one that an earlier row stated. Returns the path of the document. */
@@ -74,6 +80,15 @@ export class PlanBuilder {
     if (!this.#items.has(item.fingerprint)) this.#items.set(item.fingerprint, item);
   }
 
+  /**
+   * States an item for a data row whose own record is not written: the row waits in the queue
+   * until a reviewer has decided, whatever else the plan derives from its cells.
+   */
+  hold(recordId: string, item: PlannedItem): void {
+    this.#held.add(recordId);
+    this.item(item);
+  }
+
   /** Says that a data row is kept as a source record only, and why. */
   rawOnly(recordId: string, reason: string): void {
     this.#rawOnly.set(recordId, reason);
@@ -90,6 +105,12 @@ export class PlanBuilder {
       .map((draft) => ({ ...draft }))
       .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
     const items = [...this.#items.values()].sort((a, b) => (a.fingerprint < b.fingerprint ? -1 : 1));
-    return { documents, items, rawOnly: new Map(this.#rawOnly), blocking: [...this.#blocking] };
+    return {
+      documents,
+      items,
+      rawOnly: new Map(this.#rawOnly),
+      held: new Set(this.#held),
+      blocking: [...this.#blocking],
+    };
   }
 }

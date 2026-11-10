@@ -1,6 +1,6 @@
 // What every stage of one run shares: the database, the batch, the instant and the actor.
 import { COLLECTIONS, type CollectionEntry, type CollectionKey, systemActor, systemWriteContext } from "@eegml/shared";
-import { type Firestore, Timestamp } from "firebase-admin/firestore";
+import type { Firestore, Timestamp } from "firebase-admin/firestore";
 
 /** The actor recorded on everything an importer writes. */
 export const IMPORT_ACTOR = systemActor("import");
@@ -67,9 +67,15 @@ export async function readDocuments(
 }
 
 /** Validates a document against the schema of its collection before it is written. The error quotes no value. */
-export function validated(entry: CollectionEntry, path: string, data: Record<string, unknown>): Record<string, unknown> {
+export function validated(
+  entry: CollectionEntry,
+  path: string,
+  data: Record<string, unknown>,
+): Record<string, unknown> {
   const parsed = entry.schema.safeParse(data);
   if (parsed.success) return data;
   const problems = parsed.error.issues.map((issue) => `${issue.path.join(".") || "(document)"}: ${issue.code}`);
-  throw new Error(`The planned document ${path} does not fit the schema of ${entry.key}: ${[...new Set(problems)].join(", ")}.`);
+  throw new Error(
+    `The planned document ${path} does not fit the schema of ${entry.key}: ${[...new Set(problems)].join(", ")}.`,
+  );
 }

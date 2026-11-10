@@ -65,8 +65,14 @@ export function validOrcid(cell: string): string | null {
 }
 
 export const personEvidence = {
-  websitePeople: (id: string): PersonEvidence => ({ kind: "websitePersonId", key: personEvidenceKey.websitePeople(id) }),
-  websiteMembers: (id: string): PersonEvidence => ({ kind: "websitePersonId", key: personEvidenceKey.websiteMembers(id) }),
+  websitePeople: (id: string): PersonEvidence => ({
+    kind: "websitePersonId",
+    key: personEvidenceKey.websitePeople(id),
+  }),
+  websiteMembers: (id: string): PersonEvidence => ({
+    kind: "websitePersonId",
+    key: personEvidenceKey.websiteMembers(id),
+  }),
   /** Null unless the cell is exactly one address. */
   email: (cell: string): PersonEvidence | null => {
     const email = singleEmail(cell);
@@ -172,12 +178,6 @@ export class IdentityResolver {
     return { status: "unresolved" };
   }
 
-  /** The people who already hold a key, other than the one named. A reviewer decides whether they are one person. */
-  async othersHolding(evidence: PersonEvidence, personId: string): Promise<readonly string[]> {
-    const people = await this.#people(evidence);
-    return people === "erased" ? [] : people.filter((other) => other !== personId).sort();
-  }
-
   /**
    * The identity keys of a person as planned documents, so that a later import finds the person
    * again. The keys are also remembered for the rows that the current plan has still to resolve.
@@ -220,7 +220,9 @@ export class IdentityResolver {
    */
   async resolveInstitution(name: string, countryCode: string): Promise<string | null> {
     const entry = await this.#entry("institution", "nameAffiliation", `${lookupFold(name)}#${countryCode}`);
-    return entry !== null && entry.status === "active" && entry.entityIds.length === 1 ? (entry.entityIds[0] ?? null) : null;
+    return entry !== null && entry.status === "active" && entry.entityIds.length === 1
+      ? (entry.entityIds[0] ?? null)
+      : null;
   }
 
   /**
@@ -229,6 +231,8 @@ export class IdentityResolver {
    */
   async resolveLaboratory(institutionId: string, name: string): Promise<string | null> {
     const entry = await this.#entry("laboratory", "nameAffiliation", `${institutionId}#${lookupFold(name)}`);
-    return entry !== null && entry.status === "active" && entry.entityIds.length === 1 ? (entry.entityIds[0] ?? null) : null;
+    return entry !== null && entry.status === "active" && entry.entityIds.length === 1
+      ? (entry.entityIds[0] ?? null)
+      : null;
   }
 }

@@ -56,7 +56,10 @@ export function readZip(bytes: Uint8Array): Map<string, Uint8Array> {
     const data = buffer.subarray(dataStart, dataStart + compressedSize);
     if (method === STORED) members.set(name, data);
     else if (method === DEFLATED) members.set(name, inflateRawSync(data));
-    else throw new WorkbookFormatError(`A member of the archive uses compression method ${method}, which is not supported.`);
+    else
+      throw new WorkbookFormatError(
+        `A member of the archive uses compression method ${method}, which is not supported.`,
+      );
   }
   return members;
 }
@@ -99,7 +102,8 @@ export function parseXml(bytes: Uint8Array): XmlElement {
   parser.on("cdata", append);
   parser.write(new TextDecoder("utf-8", { fatal: true }).decode(bytes)).close();
   const document = root.children[0];
-  if (failure !== null || document === undefined) throw new WorkbookFormatError("A part of the workbook is not well-formed XML.");
+  if (failure !== null || document === undefined)
+    throw new WorkbookFormatError("A part of the workbook is not well-formed XML.");
   return document;
 }
 

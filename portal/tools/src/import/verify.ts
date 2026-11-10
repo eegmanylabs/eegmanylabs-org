@@ -10,18 +10,25 @@
 // | `secondRun`        | A second run would write nothing: no source record, no document, no item        |
 // | `traceToSource`    | Every imported document names at least one existing source record, and every data row is named by a document, an open item or a reason |
 // | `noOrphans`        | Every reference of an imported document resolves                                |
+// | `noAddress`        | No imported document that members can read holds an email-shaped text, and no identifier holds an `@` |
 import { COLLECTIONS, type CollectionKey, type EntityType, entityPath } from "@eegml/shared";
 import { type Firestore, Timestamp } from "firebase-admin/firestore";
-import { chunked, readDocuments, type RunContext } from "./context";
+import { chunked, entryOf, type RunContext, readDocuments } from "./context";
 import type { ImporterDefinition, ImportInput } from "./model";
 import { carriesProvenance } from "./ownership";
 import { compute } from "./run";
 import { compareSnapshot, recordRows } from "./snapshot";
-import { rowHash } from "./values";
-import { entryOf } from "./context";
+import { canonicalJson, rowHash } from "./values";
 
 export interface VerificationCheck {
-  readonly key: "structure" | "rowAccounting" | "rawFidelity" | "secondRun" | "traceToSource" | "noOrphans";
+  readonly key:
+    | "structure"
+    | "rowAccounting"
+    | "rawFidelity"
+    | "secondRun"
+    | "traceToSource"
+    | "noOrphans"
+    | "noAddress";
   readonly passed: boolean;
   /** Counts and document paths. Never a value of a document. */
   readonly detail: string;
@@ -45,20 +52,29 @@ const REFERENCE_FIELDS: Readonly<Record<string, CollectionKey>> = {
 export function referencesOf(data: Readonly<Record<string, unknown>>): string[] {
   const paths: string[] = [];
   const one = (collection: CollectionKey, id: unknown) => {
-    if (typeof id === "string" && id !== "") paths.push((COLLECTIONS[collection].docPath as (id: string) => string)(id));
+    if (typeof id === "string" && id !== "")
+      paths.push((COLLECTIONS[collection].docPath as (id: string) => string)(id));
   };
   for (const [field, collection] of Object.entries(REFERENCE_FIELDS)) {
     const value = data[field];
     for (const id of Array.isArray(value) ? value : [value]) one(collection, id);
   }
   for (const id of Object.values((data.fieldSources as Record<string, unknown>) ?? {})) one("sourceRecords", id);
-  for (const link of Array.isArray(data.vocabulary) ? (data.vocabulary as { termId?: unknown }[]) : []) one("vocabularyTerms", link.termId);
+  for (const link of Array.isArray(data.vocabulary) ? (data.vocabulary as { termId?: unknown }[]) : [])
+    one("vocabularyTerms", link.termId);
   if (typeof data.entityType === "string") {
-    const ids = Array.isArray(data.entityIds) ? data.entityIds : typeof data.entityId === "string" ? [data.entityId] : [];
+    const ids = Array.isArray(data.entityIds)
+      ? data.entityIds
+      : typeof data.entityId === "string"
+        ? [data.entityId]
+        : [];
     for (const id of ids) if (typeof id === "string") paths.push(entityPath(data.entityType as EntityType, id));
   }
   return paths;
 }
+
+/** The shape of an email address anywhere in a text. */
+const EMAIL_SHAPED = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/;
 
 export interface VerifyOptions {
   readonly db: Firestore;
@@ -71,7 +87,7 @@ export async function verifyImport(options: VerifyOptions): Promise<Verification
   const { db, importer, input, secret } = options;
   // The name sorts after every batch identifier, so the latest batch counts as the previous one.
   const context: RunContext = { db, sourceKey: importer.sourceKey, batchId: "verify", now: Timestamp.now() };
-  const reading = await importer.read(input);
+  const reading = await importer.read(input, { secret });
   const rows = recordRows(importer.sourceKey, reading);
   const state = await compareSnapshot(context, rows);
   const { plan, diff, tabs } = await compute(context, importer, input, secret, reading, rows, state);
@@ -80,11 +96,17 @@ export async function verifyImport(options: VerifyOptions): Promise<Verification
   checks.push({
     key: "structure",
     passed: blocked === 0,
-    detail: blocked === 0 ? `${reading.tabs.length} tabs read` : `${blocked} blocking checks failed: ${plan.blocking.map((check) => check.check).join(", ")}`,
+    detail:
+      blocked === 0
+        ? `${reading.tabs.length} tabs read`
+        : `${blocked} blocking checks failed: ${plan.blocking.map((check) => check.check).join(", ")}`,
   });
 
   const dataRows = tabs.reduce((sum, tab) => sum + tab.rows.data, 0);
-  const accounted = tabs.reduce((sum, tab) => sum + tab.imported + tab.queued + Object.values(tab.rawOnly).reduce((a, b) => a + b, 0), 0);
+  const accounted = tabs.reduce(
+    (sum, tab) => sum + tab.imported + tab.queued + Object.values(tab.rawOnly).reduce((a, b) => a + b, 0),
+    0,
+  );
   checks.push({
     key: "rowAccounting",
     passed: blocked === 0 && tabs.every((tab) => tab.unaccounted === 0) && accounted === dataRows,
@@ -105,7 +127,9 @@ export async function verifyImport(options: VerifyOptions): Promise<Verification
     const record = stored.get(COLLECTIONS.sourceRecords.docPath(row.recordId));
     if (!record) return true;
     const raw = record.data.raw as Record<string, unknown>;
-    return record.data.rawHash !== row.rawHash || rowHash(row.labels.map((label) => raw[label] ?? null)) !== row.rawHash;
+    return (
+      record.data.rawHash !== row.rawHash || rowHash(row.labels.map((label) => raw[label] ?? null)) !== row.rawHash
+    );
   });
   checks.push({
     key: "rawFidelity",
@@ -155,7 +179,9 @@ export async function verifyImport(options: VerifyOptions): Promise<Verification
       if (candidate.sourceRecordId !== undefined) named.add(candidate.sourceRecordId);
     }
   }
-  const unnamed = current.filter((row) => row.rowClass === "data" && row.cellLevel !== true && !named.has(row.recordId));
+  const unnamed = current.filter(
+    (row) => row.rowClass === "data" && row.cellLevel !== true && !named.has(row.recordId),
+  );
   checks.push({
     key: "traceToSource",
     passed: untraced.length === 0 && unnamed.length === 0,
@@ -176,6 +202,24 @@ export async function verifyImport(options: VerifyOptions): Promise<Verification
     detail:
       `${referenced.size - orphans.length} of ${referenced.size} references resolve` +
       (orphans.length > 0 ? ` (first missing: ${orphans.slice(0, 5).join(", ")})` : ""),
+  });
+  // Addresses belong in restricted documents. A document that every member can read holds none.
+  const exposed = plan.documents
+    .filter((document) => {
+      const readable = ["public", "member"].includes(entryOf(document.collection).dataClass);
+      const stored = documents.get(document.path);
+      return (
+        document.path.includes("@") ||
+        (readable && stored !== null && stored !== undefined && EMAIL_SHAPED.test(canonicalJson(stored.data)))
+      );
+    })
+    .map((document) => document.path);
+  checks.push({
+    key: "noAddress",
+    passed: exposed.length === 0,
+    detail:
+      `${plan.documents.length - exposed.length} of ${plan.documents.length} documents are free of addresses where members can read` +
+      (exposed.length > 0 ? ` (first with one: ${exposed.slice(0, 5).join(", ")})` : ""),
   });
   return checks;
 }

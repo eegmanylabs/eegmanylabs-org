@@ -185,6 +185,24 @@ export const outreachContactDocSchema = documentBaseSchema.extend({
       fillColour: z.string().max(32).exactOptional(),
     })
     .exactOptional(),
+  /**
+   * The keyed hash that the copies of one contact share across the tabs of one study. It links
+   * the copies, which are never merged. Absent while the tab is resolved to no replication.
+   */
+  groupKey: z
+    .string()
+    .max(20)
+    .regex(/^[0-9a-f]{20}$/, { error: "Expected the keyed hash of a study and a contact name" })
+    .exactOptional(),
+  /**
+   * The addresses found in the notes and in cells beside them: each as the source wrote it, and
+   * in a form without access tokens and session parameters. They stay with the contact, because
+   * a link of this kind can name the person.
+   */
+  links: z
+    .array(z.strictObject({ urlSource: verbatimSchema, url: urlSchema }))
+    .max(50)
+    .exactOptional(),
   sourceRecordId: idSchema,
   scopeKeys: scopeKeysSchema,
   ...provenanceShape,

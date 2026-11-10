@@ -4,5 +4,9 @@ export interface Command {
   readonly name: string;
   /** One line for the usage text. */
   readonly summary: string;
-  run(args: readonly string[]): Promise<void>;
+  /**
+   * Runs the command. A command that ends without a number has succeeded. A number is the exit
+   * status of an outcome that is no failure of the tool, such as an import that a check blocks.
+   */
+  run(args: readonly string[]): Promise<number | undefined>;
 }

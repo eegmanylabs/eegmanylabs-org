@@ -2,7 +2,17 @@
 // `resolveAccess`: overrides, expiry, revocation, the second factor and suspension.
 // Fixtures are synthetic: invented accounts, studies and laboratories.
 import { describe, expect, it } from "vitest";
-import { type AccessInputs, can, capabilitiesOf, emptyAccess, type ResolvedAccess, resolveAccess } from "./access";
+import {
+  type AccessInputs,
+  can,
+  capabilitiesOf,
+  emptyAccess,
+  PROGRAMME_POWER_SCOPE_KEYS,
+  programmePowersInEffect,
+  type ResolvedAccess,
+  resolveAccess,
+  sessionScopeKeys,
+} from "./access";
 import {
   CAPABILITIES,
   type CapabilityOverrides,
@@ -524,6 +534,100 @@ describe("the second factor", () => {
     const access = resolveRole("core_team");
     expect(access.scopeKeys).toEqual(["members", "programme", "role:core_team", `user:${UID}`]);
     expect(can(access, "imports.run", "programme")).toBe(true);
+  });
+});
+
+describe("the second factor of a session", () => {
+  const verified = { secondFactorVerified: true };
+  const unverified = { secondFactorVerified: false };
+
+  it("puts the powers of a programme role in effect only in a session that presents the factor", () => {
+    const admin = resolveRole("programme_admin");
+    expect(programmePowersInEffect(admin, verified)).toBe(true);
+    expect(programmePowersInEffect(admin, unverified)).toBe(false);
+    // An account that need not present a factor has none to present.
+    const lead = { ...resolveRole("replication_lead"), mfaEnrolled: true };
+    expect(programmePowersInEffect(lead, unverified)).toBe(true);
+    // No factor is enrolled: nothing is in effect, whatever the session says.
+    const unenrolled = resolveAccess(
+      inputs({ user: { status: "active", mfaEnrolled: false }, roleAssignments: [assignment("core_team")] }),
+    );
+    expect(programmePowersInEffect(unenrolled, verified)).toBe(false);
+  });
+
+  it.each(["programme_admin", "core_team"] as const)(
+    "withholds the scope keys of the programme from a session of %s that lacks the factor",
+    (role) => {
+      const access = resolveAccess(
+        inputs({ roleAssignments: [assignment(role), assignment("replication_lead"), assignment("lab_member")] }),
+      );
+      expect(access.scopeKeys).toEqual(expect.arrayContaining(["programme", `role:${role}`]));
+      expect(sessionScopeKeys(access, verified)).toEqual(access.scopeKeys);
+      // What the account holds through its own units stays: those roles need no factor.
+      expect(sessionScopeKeys(access, unverified)).toEqual([
+        "lab:lab-a",
+        "members",
+        "rep:StudyA2001",
+        "role:lab_member",
+        "role:replication_lead",
+        `user:${UID}`,
+      ]);
+    },
+  );
+
+  it("names the keys of the programme, which are the keys that the security rules withhold", () => {
+    expect(PROGRAMME_POWER_SCOPE_KEYS).toEqual(["programme", "role:programme_admin", "role:core_team"]);
+  });
+
+  it("leaves a suspended account with no scope key at all", () => {
+    const suspended = { ...resolveRole("replication_lead"), suspended: true };
+    expect(sessionScopeKeys(suspended, verified)).toEqual([]);
+  });
+});
+
+describe("the units in which an account reads contact details", () => {
+  const barred = (role: Role): AccessInputs["roleCapabilities"] => [{ role, overrides: { peopleContactRead: false } }];
+  const leadAndCoordinator = [assignment("replication_lead"), assignment("lab_coordinator", { scopeId: "lab-b" })];
+
+  it("are the replications it leads and the laboratories it coordinates, by default", () => {
+    const access = resolveAccess(inputs({ roleAssignments: leadAndCoordinator }));
+    expect(access.contactReplicationIds).toEqual(["StudyA2001"]);
+    expect(access.contactLaboratoryIds).toEqual(["lab-b"]);
+    expectStorable(access);
+  });
+
+  it("leave out a unit whose role no longer confers the capability, whatever the other role confers", () => {
+    const leadsBarred = resolveAccess(
+      inputs({ roleAssignments: leadAndCoordinator, roleCapabilities: barred("replication_lead") }),
+    );
+    expect(leadsBarred.leadReplicationIds).toEqual(["StudyA2001"]);
+    expect(leadsBarred.contactReplicationIds).toEqual([]);
+    expect(leadsBarred.contactLaboratoryIds).toEqual(["lab-b"]);
+
+    const coordinatorsBarred = resolveAccess(
+      inputs({ roleAssignments: leadAndCoordinator, roleCapabilities: barred("lab_coordinator") }),
+    );
+    expect(coordinatorsBarred.contactReplicationIds).toEqual(["StudyA2001"]);
+    expect(coordinatorsBarred.contactLaboratoryIds).toEqual([]);
+  });
+
+  it("hold nothing for a member of a laboratory, a team member or a programme role", () => {
+    for (const role of ["lab_member", "core_team", "programme_admin", "external_collaborator"] as const) {
+      const access = resolveRole(role);
+      expect(access.contactReplicationIds, role).toEqual([]);
+      expect(access.contactLaboratoryIds, role).toEqual([]);
+    }
+    const team = resolveAccess(inputs({ confirmedReplicationIds: ["StudyA2001"] }));
+    expect(team.teamReplicationIds).toEqual(["StudyA2001"]);
+    expect(team.contactReplicationIds).toEqual([]);
+  });
+
+  it("are empty for a suspended account and for an account that has been granted nothing", () => {
+    const suspended = resolveAccess(
+      inputs({ user: { status: "suspended", mfaEnrolled: false }, roleAssignments: leadAndCoordinator }),
+    );
+    expect([suspended.contactReplicationIds, suspended.contactLaboratoryIds]).toEqual([[], []]);
+    expect([emptyAccess().contactReplicationIds, emptyAccess().contactLaboratoryIds]).toEqual([[], []]);
   });
 });
 

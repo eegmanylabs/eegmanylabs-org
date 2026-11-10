@@ -1,7 +1,12 @@
 rules_version = '2';
 
-// Security rules for Cloud Storage. Nothing is stored yet, so every read and write is denied.
-// A later phase adds narrowly scoped paths here, each with its own tests in portal/tests/rules.
+// Security rules for Cloud Storage.
+//
+// Nothing is stored through the portal yet: attachments are built in a later phase. Until then
+// every read and every write is denied to every caller, a programme administrator included,
+// and portal/tests/rules/storage.rules.test.ts proves it for each kind of caller. The phase that
+// builds attachments adds narrowly scoped paths here, each with its own tests, and decides who
+// may read a file from the attachment document in Firestore that describes it.
 service firebase.storage {
   match /b/{bucket}/o {
     match /{allPaths=**} {

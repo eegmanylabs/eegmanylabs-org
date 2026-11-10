@@ -312,8 +312,23 @@ export const appendOnlyProvenanceShape = {
   sourceRecordIds: provenanceShape.sourceRecordIds,
 };
 
+/**
+ * One value of a custom property. Its type follows the property, which the model leaves open, so
+ * the cap is on its size: a text holds `LIMITS.longText` characters at most, and any other value
+ * serialises to no more than that. A value that a client writes directly is a text, a number, a
+ * boolean or null, because a security rule can check nothing deeper.
+ */
+export const customValueSchema = z.unknown().refine(
+  (value) => {
+    if (typeof value === "string") return value.length <= LIMITS.longText;
+    const serialised = JSON.stringify(value);
+    return serialised === undefined || serialised.length <= LIMITS.longText;
+  },
+  { error: `A custom value holds at most ${LIMITS.longText} characters` },
+);
+
 /** The values of custom properties with the audience `member`, keyed by property identifier. */
-export const customValuesSchema = boundedRecord(mapKeySchema, z.unknown());
+export const customValuesSchema = boundedRecord(mapKeySchema, customValueSchema);
 
 interface UnrecognisedKeysIssue {
   readonly code: "unrecognized_keys";

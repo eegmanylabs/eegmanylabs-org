@@ -86,5 +86,6 @@ export const seedLookupsCommand: Command = {
     for (const path of summary.different) {
       console.log(`Left as it is, because its values differ from the seed: ${path}`);
     }
+    return undefined;
   },
 };

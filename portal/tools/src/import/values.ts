@@ -1,6 +1,6 @@
-// Hashes and normalised copies of source values (docs/MIGRATION_PLAN.md, sections 2 and 3.1).
-// A normalised or parsed value is stored beside the raw one and never in its place, so nothing
-// here is applied to a value before it has been captured in a source record.
+// Hashes and parsed copies of source values (docs/MIGRATION_PLAN.md, sections 2 and 3.1).
+// A parsed value is stored beside the raw one and never in its place, so nothing here is
+// applied to a value before it has been captured in a source record.
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 
@@ -44,26 +44,21 @@ export function rowHash(cells: readonly unknown[]): string {
   return contentHash(cells).slice(0, ROW_HASH_LENGTH);
 }
 
-/** The normalised copy of a text: Unicode NFC, trimmed, with every run of white space as one space. For matching and display only. */
-export function normaliseText(text: string): string {
-  return text.normalize("NFC").replace(/\s+/gu, " ").trim();
+/**
+ * The key of a row that has no natural key: the hash of its content with its ordinal among the
+ * rows of equal content, so that the row number is no part of it. `seen` counts the rows of one tab.
+ */
+export function contentRowKey(cells: readonly unknown[], seen: Map<string, number>): string {
+  const hash = rowHash(cells);
+  const ordinal = (seen.get(hash) ?? 0) + 1;
+  seen.set(hash, ordinal);
+  return `row__${hash}__${ordinal}`;
 }
 
 /** The whole number that a text states, or null. `2007` and ` 7 ` qualify, and `2005a`, `7.5` and an empty text do not. */
 export function wholeNumberOf(text: string): number | null {
   const trimmed = text.trim();
   return /^\d{1,15}$/.test(trimmed) ? Number(trimmed) : null;
-}
-
-/** Whether a text is one address on the web that is safe to link to. */
-export function isHttpUrl(text: string): boolean {
-  if (/\s/.test(text) || !/^https?:\/\//i.test(text)) return false;
-  try {
-    const url = new URL(text);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
 }
 
 /** Whether two stored values are equal in every part. */

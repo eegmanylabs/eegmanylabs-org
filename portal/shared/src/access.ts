@@ -163,6 +163,8 @@ export function resolveAccess(inputs: AccessInputs): ResolvedAccess {
       teamReplicationIds: [],
       coordinatorLaboratoryIds: [],
       memberLaboratoryIds: [],
+      contactReplicationIds: [],
+      contactLaboratoryIds: [],
       groupKeys: [],
       scopeKeys: [],
       manageScopeKeys: [],
@@ -237,6 +239,14 @@ export function resolveAccess(inputs: AccessInputs): ResolvedAccess {
       : sortedUnique(scopes);
   }
 
+  // The units in which a role of the account itself confers sight of contact details. A holder
+  // of the capability for the programme as a whole is no part of this: the rules ask for the
+  // programme powers of such a session, second factor included.
+  const contactScopes = held.get("people.contact.read") ?? new Set<string>();
+  const contactReplicationIds = leadReplicationIds.filter((id) => contactScopes.has(replicationScopeKey(id)));
+  const contactLaboratoryIds = sortedUnique([...coordinatorLaboratoryIds, ...memberLaboratoryIds]).filter((id) =>
+    contactScopes.has(laboratoryScopeKey(id)),
+  );
   const effectiveRoles = [...roles].filter((role) => privileged || !isProgrammeRole(role));
   const scopeKeys = sortedUnique([
     userScopeKey(uid),
@@ -256,6 +266,8 @@ export function resolveAccess(inputs: AccessInputs): ResolvedAccess {
     teamReplicationIds,
     coordinatorLaboratoryIds,
     memberLaboratoryIds,
+    contactReplicationIds,
+    contactLaboratoryIds,
     groupKeys,
     scopeKeys,
     manageScopeKeys: sortedUnique([
@@ -280,6 +292,52 @@ export function resolveAccess(inputs: AccessInputs): ResolvedAccess {
   };
 }
 
+/**
+ * The scope keys that stand for the powers of a programme role: the programme as a whole and
+ * the two programme roles. An access document lists them once a second factor is enrolled, and
+ * they count only in a session that satisfies `secondFactorRequired`.
+ */
+export const PROGRAMME_POWER_SCOPE_KEYS: readonly string[] = [
+  PROGRAMME_SCOPE_KEY,
+  roleScopeKey("programme_admin"),
+  roleScopeKey("core_team"),
+];
+
+/** What the rules and the functions need to know about the second factor of a session. */
+export interface SecondFactorFacts {
+  /** Whether the sign-in token says that a second factor was verified in this session. */
+  readonly secondFactorVerified: boolean;
+}
+
+/**
+ * Whether the powers of a programme role or of a named grant are in effect in a session: a
+ * factor is enrolled, and the session presents it wherever the access document requires one.
+ * This is the decision that `programmePowers()` makes in portal/firestore.rules.
+ */
+export function programmePowersInEffect(
+  access: Pick<AccessDocument, "mfaEnrolled" | "secondFactorRequired">,
+  session: SecondFactorFacts,
+): boolean {
+  return access.mfaEnrolled && (!access.secondFactorRequired || session.secondFactorVerified);
+}
+
+/**
+ * The scope keys that an account holds in a session. A document whose audience is the programme
+ * as a whole is for programme administrators and the core team, whose powers need the second
+ * factor, so the keys of `PROGRAMME_POWER_SCOPE_KEYS` are left out of a session that lacks it.
+ * The rules compare `scopeKeys` of a document with these keys, and a function that filters by
+ * scope does the same.
+ */
+export function sessionScopeKeys(
+  access: Pick<AccessDocument, "scopeKeys" | "mfaEnrolled" | "secondFactorRequired" | "suspended">,
+  session: SecondFactorFacts,
+): string[] {
+  if (access.suspended) return [];
+  return programmePowersInEffect(access, session)
+    ? [...access.scopeKeys]
+    : access.scopeKeys.filter((key) => !PROGRAMME_POWER_SCOPE_KEYS.includes(key));
+}
+
 /** The access document of an account that has been granted nothing: what a first sign-in creates. */
 export function emptyAccess(): ResolvedAccess {
   return {
@@ -290,6 +348,8 @@ export function emptyAccess(): ResolvedAccess {
     teamReplicationIds: [],
     coordinatorLaboratoryIds: [],
     memberLaboratoryIds: [],
+    contactReplicationIds: [],
+    contactLaboratoryIds: [],
     groupKeys: [],
     scopeKeys: [],
     manageScopeKeys: [],

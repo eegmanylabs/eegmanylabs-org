@@ -1,6 +1,6 @@
 import net from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
-import { requireEmulatorTarget, requireRunningEmulators, ToolRefusal } from "./environment";
+import { requireEmulatorTarget, requireImportTarget, requireRunningEmulators, ToolRefusal } from "./environment";
 
 const emulators = {
   FIRESTORE_EMULATOR_HOST: "127.0.0.1:9180",
@@ -98,5 +98,50 @@ describe("requireRunningEmulators", () => {
   it("refuses an address that is not a host and a port", async () => {
     const target = { projectId: "demo-eegml", firestoreHost: "not-an-address", authHost: await listen() };
     await expect(requireRunningEmulators(target, {})).rejects.toBeInstanceOf(ToolRefusal);
+  });
+});
+
+describe("requireImportTarget", () => {
+  const credentials = { GOOGLE_APPLICATION_CREDENTIALS: "/somewhere/short-lived.json" };
+
+  it("gives the emulator when no production flag is given, and refuses when no emulator is named", () => {
+    expect(requireImportTarget({ production: false }, emulators)).toEqual({
+      kind: "emulator",
+      projectId: "demo-eegml",
+      firestoreHost: "127.0.0.1:9180",
+      authHost: "127.0.0.1:9199",
+    });
+    expect(() => requireImportTarget({ production: false }, {})).toThrow(ToolRefusal);
+    // Credentials in the environment are no request for a real project.
+    expect(() => requireImportTarget({ production: false }, credentials)).toThrow(ToolRefusal);
+  });
+
+  it("refuses a project name without the production flag", () => {
+    expect(() => requireImportTarget({ production: false, projectId: "eegml-production" }, emulators)).toThrow(
+      /only together with --production/,
+    );
+  });
+
+  it("reaches a real project only with the flag, the project and credentials together", () => {
+    expect(requireImportTarget({ production: true, projectId: "eegml-production" }, credentials)).toEqual({
+      kind: "production",
+      projectId: "eegml-production",
+    });
+    expect(() => requireImportTarget({ production: true }, credentials)).toThrow(/--project/);
+    expect(() => requireImportTarget({ production: true, projectId: "eegml-production" }, {})).toThrow(/credentials/);
+  });
+
+  it("refuses whatever leaves the target in doubt", () => {
+    const request = { production: true, projectId: "eegml-production" };
+    expect(() => requireImportTarget(request, { ...credentials, ...emulators })).toThrow(/in doubt/);
+    expect(() => requireImportTarget(request, { ...credentials, FIRESTORE_EMULATOR_HOST: "127.0.0.1:9180" })).toThrow(
+      /in doubt/,
+    );
+    expect(() => requireImportTarget({ production: true, projectId: "demo-eegml" }, credentials)).toThrow(
+      /demonstration project/,
+    );
+    expect(() => requireImportTarget(request, { ...credentials, GCLOUD_PROJECT: "another-project" })).toThrow(
+      /not the project named/,
+    );
   });
 });

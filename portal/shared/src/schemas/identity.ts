@@ -179,6 +179,13 @@ export const accessDocSchema = documentBaseSchema.extend({
   teamReplicationIds: idListSchema,
   coordinatorLaboratoryIds: idListSchema,
   memberLaboratoryIds: idListSchema,
+  /**
+   * The replications and the laboratories for which the account holds `people.contact.read`
+   * through a role of its own there. A rule compares them with the units that the directory
+   * document of a person names, which it could not do with the scope keys of `capabilities`.
+   */
+  contactReplicationIds: idListSchema,
+  contactLaboratoryIds: idListSchema,
   groupKeys: idListSchema,
   /** Every scope key the account holds, in the forms of `scopeKeySchema`. */
   scopeKeys: scopeKeysSchema,
@@ -413,28 +420,57 @@ export const SPECIAL_CATEGORY_FIELDS = [
 
 export const correctionRequestStatusSchema = z.enum(["open", "accepted", "rejected", "withdrawn"]);
 
-/** `correctionRequests/{id}`: a member's request to correct an imported record. */
-export const correctionRequestDocSchema = documentBaseSchema
-  .extend({
-    uid: uidSchema,
-    ...entityRefShape,
-    field: mapKeySchema,
-    proposedValue: z.union([z.string().max(LIMITS.longText), z.number(), z.boolean()]),
-    message: longTextSchema.exactOptional(),
-    status: correctionRequestStatusSchema,
-    resolvedBy: actorSchema.nullable(),
-    resolvedAt: timestampSchema.nullable(),
-  })
-  .refine((request) => !(SPECIAL_CATEGORY_FIELDS as readonly string[]).includes(request.field), {
+/**
+ * What the name of a field holds, in any case, when the field belongs to the special categories.
+ * A correction request is read by everyone who resolves the review queue, so it never names such
+ * a field, however the name is spelt. The security rules refuse the same names.
+ */
+export const SPECIAL_CATEGORY_NAME_PARTS = ["gender", "ethnic", "demograph"] as const;
+
+/** Whether the name of a field says that it holds special-category data. */
+export function namesSpecialCategory(field: string): boolean {
+  const lowered = field.toLowerCase();
+  return (
+    (SPECIAL_CATEGORY_FIELDS as readonly string[]).includes(field) ||
+    SPECIAL_CATEGORY_NAME_PARTS.some((part) => lowered.includes(part))
+  );
+}
+
+/**
+ * The field that a correction request is about: the name of a top-level field as the schemas
+ * spell one, which is letters and digits with a letter first, so that white space or a full stop
+ * cannot disguise it.
+ */
+export const correctableFieldSchema = z
+  .string()
+  .max(100)
+  .regex(/^[A-Za-z][A-Za-z0-9]*$/, { error: "Expected the name of a field" })
+  .refine((field) => !namesSpecialCategory(field), {
     error: "A correction request never names a special-category field",
-    path: ["field"],
   });
+
+/** `correctionRequests/{id}`: a member's request to correct an imported record. */
+export const correctionRequestDocSchema = documentBaseSchema.extend({
+  uid: uidSchema,
+  ...entityRefShape,
+  field: correctableFieldSchema,
+  proposedValue: z.union([z.string().max(LIMITS.longText), z.number(), z.boolean()]),
+  message: longTextSchema.exactOptional(),
+  status: correctionRequestStatusSchema,
+  resolvedBy: actorSchema.nullable(),
+  resolvedAt: timestampSchema.nullable(),
+});
 export type CorrectionRequestDoc = z.output<typeof correctionRequestDocSchema>;
 
 export const publicListingSchema = z.enum(["none", "member", "coreTeam"]);
 
-/** The directory fields of a person that the person may edit directly. Every other field is for administrators. */
-export const PERSON_SELF_EDITABLE_FIELDS = ["orcid", "scholarUrl", "universityUrl", "labUrl"] as const;
+/**
+ * The directory fields of a person that the person may edit directly: the three profile
+ * addresses. Every other field is for administrators, and the ORCID iD changes through a
+ * callable function for everyone, because imports find a person again by it: the function
+ * reserves the identity key in the same transaction and refuses an iD that another person holds.
+ */
+export const PERSON_SELF_EDITABLE_FIELDS = ["scholarUrl", "universityUrl", "labUrl"] as const;
 
 /**
  * `persons/{personId}`: the directory document of a person, readable by members. `isCoreTeam`

@@ -8,13 +8,20 @@
 // trusted environment (an administrator's machine or a protected workflow), never from the
 // public site.
 import type { Command } from "./command";
+import { importCommand } from "./commands/import";
 import { seedDemoCommand } from "./commands/seed-demo";
 import { seedLookupsCommand } from "./commands/seed-lookups";
 import { ToolRefusal } from "./environment";
 
 /** Registry of commands. Add a new command here. */
-const COMMANDS: readonly Command[] = [seedDemoCommand, seedLookupsCommand];
+const COMMANDS: readonly Command[] = [seedDemoCommand, seedLookupsCommand, importCommand];
 
+// | Exit status | Meaning                                                                      |
+// |-------------|------------------------------------------------------------------------------|
+// | 0           | Done                                                                         |
+// | 1           | The tool failed unexpectedly                                                 |
+// | 2           | Refused: wrong usage, or a target that is no emulator                        |
+// | 3 and above | An outcome that a command defines, such as an import that a check blocks     |
 const EXIT_FAILED = 1;
 const EXIT_REFUSED = 2;
 
@@ -42,8 +49,7 @@ async function main(): Promise<number> {
     return EXIT_REFUSED;
   }
   try {
-    await command.run(args);
-    return 0;
+    return (await command.run(args)) ?? 0;
   } catch (error) {
     if (error instanceof ToolRefusal) {
       console.error(error.message);

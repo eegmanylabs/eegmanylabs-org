@@ -48,7 +48,11 @@ export function carriesProvenance(entry: CollectionEntry): boolean {
 }
 
 /** The document that a plan creates where none exists. */
-export function newDocument(spec: PlannedDocument, entry: CollectionEntry, context: MergeContext): Record<string, unknown> {
+export function newDocument(
+  spec: PlannedDocument,
+  entry: CollectionEntry,
+  context: MergeContext,
+): Record<string, unknown> {
   const owned = withoutUndefined(spec.owned);
   const data: Record<string, unknown> = {
     ...context.created,
@@ -61,7 +65,9 @@ export function newDocument(spec: PlannedDocument, entry: CollectionEntry, conte
     data.sourceRecordIds = [...spec.sourceRecordIds];
     if (Object.keys(owned).length > 0) {
       data.importedValues = owned;
-      data.fieldSources = Object.fromEntries(Object.keys(owned).map((field) => [field, spec.fieldSources[field] ?? ""]));
+      data.fieldSources = Object.fromEntries(
+        Object.keys(owned).map((field) => [field, spec.fieldSources[field] ?? ""]),
+      );
     }
   }
   return data;

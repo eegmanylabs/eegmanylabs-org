@@ -107,5 +107,6 @@ export const seedDemoCommand: Command = {
       `seed:demo wrote to ${summary.projectId} (emulator): ${summary.created} created, ${summary.unchanged} unchanged.`,
     );
     console.log(`Demonstration accounts: ${DEMO_ACCOUNTS.map((account) => account.email).join(", ")}`);
+    return undefined;
   },
 };

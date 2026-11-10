@@ -7,6 +7,7 @@ import { COLLECTIONS, type CollectionKey } from "../collections";
 import type { FirestoreTimestamp } from "../timestamp";
 import type { z } from "../zod";
 import { LIMITS, parseStoredDocument, systemWriteContext, userWriteContext, utf8ByteLength } from "./base";
+import { namesSpecialCategory } from "./identity";
 
 function timestamp(iso: string): FirestoreTimestamp {
   const date = new Date(iso);
@@ -300,8 +301,63 @@ describe("a correction request", () => {
     expect(issuesOf("correctionRequests", { ...request, field })).toEqual(["field"]);
   });
 
+  it.each([
+    "gender",
+    "ethnicity",
+    "Gender",
+    "GenderSource",
+    "gendersource",
+    "ETHNICITYCATEGORY",
+    "demographics",
+    "selfDescribedEthnicity",
+  ])("never names a field of the special categories under another spelling: %s", (field) => {
+    expect(issuesOf("correctionRequests", { ...request, field })).toEqual(["field"]);
+    expect(namesSpecialCategory(field)).toBe(true);
+  });
+
+  it.each([
+    "genderSource ",
+    " ethnicitySelfDescribed",
+    "custom.gender",
+    "display name",
+    "",
+    "2ndName",
+    "x".repeat(101),
+  ])("names a field by letters and digits alone, which %j is not", (field) => {
+    expect(issuesOf("correctionRequests", { ...request, field })).toContain("field");
+  });
+
+  it("names every other field of a record", () => {
+    for (const field of ["displayName", "countryCode", "city", "originalN", "affiliationSource"]) {
+      expect(issuesOf("correctionRequests", { ...request, field })).toEqual([]);
+      expect(namesSpecialCategory(field)).toBe(false);
+    }
+  });
+
   it("refers only to a kind of record that the entity registry knows", () => {
     expect(accepts("correctionRequests", { ...request, entityType: "spreadsheet" })).toBe(false);
+  });
+});
+
+describe("the values of custom properties", () => {
+  it("hold texts, numbers, booleans and small structures", () => {
+    const custom = {
+      room: "B12",
+      booths: 2,
+      shielded: true,
+      contact: null,
+      tags: ["a", "b"],
+      range: { from: 1, to: 2 },
+    };
+    expect(issuesOf("persons", { ...person, custom })).toEqual([]);
+  });
+
+  it("refuse a text beyond 10,000 characters and a structure that serialises beyond them", () => {
+    expect(accepts("persons", { ...person, custom: { note: "x".repeat(10_000) } })).toBe(true);
+    expect(accepts("persons", { ...person, custom: { note: "x".repeat(10_001) } })).toBe(false);
+    expect(accepts("persons", { ...person, custom: { tags: Array.from({ length: 2_000 }, () => "label") } })).toBe(
+      false,
+    );
   });
 });
 
@@ -477,6 +533,34 @@ describe("a participation and its checklist", () => {
     expect(schemaOf("outreachContacts").parse(contact)).toEqual(contact);
     expect(accepts("outreachContacts", { ...contact, firstContactDate: "03.04.21" })).toBe(false);
     expect(accepts("outreachContacts", { ...contact, firstContactDate: "2021-04-03" })).toBe(true);
+  });
+
+  it("links the copies of an outreach contact by a keyed hash, and keeps its links as written and without tokens", () => {
+    const contact = {
+      ...base,
+      createdBy: "system:import",
+      updatedBy: "system:import",
+      writeContext: systemWriteContext("import"),
+      replicationId: "AmodioJost2007",
+      groupKey: "ced7157bf018160ecc89",
+      links: [
+        {
+          urlSource: "https://papers.example.org/article?token=invented#",
+          url: "https://papers.example.org/article",
+        },
+      ],
+      sourceRecordId: "0123456789abcdef0123",
+      scopeKeys: ["rep:AmodioJost2007"],
+    };
+    expect(schemaOf("outreachContacts").parse(contact)).toEqual(contact);
+    // A readable name is no group key, and a link needs an address that is safe to follow.
+    expect(accepts("outreachContacts", { ...contact, groupKey: "AmodioJost2007 Synthetic Contact" })).toBe(false);
+    expect(
+      accepts("outreachContacts", { ...contact, links: [{ urlSource: "see the page", url: "javascript:alert(1)" }] }),
+    ).toBe(false);
+    expect(accepts("outreachContacts", { ...contact, links: [{ url: "https://papers.example.org/article" }] })).toBe(
+      false,
+    );
   });
 });
 

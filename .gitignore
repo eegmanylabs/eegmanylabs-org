@@ -222,3 +222,4 @@ portal/blob-report/
 # Private local material: source exports and configuration that must never be
 # committed to this public repository.
 portal/.private/
+portal/.vitest/

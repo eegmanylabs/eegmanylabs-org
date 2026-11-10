@@ -10,24 +10,35 @@
 // | Write     | Only items that explain a blocked batch   | Every change, each with its log entry      |
 //
 // A run on an unchanged source writes its own batch record and nothing else.
-import {
-  COLLECTIONS,
-  type CollectionKey,
-  importBatchId,
-  type ReconciliationKind,
-  sequenceId,
-} from "@eegml/shared";
+import { COLLECTIONS, type CollectionKey, importBatchId, type ReconciliationKind, sequenceId } from "@eegml/shared";
 import { type Firestore, Timestamp } from "firebase-admin/firestore";
 import { ToolRefusal } from "../environment";
 import { applyBlockingItems, applyDiff, ImportStopped } from "./apply";
-import type { PrivateSource } from "./config";
-import { appendOnlyFields, chunked, createdFields, entryOf, IMPORT_ACTOR, type RunContext, updatedFields, validated } from "./context";
+import {
+  appendOnlyFields,
+  chunked,
+  createdFields,
+  entryOf,
+  IMPORT_ACTOR,
+  type RunContext,
+  readDocuments,
+  updatedFields,
+  validated,
+} from "./context";
 import { IdentityResolver } from "./identity";
-import type { BlockingCheck, ImporterDefinition, ImportInput, ImportPlan, RecordedRow, RowClass, SourceReading } from "./model";
+import type {
+  BlockingCheck,
+  ImporterDefinition,
+  ImportInput,
+  ImportPlan,
+  RecordedRow,
+  RowClass,
+  SourceReading,
+} from "./model";
 import { PlanBuilder } from "./plan";
 import { comparePlan, entityRefOf, type ItemAction, type PlanDiff } from "./preview";
 import { type ItemBuilders, itemBuilders } from "./reconcile";
-import { sourceDefinition, syncRegistry } from "./registry";
+import { type PrivateLocations, sourceDefinition, syncRegistry } from "./registry";
 import { compareSnapshot, recordRows, type SnapshotState, writeSnapshot } from "./snapshot";
 import { StudyResolver } from "./studies";
 
@@ -64,9 +75,16 @@ export interface RunReport {
   readonly status: "previewed" | "applied" | "failed";
   readonly blocking: readonly BlockingCheck[];
   readonly tabs: readonly TabAccount[];
-  readonly sourceRecords: { readonly created: number; readonly superseded: number; readonly missing: number; readonly seen: number };
+  readonly sourceRecords: {
+    readonly created: number;
+    readonly superseded: number;
+    readonly missing: number;
+    readonly seen: number;
+  };
   readonly collections: Readonly<Partial<Record<CollectionKey, CollectionAccount>>>;
-  readonly items: Readonly<Record<ItemAction, Partial<Record<ReconciliationKind, number>>>> & { readonly standing: number };
+  readonly items: Readonly<Record<ItemAction, Partial<Record<ReconciliationKind, number>>>> & {
+    readonly standing: number;
+  };
   /** Fields that were left alone because the live value differs from the source. */
   readonly conflicts: number;
   /** Changes written with a log entry. Always 0 for a preview that is not blocked. */
@@ -83,8 +101,8 @@ export interface RunOptions {
   readonly mode: "preview" | "apply";
   /** The secret of the keyed hash. */
   readonly secret: string;
-  /** The private location of the source, where the configuration names one. */
-  readonly location?: PrivateSource;
+  /** The private locations of the sources, where the configuration names them. */
+  readonly locations?: PrivateLocations;
   /** A previewed batch that the apply must match. */
   readonly previewBatchId?: string;
   readonly now?: Date;
@@ -143,6 +161,14 @@ async function withDepartures(
       }
     }
   }
+  // A document that a rollback has removed since is no longer something the source produced.
+  const stored = await readDocuments(
+    context.db,
+    [...derived.values()].flatMap((paths) => [...paths]),
+  );
+  for (const paths of derived.values()) {
+    for (const path of paths) if (stored.get(path) === null) paths.delete(path);
+  }
   const refOfPath = (path: string) => {
     const segments = path.split("/");
     const entry = Object.values(COLLECTIONS).find(
@@ -191,7 +217,9 @@ export function accountRows(
   interpreted: boolean,
 ): TabAccount[] {
   const imported = new Set(plan.documents.flatMap((document) => document.sourceRecordIds));
-  const queued = new Set(plan.items.flatMap((item) => item.candidates.flatMap((candidate) => candidate.sourceRecordId ?? [])));
+  const queued = new Set(
+    plan.items.flatMap((item) => item.candidates.flatMap((candidate) => candidate.sourceRecordId ?? [])),
+  );
   return reading.tabs.map((tab) => {
     const counts: Record<RowClass, number> = {
       header: 0,
@@ -203,7 +231,13 @@ export function accountRows(
       filler: tab.fillerRows,
       blank: tab.blankRows,
     };
-    const account = { imported: 0, queued: 0, unaccounted: 0, cellAnnotations: 0, rawOnly: {} as Record<string, number> };
+    const account = {
+      imported: 0,
+      queued: 0,
+      unaccounted: 0,
+      cellAnnotations: 0,
+      rawOnly: {} as Record<string, number>,
+    };
     for (const row of rows.get(tab.tabKey) ?? []) {
       if (row.cellLevel === true) {
         account.cellAnnotations += 1;
@@ -212,8 +246,10 @@ export function accountRows(
       counts[row.rowClass] += 1;
       if (row.rowClass !== "data") continue;
       const reason = plan.rawOnly.get(row.recordId);
-      if (imported.has(row.recordId)) account.imported += 1;
-      else if (queued.has(row.recordId)) account.queued += 1;
+      const waits = queued.has(row.recordId);
+      if (waits && plan.held.has(row.recordId)) account.queued += 1;
+      else if (imported.has(row.recordId)) account.imported += 1;
+      else if (waits) account.queued += 1;
       else if (reason !== undefined) account.rawOnly[reason] = (account.rawOnly[reason] ?? 0) + 1;
       else if (!interpreted) account.rawOnly.blocked = (account.rawOnly.blocked ?? 0) + 1;
       else account.unaccounted += 1;
@@ -238,7 +274,12 @@ function summarise(diff: PlanDiff): Pick<RunReport, "collections" | "items"> {
     }
   }
   for (const [collection, count] of diff.unchanged) of(collection).unchanged = count;
-  const items: Record<ItemAction, Partial<Record<ReconciliationKind, number>>> = { raise: {}, reopen: {}, supersede: {}, clear: {} };
+  const items: Record<ItemAction, Partial<Record<ReconciliationKind, number>>> = {
+    raise: {},
+    reopen: {},
+    supersede: {},
+    clear: {},
+  };
   for (const change of diff.itemChanges) {
     const kind = change.kind as ReconciliationKind;
     items[change.action][kind] = (items[change.action][kind] ?? 0) + 1;
@@ -260,7 +301,8 @@ function statsOf(report: Omit<RunReport, "status">): Record<string, number> {
     "items:standing": report.items.standing,
   };
   for (const tab of report.tabs) {
-    for (const [rowClass, count] of Object.entries(tab.rows)) if (count > 0) stats[`rows:${tab.tabKey}:${rowClass}`] = count;
+    for (const [rowClass, count] of Object.entries(tab.rows))
+      if (count > 0) stats[`rows:${tab.tabKey}:${rowClass}`] = count;
     if (tab.cellAnnotations > 0) stats[`rows:${tab.tabKey}:cellAnnotations`] = tab.cellAnnotations;
     stats[`rows:${tab.tabKey}:imported`] = tab.imported;
     stats[`rows:${tab.tabKey}:queued`] = tab.queued;
@@ -307,10 +349,12 @@ export async function compute(
         secret,
         studies: new StudyResolver(context.db),
         identities: new IdentityResolver(context.db, secret),
+        items,
         db: context.db,
       })
     : planOfIssues(importer.sourceKey, reading, items);
-  const plan = interpreted && drafted.blocking.length === 0 ? await withDepartures(context, drafted, state, items) : drafted;
+  const plan =
+    interpreted && drafted.blocking.length === 0 ? await withDepartures(context, drafted, state, items) : drafted;
   const tabs = accountRows(reading, rows, plan, interpreted && plan.blocking.length === 0);
   const unaccounted = tabs.filter((tab) => tab.unaccounted > 0);
   if (unaccounted.length > 0) {
@@ -320,11 +364,21 @@ export async function compute(
         " are named by no document, no item and no reason for keeping them raw.",
     );
   }
-  const diff = await comparePlan(context, plan, { ownRecordIds: state.ownRecordIds, items, complete: plan.blocking.length === 0 });
+  const diff = await comparePlan(context, plan, {
+    ownRecordIds: state.ownRecordIds,
+    items,
+    complete: plan.blocking.length === 0,
+  });
   return { reading, rows, state, plan, diff, tabs };
 }
 
-async function requireMatchingPreview(db: Firestore, previewBatchId: string, sourceKey: string, reading: SourceReading, diff: PlanDiff) {
+async function requireMatchingPreview(
+  db: Firestore,
+  previewBatchId: string,
+  sourceKey: string,
+  reading: SourceReading,
+  diff: PlanDiff,
+) {
   const preview = await db.doc(COLLECTIONS.importBatches.docPath(previewBatchId)).get();
   const problem = !preview.exists
     ? "it does not exist"
@@ -336,18 +390,27 @@ async function requireMatchingPreview(db: Firestore, previewBatchId: string, sou
           ? "the database or the plan has changed since it was computed"
           : null;
   if (problem !== null) {
-    throw new ImportStopped(`The apply does not match the previewed batch ${previewBatchId}: ${problem}. Preview again.`);
+    throw new ImportStopped(
+      `The apply does not match the previewed batch ${previewBatchId}: ${problem}. Preview again.`,
+    );
   }
 }
 
 export async function runImport(options: RunOptions): Promise<RunReport> {
   const { db, importer, input, mode, secret } = options;
-  const definition = sourceDefinition(importer.sourceKey);
-  if (definition === undefined) {
-    throw new ToolRefusal(`Refusing to run: the source registry lists no source "${importer.sourceKey}". A source is imported only if the registry lists it.`);
+  // A source of a family is registered by its importer, once the private configuration names it.
+  const derived = importer.source?.key === importer.sourceKey ? importer.source : undefined;
+  if (sourceDefinition(importer.sourceKey) === undefined && derived === undefined) {
+    throw new ToolRefusal(
+      `Refusing to run: the source registry lists no source "${importer.sourceKey}". A source is imported only if the registry lists it.`,
+    );
   }
+  const locations: PrivateLocations = {
+    ...options.locations,
+    ...(derived === undefined || importer.location === undefined ? {} : { [derived.key]: importer.location }),
+  };
   const started = options.now ?? new Date();
-  const reading = await importer.read(input);
+  const reading = await importer.read(input, { secret });
   const batchId = importBatchId(started, reading.contentHash);
   const context: RunContext = { db, sourceKey: importer.sourceKey, batchId, now: Timestamp.fromDate(started) };
   const batchEntry = entryOf("importBatches");
@@ -372,7 +435,13 @@ export async function runImport(options: RunOptions): Promise<RunReport> {
   );
 
   try {
-    let documentsWritten = await syncRegistry(context, definition, reading.tabs, options.location);
+    let documentsWritten = await syncRegistry(
+      context,
+      importer.key,
+      reading.tabs,
+      locations,
+      derived === undefined ? [] : [derived],
+    );
     const rows = recordRows(importer.sourceKey, reading);
     const state = await compareSnapshot(context, rows);
     const snapshot = await writeSnapshot(context, state, input.observedOn);
@@ -382,7 +451,8 @@ export async function runImport(options: RunOptions): Promise<RunReport> {
     const blocked = plan.blocking.length > 0;
     let changesCommitted = 0;
     if (mode === "apply" && !blocked) {
-      if (options.previewBatchId !== undefined) await requireMatchingPreview(db, options.previewBatchId, importer.sourceKey, reading, diff);
+      if (options.previewBatchId !== undefined)
+        await requireMatchingPreview(db, options.previewBatchId, importer.sourceKey, reading, diff);
       changesCommitted = await applyDiff(context, diff);
     } else if (blocked) {
       // An item that explains why the batch cannot be applied is written at once, so that a reviewer can act on it.
@@ -393,7 +463,14 @@ export async function runImport(options: RunOptions): Promise<RunReport> {
     const messages = plan.blocking.map((check) => `Blocking check ${check.check}: ${check.message}`);
     for (const [index, message] of messages.entries()) {
       const path = COLLECTIONS.importBatchLog.docPath(batchId, sequenceId(index + 1));
-      await db.doc(path).create(validated(entryOf("importBatchLog"), path, { ...appendOnlyFields(context.now), batchId, level: "error", message: message.slice(0, 2000) }));
+      await db.doc(path).create(
+        validated(entryOf("importBatchLog"), path, {
+          ...appendOnlyFields(context.now),
+          batchId,
+          level: "error",
+          message: message.slice(0, 2000),
+        }),
+      );
     }
     documentsWritten += messages.length;
 
@@ -405,7 +482,12 @@ export async function runImport(options: RunOptions): Promise<RunReport> {
       status,
       blocking: plan.blocking,
       tabs,
-      sourceRecords: { created: state.created.length, superseded: state.superseded.length, missing: state.missing.length, seen: state.seen.length },
+      sourceRecords: {
+        created: state.created.length,
+        superseded: state.superseded.length,
+        missing: state.missing.length,
+        seen: state.seen.length,
+      },
       ...summarise(diff),
       conflicts: diff.conflicts,
       changesCommitted,

@@ -31,6 +31,19 @@ export const ID_SEPARATOR = "__";
 /** The number of hexadecimal characters kept of a hash that stands for a part. */
 export const SHORT_HASH_LENGTH = 20;
 
+/**
+ * The identifier that Firestore generates for a record made in the portal: twenty letters and
+ * digits. Where the data model calls an identifier opaque, the security rules accept no other
+ * shape from a client, so a client can never take an identifier that trusted code derives: a
+ * derived identifier holds the separator, a hyphen or another length.
+ */
+export const AUTO_ID_PATTERN = /^[A-Za-z0-9]{20}$/;
+
+/** Whether an identifier has the shape of one that Firestore generates. */
+export function isAutoId(id: string): boolean {
+  return AUTO_ID_PATTERN.test(id);
+}
+
 /** The shortest secret, in bytes of UTF-8, that a keyed hash accepts. */
 export const MIN_HASH_SECRET_BYTES = 32;
 
@@ -350,6 +363,28 @@ export function candidateStudyId(key: CandidateStudyKey): string {
   return compose(["cand", "t", shortHash(lines([surname, String(wholeNumber(key.year, "A year", 9999)), title]))]);
 }
 
+/** The highest ordinal that the identifier of a prediction-market item can carry. */
+export const MAX_PREDICTION_MARKET_ORDINAL = 999;
+
+/**
+ * `pmq__hash__ordinal`: the identifier of a survey or market question that an importer writes
+ * (docs/MIGRATION_PLAN.md, section 4.4). The hash is taken over the heading of the section in
+ * which the question stands and over the text of the question, each with its white space
+ * collapsed, and the ordinal counts the exact repeats of that pair, from 1. A row number is no
+ * part of it, so a question keeps its identifier when rows are inserted above it.
+ */
+export function predictionMarketItemId(sectionHeading: string, questionText: string, ordinal: number): string {
+  const collapsed = (text: string) => text.normalize("NFC").replace(/\s+/g, " ").trim();
+  const question = collapsed(questionText);
+  if (question === "") throw new RangeError("A question has a text.");
+  if (!Number.isInteger(ordinal) || ordinal < 1 || ordinal > MAX_PREDICTION_MARKET_ORDINAL) {
+    throw new RangeError(
+      `The ordinal of a prediction-market item is a whole number from 1 to ${MAX_PREDICTION_MARKET_ORDINAL}.`,
+    );
+  }
+  return compose(["pmq", shortHash(lines([collapsed(sectionHeading), question])), String(ordinal)]);
+}
+
 // Participation.
 
 /** `studyKey__laboratoryId`. The laboratory identifier may contain the separator. */
@@ -360,6 +395,51 @@ export function participationId(studyKey: string, laboratoryId: string): string 
 /** `personId__protocolVersionId`. The person identifier may contain the separator. */
 export function acknowledgementId(personId: string, protocolVersionId: string): string {
   return compose([personId, protocolVersionId], 0);
+}
+
+/** The highest ordinal that the identifier of an outreach contact can carry. */
+export const MAX_OUTREACH_ORDINAL = 9_999;
+
+/**
+ * The keyed hash that stands for the name cell of an outreach row: taken over the lookup fold
+ * of the cell, so that a trailing space or a question mark changes nothing, or over the cell as
+ * written when nothing is left of it after folding. The row key of the source record and the
+ * identifier of the contact are both built from it.
+ */
+export function outreachNameHash(contactNameCell: string, secret: string): string {
+  const folded = lookupFold(contactNameCell);
+  return keyedShortHash(folded === "" ? contactNameCell : folded, secret);
+}
+
+/**
+ * `oc__sourceKey__tabKey__hash__ordinal`: the identifier of an outreach contact that an importer
+ * writes, one for each source row (docs/MIGRATION_PLAN.md, section 3.3). The hash stands for the
+ * name cell of the row, and the ordinal counts the rows of the tab whose names fold alike, from
+ * 1. Neither a row number nor a readable name is part of it. The source key may contain the
+ * separator.
+ */
+export function outreachContactId(
+  sourceKey: string,
+  tabKey: string,
+  contactNameCell: string,
+  ordinal: number,
+  secret: string,
+): string {
+  if (!Number.isInteger(ordinal) || ordinal < 1 || ordinal > MAX_OUTREACH_ORDINAL) {
+    throw new RangeError(`The ordinal of an outreach contact is a whole number from 1 to ${MAX_OUTREACH_ORDINAL}.`);
+  }
+  return compose(["oc", sourceKey, tabKey, outreachNameHash(contactNameCell, secret), String(ordinal)], 1);
+}
+
+/**
+ * The key that the copies of one contact share across the tabs of one study: the keyed hash of
+ * the lookup fold of the study identifier and of the name cell. It links the copies, which are
+ * never merged. Null when nothing is left of either part after folding.
+ */
+export function outreachGroupKey(studyKey: string, contactNameCell: string, secret: string): string | null {
+  const study = lookupFold(studyKey);
+  const name = lookupFold(contactNameCell);
+  return study === "" || name === "" ? null : keyedShortHash(lines([study, name]), secret);
 }
 
 // Tasks and workspace.
@@ -390,6 +470,72 @@ export function sequenceId(position: number): string {
 /** `generation__n`: the identifier of one chunk of a page snapshot. */
 export function pageContentChunkId(generation: number, index: number): string {
   return compose([sequenceId(generation), sequenceId(index)]);
+}
+
+// Scientific outputs.
+
+/** The highest ordinal that the identifier of a contributor can carry. */
+export const MAX_CONTRIBUTOR_ORDINAL = 9_999;
+
+function fileIdentifierHash(fileIdentifier: string): string {
+  if (fileIdentifier.trim() === "") throw new RangeError("The file identifier of a contributor sheet is not empty.");
+  return shortHash(fileIdentifier.trim());
+}
+
+/**
+ * `ctable-hash`: the key of a contributor sheet in the source registry, from the hash of the
+ * identifier that the host gives the file. The identifier is a long random string, so its plain
+ * hash cannot be reversed by guessing, and the identifier itself stays in private configuration.
+ * The key joins its two parts with a hyphen, because the key of a source holds no separator.
+ */
+export function contributorSheetSourceKey(fileIdentifier: string): string {
+  return `ctable-${fileIdentifierHash(fileIdentifier)}`;
+}
+
+/**
+ * `ctable__hash`: the identifier of the contributor table that an importer writes for a sheet,
+ * from the hash of the file identifier. One replication may have a sign-up table and a final
+ * table, so the replication is no part of it.
+ */
+export function contributorTableId(fileIdentifier: string): string {
+  return compose(["ctable", fileIdentifierHash(fileIdentifier)]);
+}
+
+/**
+ * The keyed hash that stands for the name of a contributor row: taken over the lookup folds of
+ * the first name cell and of the surname cell, one to a line. The middle name is left out,
+ * because it varies between the sheets of one person. Null when nothing is left of either cell.
+ */
+export function contributorNameHash(firstNameCell: string, surnameCell: string, secret: string): string | null {
+  const first = lookupFold(firstNameCell);
+  const surname = lookupFold(surnameCell);
+  return first === "" || surname === "" ? null : keyedShortHash(lines([first, surname]), secret);
+}
+
+/**
+ * `ctr__hash__hash__ordinal`: the identifier of a contributor that an importer writes, one for
+ * each named row of a sheet (docs/MIGRATION_PLAN.md, section 3.3). The first hash stands for
+ * the file, the second is `contributorNameHash`, and the ordinal counts the rows of the sheet
+ * whose names fold alike, from 1. Neither a row number, an order value nor a readable name is
+ * part of it.
+ */
+export function contributorId(fileIdentifier: string, nameHash: string, ordinal: number): string {
+  if (!/^[0-9a-f]{20}$/.test(nameHash)) throw new RangeError("The name hash of a contributor is a keyed short hash.");
+  if (!Number.isInteger(ordinal) || ordinal < 1 || ordinal > MAX_CONTRIBUTOR_ORDINAL) {
+    throw new RangeError(`The ordinal of a contributor is a whole number from 1 to ${MAX_CONTRIBUTOR_ORDINAL}.`);
+  }
+  return compose(["ctr", fileIdentifierHash(fileIdentifier), nameHash, String(ordinal)]);
+}
+
+/**
+ * `p-hash`: the slug of a person whom an importer creates from a restricted source. A slug is
+ * a public page anchor, so it is never derived from the name of such a person: it repeats the
+ * hash of the identifier of the person.
+ */
+export function opaquePersonSlug(personId: string): string {
+  const match = /^p__([0-9a-f]{20})$/.exec(personId);
+  if (match === null) throw new RangeError("An opaque slug is taken from the identifier of an imported person.");
+  return `p-${match[1]}`;
 }
 
 // Provenance, migration and integrations.
@@ -519,12 +665,16 @@ export const ID_BUILDERS = {
   historicalAggregateId,
   vocabularyTermId,
   candidateStudyId,
+  predictionMarketItemId,
   participationId,
   acknowledgementId,
+  outreachContactId,
   tagId,
   pagePermissionId,
   sequenceId,
   pageContentChunkId,
+  contributorTableId,
+  contributorId,
   sourceTabKey,
   sourceRecordId,
   importBatchId,

@@ -259,6 +259,11 @@ function define<const Template extends string, Schema extends z.ZodObject>(spec:
 
 // Shorthand for the entries below.
 
+/**
+ * An opaque identifier. A client that creates such a document sends an identifier that Firestore
+ * generated (`AUTO_ID_PATTERN`), and the rules refuse any other, so that no client can take an
+ * identifier that an importer derives.
+ */
 const auto: IdentifierRule = { kind: "auto", note: null };
 const key = (of: string, field: string | null = null): IdentifierRule => ({ kind: "key", of, field });
 const fixed = (name: string): IdentifierRule => ({ kind: "fixed", name });
@@ -525,7 +530,8 @@ const DEFINITIONS = {
     write: client(
       [
         grant(["member"], ["create"], {
-          condition: "The request names its creator in uid, is open, and names no special-category field.",
+          condition:
+            "The request names its creator in uid, is open, and names a field by letters and digits alone, never one whose name holds gender, ethnic or demograph in any case.",
         }),
         grant(["self"], ["update"], {
           onlyFields: ["status"],
@@ -549,7 +555,19 @@ const DEFINITIONS = {
         grant(STAFF, ["update"], { capability: "people.manage" }),
       ],
       ["userId"],
-      ["slug", "userId", "claimedAt", "laboratoryIds", "replicationIds", "institutionId", "affiliationSummary"],
+      // The link to a login, the derived copies, and the fields by which imports find a person
+      // again: a callable function changes those and reserves the identity key with the change.
+      [
+        "slug",
+        "userId",
+        "claimedAt",
+        "laboratoryIds",
+        "replicationIds",
+        "institutionId",
+        "affiliationSummary",
+        "orcid",
+        "websitePersonId",
+      ],
     ),
     dataClass: "member",
     flags: { importable: true, searchable: true },
@@ -575,7 +593,10 @@ const DEFINITIONS = {
     schema: identity.personAddressDocSchema,
     id: fixed("address"),
     read: read(["SELF", "ADMIN"], ["parent.userId"], null, "people.manage"),
-    write: client([grant(["self"], WRITE), grant(STAFF, WRITE, { capability: "people.manage" })], ["parent.userId"]),
+    write: client(
+      [grant(["self"], WRITE), grant(STAFF, WRITE, { capability: "people.manage", condition: "The person exists." })],
+      ["parent.userId"],
+    ),
     dataClass: "restricted",
     enforcement: ENFORCED,
   }),
@@ -603,7 +624,19 @@ const DEFINITIONS = {
     schema: identity.personAffiliationDocSchema,
     id: auto,
     read: read(["MEMBER"]),
-    write: client([grant(["self"], WRITE), grant(STAFF, WRITE, { capability: "people.manage" })], ["parent.userId"]),
+    write: client(
+      [
+        grant(["self"], WRITE, {
+          condition:
+            "The institution exists. A person names a laboratory only where that laboratory holds a confirmed member entry for the person.",
+        }),
+        grant(STAFF, WRITE, {
+          capability: "people.manage",
+          condition: "The person, the institution and the laboratory exist.",
+        }),
+      ],
+      ["parent.userId"],
+    ),
     dataClass: "member",
     flags: { importable: true },
     enforcement: ENFORCED,
@@ -645,7 +678,13 @@ const DEFINITIONS = {
     schema: identity.institutionDocSchema,
     id: auto,
     read: read(["MEMBER"]),
-    write: client([grant(STAFF, ["update"], { capability: "lookups.manage" })]),
+    write: client(
+      [grant(STAFF, ["update"], { capability: "lookups.manage" })],
+      [],
+      // Imports find an institution again by its ROR identifier, which a callable function
+      // changes together with the identity key.
+      ["rorId"],
+    ),
     dataClass: "member",
     flags: { importable: true, searchable: true },
     enforcement: ENFORCED,
@@ -700,10 +739,12 @@ const DEFINITIONS = {
         grant(COORDINATORS, WRITE, {
           capability: "labs.manage",
           condition:
-            "An entry starts as proposed. Only the person concerned or an administrator sets status to confirmed, through a callable function.",
+            "An entry starts as proposed. Only the person concerned or an administrator sets status to confirmed, through a callable function. A confirmed entry keeps its role and its mark of an authorised representative, unless it returns to proposed with the change. An archived entry is restored as proposed.",
         }),
       ],
       ["{laboratoryId}"],
+      // Trusted code moves a period that has ended into the earlier periods.
+      ["earlierPeriods"],
     ),
     dataClass: "member",
     flags: { importable: true },
@@ -729,10 +770,32 @@ const DEFINITIONS = {
     write: client(
       [
         grant(["replication_lead"], ["update"], { capability: "replications.manage" }),
-        grant(STAFF, WRITE, { capability: "replications.manage" }),
+        grant(STAFF, WRITE, {
+          capability: "replications.manage",
+          condition:
+            "A new replication holds its programme, its study identifier and a short title. Its scientific definition is written by later changes.",
+        }),
       ],
       ["{studyKey}"],
-      ["statusKey", "statusHistoryId", "leadPersonIds"],
+      // The status and the leads, which trusted code derives or records with a history entry;
+      // the decisions of the programme (the programme a replication belongs to, its selection
+      // and the stage that the public sees); the result of the citation check, which a machine
+      // makes; and the links to vocabulary terms, whose elements no rule can check.
+      [
+        "statusKey",
+        "statusHistoryId",
+        "leadPersonIds",
+        "programmeId",
+        "selectionStatus",
+        "publicStageNumber",
+        "publicStageName",
+        "publicStageText",
+        "citationStatus",
+        "citationCheckedAt",
+        "citationSource",
+        "citationMetadata",
+        "vocabulary",
+      ],
     ),
     dataClass: "member",
     flags: { importable: true, searchable: true },
@@ -777,10 +840,12 @@ const DEFINITIONS = {
         grant(["replication_lead"], WRITE, {
           capability: "replications.manage",
           condition:
-            "The role is neither lead nor coLead, and reviewStatus is needsReview on creation and unchanged on update.",
+            "The role is neither lead nor coLead, and reviewStatus is needsReview on creation and unchanged on update. A lead neither makes a confirmed membership current again nor restores one from the archive.",
         }),
       ],
       ["{studyKey}"],
+      // Trusted code moves a period that has ended into the earlier periods.
+      ["earlierPeriods"],
     ),
     dataClass: "member",
     flags: { importable: true },
@@ -791,7 +856,41 @@ const DEFINITIONS = {
     schema: replications.replicationHypothesisDocSchema,
     id: built("hypothesisId", ["hypothesisNumber"]),
     read: read(["MEMBER"]),
-    write: client([grant(LEADS, WRITE, { capability: "replications.manage" })], ["{studyKey}"]),
+    write: client(
+      [
+        grant(STAFF, WRITE, {
+          capability: "replications.manage",
+          condition:
+            "A review names the reviewer and the request time. Whoever changes the reviewed content clears the review or signs it anew.",
+        }),
+        grant(["replication_lead"], ["create"], {
+          capability: "replications.manage",
+          condition: "A new hypothesis is unverified and carries no review.",
+        }),
+        grant(["replication_lead"], ["update"], {
+          capability: "replications.manage",
+          // Never the review status or the review itself: a lead does not review its own result.
+          // A lead archives a hypothesis that nobody has reviewed yet.
+          onlyFields: [
+            "text",
+            "expectedEffect",
+            "outcomeMeasure",
+            "analysisSpecification",
+            "preregistrationUrl",
+            "originalStatistics",
+            "nullSigSource",
+            "analysisStatus",
+            "resultSummary",
+            "studyDescriptionUrl",
+            "infosheetUrl",
+            "archivedAt",
+          ],
+          condition:
+            "Once a result is reviewed or the hypothesis is verified, a lead changes the three addresses alone.",
+        }),
+      ],
+      ["{studyKey}"],
+    ),
     dataClass: "member",
     flags: { importable: true, searchable: true },
     enforcement: ENFORCED,
@@ -801,7 +900,15 @@ const DEFINITIONS = {
     schema: replications.replicationProtocolDocSchema,
     id: auto,
     read: read(["MEMBER"]),
-    write: client([grant(LEADS, WRITE, { capability: "replications.manage" })], ["{studyKey}"]),
+    write: client(
+      [
+        grant(LEADS, WRITE, {
+          capability: "replications.manage",
+          condition: "A new protocol names no current version. The current version is a version of the protocol.",
+        }),
+      ],
+      ["{studyKey}"],
+    ),
     dataClass: "member",
     enforcement: ENFORCED,
   }),
@@ -810,7 +917,16 @@ const DEFINITIONS = {
     schema: replications.replicationProtocolVersionDocSchema,
     id: auto,
     read: read(["MEMBER"]),
-    write: client([grant(LEADS, WRITE, { capability: "replications.manage" })], ["{studyKey}"]),
+    write: client(
+      [
+        grant(LEADS, WRITE, {
+          capability: "replications.manage",
+          condition:
+            "A draft names no approver and an approved version names one, who approves in its own name at the request time. An approved version changes only by becoming superseded, and a superseded one never. The document link is a link of the replication.",
+        }),
+      ],
+      ["{studyKey}"],
+    ),
     dataClass: "member",
     enforcement: ENFORCED,
   }),
@@ -862,7 +978,7 @@ const DEFINITIONS = {
       "From the DOI, or from the first author, the year and the title where the paper has none.",
     ),
     read: read(["MEMBER"]),
-    write: client([grant(STAFF, WRITE, { capability: "replications.manage" })]),
+    write: client([grant(STAFF, WRITE, { capability: "replications.manage", condition: "The programme exists." })]),
     dataClass: "member",
     flags: { importable: true },
     enforcement: ENFORCED,
@@ -894,7 +1010,12 @@ const DEFINITIONS = {
       "A term of the community vocabulary keeps its original identifier, which sourceId repeats.",
     ),
     read: read(["MEMBER"]),
-    write: client([grant(STAFF, WRITE, { capability: "lookups.manage" })]),
+    write: client(
+      [grant(STAFF, WRITE, { capability: "lookups.manage" })],
+      [],
+      // The original identifier of a term belongs to the source it came from.
+      ["sourceId"],
+    ),
     dataClass: "public",
     flags: { importable: true },
     enforcement: ENFORCED,
@@ -904,7 +1025,12 @@ const DEFINITIONS = {
     schema: replications.predictionMarketItemDocSchema,
     id: auto,
     read: read(["MEMBER"]),
-    write: client([grant(STAFF, WRITE, { capability: "replications.manage" })]),
+    write: client([
+      grant(STAFF, WRITE, {
+        capability: "replications.manage",
+        condition: "A hypothesis is named together with its replication, and both exist.",
+      }),
+    ]),
     dataClass: "member",
     flags: { importable: true },
     enforcement: ENFORCED,
@@ -916,10 +1042,26 @@ const DEFINITIONS = {
     schema: participation.participationDocSchema,
     id: built("participationId", ["replicationId", "laboratoryId"]),
     read: read(["MEMBER"]),
-    write: client([grant(MANAGERS, WRITE, { capability: "participations.manage" })], UNIT, [
-      "status",
-      "statusHistoryId",
-    ]),
+    write: client(
+      [
+        grant(LEADS, ["create"], {
+          capability: "participations.manage",
+          condition: "The replication invites the laboratory: status is invited, and readiness has not started.",
+        }),
+        grant(COORDINATORS, ["create"], {
+          capability: "participations.manage",
+          condition:
+            "The laboratory registers its interest: status is interested, and readiness has not started. Programme administrators and the core team record either.",
+        }),
+        grant(MANAGERS, ["update"], {
+          capability: "participations.manage",
+          condition:
+            "Readiness becomes approved, or stops being approved, through the leads of the replication, programme administrators and the core team alone. The protocol version is a version of the protocol.",
+        }),
+      ],
+      UNIT,
+      ["status", "statusHistoryId"],
+    ),
     dataClass: "member",
     flags: { importable: true, searchable: true },
     enforcement: ENFORCED,
@@ -930,7 +1072,13 @@ const DEFINITIONS = {
     id: fixed("detail"),
     read: read(["SCOPED"], ["parent.scopeKeys"]),
     write: client(
-      [grant(MANAGERS, WRITE, { capability: "participations.manage" })],
+      [
+        grant(MANAGERS, WRITE, {
+          capability: "participations.manage",
+          condition:
+            "Only the leads of the replication, programme administrators and the core team set or clear the approval of readiness, in their own name at the request time. Once readiness is approved, what was approved (ethics, training and the equipment override) changes only together with the approval.",
+        }),
+      ],
       ["parent.replicationId", "parent.laboratoryId"],
     ),
     dataClass: "restricted",
@@ -943,10 +1091,15 @@ const DEFINITIONS = {
     read: read(["SCOPED"], ["scopeKeys"]),
     write: client(
       [
-        grant(MANAGERS, ["update"], { capability: "participations.manage" }),
+        grant(MANAGERS, ["update"], {
+          capability: "participations.manage",
+          condition:
+            "An item is done exactly while it names who completed it. A change to a completed item is signed anew by the caller, or reopens the item.",
+        }),
         grant(["lab_member"], ["update"], {
           onlyFields: ["status", "completedBy", "completedAt", "evidenceUrl", "note"],
-          condition: "A member of the laboratory of the participation.",
+          condition:
+            "A member of the laboratory of the participation, who reopens only an item that the member completed.",
         }),
       ],
       UNIT,
@@ -969,7 +1122,15 @@ const DEFINITIONS = {
     schema: participation.participationAcknowledgementDocSchema,
     id: built("acknowledgementId", ["personId", "protocolVersionId"]),
     read: read(["SCOPED"], ["scopeKeys"]),
-    write: client([grant(MANAGERS, ["create"], { capability: "participations.manage" })], UNIT),
+    write: client(
+      [
+        grant(["self"], ["create"], {
+          condition:
+            "The person concerned, who is on the team of the participation, acknowledges an approved version in their own name at the request time. Nobody records an acknowledgement for someone else.",
+        }),
+      ],
+      ["personId"],
+    ),
     dataClass: "member",
     flags: { appendOnly: true },
     enforcement: ENFORCED,
@@ -979,7 +1140,16 @@ const DEFINITIONS = {
     schema: participation.participationDeviationDocSchema,
     id: auto,
     read: read(["SCOPED"], ["scopeKeys"]),
-    write: client([grant(MANAGERS, WRITE, { capability: "participations.manage" })], UNIT),
+    write: client(
+      [
+        grant(MANAGERS, WRITE, {
+          capability: "participations.manage",
+          condition:
+            "Whoever reports a deviation is named in reportedBy. Only the reporter, programme administrators and the core team change what was reported, resolve it or archive it. The other side adds a corrective action and moves an open deviation to underReview.",
+        }),
+      ],
+      UNIT,
+    ),
     dataClass: "member",
     enforcement: ENFORCED,
   }),
@@ -994,7 +1164,13 @@ const DEFINITIONS = {
     schema: participation.checklistTemplateDocSchema,
     id: key("template key", "key"),
     read: read(["MEMBER"]),
-    write: client([grant(STAFF, WRITE, { capability: "lookups.manage" })]),
+    write: client([
+      grant(STAFF, WRITE, {
+        capability: "lookups.manage",
+        condition:
+          "A template that a client writes holds fifteen items at most, because a rule checks them one by one. Trusted code writes a longer one.",
+      }),
+    ]),
     dataClass: "public",
     enforcement: ENFORCED,
   }),
@@ -1428,7 +1604,10 @@ const DEFINITIONS = {
     write: client(
       [grant(LEADS, WRITE, { capability: "replications.manage" })],
       ["replicationId", "scopeKeys"],
-      ["status", "statusHistoryId"],
+      // The status, which a callable function records with its history; the identifier of the
+      // public website, by which its importer finds the manuscript again; and the result of the
+      // citation check, which a machine makes.
+      ["status", "statusHistoryId", "websitePublicationId", "citationStatus", "citationMetadata"],
     ),
     dataClass: "member",
     flags: { importable: true, searchable: true },
@@ -1459,7 +1638,16 @@ const DEFINITIONS = {
     schema: outputs.contributorDocSchema,
     id: auto,
     read: read(["MEMBER"]),
-    write: client([grant(LEADS, WRITE, { capability: "replications.manage" })], ["replicationId", "scopeKeys"]),
+    write: client(
+      [
+        grant(LEADS, WRITE, {
+          capability: "replications.manage",
+          condition:
+            "The contributor table and the manuscript belong to the replication of the row, and the person exists.",
+        }),
+      ],
+      ["replicationId", "scopeKeys"],
+    ),
     dataClass: "member",
     flags: { importable: true },
     enforcement: ENFORCED,
@@ -1532,6 +1720,8 @@ const DEFINITIONS = {
     write: client(
       [grant(MANAGERS, WRITE, { condition: "The scope fields equal the audience of the target record." })],
       [...UNIT, "scopeKeys"],
+      // The result of the link check, which a machine makes.
+      ["accessStatus", "httpStatus", "lastCheckedAt", "ownerName", "modifiedAt"],
     ),
     dataClass: "member",
     flags: { importable: true },
@@ -1943,6 +2133,18 @@ export function clientImmutableFields(entry: CollectionEntry): readonly string[]
   ];
   const declared = new Set(Object.keys(entry.schema.shape));
   return [...new Set(candidates)].filter((field) => declared.has(field));
+}
+
+/**
+ * The fields of an entry that hold a value exactly as a source gave it (docs/DATA_MODEL.md,
+ * section 1): those whose name ends in `Source`, apart from what `clientImmutableFields` keeps
+ * from clients altogether. On a document that an import wrote, which carries `sourceRecordIds`,
+ * no client changes one, because `fieldSources` still names the source row as the origin of the
+ * value. A correction goes through `correctionRequests`.
+ */
+export function verbatimSourceFields(entry: CollectionEntry): readonly string[] {
+  const immutable = clientImmutableFields(entry);
+  return Object.keys(entry.schema.shape).filter((field) => field.endsWith("Source") && !immutable.includes(field));
 }
 
 /**

@@ -1,4 +1,6 @@
-// Proves every allow and every deny in portal/firestore.rules.
+// The rules that an account meets before it is a member: its own profile and access document,
+// the standing of the account, the audit trail and every path that no rule opens. The matrix in
+// matrix.test.ts runs every kind of caller against every collection of the registry.
 // Fixtures are synthetic: fictitious accounts on the example.org domain.
 import { assertFails, assertSucceeds, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
 import {
@@ -59,6 +61,7 @@ beforeEach(async () => {
     },
     "auditEvents/event-1": { action: "account.created", documentPath: `users/${owner}` },
     "persons/person-1": { displayName: "Synthetic Person" },
+    "tasks/task-1": { title: "Synthetic task" },
   });
 });
 
@@ -194,13 +197,21 @@ describe("auditEvents/{eventId}", () => {
 describe("every other path", () => {
   it.each(EVERYONE)("denies reading a collection that has no rule to: %s", async (caller) => {
     const db = firestoreAs(environment, caller);
+    await assertFails(getDoc(doc(db, "tasks", "task-1")));
+    await assertFails(getDocs(collection(db, "tasks")));
+    await assertFails(getDoc(doc(db, "anything", "at-all")));
+  });
+
+  it.each(EVERYONE)("denies the directory of persons to an account that is no member: %s", async (caller) => {
+    const db = firestoreAs(environment, caller);
     await assertFails(getDoc(doc(db, "persons", "person-1")));
     await assertFails(getDocs(collection(db, "persons")));
   });
 
-  it.each(EVERYONE)("denies writing to a collection that has no rule to: %s", async (caller) => {
+  it.each(EVERYONE)("denies writing to a collection that no client writes to: %s", async (caller) => {
     const db = firestoreAs(environment, caller);
     await assertFails(setDoc(doc(db, "persons", "person-2"), { displayName: "Synthetic Person" }));
+    await assertFails(setDoc(doc(db, "tasks", "task-2"), { title: "Synthetic task" }));
     await assertFails(setDoc(doc(db, "anything", "at-all"), { value: 1 }));
   });
 });

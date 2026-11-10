@@ -5,9 +5,14 @@
 // Fixtures are synthetic: invented values on the example.org domain, and a secret made up for these tests.
 import { describe, expect, it } from "vitest";
 import {
+  AUTO_ID_PATTERN,
   acknowledgementId,
   candidateStudyId,
   capabilityGrantId,
+  contributorId,
+  contributorNameHash,
+  contributorSheetSourceKey,
+  contributorTableId,
   documentLinkSlotId,
   entityRefId,
   eventFailureId,
@@ -24,6 +29,7 @@ import {
   importedPersonId,
   institutionCandidateId,
   integrationMappingId,
+  isAutoId,
   keyedShortHash,
   labClaimId,
   laboratoryScopeKey,
@@ -32,12 +38,17 @@ import {
   mailId,
   nestedEntityId,
   notificationId,
+  opaquePersonSlug,
+  outreachContactId,
+  outreachGroupKey,
+  outreachNameHash,
   PROGRAMME_SCOPE_KEY,
   pageContentChunkId,
   pagePermissionId,
   participationId,
   personEmailIndexId,
   personEvidenceKey,
+  predictionMarketItemId,
   reconciliationFingerprint,
   recordGrantId,
   replicationMembershipId,
@@ -165,12 +176,25 @@ const GOLDEN: { readonly [Name in IdBuilderName]: readonly [actual: string | nul
   ],
   vocabularyTermId: [vocabularyTermId("creditRole", "Writing – review & editing"), "creditRole__writingreviewediting"],
   candidateStudyId: [candidateStudyId({ doi: "10.1000/example.doi" }), "cand__39303ff0414138ed44f9"],
+  predictionMarketItemId: [
+    predictionMarketItemId("First section", "Did you understand the question?", 1),
+    "pmq__8923f48f25a5010b341e__1",
+  ],
   participationId: [participationId("AmodioJost2007", "lab__0f3a"), "AmodioJost2007__lab__0f3a"],
   acknowledgementId: [acknowledgementId("p__0f3a", "version-1"), "p__0f3a__version-1"],
+  outreachContactId: [
+    outreachContactId("f", "354e6b841741896a1abf", "Ada Example?", 1, SECRET),
+    "oc__f__354e6b841741896a1abf__e7aba9ebf35055fdb49b__1",
+  ],
   tagId: [tagId("Follow-up"), "c990fae1b539eca72254"],
   pagePermissionId: [pagePermissionId("role", "lab_member"), "role__lab_member"],
   sequenceId: [sequenceId(42), "000042"],
   pageContentChunkId: [pageContentChunkId(3, 12), "000003__000012"],
+  contributorTableId: [contributorTableId("an-invented-file-identifier"), "ctable__231260a4e1fc5c73416f"],
+  contributorId: [
+    contributorId("an-invented-file-identifier", contributorNameHash("Ada", "Example", SECRET) ?? "", 1),
+    "ctr__231260a4e1fc5c73416f__07682aa57abec309b384__1",
+  ],
   sourceTabKey: [sourceTabKey("Sheet 1 "), "354e6b841741896a1abf"],
   sourceRecordId: [sourceRecordId("F", "tab-1", "row-1", "aabbccddeeff"), "d5353780f1be271d54e8"],
   importBatchId: [
@@ -217,6 +241,45 @@ describe("the identifier builders", () => {
       expect(actual).toMatch(/^(?!\.{1,2}$)(?!__.*__$)[^/]+$/);
     }
   });
+
+  it("never give a record that a client could also create the shape of an identifier that Firestore generates", () => {
+    // Where a client creates a record under an opaque identifier, the rules accept nothing but
+    // the shape that Firestore generates. The identifiers that importers derive for the same
+    // collections have another shape, so a client cannot take one before the import writes it.
+    const derivedBesideClientRecords: readonly IdBuilderName[] = [
+      "importedAffiliationId",
+      "documentLinkSlotId",
+      "contributorTableId",
+      "contributorId",
+      "predictionMarketItemId",
+    ];
+    for (const name of derivedBesideClientRecords) {
+      const actual = GOLDEN[name][0] ?? "";
+      expect(isAutoId(actual), name).toBe(false);
+      expect(actual, name).toContain("__");
+    }
+  });
+});
+
+describe("the identifier that Firestore generates", () => {
+  it("is twenty letters and digits", () => {
+    expect(isAutoId("AbCdEfGhIjKlMnOpQrSt")).toBe(true);
+    expect(isAutoId("0123456789abcdefghij")).toBe(true);
+    expect(AUTO_ID_PATTERN.source).toBe("^[A-Za-z0-9]{20}$");
+  });
+
+  it.each([
+    ["a readable name", "manuscript-1"],
+    ["the identifier of a publication on the public website", "Synthetic2027"],
+    ["a composite identifier", "replication__SyntheticStudy2002__signup"],
+    ["nineteen characters", "AbCdEfGhIjKlMnOpQrS"],
+    ["twenty-one characters", "AbCdEfGhIjKlMnOpQrStU"],
+    ["twenty characters with a hyphen", "AbCdEfGhIj-lMnOpQrSt"],
+    ["twenty characters with a line break after them", "AbCdEfGhIjKlMnOpQrSt\n"],
+    ["nothing", ""],
+  ])("is not %s", (_label, id) => {
+    expect(isAutoId(id)).toBe(false);
+  });
 });
 
 describe("the identifiers that importers derive", () => {
@@ -257,6 +320,89 @@ describe("the identifiers that importers derive", () => {
     );
     expect(() => importBatchId(new Date("not a date"), hash)).toThrow(RangeError);
     expect(() => importBatchId(new Date("2026-11-10T03:15:00Z"), "abc")).toThrow(RangeError);
+  });
+
+  it("gives an outreach row an identifier without its name, which a tentative mark or a space does not change", () => {
+    const contact = outreachContactId("f", "354e6b841741896a1abf", "Ada Example", 1, SECRET);
+    expect(contact).toBe("oc__f__354e6b841741896a1abf__e7aba9ebf35055fdb49b__1");
+    expect(contact).not.toMatch(/ada|example/i);
+    expect(outreachContactId("f", "354e6b841741896a1abf", " ada  example? ", 1, SECRET)).toBe(contact);
+    expect(outreachNameHash("Ada Example", SECRET)).toBe("e7aba9ebf35055fdb49b");
+    // A second row of the tab with the same name, another tab, another source and another secret each differ.
+    expect(outreachContactId("f", "354e6b841741896a1abf", "Ada Example", 2, SECRET)).not.toBe(contact);
+    expect(outreachContactId("f", "0123456789abcdef0123", "Ada Example", 1, SECRET)).not.toBe(contact);
+    expect(outreachContactId("a", "354e6b841741896a1abf", "Ada Example", 1, SECRET)).not.toBe(contact);
+    expect(outreachContactId("f", "354e6b841741896a1abf", "Ada Example", 1, `${SECRET}-other`)).not.toBe(contact);
+    // A name of which nothing is left after folding is hashed as written, so two such names stay apart.
+    expect(outreachNameHash("?", SECRET)).not.toBe(outreachNameHash("??", SECRET));
+    expect(() => outreachContactId("f", "354e6b841741896a1abf", "Ada Example", 0, SECRET)).toThrow(RangeError);
+    expect(() => outreachContactId("f", "354e6b841741896a1abf", "Ada Example", 1.5, SECRET)).toThrow(RangeError);
+  });
+
+  it("gives a contributor sheet a source key and a table identifier that hold no file identifier", () => {
+    const fileIdentifier = "an-invented-file-identifier";
+    expect(contributorSheetSourceKey(fileIdentifier)).toBe("ctable-231260a4e1fc5c73416f");
+    expect(contributorTableId(fileIdentifier)).toBe("ctable__231260a4e1fc5c73416f");
+    // The key of a source holds no separator, and both forms stand for the same file.
+    expect(contributorSheetSourceKey(fileIdentifier)).toMatch(/^ctable-[0-9a-f]{20}$/);
+    expect(contributorTableId(fileIdentifier).slice(8)).toBe(contributorSheetSourceKey(fileIdentifier).slice(7));
+    expect(contributorSheetSourceKey(` ${fileIdentifier} `)).toBe(contributorSheetSourceKey(fileIdentifier));
+    expect(contributorSheetSourceKey("another-invented-identifier")).not.toBe(
+      contributorSheetSourceKey(fileIdentifier),
+    );
+    expect(() => contributorSheetSourceKey(" ")).toThrow(RangeError);
+    expect(() => contributorTableId("")).toThrow(RangeError);
+  });
+
+  it("gives a contributor row an identifier without its name, its row or its order", () => {
+    const nameHash = contributorNameHash("Ada", "Example", SECRET);
+    expect(nameHash).toBe("07682aa57abec309b384");
+    const contributor = contributorId("an-invented-file-identifier", nameHash ?? "", 1);
+    expect(contributor).toBe("ctr__231260a4e1fc5c73416f__07682aa57abec309b384__1");
+    expect(contributor).not.toMatch(/ada|example|invented/i);
+    // Case, spacing and a diacritic change nothing, and the middle name is no part of the key.
+    expect(contributorNameHash(" ada ", "EXAMPLE", SECRET)).toBe(nameHash);
+    expect(contributorNameHash("Áda", "Example", SECRET)).toBe(nameHash);
+    // First name and surname are kept apart: the same letters split elsewhere are another name.
+    expect(contributorNameHash("Adae", "Xample", SECRET)).not.toBe(nameHash);
+    expect(contributorNameHash("Ada", "Example", `${SECRET}-other`)).not.toBe(nameHash);
+    expect(contributorNameHash("Ada", " ", SECRET)).toBeNull();
+    expect(contributorNameHash("?", "Example", SECRET)).toBeNull();
+    // Another sheet and a second row of the same name each differ.
+    expect(contributorId("another-invented-identifier", nameHash ?? "", 1)).not.toBe(contributor);
+    expect(contributorId("an-invented-file-identifier", nameHash ?? "", 2)).not.toBe(contributor);
+    expect(() => contributorId("an-invented-file-identifier", "Ada Example", 1)).toThrow(RangeError);
+    expect(() => contributorId("an-invented-file-identifier", nameHash ?? "", 0)).toThrow(RangeError);
+  });
+
+  it("gives a person from a restricted source a slug that repeats the hash of the identifier and no name", () => {
+    const personId = importedPersonId(personEvidenceKey.email("synthetic.person@example.org"), SECRET);
+    expect(opaquePersonSlug(personId)).toBe(`p-${personId.slice(3)}`);
+    expect(opaquePersonSlug(personId)).toMatch(/^p-[0-9a-f]{20}$/);
+    expect(() => opaquePersonSlug("ada-example")).toThrow(RangeError);
+  });
+
+  it("links the copies of one contact within one study, and no two studies or two people", () => {
+    const group = outreachGroupKey("AmodioJost2007", "Ada Example", SECRET);
+    expect(group).toBe("ced7157bf018160ecc89");
+    expect(outreachGroupKey("amodiojost2007", " Ada Example? ", SECRET)).toBe(group);
+    expect(outreachGroupKey("AmodioMaster2008", "Ada Example", SECRET)).not.toBe(group);
+    expect(outreachGroupKey("AmodioJost2007", "Bo Fictional", SECRET)).not.toBe(group);
+    expect(outreachGroupKey("AmodioJost2007", "Ada Example", `${SECRET}-other`)).not.toBe(group);
+    expect(outreachGroupKey("AmodioJost2007", "?", SECRET)).toBeNull();
+    expect(outreachGroupKey("", "Ada Example", SECRET)).toBeNull();
+  });
+
+  it("gives a survey question an identifier from its section and its text, with an ordinal for an exact repeat", () => {
+    const question = predictionMarketItemId("First section", "Did you understand the question?", 1);
+    // White space is no part of the identity, so an edit of spacing does not make a new question.
+    expect(predictionMarketItemId(" First  section ", "Did you understand\nthe question? ", 1)).toBe(question);
+    expect(predictionMarketItemId("First section", "Did you understand the question?", 2)).not.toBe(question);
+    expect(predictionMarketItemId("Second section", "Did you understand the question?", 1)).not.toBe(question);
+    expect(predictionMarketItemId("", "First section", 1)).toMatch(/^pmq__[0-9a-f]{20}__1$/);
+    expect(() => predictionMarketItemId("First section", "  ", 1)).toThrow(RangeError);
+    expect(() => predictionMarketItemId("First section", "A question", 0)).toThrow(RangeError);
+    expect(() => predictionMarketItemId("First section", "A question", 1.5)).toThrow(RangeError);
   });
 
   it("keeps the slots of one owner and the affiliations of one tab apart", () => {

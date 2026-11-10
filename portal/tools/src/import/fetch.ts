@@ -42,7 +42,9 @@ export async function fetchExport(options: FetchOptions): Promise<FetchedExport>
   try {
     response = await (options.fetchImplementation ?? fetch)(url, { redirect: "follow" });
   } catch {
-    throw new ToolRefusal(`Could not fetch source ${options.sourceKey}: the host of its export address did not answer.`);
+    throw new ToolRefusal(
+      `Could not fetch source ${options.sourceKey}: the host of its export address did not answer.`,
+    );
   }
   if (!response.ok) {
     throw new ToolRefusal(
@@ -56,7 +58,9 @@ export async function fetchExport(options: FetchOptions): Promise<FetchedExport>
     tabs = readWorkbook(bytes).sheets.length;
   } catch {
     // A sign-in page arrives with status 200 and is no workbook.
-    throw new ToolRefusal(`Could not fetch source ${options.sourceKey}: what the export address returned is no Excel workbook.`);
+    throw new ToolRefusal(
+      `Could not fetch source ${options.sourceKey}: what the export address returned is no Excel workbook.`,
+    );
   }
   const sha256 = sha256OfBytes(bytes);
   const retrievedAt = now.toISOString();

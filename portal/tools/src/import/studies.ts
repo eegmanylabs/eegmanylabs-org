@@ -11,7 +11,10 @@ export type StudyResolution =
   | { readonly status: "ambiguous"; readonly replicationIds: readonly string[] }
   | { readonly status: "unresolved" }
   /** The cell names several studies joined by ` + `. Nothing of its row is ever split between them. */
-  | { readonly status: "combined"; readonly parts: readonly { readonly raw: string; readonly resolution: StudyResolution }[] };
+  | {
+      readonly status: "combined";
+      readonly parts: readonly { readonly raw: string; readonly resolution: StudyResolution }[];
+    };
 
 /** The shape of every programme study identifier. */
 export const STUDY_ID_PATTERN = /^[A-Z][A-Za-z]+\d{4}$/;
@@ -57,6 +60,8 @@ export class StudyResolver {
     const replicationIds = await this.#lookup(folded);
     const [only] = replicationIds;
     if (only === undefined) return { status: "unresolved" };
-    return replicationIds.length === 1 ? { status: "resolved", replicationId: only } : { status: "ambiguous", replicationIds };
+    return replicationIds.length === 1
+      ? { status: "resolved", replicationId: only }
+      : { status: "ambiguous", replicationIds };
   }
 }

@@ -10,7 +10,7 @@ import {
   nestedEntityId,
 } from "@eegml/shared";
 import type { Timestamp } from "firebase-admin/firestore";
-import { createdFields, entryOf, readDocuments, type RunContext, updatedFields, validated } from "./context";
+import { createdFields, entryOf, type RunContext, readDocuments, updatedFields, validated } from "./context";
 import type { ImportPlan, PlannedItem } from "./model";
 import { type FieldConflict, mergeDocument, newDocument } from "./ownership";
 import type { ItemBuilders } from "./reconcile";
@@ -80,7 +80,10 @@ export function entityRefOf(collection: CollectionKey, ids: readonly string[]): 
     const entityType = ENTITY_TYPE_OF.get(entry.key);
     const [first, second] = own;
     if (entityType !== undefined && first !== undefined) {
-      return { entityType, entityId: second === undefined ? first : nestedEntityId(own.slice(0, -1).join("__"), own.at(-1) ?? "") };
+      return {
+        entityType,
+        entityId: second === undefined ? first : nestedEntityId(own.slice(0, -1).join("__"), own.at(-1) ?? ""),
+      };
     }
     if (entry.parent === null) return null;
     entry = entryOf(entry.parent as CollectionKey);
@@ -159,7 +162,9 @@ export async function comparePlan(context: RunContext, plan: ImportPlan, options
         relation: "created",
         before: null,
         after,
-        changedFields: Object.keys(after).filter((field) => field in document.owned || field in document.union || field in document.fixed),
+        changedFields: Object.keys(after).filter(
+          (field) => field in document.owned || field in document.union || field in document.fixed,
+        ),
         sourceRecordIds: document.sourceRecordIds,
         updateTime: null,
       });
@@ -199,7 +204,9 @@ export async function comparePlan(context: RunContext, plan: ImportPlan, options
   for (const item of [...plannedItems.values()].sort((a, b) => (a.fingerprint < b.fingerprint ? -1 : 1))) {
     const path = itemPath(item.fingerprint);
     const current = existing.get(path) ?? null;
-    const recordIds = item.candidates.flatMap((candidate) => (candidate.sourceRecordId === undefined ? [] : [candidate.sourceRecordId]));
+    const recordIds = item.candidates.flatMap((candidate) =>
+      candidate.sourceRecordId === undefined ? [] : [candidate.sourceRecordId],
+    );
     if (current === null) {
       const after = validated(itemEntry, path, {
         ...createdFields(now),
@@ -214,10 +221,37 @@ export async function comparePlan(context: RunContext, plan: ImportPlan, options
         resolvedAt: null,
         batchId,
       });
-      itemChanges.push({ path, fingerprint: item.fingerprint, kind: item.kind, action: "raise", blocking: item.blocking, before: null, after, sourceRecordIds: recordIds, updateTime: null });
+      itemChanges.push({
+        path,
+        fingerprint: item.fingerprint,
+        kind: item.kind,
+        action: "raise",
+        blocking: item.blocking,
+        before: null,
+        after,
+        sourceRecordIds: recordIds,
+        updateTime: null,
+      });
     } else if (CLOSED_BY_IMPORTER.has(String(current.data.status))) {
-      const after = validated(itemEntry, path, { ...current.data, status: "open", resolvedBy: null, resolvedAt: null, batchId, ...updatedFields(now) });
-      itemChanges.push({ path, fingerprint: item.fingerprint, kind: item.kind, action: "reopen", blocking: item.blocking, before: current.data, after, sourceRecordIds: recordIds, updateTime: current.updateTime });
+      const after = validated(itemEntry, path, {
+        ...current.data,
+        status: "open",
+        resolvedBy: null,
+        resolvedAt: null,
+        batchId,
+        ...updatedFields(now),
+      });
+      itemChanges.push({
+        path,
+        fingerprint: item.fingerprint,
+        kind: item.kind,
+        action: "reopen",
+        blocking: item.blocking,
+        before: current.data,
+        after,
+        sourceRecordIds: recordIds,
+        updateTime: current.updateTime,
+      });
     } else {
       itemsStanding += 1;
     }
@@ -228,13 +262,18 @@ export async function comparePlan(context: RunContext, plan: ImportPlan, options
       .where("sourceKey", "==", sourceKey)
       .where("status", "==", "open")
       .get();
-    const about = (item: { kind: unknown; entityRefs: unknown; field?: unknown }) => canonicalJson([item.kind, item.entityRefs, item.field ?? null]);
+    const about = (item: { kind: unknown; entityRefs: unknown; field?: unknown }) =>
+      canonicalJson([item.kind, item.entityRefs, item.field ?? null]);
     const plannedSubjects = new Set([...plannedItems.values()].map(about));
     for (const doc of open.docs.sort((a, b) => (a.id < b.id ? -1 : 1))) {
       if (plannedItems.has(doc.id)) continue;
       const data = doc.data();
       // A new item about the same thing means that the value has changed. Otherwise the condition has gone.
-      const action: ItemAction = plannedSubjects.has(about(data as { kind: unknown; entityRefs: unknown; field?: unknown })) ? "supersede" : "clear";
+      const action: ItemAction = plannedSubjects.has(
+        about(data as { kind: unknown; entityRefs: unknown; field?: unknown }),
+      )
+        ? "supersede"
+        : "clear";
       const after = validated(itemEntry, doc.ref.path, {
         ...data,
         status: action === "supersede" ? "superseded" : "cleared",
@@ -242,7 +281,17 @@ export async function comparePlan(context: RunContext, plan: ImportPlan, options
         resolvedAt: now,
         ...updatedFields(now),
       });
-      itemChanges.push({ path: doc.ref.path, fingerprint: doc.id, kind: String(data.kind), action, blocking: false, before: data, after, sourceRecordIds: [], updateTime: doc.updateTime });
+      itemChanges.push({
+        path: doc.ref.path,
+        fingerprint: doc.id,
+        kind: String(data.kind),
+        action,
+        blocking: false,
+        before: data,
+        after,
+        sourceRecordIds: [],
+        updateTime: doc.updateTime,
+      });
     }
   }
 
@@ -254,7 +303,10 @@ export async function comparePlan(context: RunContext, plan: ImportPlan, options
 }
 
 /** The top-level fields that differ between two states of a document, with null for a field that is removed. */
-export function changedTopLevelFields(before: Readonly<Record<string, unknown>>, after: Readonly<Record<string, unknown>>): Map<string, unknown> {
+export function changedTopLevelFields(
+  before: Readonly<Record<string, unknown>>,
+  after: Readonly<Record<string, unknown>>,
+): Map<string, unknown> {
   const patch = new Map<string, unknown>();
   for (const [field, value] of Object.entries(after)) if (!sameValue(before[field], value)) patch.set(field, value);
   for (const field of Object.keys(before)) if (!(field in after)) patch.set(field, undefined);

@@ -26,10 +26,14 @@ export async function discoverImporters(directory: string = SOURCES_DIRECTORY): 
     .sort();
   const importers: ImporterDefinition[] = [];
   for (const file of files) {
-    const module = (await import(/* @vite-ignore */ pathToFileURL(path.join(directory, file)).href)) as { importer?: unknown };
+    const module = (await import(/* @vite-ignore */ pathToFileURL(path.join(directory, file)).href)) as {
+      importer?: unknown;
+    };
     const found = module.importer;
     if (!isImporter(found)) {
-      throw new Error(`The module sources/${file} exports no importer. Every module of that directory exports its definition as \`importer\`.`);
+      throw new Error(
+        `The module sources/${file} exports no importer. Every module of that directory exports its definition as \`importer\`.`,
+      );
     }
     if (importers.some((other) => other.sourceKey === found.sourceKey || other.key === found.key)) {
       throw new Error(`Two importers claim the source or the key of sources/${file}.`);

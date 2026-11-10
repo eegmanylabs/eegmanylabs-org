@@ -7,7 +7,6 @@ import { COLLECTIONS, sequenceId } from "@eegml/shared";
 import { FieldValue, type Timestamp, type WriteBatch } from "firebase-admin/firestore";
 import { appendOnlyFields, chunked, entryOf, type RunContext, validated } from "./context";
 import { changedTopLevelFields, type DocumentChange, type ItemChange, type PlanDiff } from "./preview";
-import { contentHash } from "./values";
 
 /** The number of changes in one batched write. With the log entries it stays well below the limit of Firestore. */
 export const APPLY_CHUNK_SIZE = 100;
@@ -28,9 +27,16 @@ interface LoggedChange {
   readonly special: boolean;
 }
 
-/** The state that the change log shows for a special-category document: a marker and a hash, never a value. */
+/**
+ * The state that the change log shows for a special-category document: a marker, and nothing
+ * that depends on the values. Whoever runs imports reads the change log, and a digest of the
+ * document would let such a reader confirm a guess of its values: a demographics document has a
+ * handful of possible values in each field, and everything else in it can be read from the
+ * entry itself. The two states sit beside the entry in `special/state`, which no client reads
+ * and from which a rollback restores them.
+ */
 export function specialMarker(state: Record<string, unknown> | null): Record<string, unknown> | null {
-  return state === null ? null : { specialCategory: true, sha256: contentHash(state) };
+  return state === null ? null : { specialCategory: true };
 }
 
 function stage(batch: WriteBatch, context: RunContext, change: LoggedChange, sequence: number): void {
@@ -66,7 +72,11 @@ function stage(batch: WriteBatch, context: RunContext, change: LoggedChange, seq
     const statePath = COLLECTIONS.importBatchChangeState.docPath(batchId, sequenceId(sequence));
     batch.create(
       db.doc(statePath),
-      validated(entryOf("importBatchChangeState"), statePath, { ...appendOnlyFields(now), before: change.before, after: change.after }),
+      validated(entryOf("importBatchChangeState"), statePath, {
+        ...appendOnlyFields(now),
+        before: change.before,
+        after: change.after,
+      }),
     );
   }
 }
@@ -98,7 +108,7 @@ async function commit(context: RunContext, changes: readonly LoggedChange[], fir
   let committed = firstSequence - 1;
   for (const piece of chunked(changes, APPLY_CHUNK_SIZE)) {
     const batch = db.batch();
-    piece.forEach((change, index) => stage(batch, context, change, committed + index + 1));
+    for (const [index, change] of piece.entries()) stage(batch, context, change, committed + index + 1);
     batch.update(batchReference, { "stats.changesCommitted": committed + piece.length });
     try {
       await batch.commit();
@@ -124,7 +134,9 @@ export async function applyDiff(context: RunContext, diff: PlanDiff): Promise<nu
 export async function applyBlockingItems(context: RunContext, diff: PlanDiff): Promise<number> {
   return commit(
     context,
-    diff.itemChanges.filter((change) => change.blocking && (change.action === "raise" || change.action === "reopen")).map(ofItem),
+    diff.itemChanges
+      .filter((change) => change.blocking && (change.action === "raise" || change.action === "reopen"))
+      .map(ofItem),
     1,
   );
 }

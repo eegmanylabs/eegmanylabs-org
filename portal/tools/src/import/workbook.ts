@@ -12,6 +12,9 @@
 // | Skips hidden sheets, rows or columns                  | Reads them and reports that they are hidden    |
 // | Returns a shared formula as an empty formula          | Expands it for every cell that depends on it   |
 // | Reads the declared grid size                          | Reads the cells that exist                     |
+// | Drops the part of a link after `#`                    | Joins it to the address again                  |
+// | Ignores the lists that a sheet validates cells against | Returns each list with its options verbatim   |
+// | Drops the notes of cells                              | Returns each note with the cell it stands on   |
 //
 // The reader parses the parts of the file itself (ooxml.ts) for that reason. The libraries that
 // were assessed convert values while they read, which the plan rules out.
@@ -72,6 +75,24 @@ export interface WorkbookCell {
   readonly richText: readonly TextRun[] | null;
 }
 
+/** One validation rule of a sheet. A source states its own vocabulary in such a list. */
+export interface SheetValidation {
+  /** The ranges the rule applies to, as the file writes them, for example `F2:F39`. */
+  readonly ranges: readonly string[];
+  /** The kind of rule as the file names it, for example `list`. */
+  readonly type: string;
+  /** The options of a list that the rule states itself, verbatim and in order. Null for any other rule. */
+  readonly options: readonly string[] | null;
+}
+
+/** The note that a cell carries, as a header does that explains its column. */
+export interface CellNote {
+  /** The address of the cell, for example `E1`. */
+  readonly ref: string;
+  /** The text of the note exactly as the file holds it, with the runs of a formatted note joined. */
+  readonly text: string;
+}
+
 export interface WorkbookSheet {
   /** The title exactly as the workbook writes it. */
   readonly name: string;
@@ -87,6 +108,10 @@ export interface WorkbookSheet {
   readonly mergedRanges: readonly string[];
   readonly hiddenRows: readonly number[];
   readonly hiddenColumns: readonly number[];
+  /** The validation rules of the sheet, in the order of the file. */
+  readonly validations: readonly SheetValidation[];
+  /** The notes of the cells of the sheet, by row and then by column. Threaded discussions are no notes. */
+  readonly notes: readonly CellNote[];
   /** The last row and column that hold a value, whatever grid size the file declares. 0 for an empty sheet. */
   readonly lastRow: number;
   readonly lastColumn: number;
@@ -123,7 +148,13 @@ export function parseRef(ref: string): { readonly row: number; readonly column: 
   return { row: Number(match[2]), column: columnNumber(match[1] ?? "") };
 }
 
-function rangeBounds(range: string) {
+/** The corners of a range such as `F2:F39`, or of one cell. */
+export function rangeBounds(range: string): {
+  readonly top: number;
+  readonly left: number;
+  readonly bottom: number;
+  readonly right: number;
+} {
   const [first = "", last = first] = range.split(":");
   const start = parseRef(first);
   const end = parseRef(last);
@@ -133,7 +164,10 @@ function rangeBounds(range: string) {
 /** Whether a number format shows a number as a date or a time, so that a consumer can read it as one. */
 export function isDateFormat(formatCode: string): boolean {
   // Quoted text, escaped characters and bracketed sections say nothing about the kind of value.
-  const bare = formatCode.replace(/"[^"]*"/g, "").replace(/\\./g, "").replace(/\[[^\]]*\]/g, "");
+  const bare = formatCode
+    .replace(/"[^"]*"/g, "")
+    .replace(/\\./g, "")
+    .replace(/\[[^\]]*\]/g, "");
   return /[dmyhs]/i.test(bare) && !/general/i.test(bare);
 }
 
@@ -235,13 +269,27 @@ function themeColours(theme: XmlElement | undefined): readonly (string | null)[]
     (scheme?.children ?? []).map((entry) => {
       const colour = entry.children[0];
       // A system colour states the colour it last resolved to, and any other colour states itself.
-      return [entry.name, (colour?.name === "sysClr" ? colour.attributes.lastClr : colour?.attributes.val) ?? null] as const;
+      return [
+        entry.name,
+        (colour?.name === "sysClr" ? colour.attributes.lastClr : colour?.attributes.val) ?? null,
+      ] as const;
     }),
   );
   // Cells count light before dark, which is the reverse of the order in the theme part.
-  return ["lt1", "dk1", "lt2", "dk2", "accent1", "accent2", "accent3", "accent4", "accent5", "accent6", "hlink", "folHlink"].map(
-    (name) => byName.get(name)?.toUpperCase() ?? null,
-  );
+  return [
+    "lt1",
+    "dk1",
+    "lt2",
+    "dk2",
+    "accent1",
+    "accent2",
+    "accent3",
+    "accent4",
+    "accent5",
+    "accent6",
+    "hlink",
+    "folHlink",
+  ].map((name) => byName.get(name)?.toUpperCase() ?? null);
 }
 
 function colourOf(element: XmlElement | undefined, theme: readonly (string | null)[]): Colour | null {
@@ -337,17 +385,71 @@ export function shiftFormula(formula: string, rows: number, columns: number): st
   );
 }
 
+/**
+ * The options of a list that a validation rule states itself: a text in double quotes with the
+ * options separated by commas, in which two double quotes stand for one. A long list is written
+ * as several quoted texts joined by `&`, because one quoted text of a formula holds 255
+ * characters at most. Nothing is trimmed, because a source may end an option in a space. Null
+ * for a rule that names a range instead.
+ */
+export function listOptions(formula: string): string[] | null {
+  let rest = formula.trim();
+  let list = "";
+  for (;;) {
+    const quoted = /^"((?:[^"]|"")*)"/.exec(rest);
+    if (quoted?.[1] === undefined) return null;
+    list += quoted[1].replaceAll('""', '"');
+    rest = rest.slice(quoted[0].length).trim();
+    if (rest === "") return list.split(",");
+    if (!rest.startsWith("&")) return null;
+    rest = rest.slice(1).trim();
+  }
+}
+
 const VISIBILITIES: readonly SheetVisibility[] = ["visible", "hidden", "veryHidden"];
 
 /** The target of each relationship of a part, by relationship identifier. */
 function relationships(part: Uint8Array | undefined): Map<string, string> {
   if (part === undefined) return new Map();
   return new Map(
-    childrenOf(parseXml(part), "Relationship").map((entry) => [entry.attributes.Id ?? "", entry.attributes.Target ?? ""]),
+    childrenOf(parseXml(part), "Relationship").map((entry) => [
+      entry.attributes.Id ?? "",
+      entry.attributes.Target ?? "",
+    ]),
   );
 }
 
 const resolveTarget = (target: string): string => (target.startsWith("/") ? target.slice(1) : `xl/${target}`);
+
+/** The path of a part that another part names, where the target is relative to the directory of the naming part. */
+function resolveRelative(from: string, target: string): string {
+  if (target.startsWith("/")) return target.slice(1);
+  const segments = from.split("/").slice(0, -1);
+  for (const segment of target.split("/")) {
+    if (segment === "..") segments.pop();
+    else if (segment !== "." && segment !== "") segments.push(segment);
+  }
+  return segments.join("/");
+}
+
+/** The targets of the relationships of a part whose type ends in a name, such as `comments`. */
+function relatedTargets(part: Uint8Array | undefined, typeName: string): string[] {
+  if (part === undefined) return [];
+  return childrenOf(parseXml(part), "Relationship")
+    .filter((entry) => (entry.attributes.Type ?? "").endsWith(`/${typeName}`))
+    .map((entry) => entry.attributes.Target ?? "");
+}
+
+/** The notes of a comments part: one for each cell, with its text as written. */
+function readNotes(part: Uint8Array | undefined): CellNote[] {
+  if (part === undefined) return [];
+  return childrenOf(child(parseXml(part), "commentList"), "comment")
+    .map((comment) => ({
+      ref: comment.attributes.ref ?? "",
+      text: stringItem(child(comment, "text") ?? { name: "text", attributes: {}, children: [], text: "" }).text,
+    }))
+    .filter((note) => /^[A-Z]{1,3}\d+$/.test(note.ref));
+}
 
 function readSheet(
   sheet: XmlElement,
@@ -355,7 +457,10 @@ function readSheet(
   strings: readonly SharedString[],
   formats: readonly CellFormat[],
   theme: readonly (string | null)[],
-): Pick<WorkbookSheet, "tabColour" | "cells" | "mergedRanges" | "hiddenRows" | "hiddenColumns" | "lastRow" | "lastColumn"> {
+): Pick<
+  WorkbookSheet,
+  "tabColour" | "cells" | "mergedRanges" | "hiddenRows" | "hiddenColumns" | "validations" | "lastRow" | "lastColumn"
+> {
   const hiddenColumns = new Set<number>();
   for (const column of childrenOf(child(sheet, "cols"), "col")) {
     if (column.attributes.hidden !== "1" && column.attributes.hidden !== "true") continue;
@@ -372,13 +477,24 @@ function readSheet(
   const linkOf = new Map<string, string>();
   for (const link of childrenOf(child(sheet, "hyperlinks"), "hyperlink")) {
     const external = link.attributes.id === undefined ? undefined : links.get(link.attributes.id);
-    const target = external ?? (link.attributes.location === undefined ? undefined : `#${link.attributes.location}`);
-    if (target === undefined) continue;
+    // The file keeps the part of an address after `#` apart from the rest. The two are one target.
+    const fragment =
+      link.attributes.location === undefined || link.attributes.location === "" ? "" : `#${link.attributes.location}`;
+    const target = external === undefined ? fragment : `${external}${fragment}`;
+    if (target === "") continue;
     const { top, left, bottom, right } = rangeBounds(link.attributes.ref ?? "");
     for (let row = top; row <= bottom; row += 1) {
       for (let column = left; column <= right; column += 1) linkOf.set(`${columnLetters(column)}${row}`, target);
     }
   }
+
+  const validations = childrenOf(child(sheet, "dataValidations"), "dataValidation").map(
+    (rule): SheetValidation => ({
+      ranges: (rule.attributes.sqref ?? "").split(/\s+/).filter((range) => range !== ""),
+      type: rule.attributes.type ?? "none",
+      options: rule.attributes.type === "list" ? listOptions(child(rule, "formula1")?.text ?? "") : null,
+    }),
+  );
 
   const sharedFormulas = new Map<string, { readonly text: string; readonly row: number; readonly column: number }>();
   const cells: WorkbookCell[] = [];
@@ -411,7 +527,8 @@ function readSheet(
       } else if (stored !== null) {
         if (kind === "s") {
           const item = strings[Number(stored)];
-          if (item === undefined) throw new WorkbookFormatError("A cell refers to a shared string that does not exist.");
+          if (item === undefined)
+            throw new WorkbookFormatError("A cell refers to a shared string that does not exist.");
           [type, value, rawValue, richText] = ["string", item.text, item.text, item.runs];
         } else if (kind === "str") [type, value] = ["formulaString", stored];
         else if (kind === "b") [type, value] = ["boolean", stored === "1" || stored === "true"];
@@ -472,6 +589,7 @@ function readSheet(
     mergedRanges,
     hiddenRows,
     hiddenColumns: [...hiddenColumns].sort((a, b) => a - b),
+    validations,
     lastRow,
     lastColumn,
   };
@@ -482,7 +600,8 @@ export function readWorkbook(bytes: Uint8Array): Workbook {
   const parts = readZip(bytes);
   const part = (name: string) => parts.get(name);
   const workbookPart = part("xl/workbook.xml");
-  if (workbookPart === undefined) throw new WorkbookFormatError("The archive holds no workbook, so it is no Excel file.");
+  if (workbookPart === undefined)
+    throw new WorkbookFormatError("The archive holds no workbook, so it is no Excel file.");
   const workbook = parseXml(workbookPart);
   const targets = relationships(part("xl/_rels/workbook.xml.rels"));
   const themePart = [...parts.keys()].filter((name) => /^xl\/theme\/[^/]+\.xml$/.test(name)).sort()[0];
@@ -499,7 +618,14 @@ export function readWorkbook(bytes: Uint8Array): Workbook {
     if (path === undefined || sheetPart === undefined) {
       throw new WorkbookFormatError("The workbook lists a sheet whose content is missing from the archive.");
     }
-    const links = relationships(part(path.replace(/([^/]+)$/, "_rels/$1.rels")));
+    const relationsPart = part(path.replace(/([^/]+)$/, "_rels/$1.rels"));
+    const links = relationships(relationsPart);
+    const notes = relatedTargets(relationsPart, "comments")
+      .flatMap((target) => readNotes(part(resolveRelative(path, target))))
+      .sort((a, b) => {
+        const [first, second] = [parseRef(a.ref), parseRef(b.ref)];
+        return first.row - second.row || first.column - second.column;
+      });
     const state = entry.attributes.state ?? "visible";
     return {
       name: entry.attributes.name ?? "",
@@ -507,6 +633,7 @@ export function readWorkbook(bytes: Uint8Array): Workbook {
       position,
       visibility: VISIBILITIES.find((visibility) => visibility === state) ?? "visible",
       ...readSheet(parseXml(sheetPart), links, strings, formats, theme),
+      notes,
     };
   });
   const date1904 = child(workbook, "workbookPr")?.attributes.date1904;

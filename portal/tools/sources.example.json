@@ -1,0 +1,41 @@
+{
+  "hashKey": "REPLACE-WITH-A-RANDOM-SECRET-OF-AT-LEAST-32-BYTES",
+  "sources": {
+    "a": {
+      "externalId": "REPLACE-WITH-THE-FILE-IDENTIFIER-OF-SOURCE-A"
+    },
+    "b": {
+      "externalId": "REPLACE-WITH-THE-FILE-IDENTIFIER-OF-SOURCE-B",
+      "url": "https://sheets.example.org/REPLACE/edit",
+      "exportUrl": "https://sheets.example.org/REPLACE/export?format=xlsx"
+    },
+    "c": {
+      "externalId": "REPLACE-WITH-THE-FILE-IDENTIFIER-OF-SOURCE-C",
+      "exportUrl": "https://sheets.example.org/REPLACE/export?format=xlsx"
+    },
+    "d": {
+      "externalId": "REPLACE-WITH-THE-FILE-IDENTIFIER-OF-SOURCE-D",
+      "exportUrl": "https://sheets.example.org/REPLACE/export?format=xlsx"
+    },
+    "e": {
+      "externalId": "REPLACE-WITH-THE-FILE-IDENTIFIER-OF-SOURCE-E",
+      "exportUrl": "https://sheets.example.org/REPLACE/export?format=xlsx"
+    },
+    "f": {
+      "externalId": "REPLACE-WITH-THE-FILE-IDENTIFIER-OF-SOURCE-F",
+      "exportUrl": "https://sheets.example.org/REPLACE/export?format=xlsx"
+    },
+    "g": {
+      "externalId": "REPLACE-WITH-THE-FILE-IDENTIFIER-OF-SOURCE-G"
+    }
+  },
+  "contributorSheets": {
+    "REPLACE-WITH-A-NAME-FOR-THE-SHEET": {
+      "externalId": "REPLACE-WITH-THE-FILE-IDENTIFIER-OF-THE-CONTRIBUTOR-SHEET",
+      "replicationId": "AmodioJost2007",
+      "url": "https://sheets.example.org/REPLACE/edit",
+      "exportUrl": "https://sheets.example.org/REPLACE/export?format=xlsx",
+      "columnOverrides": []
+    }
+  }
+}

@@ -19,6 +19,7 @@ import {
   DATA_CLASSES,
   ENFORCEMENTS,
   ENTITY_COLLECTIONS,
+  verbatimSourceFields,
 } from "./collections";
 import { ID_BUILDERS } from "./ids";
 import { APPEND_ONLY_BASE_FIELDS, DOCUMENT_BASE_FIELDS, PROVENANCE_FIELDS } from "./schemas/base";
@@ -254,12 +255,17 @@ describe("the identifier rule of an entry", () => {
       COLLECTION_ENTRIES.flatMap((entry) => (entry.identifier.kind === "builder" ? [entry.identifier.builder] : [])),
     );
     // nestedEntityId builds the entityId of a reference, which is no document identifier. The other
-    // three derive the identifier that an importer gives a record of a collection whose identifiers
-    // the data model calls opaque: a person, an affiliation and a document link.
+    // seven derive the identifier that an importer gives a record of a collection whose identifiers
+    // the data model calls opaque: a person, an affiliation, a prediction-market item, an outreach
+    // contact, a contributor table, a contributor and a document link.
     expect(Object.keys(ID_BUILDERS).filter((name) => !used.has(name as keyof typeof ID_BUILDERS))).toEqual([
       "nestedEntityId",
       "importedPersonId",
       "importedAffiliationId",
+      "predictionMarketItemId",
+      "outreachContactId",
+      "contributorTableId",
+      "contributorId",
       "documentLinkSlotId",
     ]);
   });
@@ -449,18 +455,87 @@ describe("the access rules of an entry", () => {
     });
   });
 
-  it("limit what a person may change of their own directory entry to the four profile fields", () => {
+  it("limit what a person may change of their own directory entry to the three profile addresses", () => {
     const { write } = COLLECTIONS.persons;
     expect(write.mode).toBe("client");
     if (write.mode !== "client") return;
     expect(write.grants.find((grant) => grant.writers.includes("self"))?.onlyFields).toEqual([
-      "orcid",
       "scholarUrl",
       "universityUrl",
       "labUrl",
     ]);
     expect(write.functionOnlyFields).toEqual(expect.arrayContaining(["userId", "claimedAt", "slug"]));
     expect(write.grants.every((grant) => !grant.operations.includes("create"))).toBe(true);
+  });
+
+  it("keep the fields by which imports find a record again for the function that reserves their keys", () => {
+    const reserved = (key: "persons" | "institutions" | "vocabularyTerms" | "manuscripts") => {
+      const { write } = COLLECTIONS[key];
+      return write.mode === "client" ? write.functionOnlyFields : [];
+    };
+    expect(reserved("persons")).toEqual(expect.arrayContaining(["slug", "orcid", "websitePersonId"]));
+    expect(reserved("institutions")).toEqual(["rorId"]);
+    expect(reserved("vocabularyTerms")).toEqual(["sourceId"]);
+    expect(reserved("manuscripts")).toEqual(expect.arrayContaining(["websitePublicationId"]));
+  });
+
+  it("keep what a machine or the programme decides from those who manage a record", () => {
+    const reserved = (key: "replications" | "documentLinks" | "manuscripts") => {
+      const { write } = COLLECTIONS[key];
+      return write.mode === "client" ? write.functionOnlyFields : [];
+    };
+    expect(reserved("replications")).toEqual(
+      expect.arrayContaining([
+        "programmeId",
+        "selectionStatus",
+        "publicStageNumber",
+        "publicStageName",
+        "publicStageText",
+        "citationStatus",
+        "citationCheckedAt",
+        "citationSource",
+        "citationMetadata",
+      ]),
+    );
+    expect(reserved("documentLinks")).toEqual([
+      "accessStatus",
+      "httpStatus",
+      "lastCheckedAt",
+      "ownerName",
+      "modifiedAt",
+    ]);
+    expect(reserved("manuscripts")).toEqual(expect.arrayContaining(["citationStatus", "citationMetadata"]));
+  });
+
+  it("keep every field whose elements no rule can check for trusted code", () => {
+    const reserved = (key: "replications" | "laboratoryMembers" | "replicationMemberships") => {
+      const { write } = COLLECTIONS[key];
+      return write.mode === "client" ? write.functionOnlyFields : [];
+    };
+    expect(reserved("replications")).toContain("vocabulary");
+    expect(reserved("laboratoryMembers")).toEqual(["earlierPeriods"]);
+    expect(reserved("replicationMemberships")).toEqual(["earlierPeriods"]);
+  });
+
+  it("let nobody but the person concerned acknowledge a protocol version", () => {
+    const { write } = COLLECTIONS.participationAcknowledgements;
+    expect(write.mode === "client" ? write.grants.map((grant) => [grant.writers, grant.operations]) : []).toEqual([
+      [["self"], ["create"]],
+    ]);
+  });
+
+  it("let a lead write the content of a hypothesis and never its review", () => {
+    const { write } = COLLECTIONS.replicationHypotheses;
+    const lead =
+      write.mode === "client"
+        ? write.grants.find(
+            (grant) => grant.writers.includes("replication_lead") && grant.operations.includes("update"),
+          )
+        : undefined;
+    expect(lead?.onlyFields).toEqual(expect.arrayContaining(["text", "resultSummary", "analysisStatus"]));
+    for (const field of ["scientificReviewStatus", "resultReviewedBy", "resultReviewedAt"]) {
+      expect(lead?.onlyFields).not.toContain(field);
+    }
   });
 
   it("keep every status that has a history from direct client writes", () => {
@@ -510,6 +585,16 @@ describe("clientImmutableFields", () => {
       "statusKey",
       "statusHistoryId",
       "leadPersonIds",
+      "programmeId",
+      "selectionStatus",
+      "publicStageNumber",
+      "publicStageName",
+      "publicStageText",
+      "citationStatus",
+      "citationCheckedAt",
+      "citationSource",
+      "citationMetadata",
+      "vocabulary",
     ]);
     expect(clientImmutableFields(COLLECTIONS.userFavourites)).toEqual([
       "schemaVersion",
@@ -518,6 +603,28 @@ describe("clientImmutableFields", () => {
       "entityType",
       "entityId",
     ]);
+  });
+
+  it("leaves the verbatim source values of an entry to be changed only where no import wrote the document", () => {
+    expect(verbatimSourceFields(COLLECTIONS.replications)).toEqual([
+      "originalNSource",
+      "originalEffectSizeSource",
+      "originalBayesFactorSource",
+      "powerBasedNSource",
+      "durationSource",
+      "minEegChannelsSource",
+    ]);
+    expect(verbatimSourceFields(COLLECTIONS.contributors)).toEqual([
+      "firstNameSource",
+      "middleNameSource",
+      "surnameSource",
+      "affiliationSource",
+      "affiliationSlotsSource",
+      "agreementSource",
+    ]);
+    // What trusted code alone writes is no part of the list: no client changes it anywhere.
+    expect(verbatimSourceFields(COLLECTIONS.replicationDetail)).toEqual([]);
+    expect(verbatimSourceFields(COLLECTIONS.laboratories)).toEqual([]);
   });
 
   it("names only fields that the schema of the entry has", () => {
