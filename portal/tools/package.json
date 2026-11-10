@@ -1,0 +1,18 @@
+{
+  "name": "@eegml/tools",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Admin SDK command-line tools. Run only from a trusted environment.",
+  "type": "module",
+  "scripts": {
+    "cli": "tsx src/cli.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@eegml/shared": "0.0.0",
+    "firebase-admin": "14.5.0"
+  },
+  "devDependencies": {
+    "tsx": "4.23.15"
+  }
+}

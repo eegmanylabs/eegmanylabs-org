@@ -6,17 +6,17 @@ These conventions apply to everything under `portal/`. They exist so that many c
 
 The application is one TypeScript codebase with strict internal layers. A layer may import from the layers listed after it and never from the layers before it.
 
-| Layer | Location | Responsibility |
-|---|---|---|
-| Routes and components | `src/app/`, `src/components/` | Rendering, forms and interaction. Server components obtain data by calling services. Client components call the typed API. No database access, no authorisation decisions. |
-| API | `src/server/api/` | Thin typed procedures. Validate input with a schema, build the service context, call one service function, return its result. |
-| Services | `src/server/services/<module>/` | Use cases. Every exported function takes the service context first and an input object second. A service authorises, validates business rules, runs the change in a transaction, writes the audit event and emits the domain event. |
-| Policy | `src/server/policy/` | The single place where authorisation and field-level visibility are decided. Pure functions over an actor and a resource description. |
-| Domain | `src/server/domain/` | Pure logic with no input or output: recruitment rollups, forecasting, identity matching, formula evaluation, fractional ordering. Fully unit tested. |
-| Persistence | `src/server/db/` | Drizzle schema, the database client and migrations. |
-| Integrations | `src/server/integrations/<system>/` | Adapters behind interfaces, each with a real implementation and a fake used in tests. |
-| Importers | `src/server/importers/` | Source adapters built on the import framework. |
-| Jobs | `src/server/jobs/` | Background workers. A job handler calls services and holds no business logic of its own. |
+| Layer                 | Location                            | Responsibility                                                                                                                                                                                                                      |
+| --------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Routes and components | `src/app/`, `src/components/`       | Rendering, forms and interaction. Server components obtain data by calling services. Client components call the typed API. No database access, no authorisation decisions.                                                          |
+| API                   | `src/server/api/`                   | Thin typed procedures. Validate input with a schema, build the service context, call one service function, return its result.                                                                                                       |
+| Services              | `src/server/services/<module>/`     | Use cases. Every exported function takes the service context first and an input object second. A service authorises, validates business rules, runs the change in a transaction, writes the audit event and emits the domain event. |
+| Policy                | `src/server/policy/`                | The single place where authorisation and field-level visibility are decided. Pure functions over an actor and a resource description.                                                                                               |
+| Domain                | `src/server/domain/`                | Pure logic with no input or output: recruitment rollups, forecasting, identity matching, formula evaluation, fractional ordering. Fully unit tested.                                                                                |
+| Persistence           | `src/server/db/`                    | Drizzle schema, the database client and migrations.                                                                                                                                                                                 |
+| Integrations          | `src/server/integrations/<system>/` | Adapters behind interfaces, each with a real implementation and a fake used in tests.                                                                                                                                               |
+| Importers             | `src/server/importers/`             | Source adapters built on the import framework.                                                                                                                                                                                      |
+| Jobs                  | `src/server/jobs/`                  | Background workers. A job handler calls services and holds no business logic of its own.                                                                                                                                            |
 
 ## Rules that are never broken
 

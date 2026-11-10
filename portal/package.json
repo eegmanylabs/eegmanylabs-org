@@ -1,0 +1,56 @@
+{
+  "name": "eegml-portal",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Members' portal for #EEGManyLabs: a static single-page application with a Firebase backend.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.22.0"
+  },
+  "workspaces": [
+    "shared",
+    "web",
+    "functions",
+    "tools"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces && tsc -p tsconfig.json",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "build": "npm run build -w @eegml/shared && npm run build -w @eegml/functions && npm run build -w @eegml/web",
+    "test": "npm run build && npm run test:unit && node scripts/emulators.mjs exec emulated:all",
+    "test:unit": "vitest run --project unit --project web",
+    "test:rules": "node scripts/emulators.mjs exec --only firestore,storage emulated:rules",
+    "test:functions": "npm run build -w @eegml/functions && node scripts/emulators.mjs exec --only auth,firestore,functions emulated:functions",
+    "test:tools": "node scripts/emulators.mjs exec --only auth,firestore emulated:tools",
+    "test:e2e": "npm run build && node scripts/emulators.mjs exec emulated:e2e",
+    "emulated:rules": "vitest run --project rules",
+    "emulated:functions": "vitest run --project functions",
+    "emulated:tools": "vitest run --project tools",
+    "emulated:e2e": "playwright test",
+    "emulated:all": "vitest run --project rules --project functions --project tools && playwright test",
+    "dev": "node scripts/dev.mjs",
+    "preview": "npm run build && node scripts/pages-server.mjs",
+    "emulators": "node scripts/emulators.mjs start",
+    "seed:demo": "node scripts/emulators.mjs run npm run --silent -w @eegml/tools cli -- seed:demo",
+    "fb": "scripts/fb.sh"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@biomejs/biome": "2.6.6",
+    "@firebase/rules-unit-testing": "6.0.0",
+    "@playwright/test": "1.63.0",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.8",
+    "@types/node": "22.19.1",
+    "firebase": "13.2.0",
+    "firebase-admin": "14.5.0",
+    "firebase-tools": "15.35.0",
+    "jsdom": "31.0.0",
+    "playwright-core": "1.63.0",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vitest": "5.1.0"
+  }
+}

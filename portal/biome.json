@@ -1,0 +1,118 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "files": {
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/out",
+      "!.run",
+      "!.private",
+      "!firebase.run-*.json",
+      "!package-lock.json",
+      "!**/*.md"
+    ]
+  },
+  "formatter": {
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 120
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "linter": {
+    "domains": {
+      "react": "recommended"
+    },
+    "rules": {
+      "preset": "recommended",
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedVariables": "error"
+      },
+      "style": {
+        "useImportType": "error",
+        "useNodejsImportProtocol": "error",
+        "noNonNullAssertion": "error"
+      },
+      "suspicious": {
+        "noExplicitAny": "error",
+        "noConsole": {
+          "level": "error",
+          "options": {
+            "allow": ["error", "warn"]
+          }
+        }
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**", "!shared/src/zod.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "zod": {
+                    "message": "Import `z` from \"@eegml/shared\". It configures zod for the Content-Security-Policy."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["web/src/**", "!web/src/data/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "zod": {
+                    "message": "Import `z` from \"@eegml/shared\". It configures zod for the Content-Security-Policy."
+                  }
+                },
+                "patterns": [
+                  {
+                    "group": ["firebase", "firebase/*", "@firebase/*"],
+                    "message": "Only web/src/data may import the Firebase SDK. Import what you need from \"@/data\"."
+                  },
+                  {
+                    "group": ["@/data/*"],
+                    "message": "Import from \"@/data\", the public surface of the data layer."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["scripts/**", "tools/src/**", "functions/bundle.mjs"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
+          }
+        }
+      }
+    }
+  ]
+}

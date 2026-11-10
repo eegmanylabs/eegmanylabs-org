@@ -1,0 +1,46 @@
+rules_version = '2';
+
+// Security rules for the portal's Firestore database.
+//
+// These rules are the enforcement point for every direct read and write from a browser.
+// Anything not allowed here is denied. Writes that change who may do what, and writes that
+// span several documents, go through callable functions, which use the Admin SDK and are not
+// subject to these rules.
+//
+// Collection names match COLLECTIONS in portal/shared/src/paths.ts. Every allow statement has
+// a test in portal/tests/rules that proves the allow and proves the matching denials.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // One document per account, maintained by the sessionStart function.
+    match /users/{uid} {
+      allow get: if isOwner(uid);
+      allow list, create, update, delete: if false;
+    }
+
+    // What an account may do. Written by functions only, so an account cannot grant itself
+    // anything.
+    match /access/{uid} {
+      allow get: if isOwner(uid);
+      allow list, create, update, delete: if false;
+    }
+
+    // The audit trail is written by trusted code and is not readable from a browser.
+    match /auditEvents/{eventId} {
+      allow read, write: if false;
+    }
+
+    // Everything else, including collections that do not exist yet, is denied.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["es2023", "dom", "dom.iterable"],
+    "types": ["node"],
+    "allowJs": true,
+    "checkJs": true
+  },
+  "include": ["tests", "scripts", "functions/bundle.mjs", "vitest.config.ts", "playwright.config.ts"]
+}

@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// Security rules for Cloud Storage. Nothing is stored yet, so every read and write is denied.
+// A later phase adds narrowly scoped paths here, each with its own tests in portal/tests/rules.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

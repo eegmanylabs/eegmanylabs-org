@@ -180,3 +180,5 @@ portal/**/.env.*
 portal/**/test-results/
 portal/**/playwright-report/
 portal/.private/
+portal/.run/
+portal/firebase.run-*.json

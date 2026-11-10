@@ -1,193 +1,321 @@
 # #EEGManyLabs Hub: data model
 
-This document is the authoritative specification of the portal's relational model. The Drizzle schema in `portal/src/server/db/schema/` implements it, and the SQL migrations in `portal/drizzle/` are generated from that schema. When the two disagree, the schema and migrations describe what is deployed and this document must be corrected in the same change.
+This document is the authoritative specification of the data held by the members' portal. The data lives in Firestore (decisions D-001 and D-003 in `docs/DECISIONS.md`), so the model is a set of collections and documents. The shared TypeScript schemas under `portal/shared` implement it and the security rules under `portal/firebase` enforce it. The three change together: an edit to this document, to the schemas or to the rules is complete only when the same change updates the other two.
+
+The model carries over every entity and every field of the relational design that preceded it. Each section says where a former table now lives whenever the answer is anything other than a collection of the same name.
 
 ## 1. Conventions
 
-Every table uses a `uuid` primary key named `id` with a `gen_random_uuid()` default, except the authentication tables owned by the authentication library, which keep the identifier type that library requires. Foreign keys to users therefore use the authentication library's identifier type. All timestamps are `timestamptz` stored in UTC. Mutable tables carry `created_at` and `updated_at`, and tables edited by people also carry `created_by` and `updated_by`. Major entities are archived through `archived_at` and are never hard deleted, because provenance, audit and historical reporting depend on their continued existence.
+Collections are lowerCamelCase plurals and fields are lowerCamelCase. Enumerated values are lowerCamelCase strings such as `importedHistorical`. Role keys are the one exception and keep the spelling used throughout the security design: `programme_admin`, `core_team`, `replication_lead`, `lab_coordinator`, `lab_member` and `external_collaborator`. A path is written `collection/{identifier}`, and a subcollection continues the path of its parent document.
 
-Human-readable stable identifiers sit beside the primary key. A replication has an immutable `study_key` such as `AmodioJost2007`, a laboratory and a person each have a unique `slug`, a dataset has a `dataset_key`, and a group has a `group_key`. Routes accept either the UUID or the stable identifier.
+Every document carries `schemaVersion` (integer), `createdAt` and `updatedAt` (server timestamps), `createdBy` and `updatedBy` (a uid, or a system actor string such as `system:import`) and `archivedAt` for soft deletion. The tables below leave these fields out. Major entities are archived and are never hard deleted, because provenance, audit and historical reporting depend on their continued existence. An instant is a Firestore timestamp. A calendar date such as `asOfDate` is an ISO 8601 date string, which sorts correctly as text and carries no time zone.
 
-Enumerations that administrators may reconfigure (statuses, count categories, checklist templates) are rows in lookup tables. Enumerations that are technical and fixed are PostgreSQL enums. Free-text values that arrive from a source are always stored verbatim in a `*_source` or `raw_*` column, and any standardised interpretation is stored beside it in a separate column, so that an original value is never lost or silently rewritten.
+Fact-like documents carry `dataOrigin` with the values `live`, `importedHistorical`, `demo` and `projected`, and the interface labels the last three wherever they appear. A value that arrives from a source is kept verbatim in a field ending in `Source`. A standardised interpretation lives in a sibling field and never overwrites the verbatim value. Unknown numbers are absent and are never stored as zero. A record created by an import carries `sourceRecordIds` (array) and, for reconciled fields, `fieldSources` (a map of field name to source record identifier). The array takes the place of the `source_record_id` column of the relational design, and a table names a single `sourceRecordId` only where one source record is part of the entity itself.
 
-Each fact-like record declares where it came from through a `data_origin` enum with the values `live`, `imported_historical`, `demo` and `projected`. The user interface labels the last three wherever they appear. Missing numeric values are stored as SQL `NULL` or as an absent row and are never coerced to zero.
+A reference is a string field named `<entity>Id`, or an array named `<entity>Ids`, that holds the identifier of the referenced document. A login is referenced by its uid, in a field named `uid`, in a field ending in `Uid` or, on a person, in `userId`, and actor fields such as `grantedBy` hold a uid as well. A document in a subcollection repeats its parent's identifier as a reference field, and a document with a composite identifier repeats each part as a field, so that rules and collection-group queries can use them. When a referenced document lives in a subcollection, the fields that complete its path sit beside the reference.
 
-Sensitive attributes live in their own tables or columns with an explicit classification so that the authorisation layer can enforce field-level rules. The classifications are `public` (approved for the public website), `member` (visible to signed-in members), `restricted` (contact details, outreach history, private notes) and `special` (gender and ethnicity).
+Uniqueness is achieved by using the natural key as the document identifier. Composite identifiers join their parts with two underscores, and a part that may contain characters unsuited to an identifier, such as an alias, an email address or an external identifier, is replaced by its SHA-256 hash. Where a table says "opaque", the identifier is generated by Firestore for a record created in the portal and is derived deterministically from the natural key of the source record for a record created by an importer, so a repeated import writes the same documents (D-012). Stable, human-readable identifiers remain: the identifier of a replication is its study identifier (D-013), a dataset is identified by its `datasetKey`, a group by its `groupKey`, and a laboratory and a person each keep a `slug`.
 
-## 2. Identity, access and claiming
+Enumerations that administrators may reconfigure (statuses, count categories, checklist templates) are documents in lookup collections and are referenced by key. Enumerations that are technical and fixed are string unions in the shared schemas, and the rules reject any other value.
 
-| Table | Purpose and key columns |
-|---|---|
-| `user`, `session`, `account`, `verification`, `two_factor` | Owned by the authentication library. A user is a login identity. A user is distinct from a person record. |
-| `persons` | One row per human known to the programme, whether or not they have signed in. `slug`, `given_name`, `middle_name`, `family_name`, `display_name`, `orcid`, `country_code`, `country_source`, `headshot_filename`, `scholar_url`, `university_url`, `lab_url`, `is_core_team`, `public_listing` (`none`, `member`, `core_team`), `user_id` (unique, null until claimed), `claimed_at`, `data_origin`, `archived_at`. |
-| `person_emails` | `person_id`, `email` (stored lower-cased and trimmed), `kind` (`primary`, `secondary`, `historical`), `source_record_id`, `verified_at`, `is_claim_eligible`. Classification `restricted`. An index on `email` supports claim matching. The same address may appear on more than one person as a data error, which the claim flow treats as an ambiguous match that requires review. |
-| `person_demographics` | One row per person, classification `special`. `gender_source`, `gender_category`, `gender_self_described`, `ethnicity_source`, `ethnicity_category`, `ethnicity_self_described`, `source_record_id`, `recorded_at`, `updated_by`. Original source terms are preserved verbatim and standardised categories are optional. Every read through the service layer is audited. |
-| `institutions` | `name`, `short_name`, `country_code`, `city`, `ror_id`, `website`. Unique on normalised name and country. |
-| `affiliations` | `person_id`, `institution_id` (nullable), `laboratory_id` (nullable), `affiliation_source` (verbatim text), `role_title`, `is_primary`, `start_date`, `end_date`, `source_record_id`. A person may hold several. |
-| `role_assignments` | `user_id`, `role` (`programme_admin`, `core_team`, `replication_lead`, `lab_coordinator`, `lab_member`, `external_collaborator`), `scope_type` (`programme`, `replication`, `laboratory`, `group`), `scope_id`, `status` (`pending_approval`, `active`, `revoked`, `expired`), `granted_by`, `granted_at`, `expires_at`, `revoked_by`, `revoked_at`, `reason`. Unique on the active combination of user, role and scope. |
-| `role_capabilities` | Administrator-configurable matrix: `role`, `capability`, `allowed`. Defaults are defined in code and this table stores overrides, which is how sensitive operations are restricted for the core team. |
-| `capability_grants` | Named capability granted to one user, for example `demographics.read`, with `granted_by`, `reason`, `expires_at`, `revoked_at`. |
-| `groups`, `group_members` | Replication-level and laboratory-level workspaces with a stable `group_key`. `kind` (`replication_team`, `lab_team`, `working_group`, `custom`), optional `replication_id` and `laboratory_id`. Members are users with a `role_in_group`. Groups receive permissions as principals. Individual attribution is always retained. |
-| `external_accounts` | Mapping from a person, group, laboratory or replication to an account name in an external system (`cloud`, `bids`, `eegnet`, `sftp`, `osf`, `github`, `google`, `quire`). Stores the account identifier and never a secret. |
-| `invitations` | `email`, `person_id` (nullable), intended role and scope, `token_hash`, `expires_at`, `accepted_at`, `invited_by`, `revoked_at`. |
-| `account_claims` | `user_id`, `person_id`, `status` (`pending_review`, `approved`, `rejected`, `withdrawn`), `match_basis` (`primary_email`, `secondary_email`, `invitation`, `manual`), `evidence` (JSON), `reviewed_by`, `reviewed_at`, `decision_note`. |
-| `lab_claims` | `laboratory_id`, `user_id`, `requested_role` (`coordinator`, `representative`), `evidence` (JSON, including affiliation match and institutional email domain), `status`, `reviewed_by`, `reviewed_at`, `decision_note`. |
-| `correction_requests` | A member's request to correct an imported record: `user_id`, `entity_type`, `entity_id`, `field`, `proposed_value`, `message`, `status`, `resolved_by`, `resolved_at`. |
+Access-scoped documents carry `replicationId`, `laboratoryId` or both, together with a `scopeKeys` array whose values take the forms `programme`, `rep:<studyKey>` and `lab:<laboratoryId>`. Security rules do not filter results, so a list query must itself be limited to a scope the caller holds, and `scopeKeys` is the field that such a query constrains.
 
-## 3. Programme, laboratories and equipment
+Rules grant a read for a whole document. A field with a stricter audience than its neighbours therefore lives in a separate document beneath the parent: `private/<name>` for restricted data (contact details, outreach history, private notes, storage locations) and `special/<name>` for special-category data (gender and ethnicity). Member-visible data stays in the parent document, and data approved as public leaves the portal only through the publishing workflow. A document is limited to 1 MiB, so large content such as page snapshots and file manifests is stored in numbered chunks.
 
-| Table | Purpose and key columns |
-|---|---|
-| `programmes` | `key`, `name`, `description`, `parent_id`, `kind` (`programme`, `subproject`). Spin-off projects such as the resting-state and alpha asymmetry subprojects are children of the main programme. |
-| `laboratories` | One authoritative profile per laboratory or institutional unit. `slug`, `name`, `institution_id`, `department`, `country_code`, `city`, `address` (restricted), `website`, `pi_person_id`, `status` (`unverified`, `active`, `inactive`), `description`, `data_origin`, `archived_at`. |
-| `laboratory_members` | `laboratory_id`, `person_id`, `role` (`pi`, `coordinator`, `representative`, `member`), `is_authorised_representative`, `start_date`, `end_date`, `status`. Several authorised representatives are allowed. |
-| `equipment_configurations` | Several per laboratory, with history. `laboratory_id`, `name`, `is_current`, `valid_from`, `valid_to`, `eeg_system_source` (verbatim), `amplifier_manufacturer`, `amplifier_model`, `cap_type`, `electrode_type`, `channel_count`, `sampling_rates_hz` (integer array), `reference_scheme`, `trigger_method`, `presentation_software`, `stimulus_computer`, `display_refresh_hz`, `eye_tracker`, `response_devices`, `other` (JSON), `notes`. An edit to a current configuration closes the old row and opens a new one, which preserves history. |
-| `equipment_requirements` | Per replication: `replication_id`, `requirement_key`, `operator`, `value`, `is_mandatory`, `note`. Compatibility is computed by comparing these with a laboratory's current configuration. |
+## 2. Access tiers
 
-## 4. Replications and scientific definition
+The Access column of each table uses five tiers. MEMBER is any signed-in user with an approved membership. SCOPED is programme administrators and the core team, together with users whose access document holds the matching replication or laboratory scope. SELF is the user who owns the document. ADMIN is programme administrators, and the core team where the capability matrix allows. FUNCTION means no client access at all: the document is read and written only by Cloud Functions and by Admin SDK tools such as the importers.
 
-| Table | Purpose and key columns |
-|---|---|
-| `replications` | `programme_id`, `study_key` (immutable, unique), `short_title`, original study fields (`original_authors`, `original_year`, `original_title`, `original_reference`, `original_doi`), citation verification (`citation_status` of `unverified`, `verified`, `mismatch`, `not_found`, with `citation_checked_at`, `citation_source`, `citation_metadata` JSON), `abstract`, `rationale`, `effect_of_interest`, `plain_language_description`, `original_n`, `original_statistics`, `original_effect_size_source`, `original_effect_size_value`, `original_effect_size_metric`, `original_bayes_factor_source`, `power_assumptions`, `power_based_n`, `target_n`, `duration_source`, `sample_type`, `min_eeg_channels`, `extra_equipment`, `study_type`, `outcome`, `psych_construct`, `theme`, `status_id`, public stage fields (`public_stage_number`, `public_stage_name`, `public_stage_text`), `signup_url`, `signup_active`, `selection_status` (`selected`, `shortlisted`, `ranked_candidate`, `withdrawn`), `data_origin`, `archived_at`. |
-| `study_aliases` | `replication_id`, `alias`, `scheme` (`programme`, `website`, `cloud_account`, `bids`, `eegnet`, `source_tab`, `other`), `explanation`, `part_1`, `part_2`, `is_canonical`, `source_record_id`. Unique on scheme and alias. Existing identifiers are never renamed. |
-| `replication_memberships` | `replication_id`, `person_id`, `role` (`lead`, `co_lead`, `former_lead`, `coordinator`, `analyst`, `member`, `advisor`), `is_current`, `start_date`, `end_date`, `review_status` (`confirmed`, `needs_review`), `source_record_id`. Conflicting leads from different sources are all stored with `needs_review` and a reconciliation item is raised. |
-| `status_definitions` | Configurable statuses for any entity type: `entity_type`, `key`, `label`, `category` (`not_started`, `active`, `done`, `paused`, `cancelled`), `position`, `is_default`, `archived_at`. Seeded for replications with proposed, planning, recruiting labs, site preparation, collecting, collection complete, processing, analysing, writing, submitted, published, paused and archived. |
-| `status_history` | `entity_type`, `entity_id`, `from_status_id`, `to_status_id`, `effective_at`, `recorded_at`, `changed_by`, `reason`, `source`. The pair of effective and recorded times allows a past status to be reconstructed. |
-| `hypotheses` | `replication_id`, `hypothesis_number` (verbatim), `text`, `expected_effect`, `outcome_measure`, `analysis_specification`, `preregistration_url`, `original_statistics`, `null_sig_source` (verbatim), `replicated_source` (verbatim, an unverified historical label), `scientific_review_status` (`unverified`, `under_review`, `verified`), `analysis_status`, `result_summary`, `result_reviewed_by`, `result_reviewed_at`, `study_description_url`, `infosheet_url`, `source_record_id`. |
-| `prediction_market_items` | Survey and market questions linked to a hypothesis or to the programme: `hypothesis_id`, `question_text`, `choices`, `source_record_id`. |
-| `protocols`, `protocol_versions` | A protocol belongs to a replication. A version has `version_label`, `effective_date`, `status` (`draft`, `approved`, `superseded`), `change_summary`, `document_link_id`, `approved_by`, `approved_at`. |
-| `protocol_acknowledgements`, `protocol_deviations` | Per participation: acknowledgement of a version by a person at a time, and deviations with `description`, `severity`, `occurred_at`, `reported_by`, `corrective_action`, `status`. |
-| `vocabulary_terms` | Community vocabulary: `source_id` (original identifier), `name`, `abbreviation`, `description`, `invalid_reason`, `same_as_source` (verbatim), `same_as_term_id`, `kind`, `is_deprecated`, `source_record_id`. |
-| `replication_vocabulary` | Links a replication to vocabulary terms, for example its questionnaires, with a `relation` and a note. |
+A tier named alone covers reading and writing. Where the two differ, the cell names each, and "FUNCTION write" beside a readable tier means that clients read the document and only trusted code changes it. Within a scope every holder may read. Writing belongs to the leads of the replication and the coordinators of the laboratory, and the capability matrix decides what other roles may add. Programme administrators hold every scoped right.
 
-## 5. Laboratory participation in a replication
+The rules decide each request from the caller's `access/{uid}` document, which they read with a single `get()`. A suspended user satisfies no tier. A signed-in user whose membership is still awaiting approval satisfies SELF only, which is what the claim flow needs.
 
-A laboratory and its participation in one replication are separate records. Project-specific details live on the participation and laboratory-wide facts live on the laboratory.
+## 3. Identity and access
 
-| Table | Purpose and key columns |
-|---|---|
-| `participations` | Unique on `replication_id` and `laboratory_id`. `local_lead_person_id`, `status` (`invited`, `interested`, `confirmed`, `onboarding`, `ready`, `collecting`, `collection_complete`, `withdrawn`, `declined`), `ethics_status` (`unknown`, `not_started`, `submitted`, `approved`, `not_required`), `ethics_reference`, `ethics_approved_at`, `training_status`, `readiness_status`, `readiness_approved_by`, `readiness_approved_at`, `target_n_main`, `target_n_rest`, `protocol_version_id`, `equipment_configuration_id`, `equipment_override_justification`, `signed_up_at`, `data_origin`. |
-| `participation_members` | People at the laboratory who work on this replication, with a role. |
-| `checklist_templates`, `checklist_template_items` | Administrator-configurable templates, seeded with the onboarding checklist (participation confirmation, verified contacts, equipment confirmation, ethics, protocol review, training, technical checks, pilot, readiness approval). |
-| `checklist_items` | Instantiated per participation: `participation_id`, `template_item_key`, `label`, `status` (`not_started`, `in_progress`, `done`, `not_applicable`, `blocked`), `completed_by`, `completed_at`, `evidence_url`, `note`, `position`. |
-| `outreach_contacts` | Historical recruitment correspondence, classification `restricted`. `replication_id`, `laboratory_id` (nullable), `person_id` (nullable), `lab_name_source`, `contact_name_source`, `contact_email`, `contacted_at_source`, `response_source`, `status_source`, `notes`, `source_record_id`. |
+Firebase Authentication holds the login itself: the account, its sign-in providers, single-use sign-in links, sessions and the second factor. It takes the place of the authentication library's tables, and Firestore keeps only the profile in `users`. A person record and a login are different things (D-005). A person exists whether or not they have signed in, and a claim links exactly one login to exactly one person, which the identifier of `accountClaims` guarantees. The per-user tables for favourites, recents, notifications, notification preferences and subscriptions are subcollections of the user.
 
-## 6. Recruitment
+`roleAssignments` is the source of truth for roles. Functions resolve a user's active assignments, the capability overrides and the named grants into one `access` document, which is the only document the rules consult. D-006 records that the choice between this document and custom claims on the sign-in token awaits the application spike. A capability named `demographics.read` appears in that document's `capabilities` map as `demographicsRead`, because a full stop separates the segments of a Firestore field path. Group membership, formerly `group_members`, is the `memberUids` array and the `roles` map of the group. Groups receive permissions as principals, and every edit stays attributed to the individual who made it.
 
-Recruitment is recorded as append-only reports. A report never overwrites an earlier one. A correction is a new report that points at the report it corrects.
+A person is split across three documents (D-006). The directory document is readable by members. Email addresses, formerly the `person_emails` table, are an array in the restricted contact document, and `personEmailIndex` supports claim matching without exposing an address. The same address may appear on more than one person as a data error. The index entry then lists every such person, and the claim flow treats the match as ambiguous and sends it for review. Gender and ethnicity sit in the demographics document, which no client can read: a callable function serves it after checking the caller's grant and second factor, and it audits every read.
 
-| Table | Purpose and key columns |
-|---|---|
-| `count_categories` | `key`, `label`, `definition`, `position`, `is_core`, `replication_id` (null for global). Seeded with target, planned, scheduled, recruited, tested, recorded, submitted, received, validated, usable and excluded, each with an explicit definition. Replication-specific extensions set `replication_id`. |
-| `recruitment_reports` | `participation_id`, `as_of_date` (the date for which the counts hold), `period_start`, `period_end`, `report_kind` (`cumulative`, `period`), `basis` (`lab_reported`, `centrally_verified`), `entry_kind` (`new`, `correction`), `corrects_report_id`, `reported_by`, `verified_by`, `verified_at`, `source` (`manual`, `import`, `sheet_sync`), `data_origin`, `note`, `created_at`. |
-| `recruitment_counts` | `report_id`, `category_id`, `modality` (`main`, `rest`, `participants`), `value` (integer, not null). An absent row means the value is unknown. The `participants` modality counts unique people, which prevents a person who contributed both a main-experiment and a resting-state recording from being counted twice. A total number of participants is never derived by adding `main` and `rest`. |
-| `recruitment_exclusions` | `report_id`, `modality`, `reason_term_id`, `reason_source`, `count`. |
-| `planned_pauses` | `participation_id`, `starts_on`, `ends_on`, `reason`. |
-| `historical_aggregates` | Replication-level figures imported from historical workbooks and kept apart from live counts: `replication_id`, `metric_key` (for example `n_labs_signed`, `total_n_to_be_run`, `n_labs_finished`, `total_n_main_collected`, `total_n_rest`), `value_source` (verbatim), `value_numeric`, `snapshot_date`, `source_record_id`. |
-| `forecast_runs` | `replication_id`, `generated_at`, `generated_by`, `method_version`, `assumptions` (JSON), `scenarios` (JSON with optimistic, central and conservative results and intervals), `inputs_as_of`. Always `data_origin = projected`. |
+| Path | Identifier | Access | Contents |
+|---|---|---|---|
+| `users/{uid}` | Authentication uid | SELF read; FUNCTION write | Login profile: `emailLower`, `displayName`, `personId`, `status` (`active`, `suspended`), `mfaEnrolled`, `lastSeenAt`. |
+| `users/{uid}/favourites/{entityType__entityId}` | Entity type and entity identifier | SELF | `uid`, `entityType`, `entityId`. |
+| `users/{uid}/recents/{entityType__entityId}` | Entity type and entity identifier | SELF | `uid`, `entityType`, `entityId`. `updatedAt` is the time of the latest visit. |
+| `users/{uid}/notifications/{id}` | Opaque | SELF read; FUNCTION write; the user may set `readAt` only | `uid`, `type`, `entityType`, `entityId`, `payload`, `readAt`, `emailedAt`. |
+| `users/{uid}/subscriptions/{entityType__entityId}` | Entity type and entity identifier | SELF | `uid`, `entityType`, `entityId`, `level`. |
+| `users/{uid}/settings/preferences` | Fixed name | SELF | Notification channel settings, digest frequency, quiet hours and per-type switches. |
+| `access/{uid}` | Authentication uid | SELF read; FUNCTION write | The resolved access set: `member` (boolean), `personId`, `programmeRoles` (array of `programme_admin`, `core_team`), `leadReplicationIds`, `teamReplicationIds`, `coordinatorLaboratoryIds`, `memberLaboratoryIds`, `groupKeys`, `capabilities` (map, for example `demographicsRead`), `suspended`, `updatedAt`. |
+| `roleAssignments/{uid__role__scopeType__scopeId}` | User, role and scope | SELF and ADMIN read; FUNCTION write | `uid`, `role` (`programme_admin`, `core_team`, `replication_lead`, `lab_coordinator`, `lab_member`, `external_collaborator`), `scopeType` (`programme`, `replication`, `laboratory`, `group`), `scopeId`, `status` (`pendingApproval`, `active`, `revoked`, `expired`), `grantedBy`, `grantedAt`, `expiresAt`, `revokedBy`, `revokedAt`, `reason`. |
+| `roleCapabilities/{role}` | Role key | ADMIN | Overrides of the default capability matrix, whose defaults are defined in code: `role`, `overrides` (map of capability to `allowed`). This is how sensitive operations are restricted for the core team. |
+| `capabilityGrants/{uid__capability}` | User and capability | ADMIN read; FUNCTION write | A named capability granted to one user, for example `demographics.read`: `uid`, `capability`, `grantedBy`, `reason`, `expiresAt`, `revokedAt`. |
+| `groups/{groupKey}` | Stable group key | MEMBER read; ADMIN, or the lead or coordinator of the group's replication or laboratory, write | Directory fields only: `groupKey`, `kind` (`replicationTeam`, `labTeam`, `workingGroup`, `custom`), `name`, `replicationId`, `laboratoryId`, `memberUids`, `roles` (map of uid to role in the group). |
+| `externalAccounts/{id}` | Opaque | SCOPED | An account name in an external system: `ownerType` (`person`, `group`, `laboratory`, `replication`), `ownerId`, `system` (`cloud`, `bids`, `eegnet`, `sftp`, `osf`, `github`, `google`, `quire`), `accountName`, `notes`, `scopeKeys`. Never a secret. |
+| `invitations/{id}` | Opaque | FUNCTION | `email`, `personId`, the intended `role`, `scopeType` and `scopeId`, `tokenHash`, `expiresAt`, `acceptedAt`, `invitedBy`, `revokedAt`. |
+| `accountClaims/{uid}` | Authentication uid | SELF and ADMIN read; FUNCTION write | `uid`, `personId`, `candidatePersonIds`, `status` (`pendingReview`, `approved`, `rejected`, `withdrawn`), `matchBasis` (`primaryEmail`, `secondaryEmail`, `invitation`, `manual`), `evidence` (map), `reviewedBy`, `reviewedAt`, `decisionNote`. |
+| `labClaims/{id}` | Opaque | The requesting user, ADMIN and that laboratory's coordinators read; FUNCTION write | `laboratoryId`, `uid`, `requestedRole` (`coordinator`, `representative`), `evidence` (map, including the affiliation match and the institutional email domain), `status`, `reviewedBy`, `reviewedAt`, `decisionNote`. |
+| `correctionRequests/{id}` | Opaque | The creator and ADMIN | A member's request to correct an imported record: `uid`, `entityType`, `entityId`, `field`, `proposedValue`, `message`, `status`, `resolvedBy`, `resolvedAt`. |
+| `persons/{personId}` | Opaque; imports find it again through `identityKeys` | MEMBER read; SELF limited write (display name and profile links); ADMIN write | Directory fields only: `slug`, `givenName`, `middleName`, `familyName`, `displayName`, `orcid`, `countryCode`, `countrySource`, `affiliationSummary`, `institutionId`, `laboratoryIds`, `replicationIds`, `isCoreTeam`, `publicListing` (`none`, `member`, `coreTeam`), `websitePersonId`, `coreRoles`, `headshotFilename`, `scholarUrl`, `universityUrl`, `labUrl`, `userId` (null until claimed), `claimedAt`, `dataOrigin`. |
+| `persons/{personId}/private/contact` | Fixed name | Read: the person, ADMIN, and SCOPED leads and coordinators of that person's replications and laboratories. Write: the person and ADMIN | `emails` (array of {`email` stored lower-cased and trimmed, `kind` (`primary`, `secondary`, `historical`), `sourceRecordId`, `verifiedAt`, `claimEligible`}), `postalAddress`, `privateNotes`. |
+| `persons/{personId}/special/demographics` | Fixed name | FUNCTION | `genderSource`, `genderCategory`, `genderSelfDescribed`, `ethnicitySource`, `ethnicityCategory`, `ethnicitySelfDescribed`, `sourceRecordId`, `recordedAt`. Source terms are verbatim and the standardised categories are optional. |
+| `persons/{personId}/affiliations/{id}` | Opaque | MEMBER read; SELF and ADMIN write | `personId`, `institutionId`, `laboratoryId`, `affiliationSource` (verbatim), `roleTitle`, `isPrimary`, `startDate`, `endDate`. A person may hold several. |
+| `personEmailIndex/{emailHash}` | SHA-256 of the lower-cased, trimmed address | FUNCTION | `personIds`, `claimEligible`. |
+| `identityKeys/{keyHash}` | SHA-256 of the key | FUNCTION | `entityType`, `entityId`, `keyKind` (`websitePersonId`, `email`, `orcid`, `nameAffiliation`). A repeated import resolves through these keys to the same person, laboratory or institution. `nameAffiliation` is a folded name joined to its context: the affiliation of a person, the institution of a laboratory, the country of an institution. |
+| `institutions/{id}` | Opaque; unique on normalised name and country through `identityKeys` | MEMBER read; ADMIN write | `name`, `shortName`, `countryCode`, `city`, `rorId`, `website`, `emailDomains`. |
 
-The state of recruitment at any past date is the latest cumulative report per participation, category, modality and basis whose `as_of_date` is on or before that date. Restricting additionally on `created_at` reproduces what the portal knew at that time.
+## 4. Programme, laboratories and equipment
 
-## 7. Tasks and project oversight
+A laboratory has one authoritative profile, and several authorised representatives are allowed. Its postal address and internal notes are restricted and sit in a private document. Equipment configurations keep their history: an edit to the current configuration closes it by setting `validTo` and clearing `isCurrent`, and opens a new configuration whose `supersedesId` names the old one. The equipment requirements of a replication are stored beneath that replication (section 5), and compatibility is computed by comparing them with a laboratory's current configuration.
 
-| Table | Purpose and key columns |
-|---|---|
-| `task_lists` | A project list, optionally tied to a programme, replication or laboratory, or personal to one user. `name`, `kind`, `owner_user_id`, `scope_type`, `scope_id`, `source_system`, `source_id`, `archived_at`. |
-| `tasks` | `list_id`, `parent_id`, `position` (text fractional index), `kind` (`task`, `milestone`), `title`, `description` (rich text JSON), `status_id`, `priority` (`none`, `low`, `medium`, `high`, `urgent`), `start_at`, `due_at`, `completed_at`, `estimate_minutes`, `progress_percent`, `recurrence_rule` (RFC 5545 text), `recurrence_source_task_id`, `created_by`, `source_system`, `source_id`, `source_url`, `archived_at`. Nesting is by `parent_id` with a service-level guard against cycles. |
-| `task_participants` | `task_id`, `user_id` or `person_id`, `role` (`assignee`, `collaborator`, `follower`). |
-| `task_dependencies` | `task_id`, `depends_on_task_id`, `kind` (`finish_to_start`, `start_to_start`, `finish_to_finish`, `blocks`). Unique pair, self-reference forbidden, cycles rejected in the service. |
-| `task_links` | `task_id`, `entity_type`, `entity_id`. A task may link to several research entities. |
-| `task_checklist_items` | `task_id`, `label`, `is_done`, `position`. |
-| `tags`, `entity_tags` | Shared tags applied to tasks and other entities. |
-| `reminders` | `user_id`, `entity_type`, `entity_id`, `remind_at`, `sent_at`, `channel`. |
+| Path | Identifier | Access | Contents |
+|---|---|---|---|
+| `programmes/{key}` | Programme key | MEMBER read; ADMIN write | `key`, `name`, `description`, `parentId`, `kind` (`programme`, `subproject`). Spin-off projects such as the resting-state and alpha asymmetry subprojects are children of the main programme. |
+| `laboratories/{laboratoryId}` | Opaque; imports find it again through `identityKeys` | MEMBER read; that laboratory's coordinators and ADMIN write | `slug`, `name`, `institutionId`, `department`, `countryCode`, `city`, `website`, `piPersonId`, `status` (`unverified`, `active`, `inactive`), `description`, `dataOrigin`. |
+| `laboratories/{laboratoryId}/private/detail` | Fixed name | SCOPED | `address`, `internalNotes`. |
+| `laboratories/{laboratoryId}/members/{personId}` | Person identifier | MEMBER read; that laboratory's coordinators and ADMIN write | `laboratoryId`, `personId`, `role` (`pi`, `coordinator`, `representative`, `member`), `isAuthorisedRepresentative`, `startDate`, `endDate`, `status`. |
+| `laboratories/{laboratoryId}/equipment/{configurationId}` | Opaque | MEMBER read; coordinators write | `laboratoryId`, `name`, `isCurrent`, `validFrom`, `validTo`, `supersedesId`, `eegSystemSource` (verbatim), `amplifierManufacturer`, `amplifierModel`, `capType`, `electrodeType`, `channelCount`, `samplingRatesHz` (integer array), `referenceScheme`, `triggerMethod`, `presentationSoftware`, `stimulusComputer`, `displayRefreshHz`, `eyeTracker`, `responseDevices`, `other` (map), `notes`. |
 
-## 8. Workspace: pages, databases and views
+## 5. Replications and scientific definition
 
-| Table | Purpose and key columns |
-|---|---|
-| `pages` | Every major entity is a page. `parent_page_id`, `entity_type` and `entity_id` (set when the page is the body of an entity), `kind` (`custom`, `entity`, `meeting`, `report`, `decision`, `template`), `title`, `icon`, `position`, `is_template`, `access_mode` (`inherit`, `restricted`), `plain_text`, `created_by`, `last_edited_by`, `archived_at`. |
-| `page_documents` | `page_id`, `snapshot` (bytea, merged Yjs state), `state_vector` (bytea), `update_seq`, `updated_at`. |
-| `page_updates` | Append-only Yjs updates awaiting compaction: `page_id`, `seq`, `update` (bytea), `user_id`, `client_id`, `created_at`. |
-| `page_versions` | `page_id`, `snapshot` (bytea), `label`, `kind` (`auto`, `manual`, `restore`), `created_by`, `created_at`. Restoring a version writes a new forward change. |
-| `page_permissions` | `page_id`, `principal_type` (`user`, `group`, `role`), `principal_id`, `level` (`view`, `comment`, `edit`, `full`). |
-| `favourites`, `recents` | Per user, referencing any entity. |
-| `comment_threads`, `comments` | A thread attaches to any entity and optionally to an anchor (a block identifier or a field). Comments have `author_id`, `body` (rich text JSON), `edited_at`, `deleted_at`. Threads have `resolved_at` and `resolved_by`. |
-| `mentions` | `source_type`, `source_id`, `mentioned_user_id`, `created_by`, `created_at`. |
-| `attachments` | `entity_type`, `entity_id`, `storage_key`, `filename`, `content_type`, `size_bytes`, `sha256`, `uploaded_by`. Files are stored through a storage adapter (local disk in development, object storage in production). |
-| `custom_databases` | User-created databases: `name`, `description`, `icon`, `parent_page_id`, `created_by`, `archived_at`. Addressed as the collection `db:<id>`. |
-| `properties` | Property definitions for a collection, which is either a custom database or a core entity type that accepts custom properties. `collection_key`, `key`, `name`, `type` (`text`, `rich_text`, `number`, `date`, `date_range`, `email`, `url`, `checkbox`, `person`, `status`, `select`, `multi_select`, `file`, `relation`, `rollup`, `formula`, `created_time`, `edited_time`, `created_by`, `edited_by`), `config` (JSON: options, relation target, rollup specification, formula expression, number format), `position`, `archived_at`. |
-| `database_rows` | Rows of custom databases: `database_id`, `title`, `values` (JSON keyed by property id), `position`, `page_id`, authorship columns, `archived_at`. |
-| `property_values` | Custom property values on core entities: `property_id`, `entity_type`, `entity_id`, `value` (JSON). Unique on property and entity. |
-| `relation_links` | Normalised storage for relation properties: `property_id`, `from_type`, `from_id`, `to_type`, `to_id`. Supports rollups and backlinks. |
-| `views` | `collection_key` (for example `core:replications`, `core:participations`, `core:tasks`, `db:<id>`), `name`, `type` (`table`, `list`, `board`, `calendar`, `timeline`, `gallery`), `config` (JSON: filter tree, sorts, grouping, visible properties, column order and widths, card layout, date properties), `scope` (JSON, a fixed filter such as one replication), `owner_user_id` (set for personal views), `is_shared`, `page_id`, `position`. |
-| `dashboards`, `dashboard_widgets` | A dashboard belongs to the programme, a replication, a laboratory or a user. Widgets have a `type` (`view`, `kpi`, `chart`, `timeline`, `calendar`, `activity`, `note`, `embed`), a `config` and a grid position and size. |
+The identifier of a replication is the programme's existing study identifier, unchanged (D-013), and existing identifiers are never renamed. Every other spelling found in a source is an alias. An alias is unique only together with its replication, because two replications share one BIDS name and one EEGNet name, so no global uniqueness holds on scheme and alias. The alias identifier therefore contains a hash and is scoped by its parent, and `studyAliasIndex` resolves a case-folded and diacritic-folded spelling to an array of replications.
 
-Core scientific collections keep strict typed columns. The collection registry in code describes which built-in fields each collection exposes to views and which collections accept custom properties. A linked view on any page queries the one authoritative table, so a record edited in one place is the same record everywhere.
+Conflicting leads from different sources are all stored as memberships with `reviewStatus` `needsReview`, a reconciliation item is raised, and `leadPersonIds` on the replication lists the current confirmed leads only. `statusKey` names a document in `statusDefinitions`, and each status history entry holds an effective time and a recorded time so that a past status can be reconstructed. The values in `sameAsSource` of a vocabulary term are external codes, stored verbatim as an array. They never refer to another local term, so the former `same_as_term_id` column is withdrawn. Replication-level figures from historical workbooks are kept as historical aggregates, apart from live reports (D-009), and `snapshotDate` may be absent because the source gives no as-of date. The former `replication_vocabulary` join is the `vocabulary` array of the replication, and protocol acknowledgements and deviations belong to a participation (section 6).
 
-## 9. Datasets and distributed storage
+| Path | Identifier | Access | Contents |
+|---|---|---|---|
+| `replications/{studyKey}` | The study identifier, for example `AmodioJost2007` | MEMBER read; that replication's leads and ADMIN write | `programmeId`, `studyKey` (immutable), `shortTitle`; the original study: `originalAuthors`, `originalYear`, `originalTitle`, `originalReference`, `originalDoi`; citation verification: `citationStatus` (`unverified`, `verified`, `mismatch`, `notFound`), `citationCheckedAt`, `citationSource`, `citationMetadata` (map); `abstract`, `rationale`, `effectOfInterest`, `plainLanguageDescription`, `originalN`, `originalStatistics`, `originalEffectSizeSource`, `originalEffectSizeValue`, `originalEffectSizeMetric`, `originalBayesFactorSource`, `powerAssumptions`, `powerBasedN`, `targetN`, `durationSource`, `sampleType`, `minEegChannels`, `extraEquipment`, `studyType`, `outcome`, `psychConstruct`, `theme`, `statusKey`; the public stage: `publicStageNumber`, `publicStageName`, `publicStageText`; `signupUrl`, `signupActive`, `selectionStatus` (`selected`, `shortlisted`, `rankedCandidate`, `withdrawn`), `leadPersonIds` (current confirmed leads), `vocabulary` (array of {`termId`, `relation`, `note`}), `dataOrigin`. |
+| `replications/{studyKey}/aliases/{scheme__hashOfAlias}` | Scheme and SHA-256 of the alias | As the replication | `replicationId`, `alias`, `aliasFolded`, `scheme` (`programme`, `website`, `cloudAccount`, `bids`, `eegnet`, `sourceTab`, `other`), `explanation`, `part1`, `part2`, `isCanonical`. |
+| `replications/{studyKey}/memberships/{personId__role}` | Person and role | As the replication | `replicationId`, `personId`, `role` (`lead`, `coLead`, `formerLead`, `coordinator`, `analyst`, `member`, `advisor`), `isCurrent`, `startDate`, `endDate`, `reviewStatus` (`confirmed`, `needsReview`). |
+| `replications/{studyKey}/hypotheses/{hNN}` | `h` and a two-digit number, for example `h01` | As the replication | `replicationId`, `hypothesisNumber` (verbatim), `text`, `expectedEffect`, `outcomeMeasure`, `analysisSpecification`, `preregistrationUrl`, `originalStatistics`, `nullSigSource` (verbatim), `replicatedSource` (verbatim, an unverified historical label), `scientificReviewStatus` (`unverified`, `underReview`, `verified`), `analysisStatus`, `resultSummary`, `resultReviewedBy`, `resultReviewedAt`, `studyDescriptionUrl`, `infosheetUrl`. |
+| `replications/{studyKey}/protocols/{id}` | Opaque | As the replication | A protocol of the replication: `replicationId`. Its content is held in its versions. |
+| `replications/{studyKey}/protocols/{id}/versions/{id}` | Opaque | As the replication | `replicationId`, `protocolId`, `versionLabel`, `effectiveDate`, `status` (`draft`, `approved`, `superseded`), `changeSummary`, `documentLinkId`, `approvedBy`, `approvedAt`. |
+| `replications/{studyKey}/equipmentRequirements/{key}` | Requirement key | As the replication | `replicationId`, `requirementKey`, `operator`, `value`, `isMandatory`, `note`. |
+| `replications/{studyKey}/statusHistory/{id}` | Opaque | MEMBER read; leads and ADMIN create; no update or delete | `entityType` and `entityId` (the replication), `fromStatusKey`, `toStatusKey`, `effectiveAt`, `recordedAt`, `changedBy`, `reason`, `source`. Status changes of other entity types are recorded in the audit trail (section 13). |
+| `replications/{studyKey}/historicalAggregates/{metricKey__sourceRecordId}` | Metric key and source record | MEMBER read; FUNCTION write | `replicationId`, `metricKey` (for example `nLabsSigned`, `totalNToBeRun`, `nLabsFinished`, `totalNMainCollected`, `totalNRest`), `valueSource` (verbatim), `valueNumeric`, `snapshotDate` (may be absent), `sourceRecordId`. `dataOrigin` is always `importedHistorical`. |
+| `replications/{studyKey}/countCategories/{key}` | Category key | As the replication | Replication-specific extensions of the global categories in section 7, with the same fields and `replicationId`. |
+| `replications/{studyKey}/summaries/{kind}` | Summary kind, for example `recruitment` | MEMBER read; FUNCTION write | Rollups such as recruitment totals, which are also the basis of approved public aggregates (section 15). |
+| `studyAliasIndex/{foldedAlias}` | The case-folded and diacritic-folded alias | MEMBER read; FUNCTION write | `replicationIds` (an array, since an alias can belong to two studies). |
+| `statusDefinitions/{entityType__key}` | Entity type and status key | MEMBER read; ADMIN write | `entityType`, `key`, `label`, `category` (`notStarted`, `active`, `done`, `paused`, `cancelled`), `position`, `isDefault`. Seeded for replications with proposed, planning, recruiting labs, site preparation, collecting, collection complete, processing, analysing, writing, submitted, published, paused and archived. |
+| `vocabularyTerms/{sourceId}` | The term's original identifier | MEMBER read; ADMIN write | Community vocabulary: `sourceId`, `name`, `abbreviation`, `description`, `invalidReason`, `sameAsSource` (array of external codes, verbatim), `kind`, `isDeprecated`. |
+| `predictionMarketItems/{id}` | Opaque | MEMBER read; ADMIN write | Survey and market questions: `replicationId` and `hypothesisId` (both absent for a question about the programme), `questionText`, `choices`. |
 
-The portal is a registry of where data lives. It does not require raw EEG to be transferred to a central store.
+## 6. Participation
 
-| Table | Purpose and key columns |
-|---|---|
-| `storage_endpoints` | `key`, `name`, `institution_id`, `protocol` (`sftp`, `ftps`, `filesystem`, `s3`, `webdav`, `gin`, `osf`, `other`), `host`, `port`, `base_path`, `owner_person_id`, `credential_ref` (the name of a secret held in the secret store), `status` (`active`, `unreachable`, `retired`), `last_checked_at`, `last_check_result`. |
-| `datasets` | `dataset_key`, `replication_id`, `laboratory_id`, `participation_id`, `title`, `modality` (`main`, `rest`, `mixed`), `grouping_label`, `protocol_version_id`, `expected_file_count`, `expected_participants`, `received_at`, `size_bytes`, `workflow_status_id`, `bids_status` (`not_started`, `in_progress`, `invalid`, `valid`), `bids_version`, `bids_report` (JSON), `qc_status` (`not_started`, `pending`, `passed`, `flagged`, `failed`), `analysis_ready`, `metadata` (JSON), `data_origin`. |
-| `dataset_storage_refs` | Several per dataset. `dataset_id`, `endpoint_id`, `role` (`primary`, `mirror`, `backup`, `processing_copy`), `uri`, `availability` (`available`, `unavailable`, `unknown`), `verified_at`, `valid_from`, `valid_to`, `relocated_from_ref_id`. |
-| `file_manifests`, `manifest_files` | A manifest is a listing of a storage reference at a time, from a scan, an upload or manual entry. Files carry `relative_path`, `size_bytes`, `checksum_algorithm`, `checksum`, `modified_at` and a comparison `status` (`expected`, `present`, `missing`, `unexpected`, `duplicate`). |
-| `data_transfers` | `dataset_id`, `from_ref_id`, `to_ref_id`, `status` (`initiated`, `in_progress`, `completed`, `failed`, `verified`), `initiated_by`, timestamps, `bytes_transferred`, `error`, `verification_manifest_id`. |
-| `qc_assessments` | `dataset_id`, `level` (`dataset`, `recording`), `recording_label`, `assessed_by`, `tool`, `tool_version`, `pipeline_version`, `parameters` (JSON), `outcome` (`pass`, `flag`, `fail`), `metrics` (JSON), `exclusions`, `notes`, `assessed_at`. |
-| `processing_runs`, `processing_run_inputs` | Preprocessing and analysis runs with `kind`, `pipeline_name`, `code_url`, `code_commit`, `version`, `parameters`, `environment`, `status`, `started_at`, `finished_at`, `run_by`, output links and reproducibility notes. Inputs link to datasets. |
-| `dataset_access_events` | Who viewed storage paths or requested a viewer link, and when. |
-| `viewer_links` | Optional links to a viewer such as ElectroTag: `dataset_id`, `tool`, `url`, `created_by`. Entirely optional and never required for access. |
+A laboratory profile holds facts about the laboratory, and a participation holds everything specific to that laboratory in one replication (D-008). Its identifier joins the two identifiers, which makes a duplicate participation impossible. The registry fields are readable by every member. Ethics, training, readiness approval and notes are restricted and sit in a private document. Outreach contacts are the historical recruitment correspondence and are restricted to the leads of the replication. Their three verbatim cells record the first contact, the follow-up and the result, and `formatting` keeps the cell formatting that carries meaning in the source.
 
-## 10. Scientific outputs and governance records
+| Path | Identifier | Access | Contents |
+|---|---|---|---|
+| `participations/{studyKey__laboratoryId}` | Replication and laboratory | MEMBER read; SCOPED write | `replicationId`, `laboratoryId`, `localLeadPersonId`, `status` (`invited`, `interested`, `confirmed`, `onboarding`, `ready`, `collecting`, `collectionComplete`, `withdrawn`, `declined`), `targetNMain`, `targetNRest`, `protocolId`, `protocolVersionId`, `equipmentConfigurationId`, `signedUpAt`, `readinessStatus`, `dataOrigin`, `scopeKeys`. |
+| `participations/{participationId}/private/detail` | Fixed name | SCOPED | `ethicsStatus` (`unknown`, `notStarted`, `submitted`, `approved`, `notRequired`), `ethicsReference`, `ethicsApprovedAt`, `trainingStatus`, `readinessApprovedBy`, `readinessApprovedAt`, `equipmentOverrideJustification`, `notes`. |
+| `participations/{participationId}/checklist/{itemKey}` | Template item key | SCOPED | `participationId`, `templateItemKey`, `label`, `status` (`notStarted`, `inProgress`, `done`, `notApplicable`, `blocked`), `completedBy`, `completedAt`, `evidenceUrl`, `note`, `position`. |
+| `participations/{participationId}/members/{personId}` | Person identifier | SCOPED | People at the laboratory who work on this replication: `participationId`, `personId`, `role`. |
+| `participations/{participationId}/acknowledgements/{id}` | Opaque | SCOPED | Acknowledgement of a protocol version by a person at a time: `participationId`, `protocolVersionId`, `personId`, `acknowledgedAt`. |
+| `participations/{participationId}/deviations/{id}` | Opaque | SCOPED | `participationId`, `description`, `severity`, `occurredAt`, `reportedBy`, `correctiveAction`, `status`. |
+| `checklistTemplates/{key}` | Template key | MEMBER read; ADMIN write | `key`, `items` (ordered array of template items, each with a key and a label). Seeded with the onboarding checklist: participation confirmation, verified contacts, equipment confirmation, ethics, protocol review, training, technical checks, pilot and readiness approval. |
+| `outreachContacts/{id}` | Opaque | The replication's leads and ADMIN | `replicationId`, `laboratoryId`, `personId`, `labNameSource`, `contactNameSource`, `contactEmail`, `firstContactSource`, `followUpSource`, `resultSource`, `notes`, `formatting` ({`struckThrough`, `fillColour`}), `sourceRecordId`, `scopeKeys`. |
 
-| Table | Purpose and key columns |
-|---|---|
-| `manuscripts` | `replication_id` (nullable), `website_publication_id`, `title`, `kind` (`stage1_rr`, `stage2_rr`, `preprint`, `article`, `data_paper`, `software`, `other`), `status`, `journal`, `doi`, `preprint_doi`, `osf_url`, `authors_short`, `submitted_at`, `accepted_at`, `published_at`, `citation_status`, `citation_metadata`. |
-| `manuscript_events` | Review rounds, decisions, revisions and submissions with dates and linked documents. |
-| `contributor_tables` | From the membership workbook: `replication_id`, `table_url`, `is_only_signup_table`, `is_published`, `publication_url`, `pdf_url`, `source_record_id`. |
-| `contributors` | `replication_id`, `manuscript_id` (nullable), `contributor_table_id`, `person_id` (nullable), verbatim name parts, `order_in_publication`, `affiliation_source`, `email` (restricted), `orcid`, `agreement_source`, `funding_statement`, `review_status`, `source_record_id`. |
-| `contributor_roles` | `contributor_id`, `credit_role` (the 14 CRediT roles), `value_source` (verbatim cell value). |
-| `decisions`, `risks`, `incidents` | Methodological decision log, risk register and incident registry, each scoped to the programme or a replication, each with an owner, a status, dates and a linked page. |
-| `meetings`, `meeting_attendees` | Meeting pages with agenda and notes held in the page body, attendees, and action items created as linked tasks. |
-| `progress_reports` | Scope, period, linked page, linked generated document and status. |
-| `document_links` | Any external document attached to any entity: `entity_type`, `entity_id`, `kind` (`google_doc`, `google_sheet`, `drive_folder`, `osf`, `github`, `pdf`, `form`, `url`), `url`, `external_id`, `title`, `access_status` (`unknown`, `public`, `restricted`, `unreachable`), `http_status`, `last_checked_at`, `owner_name`, `modified_at`, `source_record_id`. |
+## 7. Recruitment
 
-## 11. Provenance, migration and integrations
+Recruitment is an append-only series of reports (D-009). A report is created once, and the rules refuse every update and delete. A correction is a new report that names the report it corrects in `correctsReportId`. Central verification is likewise a new report with `basis` `centrallyVerified`, whose `reportedBy` and `createdAt` carry what the former `verified_by` and `verified_at` columns held, so a report never needs to be edited.
 
-| Table | Purpose and key columns |
-|---|---|
-| `sources` | The source registry. `key`, `name`, `kind` (`google_sheet`, `drive_file`, `repository_tsv`, `quire`, `osf`, `other`), `url`, `external_id`, `owner`, `authority` (`historical`, `live`, `reference`), `sync_policy` (`one_off`, `scheduled_pull`, `two_way`), `cadence`, `access_status`, `last_fetched_at`, `notes`. |
-| `source_tabs` | `source_id`, `name` (verbatim), `visibility` (`visible`, `hidden`, `very_hidden`), `header_row`, `row_count`, `importer_key`, `last_seen_at`. |
-| `import_batches` | `source_id`, `mode` (`preview`, `apply`), `status` (`running`, `previewed`, `applied`, `failed`, `rolled_back`), `content_hash`, `started_by`, `started_at`, `finished_at`, `stats` (JSON), `log` (JSON). |
-| `source_records` | Immutable raw rows. `source_id`, `tab`, `row_key` (stable identity derived from natural keys, never from the row number alone), `row_number`, `raw` (JSON of original values and formulas), `raw_hash`, `first_seen_batch_id`, `last_seen_batch_id`. Unique on source, tab, row key and hash. |
-| `record_links` | Provenance from a source record to an entity: `source_record_id`, `entity_type`, `entity_id`, `relation` (`created`, `updated`, `matched`), `fields`. |
-| `import_changes` | Every write made by a batch, with `before` and `after`, which makes a batch reversible. |
-| `reconciliation_items` | The human review queue. `kind` (`duplicate_person`, `conflicting_lead`, `ambiguous_laboratory`, `value_conflict`, `unmatched_identifier`, `ambiguous_email`), entity references, `candidates` (JSON with source references), `status` (`open`, `resolved`, `dismissed`), `resolution`, `resolved_by`, `resolved_at`, `batch_id`, `fingerprint` (unique, so a re-import does not raise the same item twice). |
-| `integration_mappings` | Identifier of an entity in an external system: `entity_type`, `entity_id`, `system`, `external_id`, `external_url`. Unique on system, external identifier and entity type. |
-| `integration_connections` | `system`, `status`, `config` (non-secret JSON), `credential_ref`, `last_success_at`, `last_error`, `last_error_at`. |
-| `sync_mappings` | `connection_id`, `spreadsheet_id`, `tab`, `collection_key`, `key_strategy`, `column_map` (JSON with a direction per field: `app_authoritative`, `sheet_authoritative`, `bidirectional`, `generated`), `enabled`. |
-| `sync_cell_state` | The last value synchronised for each mapped cell on both sides, which is the base of the three-way comparison that prevents feedback loops. |
-| `sync_runs`, `sync_conflicts` | Run history with attempts and errors, and conflicts holding the base, application and sheet values until an authorised user resolves them. |
-| `generated_documents` | `template_key`, entity reference, `external_document_id`, `managed_sections` (JSON of named ranges), `last_generated_at`, `last_revision_id`, `status`. |
-| `publication_batches` | The public publishing log: `kind`, `payload`, `diff`, `status` (`draft`, `previewed`, `staged`, `approved`, `published`, `rolled_back`), `requested_by`, `approved_by`, `commit_ref`, `pull_request_url`. |
+The former `recruitment_counts` and `recruitment_exclusions` tables are embedded in the report. `counts` maps a modality to a map of category key to a non-negative integer, and an absent key means the value is unknown. The `participants` modality counts unique people, which prevents a person who contributed both a main-experiment and a resting-state recording from being counted twice. A total number of participants is never derived by adding `main` and `rest`. Historical aggregates are documents beneath the replication (section 5).
 
-## 12. Events, audit, automation and notifications
+| Path | Identifier | Access | Contents |
+|---|---|---|---|
+| `countCategories/{key}` | Category key | MEMBER read; ADMIN write | `key`, `label`, `definition`, `position`, `isCore`. Seeded with target, planned, scheduled, recruited, tested, recorded, submitted, received, validated, usable and excluded, each with an explicit definition. Extensions for one replication live beneath it (section 5), which takes the place of the nullable `replication_id` column. |
+| `recruitmentReports/{id}` | Opaque | SCOPED read; SCOPED create; nobody may update or delete | `participationId`, `replicationId`, `laboratoryId`, `asOfDate` (ISO date for which the counts hold), `periodStart`, `periodEnd`, `reportKind` (`cumulative`, `period`), `basis` (`labReported`, `centrallyVerified`), `entryKind` (`new`, `correction`), `correctsReportId`, `counts` (map of modality `main`, `rest`, `participants` to a map of category key to non-negative integer), `exclusions` (array of {`modality`, `reasonTermId`, `reasonSource`, `count`}), `note`, `reportedBy`, `source` (`manual`, `import`, `sheetSync`), `dataOrigin`, `scopeKeys`. |
+| `plannedPauses/{id}` | Opaque | SCOPED | `participationId`, `replicationId`, `laboratoryId`, `startsOn`, `endsOn`, `reason`, `scopeKeys`. |
+| `forecastRuns/{id}` | Opaque | MEMBER read; FUNCTION or that replication's leads write | `replicationId`, `generatedAt`, `generatedBy`, `methodVersion`, `assumptions` (map), `scenarios` (map with optimistic, central and conservative results and intervals), `inputsAsOf`. `dataOrigin` is always `projected`. |
 
-| Table | Purpose and key columns |
-|---|---|
-| `audit_events` | Append-only. `actor_user_id`, `actor_kind` (`user`, `system`, `import`, `sync`, `automation`), `action`, `entity_type`, `entity_id`, `changes` (JSON of field, before and after, with special-category values replaced by a marker), `context` (JSON: request identifier, hashed IP address, user agent), `created_at`. Updates and deletes are blocked by a trigger. |
-| `domain_events` | Transactional outbox consumed by automations, notifications, synchronisation and search indexing. `type`, `entity_type`, `entity_id`, `payload`, `actor_user_id`, `origin`, `correlation_id`, `causation_id`, `depth`, `created_at`, `processed_at`. |
-| `automation_rules` | `name`, `enabled`, `trigger_type` (`record_created`, `record_updated`, `status_changed`, `schedule`, `manual`), `trigger_config`, `conditions`, `actions`, `scope_type`, `scope_id`, `created_by`. |
-| `automation_runs` | `rule_id`, `event_id`, `idempotency_key` (unique), `status`, `attempts`, `log`, `error`, `started_at`, `finished_at`. Loop prevention uses the event `depth` and `origin`. |
-| `notifications` | `user_id`, `type`, `entity_type`, `entity_id`, `payload`, `created_at`, `read_at`, `emailed_at`. |
-| `notification_preferences` | Per user: channel settings, digest frequency, quiet hours and per-type switches. |
-| `subscriptions` | `user_id`, `entity_type`, `entity_id`, `level`. |
-| `email_outbox` | `to_address`, `subject`, `text_body`, `html_body`, `template_key`, `status`, `attempts`, `sent_at`, `error`. In development, messages stay in this table and are shown in a development mailbox. |
-| `scheduled_reports` | `name`, `definition`, `schedule`, `recipients`, `last_run_at`, `enabled`. |
-| `search_documents` | `entity_type`, `entity_id`, `title`, `body`, `tsv` (generated `tsvector` with a GIN index), `scope` (JSON used for permission filtering), `updated_at`. |
+## 8. Tasks
 
-## 13. Integrity rules enforced by the database
+A task list is tied to the programme, a replication or a laboratory, or is personal to one user. The join tables of the relational design are arrays on the task: `task_participants` is the three uid arrays, `task_dependencies` is `dependsOn`, `task_links` is `links`, `task_checklist_items` is `checklist`, and `entity_tags` is the `tagIds` array of any tagged document. The uid arrays hold logins, so a person who has no account yet is attached to a task through `links`.
 
-Foreign keys are declared for every reference to a first-class table, with `ON DELETE RESTRICT` as the default and `ON DELETE CASCADE` only for pure child rows such as checklist items, counts and manifest files. Polymorphic references (`entity_type` with `entity_id`) are validated in the service layer and covered by integration tests. Unique constraints protect natural keys: replication `study_key`, laboratory `slug`, person `slug`, participation pair, alias within a scheme, source record identity, reconciliation fingerprint and automation idempotency key. Check constraints protect ranges such as non-negative counts and `progress_percent` between 0 and 100. Indexes exist on every foreign key and on the columns used for filtering in the main views.
+Nesting is by `parentId`, and `ancestorIds` is kept beside it so that a rule can refuse a move beneath one of the task's own descendants and a subtree can be loaded with one query. `order` is a fractional index string, which lets a task be placed between two others by writing one document. A task appears once in `dependsOn` and never names itself. A cycle of dependencies cannot be excluded by a rule, so the interface refuses to create one and the integrity checker reports any that exists.
+
+| Path | Identifier | Access | Contents |
+|---|---|---|---|
+| `taskLists/{id}` | Opaque | By scope or owner | `name`, `kind`, `ownerUid`, `scopeType`, `scopeId`, `replicationId`, `laboratoryId`, `source` ({`system`, `id`}), `scopeKeys`. |
+| `tasks/{id}` | Opaque | By scope or owner, as its list | `listId`, `parentId`, `ancestorIds`, `order`, `kind` (`task`, `milestone`), `title`, `description` (rich text), `statusKey`, `priority` (`none`, `low`, `medium`, `high`, `urgent`), `startAt`, `dueAt`, `completedAt`, `estimateMinutes`, `progressPercent`, `recurrenceRule` (RFC 5545 text), `recurrenceSourceTaskId`, `assigneeUids`, `collaboratorUids`, `followerUids`, `dependsOn` (array of {`taskId`, `kind` (`finishToStart`, `startToStart`, `finishToFinish`, `blocks`)}), `links` (array of {`entityType`, `entityId`}), `checklist` (array of {`id`, `label`, `done`}), `tagIds`, `replicationId`, `laboratoryId`, `scopeKeys`, `source` ({`system`, `id`, `url`}). |
+| `tags/{id}` | Opaque | MEMBER read and create; ADMIN update | A shared tag, applied to tasks and other entities through their `tagIds`. |
+| `reminders/{id}` | Opaque | SELF; FUNCTION sets `sentAt` | `uid`, `entityType`, `entityId`, `remindAt`, `sentAt`, `channel`. |
+
+## 9. Workspace
+
+Every major entity is a page. A page with `accessMode` `inherit` follows its parent page, or the scope of the entity it belongs to, through `scopeKeys`. A page with `accessMode` `restricted` is open only to the principals listed in its `permissions` subcollection, where a principal is a user, a group or a role. The body of a page is a Yjs document (D-010, provisional until the editor spike confirms the chunk size and the compaction procedure). The merged snapshot is stored in chunks, updates are appended until compaction merges them, and a version is a stored snapshot. Restoring a version writes a new forward change. Yjs updates may be applied in any order, so the `seq` column of the former `page_updates` table has no counterpart and `createdAt` orders updates for compaction. The full plain text of a page feeds the search index (section 13), and the page keeps an excerpt.
+
+Scientific core fields keep strict schemas (D-011), and the collection registry in code says which built-in fields each core collection exposes to views and which collections accept custom properties. A user-created database is a collection of its own, addressed as `db:<id>`, with its property definitions on the database document and its values in each row. Custom properties added to a core collection are defined in `collectionSchemas`, and their values sit in a `custom` map on each core document, keyed by property identifier, which takes the place of the `property_values` table. A relation property stores an array of {`entityType`, `entityId`} references in `values` or `custom`, which takes the place of the `relation_links` table, and backlinks and rollups are computed in the browser (section 15). The property types are `text`, `richText`, `number`, `date`, `dateRange`, `email`, `url`, `checkbox`, `person`, `status`, `select`, `multiSelect`, `file`, `relation`, `rollup`, `formula`, `createdTime`, `editedTime`, `createdBy` and `editedBy`.
+
+The former `mentions` table is the `mentionUids` array of the comment that contains the mention. Its author and time are the comment's own, and each mention produces a notification beneath the mentioned user. Dashboard widgets are an array on the dashboard. Favourites and recents are subcollections of the user (section 3).
+
+| Path | Identifier | Access | Contents |
+|---|---|---|---|
+| `pages/{pageId}` | Opaque | By page access | `parentPageId`, `entityType` and `entityId` (set when the page is the body of an entity), `kind` (`custom`, `entity`, `meeting`, `report`, `decision`, `template`), `title`, `icon`, `order`, `isTemplate`, `accessMode` (`inherit`, `restricted`), `replicationId`, `laboratoryId`, `scopeKeys`, `plainTextExcerpt`, `lastEditedBy`. |
+| `pages/{pageId}/content/{chunkId}` | Chunk identifier | As the page | The merged Yjs snapshot, chunked below the document limit: `pageId`, `index`, `snapshot` (bytes), `stateVector` (bytes), `updateSeq` (a counter that rises with each compaction). |
+| `pages/{pageId}/updates/{id}` | Opaque | As the page; editors create; append-only | Yjs updates awaiting compaction: `pageId`, `update` (bytes), `uid`, `clientId`, `createdAt`. |
+| `pages/{pageId}/versions/{id}` | Opaque | As the page; editors create; no update or delete | `pageId`, `label`, `kind` (`auto`, `manual`, `restore`), `createdBy`. |
+| `pages/{pageId}/versions/{id}/chunks/{n}` | Chunk number | As the version | `snapshot` (bytes). |
+| `pages/{pageId}/permissions/{principalType__principalId}` | Principal type and principal | Read as the page; holders of `full` and ADMIN write | `pageId`, `principalType` (`user`, `group`, `role`), `principalId`, `level` (`view`, `comment`, `edit`, `full`). |
+| `threads/{id}` | Opaque | As the target record | `targetType`, `targetId`, `anchor` ({`blockId`, `field`}), `replicationId`, `laboratoryId`, `scopeKeys`, `resolvedAt`, `resolvedBy`. |
+| `threads/{id}/comments/{id}` | Opaque | As the thread; an author edits or deletes their own comment | `threadId`, `authorUid`, `body` (rich text), `mentionUids`, `editedAt`, `deletedAt`. |
+| `attachments/{id}` | Opaque | As the entity it is attached to | `entityType`, `entityId`, `storagePath`, `filename`, `contentType`, `sizeBytes`, `sha256`, `uploadedBy`. The file itself is in Cloud Storage. |
+| `databases/{databaseId}` | Opaque | As the parent page | `name`, `description`, `icon`, `parentPageId`, `properties` (ordered array of {`id`, `key`, `name`, `type`, `config`, `archivedAt`}). `config` holds options, the relation target, the rollup specification, the formula expression and the number format. |
+| `databases/{databaseId}/rows/{rowId}` | Opaque | As the database | `databaseId`, `title`, `values` (map of property identifier to value), `order`, `pageId`. |
+| `collectionSchemas/{collectionKey}` | Collection key, for example `core:replications` | MEMBER read; ADMIN write | Custom property definitions for a core collection: `collectionKey`, `properties` (the same shape as on a database). |
+| `views/{viewId}` | Opaque | Personal views: SELF. Shared views: MEMBER read; owner and ADMIN write | `collectionKey` (for example `core:replications`, `core:participations`, `core:tasks`, `db:<id>`), `name`, `type` (`table`, `list`, `board`, `calendar`, `timeline`, `gallery`), `config` (filter tree, sorts, grouping, visible properties, column order and widths, card layout, date properties), `scope` (a fixed filter such as one replication), `ownerUid` (set for personal views), `isShared`, `pageId`, `order`. |
+| `dashboards/{id}` | Opaque | A user's dashboard: SELF. Others: MEMBER read; SCOPED write | A dashboard of the programme, a replication, a laboratory or a user: `scopeType`, `scopeId`, `ownerUid`, `name`, `widgets` (array of {`id`, `type` (`view`, `kpi`, `chart`, `timeline`, `calendar`, `activity`, `note`, `embed`), `config`, `x`, `y`, `w`, `h`}). |
+
+## 10. Datasets
+
+The portal is a registry of where data lives, and raw EEG never has to be transferred to a central store. The registry document of a dataset is readable by every member. Storage paths and server details are restricted, so storage references, manifests, transfers and quality assessments sit in scoped subcollections, and every view of a storage path or request for a viewer link is recorded in `accessEvents`. `credentialRef` names a secret held in the secret store and is never the secret. The former `manifest_files` rows are arrays in numbered chunks of a manifest, and the former `processing_run_inputs` join is the `inputDatasetIds` array of a run.
+
+| Path | Identifier | Access | Contents |
+|---|---|---|---|
+| `storageEndpoints/{key}` | Endpoint key | SCOPED read; ADMIN write | `key`, `name`, `institutionId`, `protocol` (`sftp`, `ftps`, `filesystem`, `s3`, `webdav`, `gin`, `osf`, `other`), `host`, `port`, `basePath`, `ownerPersonId`, `credentialRef`, `status` (`active`, `unreachable`, `retired`), `lastCheckedAt`, `lastCheckResult`, `scopeKeys` (the scopes whose datasets use the endpoint). |
+| `datasets/{datasetKey}` | Dataset key | MEMBER read; SCOPED write | `datasetKey`, `replicationId`, `laboratoryId`, `participationId`, `title`, `modality` (`main`, `rest`, `mixed`), `groupingLabel`, `protocolId`, `protocolVersionId`, `expectedFileCount`, `expectedParticipants`, `receivedAt`, `sizeBytes`, `workflowStatusKey`, `bidsStatus` (`notStarted`, `inProgress`, `invalid`, `valid`), `bidsVersion`, `bidsReport` (map), `qcStatus` (`notStarted`, `pending`, `passed`, `flagged`, `failed`), `analysisReady`, `metadata` (map), `dataOrigin`, `scopeKeys`. |
+| `datasets/{datasetKey}/storageRefs/{id}` | Opaque | SCOPED | `datasetId`, `endpointKey`, `role` (`primary`, `mirror`, `backup`, `processingCopy`), `uri`, `availability` (`available`, `unavailable`, `unknown`), `verifiedAt`, `validFrom`, `validTo`, `relocatedFromRefId`. |
+| `datasets/{datasetKey}/manifests/{id}` | Opaque | SCOPED | A listing of one storage reference at one time, from a scan, an upload or manual entry: `datasetId`, `storageRefId`, the time of the listing and its origin. |
+| `datasets/{datasetKey}/manifests/{id}/fileChunks/{n}` | Chunk number | SCOPED | `files` (array of up to 2000 {`relativePath`, `sizeBytes`, `checksumAlgorithm`, `checksum`, `modifiedAt`, `status` (`expected`, `present`, `missing`, `unexpected`, `duplicate`)}). |
+| `datasets/{datasetKey}/transfers/{id}` | Opaque | SCOPED | `datasetId`, `fromRefId`, `toRefId`, `status` (`initiated`, `inProgress`, `completed`, `failed`, `verified`), `initiatedBy`, its timestamps, `bytesTransferred`, `error`, `verificationManifestId`. |
+| `datasets/{datasetKey}/qcAssessments/{id}` | Opaque | SCOPED | `datasetId`, `level` (`dataset`, `recording`), `recordingLabel`, `assessedBy`, `tool`, `toolVersion`, `pipelineVersion`, `parameters` (map), `outcome` (`pass`, `flag`, `fail`), `metrics` (map), `exclusions`, `notes`, `assessedAt`. |
+| `datasets/{datasetKey}/accessEvents/{id}` | Opaque | SCOPED read; FUNCTION write | Who viewed storage paths or requested a viewer link, and when: `datasetId`, `uid`, `action`. |
+| `datasets/{datasetKey}/viewerLinks/{id}` | Opaque | SCOPED | A link to a viewer such as ElectroTag: `datasetId`, `tool`, `url`. Entirely optional and never required for access. |
+| `processingRuns/{id}` | Opaque | SCOPED | Preprocessing and analysis runs: `kind`, `pipelineName`, `codeUrl`, `codeCommit`, `version`, `parameters`, `environment`, `status`, `startedAt`, `finishedAt`, `runBy`, output links, reproducibility notes, `inputDatasetIds`, `scopeKeys` (the scopes of the input datasets). |
+
+## 11. Scientific outputs and governance
+
+Contributor role cells are stored booleans in the sources, so the verbatim value of each cell is kept per role in the `creditRoles` map, which takes the place of the `contributor_roles` table. A contributor's email address and funding statement are restricted and sit in a private document. The decision log, the risk register and the incident registry are each scoped to the programme or to one replication. A meeting keeps its agenda and notes in the body of its page, its attendees in `attendeePersonIds`, and its action items as tasks that link to it.
+
+| Path | Identifier | Access | Contents |
+|---|---|---|---|
+| `manuscripts/{id}` | Opaque | MEMBER read; SCOPED write | `replicationId` (absent for a programme-level output), `websitePublicationId`, `title`, `kind` (`stage1Rr`, `stage2Rr`, `preprint`, `article`, `dataPaper`, `software`, `other`), `status`, `journal`, `doi`, `preprintDoi`, `osfUrl`, `authorsShort`, `submittedAt`, `acceptedAt`, `publishedAt`, `citationStatus`, `citationMetadata`, `scopeKeys`. |
+| `manuscripts/{id}/events/{id}` | Opaque | As the manuscript | Review rounds, decisions, revisions and submissions, each with its dates and linked documents. |
+| `contributorTables/{id}` | Opaque | SCOPED | `replicationId`, `tableUrl`, `isOnlySignupTable`, `isPublished`, `publicationUrl`, `pdfUrl`, `sourceRecordId`, `scopeKeys`. |
+| `contributors/{id}` | Opaque | MEMBER read; SCOPED write | The verbatim name parts, `orderInPublication`, `affiliationSource`, `orcid`, `creditRoles` (map of each of the 14 CRediT role keys to the verbatim cell value), `agreementSource`, `reviewStatus`, `replicationId`, `manuscriptId`, `contributorTableId`, `personId`, `sourceRecordId`, `scopeKeys`. |
+| `contributors/{id}/private/contact` | Fixed name | SCOPED | `email`, `fundingStatement`. |
+| `decisions/{id}` | Opaque | MEMBER read; SCOPED write | The methodological decision log: `scopeType` (`programme`, `replication`), `scopeId`, `replicationId`, an owner, a status, dates, `pageId`, `scopeKeys`. |
+| `risks/{id}` | Opaque | SCOPED | The risk register, with the fields of a decision. |
+| `incidents/{id}` | Opaque | SCOPED | The incident registry, with the fields of a decision. |
+| `meetings/{id}` | Opaque | SCOPED | `attendeePersonIds`, `pageId`, `replicationId`, `laboratoryId`, `scopeKeys`. |
+| `progressReports/{id}` | Opaque | SCOPED | Its scope, its period, `pageId`, `generatedDocumentId`, a status, `scopeKeys`. |
+| `documentLinks/{id}` | Opaque | As the entity it is attached to | Any external document attached to any entity: `entityType`, `entityId`, `kind` (`googleDoc`, `googleSheet`, `driveFolder`, `osf`, `github`, `pdf`, `form`, `url`), `url`, `externalId`, `title`, `accessStatus` (`unknown`, `public`, `restricted`, `unreachable`), `httpStatus`, `lastCheckedAt`, `ownerName`, `modifiedAt`, `sourceRecordId`, `scopeKeys`. |
+
+## 12. Provenance, migration and integrations
+
+Importers run from a trusted environment with the Admin SDK and preserve every source value (D-012). The repository refers to a source by letter and title only. The address and external identifier of a source document are held in a document that no client can read, and they are never committed. Each imported row is stored once, verbatim, as a source record, with its formulas and the formatting flags that carry meaning. A row key is a stable identity derived from natural keys and never from the row number alone.
+
+The former `record_links` table is carried by the documents themselves. An imported document lists in `sourceRecordIds` every source record that created, updated or matched it, and `fieldSources` names the record that supplied each reconciled field. Whether a record created or updated a document is read from the changes of its batch, which hold the state before and after every write and so make a batch reversible. A conflict between sources is queued in `reconciliationItems` and is never settled by choosing a value arbitrarily. The identifier of an item is its fingerprint, so a repeated import raises each item once. For sheet synchronisation, `cellState` holds the last value synchronised on each side of every mapped cell, which is the base of the three-way comparison that prevents feedback loops.
+
+| Path | Identifier | Access | Contents |
+|---|---|---|---|
+| `sources/{key}` | Source key | ADMIN | The source registry: `key`, `title`, `kind` (`googleSheet`, `driveFile`, `repositoryTsv`, `quire`, `osf`, `other`), `owner`, `authority` (`historical`, `live`, `reference`), `syncPolicy` (`oneOff`, `scheduledPull`, `twoWay`), `cadence`, `accessStatus`, `lastFetchedAt`, `notes`. |
+| `sources/{key}/private/location` | Fixed name | FUNCTION | `url` and `externalId` of the source document. |
+| `sources/{key}/tabs/{tabSlug}` | Slug of the tab name | ADMIN read; FUNCTION write | `sourceKey`, `name` (verbatim), `visibility` (`visible`, `hidden`, `veryHidden`), `headerRow`, `rowCount`, `importerKey`, `lastSeenAt`. |
+| `importBatches/{batchId}` | Batch identifier | ADMIN read; FUNCTION write | `sourceKey`, `mode` (`preview`, `apply`), `status` (`running`, `previewed`, `applied`, `failed`, `rolledBack`), `contentHash`, `startedBy`, `startedAt`, `finishedAt`, `stats` (map), `log`. |
+| `importBatches/{batchId}/changes/{n}` | Sequence number within the batch | ADMIN read; FUNCTION write | Every write made by the batch: `batchId`, `documentPath`, `operation`, `before`, `after`. |
+| `sourceRecords/{id}` | Hash of source key, tab, row key and raw hash | ADMIN read; FUNCTION write | Immutable raw rows: `sourceKey`, `tab`, `rowKey`, `rowNumber`, `raw` (verbatim values, formulas, and formatting flags that carry meaning), `rawHash`, `firstSeenBatchId`, `lastSeenBatchId`. |
+| `reconciliationItems/{fingerprint}` | Fingerprint of the conflict | ADMIN | The human review queue: `kind` (`duplicatePerson`, `conflictingLead`, `ambiguousLaboratory`, `valueConflict`, `unmatchedIdentifier`, `ambiguousEmail`), entity references, `candidates` (with source references), `status` (`open`, `resolved`, `dismissed`), `resolution`, `resolvedBy`, `resolvedAt`, `batchId`. A resolution that changes other documents is applied by a callable function. |
+| `integrationMappings/{system__hashOfExternalId}` | System and SHA-256 of the external identifier | ADMIN read; FUNCTION write | The identifier of an entity in an external system: `entityType`, `entityId`, `system`, `externalId`, `externalUrl`. |
+| `integrationConnections/{system}` | System key | ADMIN | `system`, `status`, `config` (non-secret map), `credentialRef`, `lastSuccessAt`, `lastError`, `lastErrorAt`. |
+| `syncMappings/{id}` | Opaque | ADMIN | `connectionId`, `spreadsheetId`, `tab`, `collectionKey`, `keyStrategy`, `columnMap` (map with a direction per field: `appAuthoritative`, `sheetAuthoritative`, `bidirectional`, `generated`), `enabled`. |
+| `syncMappings/{id}/cellState/{recordId__field}` | Record and field | FUNCTION | `recordId`, `field`, and the last value synchronised on the application side and on the sheet side. |
+| `syncRuns/{id}` | Opaque | ADMIN read; FUNCTION write | Run history with attempts and errors. |
+| `syncConflicts/{id}` | Opaque | ADMIN read; FUNCTION write | The base, application and sheet values of a conflicting cell, held until an authorised user resolves it. |
+| `generatedDocuments/{id}` | Opaque | Read as the entity it was generated for; FUNCTION write | `templateKey`, `entityType`, `entityId`, `externalDocumentId`, `managedSections` (map of named ranges), `lastGeneratedAt`, `lastRevisionId`, `status`. |
+| `publicationBatches/{id}` | Opaque | ADMIN read; FUNCTION write | The public publishing log: `kind`, `payload`, `diff`, `status` (`draft`, `previewed`, `staged`, `approved`, `published`, `rolledBack`), `requestedBy`, `approvedBy`, `commitRef`, `pullRequestUrl`. |
+
+## 13. Events, audit, automation, notifications and search
+
+The audit trail is written by trusted code and no client can write to it (D-007). A callable function writes the audit entry in the same transaction as its change, and a Firestore trigger captures every other write with the identity of the writer and the state before and after. Trigger delivery is at least once, so an entry uses the event identifier as its document identifier.
+
+Firestore triggers take the place of the relational `domain_events` outbox. Each committed write is delivered to the functions that run automations, send notifications, synchronise sheets and maintain the search index, and each consumer is idempotent on the event identifier. The fields the outbox carried survive in the audit event of the same change: its type is `action`, its payload is `changes`, its actor is `actorUid` with `actorKind`, and `context` carries the `origin`, `correlationId`, `causationId` and `depth` that loop prevention reads. Notifications, notification preferences and subscriptions are subcollections of the user (section 3). The search index holds folded tokens drawn from the title and body of a record, which takes the place of the `body` text and `tsvector` of the relational design, and it never contains restricted or special-category values.
+
+| Path | Identifier | Access | Contents |
+|---|---|---|---|
+| `auditEvents/{eventId}` | Event identifier | ADMIN read; no client write | `actorUid`, `actorKind` (`user`, `system`, `import`, `sync`, `automation`), `action`, `documentPath`, `entityType`, `entityId`, `changes` (field, before and after, with special-category values replaced by a marker), `context` (request identifier, hashed IP address, user agent, and for chained changes `origin`, `correlationId`, `causationId` and `depth`), `createdAt`. |
+| `automationRules/{id}` | Opaque | ADMIN | `name`, `enabled`, `triggerType` (`recordCreated`, `recordUpdated`, `statusChanged`, `schedule`, `manual`), `triggerConfig`, `conditions`, `actions`, `scopeType`, `scopeId`. |
+| `automationRuns/{idempotencyKey}` | Idempotency key | ADMIN read; FUNCTION write | `ruleId`, `eventId`, `idempotencyKey`, `status`, `attempts`, `log`, `error`, `startedAt`, `finishedAt`. Loop prevention uses the depth and origin of the event. |
+| `mail/{id}` | Opaque | FUNCTION | The outbound email outbox: `toAddress`, `subject`, `textBody`, `htmlBody`, `templateKey`, `status`, `attempts`, `sentAt`, `error`. Under the emulator it is shown as a development mailbox. |
+| `scheduledReports/{id}` | Opaque | ADMIN | `name`, `definition`, `schedule`, `recipients`, `lastRunAt`, `enabled`. |
+| `searchIndex/{entityType__entityId}` | Entity type and entity identifier | Read by scope; FUNCTION write | `entityType`, `entityId`, `title`, `tokens`, `kind`, `scopeKeys`, `updatedAt`. |
+| `integrityReports/{runId}` | Run identifier | ADMIN read; FUNCTION write | The output of one run of the scheduled referential-integrity checker. |
+| `system/{doc}` | Document name | MEMBER read; ADMIN write | Non-secret configuration. |
+
+## 14. Integrity
+
+Firestore has no foreign keys, no unique constraints and no joins (D-003). Four mechanisms take the place of database constraints for the whole model, and each is built and tested deliberately.
+
+The first is the use of natural keys as document identifiers, which makes a duplicate impossible because a second write addresses the same document. The table lists every such rule. Slugs of persons and laboratories are fields. They are assigned by an import or a callable function that checks for a clash in a transaction, and the checker reports any duplicate.
+
+| Path | Identifier | What it guarantees |
+|---|---|---|
+| `users/{uid}`, `access/{uid}`, `accountClaims/{uid}` | Authentication uid | One profile, one access set and one claim per login |
+| `users/{uid}/favourites`, `recents`, `subscriptions` | `entityType__entityId` | One entry per user and entity |
+| `users/{uid}/settings/preferences` | Fixed name | One preferences document per user |
+| `roleAssignments` | `uid__role__scopeType__scopeId` | One assignment per user, role and scope, whose `status` says whether it is active |
+| `roleCapabilities` | Role key | One set of overrides per role |
+| `capabilityGrants` | `uid__capability` | One grant per user and capability |
+| `groups` | `groupKey` | A stable, unique group key |
+| `persons/{personId}/private/contact`, `persons/{personId}/special/demographics` | Fixed names | One contact document and one demographics document per person |
+| `personEmailIndex` | SHA-256 of the lower-cased, trimmed address | One entry per address, listing every person who carries it |
+| `identityKeys` | SHA-256 of the key | A repeated import resolves to the same person, laboratory or institution, and an institution is unique on normalised name and country |
+| `programmes` | Programme key | A unique programme key |
+| `laboratories/{laboratoryId}/private/detail` | Fixed name | One restricted document per laboratory |
+| `laboratories/{laboratoryId}/members` | `personId` | One membership per person in a laboratory |
+| `replications` | `studyKey` | The immutable study identifier is unique |
+| `replications/{studyKey}/aliases` | `scheme__hashOfAlias` | An alias is unique within a scheme and a replication, and two replications may share it |
+| `replications/{studyKey}/memberships` | `personId__role` | One membership per person and role in a replication |
+| `replications/{studyKey}/hypotheses` | `hNN` | One hypothesis per number in a replication |
+| `replications/{studyKey}/equipmentRequirements` | Requirement key | One requirement per key in a replication |
+| `replications/{studyKey}/historicalAggregates` | `metricKey__sourceRecordId` | A repeated import writes each figure once, and figures from different source records stay apart |
+| `countCategories`, `replications/{studyKey}/countCategories` | Category key | A unique category key, globally and within a replication |
+| `replications/{studyKey}/summaries` | Summary kind | One summary of each kind per replication |
+| `studyAliasIndex` | Folded alias | One lookup entry per folded spelling |
+| `statusDefinitions` | `entityType__key` | A status key is unique within an entity type |
+| `vocabularyTerms` | `sourceId` | One term per original identifier |
+| `participations` | `studyKey__laboratoryId` | One participation per replication and laboratory |
+| `participations/{participationId}/private/detail` | Fixed name | One restricted document per participation |
+| `participations/{participationId}/checklist` | Template item key | One checklist item per template item |
+| `participations/{participationId}/members` | `personId` | One entry per person in a participation |
+| `checklistTemplates` | Template key | A unique template key |
+| `pages/{pageId}/permissions` | `principalType__principalId` | One permission level per principal on a page |
+| `pages/{pageId}/versions/{id}/chunks`, `datasets/{datasetKey}/manifests/{id}/fileChunks`, `importBatches/{batchId}/changes` | Sequence number | Each chunk or change holds one position in its series |
+| `collectionSchemas` | Collection key | One schema of custom properties per core collection |
+| `storageEndpoints` | Endpoint key | A unique endpoint key |
+| `datasets` | `datasetKey` | A unique dataset key |
+| `contributors/{id}/private/contact` | Fixed name | One restricted document per contributor |
+| `sources` | Source key | A unique source key |
+| `sources/{key}/private/location` | Fixed name | One location document per source |
+| `sources/{key}/tabs` | Slug of the tab name | One entry per tab of a source |
+| `importBatches` | Batch identifier | One document per batch |
+| `sourceRecords` | Hash of source key, tab, row key and raw hash | A source record is unique on source, tab, row key and content |
+| `reconciliationItems` | Fingerprint | A repeated import raises each item once |
+| `integrationMappings` | `system__hashOfExternalId` | One mapping per external identifier in a system |
+| `integrationConnections` | System key | One connection per system |
+| `syncMappings/{id}/cellState` | `recordId__field` | One base value per mapped cell |
+| `auditEvents` | Event identifier | A trigger delivered twice writes one entry |
+| `automationRuns` | Idempotency key | A rule runs once for an event |
+| `searchIndex` | `entityType__entityId` | One search entry per record |
+| `integrityReports` | Run identifier | One report per run |
+| `system` | Document name | One document per configuration topic |
+
+The second mechanism is the security rules, which validate every client write. They check the shape of the document: required fields, types, enumerated values, and ranges such as non-negative counts and `progressPercent` between 0 and 100. They check that the parts of a composite identifier equal the corresponding fields, and they confirm with `exists()` that referenced parents are present. A participation, for example, can be created only when its replication and its laboratory both exist. Rules also make collections append-only by refusing updates and deletes.
+
+The third mechanism is callable functions, which use Admin SDK transactions for every change that spans several documents and write the audit entry in the same transaction. Examples are approving a claim, granting or revoking a role together with the access document, resolving a reconciliation item, merging duplicate persons and rolling back an import batch.
+
+The fourth mechanism is the scheduled integrity checker, which writes an `integrityReports` document on each run. It follows every reference field and reports any that points at a missing document, including polymorphic references held as `entityType` with `entityId`, which no rule can check in general. It also compares derived documents with their sources: `access` with `roleAssignments`, `personEmailIndex` with contact emails, `studyAliasIndex` with aliases, `leadPersonIds` with memberships, `scopeKeys` with `replicationId` and `laboratoryId`, and `searchIndex` with the records it describes. It reports duplicate slugs and cycles of task dependencies.
+
+Several collections are append-only. Clients may add to `recruitmentReports`, `replications/{studyKey}/statusHistory`, `pages/{pageId}/updates` and `pages/{pageId}/versions` with its chunks, and no client may change or remove what is there. Page updates stay until compaction has merged them into the snapshot. Trusted code alone appends to `auditEvents`, `datasets/{datasetKey}/accessEvents`, `importBatches/{batchId}/changes`, `integrityReports` and `sourceRecords`, where the raw content of a source record never changes and only `lastSeenBatchId` advances.
+
+The following never accept a client write: `users/{uid}` itself, `access`, `roleAssignments`, `capabilityGrants`, `invitations`, `accountClaims`, `labClaims`, `persons/{personId}/special/demographics`, `personEmailIndex`, `identityKeys`, `replications/{studyKey}/historicalAggregates`, `replications/{studyKey}/summaries`, `studyAliasIndex`, `datasets/{datasetKey}/accessEvents`, `sources/{key}/private/location`, `sources/{key}/tabs`, `importBatches` with its changes, `sourceRecords`, `integrationMappings`, `syncMappings/{id}/cellState`, `syncRuns`, `syncConflicts`, `generatedDocuments`, `publicationBatches`, `auditEvents`, `automationRuns`, `mail`, `searchIndex` and `integrityReports`. In `users/{uid}/notifications` a client may set `readAt` and nothing else.
+
+Major entities are archived, and the rules refuse a client delete of them. Firestore leaves subcollections in place when a parent is deleted, so the rare hard deletion, such as erasure of personal fields on request, is performed by a function that removes the child documents with the parent. Firestore indexes single fields automatically. The composite indexes that scoped list queries need are declared beside the rules under `portal/firebase`, and large fields such as `raw`, `changes`, `snapshot` and `update` are exempted from indexing.
+
+## 15. How views and rollups use this model
+
+Each collection of records exists once (D-011). The client attaches realtime listeners to the documents its scope permits: the member-readable collections as a whole, which amount to a few thousand documents, and the scoped collections through queries constrained by `scopeKeys`. A view is a stored definition of filters, sorts, grouping and visible properties that the client applies to what it has loaded. The same record therefore appears in a programme dashboard, a replication page and a laboratory page as one document, and an edit made in one place reaches every open view through the listeners.
+
+Filters, sorts, grouping, relation lookups, backlinks, rollups and formulas are computed in the browser by the shared domain code over that loaded set, and so are historical as-of states. The state of recruitment at a past date is the latest cumulative report per participation, category, modality and basis whose `asOfDate` is on or before that date, and restricting additionally on `createdAt` reproduces what the portal knew at that time. A past status is read from the effective and recorded times of the status history, and a past equipment configuration from `validFrom` and `validTo`. A user computes these results from the documents their scope permits and from no others.
+
+Summary documents written by functions serve the totals that every member may see, such as recruitment totals for a replication whose individual reports are scoped. They are recomputed when the underlying reports change, follow the same rules as the reports (an unknown value stays absent, and a total number of participants is never the sum of `main` and `rest`) and contain no restricted or special-category values. The same summaries are the basis of the approved public aggregates, which leave the portal only through the publishing workflow recorded in `publicationBatches`.

@@ -1,0 +1,39 @@
+import { defineConfig } from "vitest/config";
+
+// One configuration, five projects. `npm run test:unit` runs the first two, which need nothing
+// running. The other three expect the emulators and are started through
+// `node scripts/emulators.mjs exec`, which is what the test:* scripts in package.json do.
+const emulated = {
+  environment: "node",
+  // No Google credentials exist locally: skip the metadata-server probe of the Admin SDK.
+  env: { METADATA_SERVER_DETECTION: "none" },
+  testTimeout: 30_000,
+  hookTimeout: 60_000,
+  // Files in one project share emulator state, so they run one after another.
+  fileParallelism: false,
+} as const;
+
+export default defineConfig({
+  test: {
+    projects: [
+      {
+        test: {
+          name: "unit",
+          environment: "node",
+          include: [
+            "shared/src/**/*.test.ts",
+            "functions/src/**/*.test.ts",
+            "tools/src/**/*.test.ts",
+            "web/config/**/*.test.ts",
+            "scripts/**/*.test.mjs",
+            "tests/architecture/**/*.test.ts",
+          ],
+        },
+      },
+      "web/vitest.config.ts",
+      { test: { ...emulated, name: "rules", include: ["tests/rules/**/*.test.ts"] } },
+      { test: { ...emulated, name: "functions", include: ["tests/functions/**/*.test.ts"] } },
+      { test: { ...emulated, name: "tools", include: ["tests/tools/**/*.test.ts"] } },
+    ],
+  },
+});
