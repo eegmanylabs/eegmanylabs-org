@@ -6,6 +6,7 @@
       "!**/node_modules",
       "!**/out",
       "!.run",
+      "!.vitest",
       "!.private",
       "!firebase.run-*.json",
       "!package-lock.json",

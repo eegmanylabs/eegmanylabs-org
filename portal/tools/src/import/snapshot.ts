@@ -3,8 +3,10 @@
 // row and the hash of its raw cells. An unchanged row therefore addresses the record that
 // exists, and a changed row adds a record while the earlier one is kept and named as superseded.
 //
-// The special-category cells of a row are stored beneath its record, in a document that no
-// client can read, and the record itself holds the marker that the importer put in their place.
+// The special-category cells of a row are no part of the snapshot. The record holds the marker
+// that the importer put in their place, and the cells themselves are written, where they are
+// written at all, by the apply stage with an entry in the change log (preview.ts). A preview
+// therefore stores no special-category value.
 //
 // A record is written when a row first appears or changes. Its `lastSeenBatchId` is written
 // again only when the row goes missing or reappears, and each batch names the list of the
@@ -41,7 +43,7 @@ export function recordRows(sourceKey: string, reading: SourceReading): Map<strin
       if (row.cells.length !== row.labels.length || new Set(row.labels).size !== row.labels.length) {
         throw new Error(`A row of tab ${tab.tabKey} of source ${sourceKey} does not name each of its cells once.`);
       }
-      const rawHash = rowHash(row.cells);
+      const rawHash = rowHash(row.cells, row.rowNumber);
       return {
         ...row,
         tabKey: tab.tabKey,
@@ -183,7 +185,7 @@ export interface SnapshotWrites {
  * Writes what the comparison found: new records, the links from superseded records to their
  * successors, the changes of presence, and the list of seen records where it has changed. It
  * runs for a preview as well as for an apply, because a source record states what the source
- * said on that date whether or not the batch goes ahead.
+ * said on that date whether or not the batch goes ahead. No special-category cell is written here.
  */
 export async function writeSnapshot(
   context: RunContext,
@@ -192,10 +194,8 @@ export async function writeSnapshot(
 ): Promise<SnapshotWrites> {
   const { db, sourceKey, batchId, now } = context;
   const entry = entryOf("sourceRecords");
-  const special = entryOf("sourceRecordSpecial");
   let writes = 0;
-  let specialWrites = 0;
-  // A row with special-category cells is two documents, so the pieces are half as large.
+  // A raw row may be large, so the pieces are half the usual size.
   for (const piece of chunked(state.created, CHUNK_SIZE / 2)) {
     const batch = db.batch();
     for (const row of piece) {
@@ -221,24 +221,10 @@ export async function writeSnapshot(
           supersededById: null,
         }),
       );
-      if (row.special === undefined || Object.keys(row.special).length === 0) continue;
-      // The special-category cells of the row sit beneath its record, where no client can read them.
-      const specialPath = special.docPath(row.recordId);
-      batch.create(
-        db.doc(specialPath),
-        validated(special, specialPath, {
-          ...createdFields(now),
-          schemaVersion: special.schemaVersion,
-          sourceRecordId: row.recordId,
-          raw: { ...row.special },
-        }),
-      );
-      specialWrites += 1;
     }
     await batch.commit();
     writes += piece.length;
   }
-  writes += specialWrites;
 
   // The raw content of a record never changes. Only these two fields are written later.
   const updates = new Map<string, Record<string, unknown>>();

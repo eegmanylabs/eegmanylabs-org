@@ -61,6 +61,8 @@ export const importer: ImporterDefinition = {
   summary:
     "Recruitment and contact workbook: study-level figures, lead claims and the restricted outreach correspondence.",
   inputDescription: "the Excel export of the workbook",
+  // Its figures, leads and tabs are those of studies, all of which exist once the list of studies has been applied.
+  after: ["h", "d"],
   read: readRecruitmentWorkbook,
   plan: (context) => planRecruitmentWorkbook(RECRUITMENT_WORKBOOK, context),
 };

@@ -54,14 +54,17 @@ export const accessRebuildCommand: Command = {
   name: "access:rebuild",
   summary: "Resolve the access document of every account again and write those that differ.",
   async run(args) {
-    const production = args.includes("--production");
-    const projectIndex = args.indexOf("--project");
-    const projectId = projectIndex < 0 ? undefined : args[projectIndex + 1];
-    const known = args.filter(
-      (argument, index) => argument !== "--production" && argument !== "--project" && index !== projectIndex + 1,
-    );
-    if (known.length > 0 || (projectIndex >= 0 && (projectId === undefined || projectId.startsWith("--")))) {
-      throw new ToolRefusal(USAGE);
+    let production = false;
+    let projectId: string | undefined;
+    for (let index = 0; index < args.length; index += 1) {
+      const argument = args[index];
+      if (argument === "--production") production = true;
+      else if (argument === "--project") {
+        projectId = args[index + 1];
+        if (projectId === undefined || projectId.startsWith("--"))
+          throw new ToolRefusal(`--project needs a value.\n\n${USAGE}`);
+        index += 1;
+      } else throw new ToolRefusal(USAGE);
     }
     const target = requireImportTarget({ production, ...(projectId === undefined ? {} : { projectId }) });
     let db: Firestore;

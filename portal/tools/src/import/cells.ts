@@ -13,7 +13,8 @@ import { isDateFormat, type WorkbookCell } from "./workbook";
  * | `strike` | `strike`: true for a cell in strike-through                                |
  * | `fill`   | `fill`: the colour resolved through the theme, and `fillSource` as written |
  * | `font`   | `bold` and `italic`, for a tab that tells its rows apart by font           |
- * | `hidden` | `hiddenRow` and `hiddenColumn`                                             |
+ * | `hidden` | `hiddenRow` and `hiddenColumn`, for the header record of a tab             |
+ * | `hiddenRow` | `hiddenRow` alone, for every other row: the hidden state of a column is said once, on the header record, so that hiding a column is no new revision of every row |
  * | `merge`  | `merge`: the merged range that contains the cell                           |
  */
 export interface FormattingAsData {
@@ -21,6 +22,7 @@ export interface FormattingAsData {
   readonly fill?: boolean;
   readonly font?: boolean;
   readonly hidden?: boolean;
+  readonly hiddenRow?: boolean;
   readonly merge?: boolean;
 }
 
@@ -40,7 +42,7 @@ export function rawCellOf(cell: WorkbookCell | undefined, formatting: Formatting
   }
   if (formatting.font && cell.bold) extras.bold = true;
   if (formatting.font && cell.italic) extras.italic = true;
-  if (formatting.hidden && cell.hiddenRow) extras.hiddenRow = true;
+  if ((formatting.hidden || formatting.hiddenRow) && cell.hiddenRow) extras.hiddenRow = true;
   if (formatting.hidden && cell.hiddenColumn) extras.hiddenColumn = true;
   if (formatting.merge && cell.merge !== null) extras.merge = cell.merge;
   const holdsNothing = cell.type === "empty" && cell.formula === null && cell.hyperlink === null;

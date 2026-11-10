@@ -4,7 +4,7 @@
 // changes a raw value: every reading is a copy beside it.
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { LIMITS, shortHash, sourceTabKey } from "@eegml/shared";
+import { shortHash, sourceTabKey } from "@eegml/shared";
 import { type FormattingAsData, holdsContent, rawCellOf } from "./cells";
 import type { ImportInput, InputFile, RawCell, RawScalar, SourceRow, SourceTab, StructureIssue } from "./model";
 import { WorkbookFormatError } from "./ooxml";
@@ -18,6 +18,17 @@ export interface OpenedWorkbook {
   /** Null when the input could not be opened, in which case `issues` says why. */
   readonly workbook: Workbook | null;
   readonly issues: readonly StructureIssue[];
+}
+
+/**
+ * The record of a file that was read, under a neutral name. The name under which the operator
+ * keeps a file is never stored: an export is often named after the identifier of its document,
+ * and the batch record can be read by everyone who may run an import. The SHA-256 identifies
+ * the file.
+ */
+export function inputFileOf(inputPath: string, sha256: string): InputFile {
+  const extension = path.extname(inputPath).toLowerCase();
+  return { name: /^\.[a-z0-9]{1,8}$/.test(extension) ? `input${extension}` : "input", sha256 };
 }
 
 /** Opens the Excel export that an input names. A failure is a structural issue of the source and never an exception. */
@@ -41,7 +52,7 @@ export function openWorkbook(input: ImportInput): OpenedWorkbook {
   }
   const bytes = readFileSync(input.path);
   const contentHash = sha256OfBytes(bytes);
-  const inputFiles = [{ name: path.basename(input.path).slice(0, LIMITS.shortText), sha256: contentHash }];
+  const inputFiles = [inputFileOf(input.path, contentHash)];
   try {
     return { contentHash, inputFiles, workbook: readWorkbook(bytes), issues: [] };
   } catch (error) {
@@ -76,8 +87,10 @@ export interface SheetGrid {
 export function gridOf(sheet: WorkbookSheet): SheetGrid {
   const byRow = cellsByRow(sheet);
   const columns = Array.from({ length: sheet.lastColumn }, (_unused, index) => index + 1);
+  // The hidden state of a row is provenance of every workbook, so it is always captured. That of a column is
+  // captured where the importer asks for it, which it does for the header record of a tab.
   const cells = (row: number, formatting: FormattingAsData = {}) =>
-    columns.map((column) => rawCellOf(byRow.get(row)?.get(column), formatting));
+    columns.map((column) => rawCellOf(byRow.get(row)?.get(column), { hiddenRow: true, ...formatting }));
   return {
     labels: columns.map(columnLetters),
     cells,
@@ -104,7 +117,7 @@ export function uninterpretedTab(sheet: WorkbookSheet): SourceTab {
     rows.push({
       rowClass: "annotation",
       rowNumber: row,
-      rowKey: contentRowKey(cells, unkeyed),
+      rowKey: contentRowKey(cells, row, unkeyed),
       cells,
       labels: grid.labels,
     });

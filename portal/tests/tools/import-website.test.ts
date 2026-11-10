@@ -18,8 +18,10 @@ import {
   studyAliasId,
   vocabularyTermId,
 } from "@eegml/shared";
+import { Timestamp } from "firebase-admin/firestore";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { type WebsiteFixture, websiteFixture, writeWebsiteFixture } from "../../tools/src/import/fixtures/website";
+import { createdFields } from "../../tools/src/import/context";
 import { importer as website } from "../../tools/src/import/sources/website-data";
 import { adminDb } from "../support/admin";
 import { PORTAL_ROOT } from "../support/emulators";
@@ -548,6 +550,28 @@ describe("the website importer when the files change", () => {
       "Sample2024",
     ]);
     expect(report.tabs.find((tab) => tab.tabKey === "publications")).toMatchObject({ imported: 4, queued: 1 });
+    // The two rows differ in their identifier alone, so one item names both, and the manuscript of the earlier row.
+    const renames = (await reconciliationItems()).filter((item) => item.kind === "missingFromSource");
+    expect(
+      renames.some(
+        (item) =>
+          JSON.stringify(item.candidates).includes("h/publications/renamedTo") &&
+          JSON.stringify(item.entityRefs).includes("Sample2024"),
+      ),
+    ).toBe(true);
+  });
+
+  it("creates no second manuscript either when the renamed row has changed in other cells, by its study and its DOI", async () => {
+    await run(website, input(), "apply");
+    const renamed = input((fixture) => {
+      const sample = row(fixture.publications, "PublicationId", "Sample2024");
+      sample.PublicationId = "Sample2025";
+      sample.StatusText = "Stage 1 accepted";
+    });
+    const report = await run(website, renamed, "apply");
+    expect((await documentsOf("manuscripts")).has("Sample2025")).toBe(false);
+    expect(report.tabs.find((tab) => tab.tabKey === "publications")).toMatchObject({ imported: 4, queued: 1 });
+    // More than the identifier differs, so the importer itself recognises the manuscript and names the new identifier.
     const renames = (await reconciliationItems()).filter((item) => item.kind === "missingFromSource");
     expect(
       renames.some(
@@ -588,8 +612,17 @@ describe("the website importer when the files change", () => {
 
   it("never renames an existing replication: a row that resolves to it through an alias goes to review", async () => {
     await run(website, input(), "apply");
-    // A reviewer has recorded another spelling of one study.
-    await adminDb.doc("studyAliasIndex/zeta2011").set({ replicationIds: ["Delta1999"] });
+    // A reviewer has recorded another spelling of the identifier of one study: an alias and its entry in the lookup.
+    const standard = { ...createdFields(Timestamp.now()), schemaVersion: 1 };
+    await adminDb.doc(`replications/Delta1999/aliases/${studyAliasId("programme", "Zeta2011")}`).set({
+      ...standard,
+      replicationId: "Delta1999",
+      alias: "Zeta2011",
+      aliasFolded: "zeta2011",
+      scheme: "programme",
+      isCanonical: false,
+    });
+    await adminDb.doc("studyAliasIndex/zeta2011").set({ ...standard, replicationIds: ["Delta1999"] });
     const report = await run(
       website,
       input((fixture) => {
@@ -604,6 +637,38 @@ describe("the website importer when the files change", () => {
     expect((await documentsOf("replications")).has("Zeta2011")).toBe(false);
     expect(report.items.raise.unmatchedIdentifier).toBe(1);
     expect(report.tabs[0]).toMatchObject({ imported: 6, queued: 1 });
+  });
+
+  it("resolves an identifier with a lower-case initial or a diacritic to the study it folds to, and creates no second study", async () => {
+    await run(website, input(), "apply");
+    const before = [...(await documentsOf("replications")).keys()].sort();
+    for (const spelling of ["delta1999", "Déltá1999"]) {
+      const report = await run(
+        website,
+        input((fixture) => {
+          row(fixture.replications, "StudyId", "Delta1999").StudyId = spelling;
+        }),
+        "apply",
+      );
+      // The row keeps its key, because the key is the fold of the identifier. It is one revision more of the same row.
+      expect(report.tabs[0], spelling).toMatchObject({ imported: 6, queued: 0 });
+      // The spelling is an alias for a reviewer to confirm. No identifier goes unmatched.
+      expect(report.items.raise.aliasConfirmation, spelling).toBe(1);
+      expect(report.items.raise.unmatchedIdentifier, spelling).toBeUndefined();
+      expect([...(await documentsOf("replications")).keys()].sort(), spelling).toEqual(before);
+      const alias = await data(`replications/Delta1999/aliases/${studyAliasId("website", spelling)}`);
+      expect(alias, spelling).toMatchObject({ alias: spelling, aliasFolded: "delta1999", isCanonical: false });
+    }
+    // A spelling that folds to no study and has not the shape of an identifier names nothing and creates nothing.
+    const odd = await run(
+      website,
+      input((fixture) => {
+        fixture.replications.push({ ...row(fixture.replications, "StudyId", "Delta1999"), StudyId: "omicron2012" });
+      }),
+      "apply",
+    );
+    expect((await documentsOf("replications")).has("omicron2012")).toBe(false);
+    expect(odd.items.raise.unmatchedIdentifier).toBe(1);
   });
 
   it("marks the first lead for review too when a second lead appears later, and writes nothing for an identifier it cannot read", async () => {

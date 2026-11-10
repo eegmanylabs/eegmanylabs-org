@@ -535,6 +535,58 @@ describe("the second factor", () => {
     expect(access.scopeKeys).toEqual(["members", "programme", "role:core_team", `user:${UID}`]);
     expect(can(access, "imports.run", "programme")).toBe(true);
   });
+
+  it("is required when the system setting says so, and when the setting is absent", () => {
+    for (const requireSecondFactor of [true, undefined]) {
+      const access = resolveAccess(
+        inputs({
+          user: withoutFactor,
+          roleAssignments: [assignment("programme_admin")],
+          ...(requireSecondFactor === undefined ? {} : { requireSecondFactor }),
+        }),
+      );
+      expect(access.secondFactorRequired).toBe(true);
+      expect(access.mfaEnrolled).toBe(false);
+      expect(access.capabilities).toEqual({});
+    }
+  });
+
+  it.each(["programme_admin", "core_team"] as const)(
+    "is waived for %s while the system setting switches it off, and the powers are in effect",
+    (role) => {
+      const access = resolveAccess(
+        inputs({ user: withoutFactor, roleAssignments: [assignment(role)], requireSecondFactor: false }),
+      );
+      expect(access.secondFactorRequired).toBe(false);
+      // The security rules grant the powers of a programme role only beside this field.
+      expect(access.mfaEnrolled).toBe(true);
+      expect(access.scopeKeys).toContain("programme");
+      expect(can(access, "imports.run", "programme")).toBe(true);
+      expect(programmePowersInEffect(access, { secondFactorVerified: false })).toBe(true);
+      expectStorable(access);
+    },
+  );
+
+  it("waives nothing for an account that holds neither a programme role nor a named grant", () => {
+    const access = resolveAccess(
+      inputs({ user: withoutFactor, roleAssignments: [assignment("lab_coordinator")], requireSecondFactor: false }),
+    );
+    expect(access.secondFactorRequired).toBe(false);
+    expect(access.mfaEnrolled).toBe(false);
+    expect(programmePowersInEffect(access, { secondFactorVerified: true })).toBe(false);
+  });
+
+  it("is waived for the holder of a named grant as well, while the setting switches it off", () => {
+    const access = resolveAccess(
+      inputs({
+        user: withoutFactor,
+        capabilityGrants: [{ uid: UID, capability: "audit.read", expiresAt: null, revokedAt: null }],
+        requireSecondFactor: false,
+      }),
+    );
+    expect(access.secondFactorRequired).toBe(false);
+    expect(can(access, "audit.read", "programme")).toBe(true);
+  });
 });
 
 describe("the second factor of a session", () => {

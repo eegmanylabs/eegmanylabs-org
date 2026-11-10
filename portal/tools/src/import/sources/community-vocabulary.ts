@@ -14,7 +14,6 @@
 // Nothing is corrected, no term is merged with another, and a `same_as` code is never resolved
 // to a local term or looked up. The workbook is imported as a whole or not at all.
 import { existsSync, readFileSync, statSync } from "node:fs";
-import path from "node:path";
 import { COLLECTIONS, LIMITS, lookupFold, shortHash } from "@eegml/shared";
 import { holdsContent, rawCellOf } from "../cells";
 import { type ExternalCode, parseExternalCode } from "../codes";
@@ -35,6 +34,11 @@ import type { ItemClaim } from "../reconcile";
 import { cellValue } from "../records";
 import { contentRowKey, sha256OfBytes } from "../values";
 import { cellsByRow, columnLetters, readWorkbook, type Workbook } from "../workbook";
+import { inputFileOf } from "../workbook-rows";
+
+/** The hidden state of a row is provenance of every workbook. That of a column is said once, on the header record. */
+const HIDDEN_ROW = { hiddenRow: true } as const;
+const HIDDEN_STATE = { hidden: true } as const;
 
 const SOURCE_KEY = "c";
 /** The key of the one tab. The tab is selected by position, as the tool chain that the sheet is curated for does. */
@@ -81,7 +85,7 @@ async function read(input: ImportInput): Promise<SourceReading> {
   }
   const bytes = readFileSync(input.path);
   const contentHash = sha256OfBytes(bytes);
-  const inputFiles = [{ name: path.basename(input.path).slice(0, LIMITS.shortText), sha256: contentHash }];
+  const inputFiles = [inputFileOf(input.path, contentHash)];
   let workbook: Workbook;
   try {
     workbook = readWorkbook(bytes);
@@ -123,7 +127,7 @@ async function read(input: ImportInput): Promise<SourceReading> {
   let repeatedIds = 0;
   for (let row = 1; row <= sheet.lastRow; row += 1) {
     const cells = byRow.get(row);
-    const record = columns.map((column) => rawCellOf(cells?.get(column)));
+    const record = columns.map((column) => rawCellOf(cells?.get(column), row === 1 ? HIDDEN_STATE : HIDDEN_ROW));
     const labels = columns.map(columnLetters);
     if (row === 1) {
       rows.push({ rowClass: "header", rowNumber: 1, rowKey: "header", cells: record, labels });
@@ -140,7 +144,7 @@ async function read(input: ImportInput): Promise<SourceReading> {
       rows.push({
         rowClass: "annotation",
         rowNumber: row,
-        rowKey: contentRowKey(record, unkeyed),
+        rowKey: contentRowKey(record, row, unkeyed),
         cells: record,
         labels,
       });
@@ -149,10 +153,10 @@ async function read(input: ImportInput): Promise<SourceReading> {
     let rowKey: string;
     if (!isUsableId(id)) {
       unusableIds += 1;
-      rowKey = contentRowKey(record, unkeyed);
+      rowKey = contentRowKey(record, row, unkeyed);
     } else if (exact.has(id) || insensitive.has(id.toLowerCase())) {
       repeatedIds += 1;
-      rowKey = contentRowKey(record, unkeyed);
+      rowKey = contentRowKey(record, row, unkeyed);
     } else {
       exact.add(id);
       insensitive.add(id.toLowerCase());

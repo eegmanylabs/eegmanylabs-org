@@ -121,6 +121,26 @@ export const importBatchDocSchema = documentBaseSchema.extend({
    * batch of the same source when the set of records has not changed since.
    */
   manifestBatchId: idSchema.exactOptional(),
+  /**
+   * The report of the last verification of the batch: when it ran, whether every check passed,
+   * and each check with what it counted. A batch counts as verified only while `passed` is true.
+   * A detail holds counts and paths of documents and never a value of one.
+   */
+  verification: z
+    .strictObject({
+      checkedAt: timestampSchema,
+      passed: z.boolean(),
+      checks: z
+        .array(
+          z.strictObject({
+            key: z.string().min(1).max(LIMITS.shortText),
+            passed: z.boolean(),
+            detail: z.string().max(2_000),
+          }),
+        )
+        .max(50),
+    })
+    .exactOptional(),
 });
 export type ImportBatchDoc = z.output<typeof importBatchDocSchema>;
 
@@ -133,7 +153,8 @@ const importedStateSchema = freeMapSchema.nullable();
 /**
  * `importBatches/{batchId}/changes/{n}`: one write a batch made to an entity, with the state of
  * the imported fields before and after it, which makes a batch reversible. For a
- * special-category document the two states hold a marker and a hash.
+ * special-category document the two states hold a marker alone, and `documentPath` names the
+ * collection and no document.
  */
 export const importBatchChangeDocSchema = appendOnlyBaseSchema.extend({
   batchId: idSchema,
@@ -146,8 +167,13 @@ export const importBatchChangeDocSchema = appendOnlyBaseSchema.extend({
 });
 export type ImportBatchChangeDoc = z.output<typeof importBatchChangeDocSchema>;
 
-/** `importBatches/{batchId}/changes/{n}/special/state`: the two states of a special-category document. */
+/**
+ * `importBatches/{batchId}/changes/{n}/special/state`: the two states of a special-category
+ * document, and its path, which the entry that clients can read replaces by the path of the
+ * collection so that it does not say whose document was written.
+ */
 export const importBatchChangeStateDocSchema = appendOnlyBaseSchema.extend({
+  documentPath: z.string().min(1).max(1_500).exactOptional(),
   before: importedStateSchema,
   after: importedStateSchema,
 });

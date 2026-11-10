@@ -42,12 +42,14 @@ import { adminDb } from "../support/admin";
 import { PORTAL_ROOT, PORTS, PROJECT_ID } from "../support/emulators";
 import {
   allDocuments,
+  baselineOf,
   differences,
   documentsOf,
   freshDatabase,
   itemCounts,
   OBSERVED_ON,
   reconciliationItems,
+  recordApplied,
   removeTemporaryDirectories,
   run,
   type StoredDocument,
@@ -60,6 +62,8 @@ import {
 const COUNTS = sourceTabKey("numberOfLabsPerReplication");
 const LEADS = sourceTabKey("leadsEmails");
 const items = itemBuilders(TEST_HASH_KEY);
+/** The claim that marks the one known study of the combined row of the fixture as a part of that row. */
+const COMBINED_PART = { source: "combined/part", value: "AmodioJost2007" };
 
 /** Applies the synthetic website data with the studies of the workbook. Each has the invented lead `Ada Example`. */
 async function applyWebsite(): Promise<void> {
@@ -524,10 +528,11 @@ describe("the summary figures", () => {
         { source: `f/${COUNTS}/nLabsFinished`, value: "12" },
         { source: `f/${COUNTS}/totalNMainCollected`, value: "505" },
         { source: `f/${COUNTS}/totalNRest`, value: "505" },
+        COMBINED_PART,
       ],
     });
     const item = (await itemsOf("unmatchedIdentifier")).find((entry) => entry.id === expected.fingerprint);
-    // The numbers stay with the row in the queue, and the one study that the cell does name is linked.
+    // The numbers stay with the row in the queue. The study that the cell does name is marked as a part of it.
     expect(item).toMatchObject({
       status: "open",
       entityRefs: [{ entityType: "replication", entityId: "AmodioJost2007" }],
@@ -539,8 +544,14 @@ describe("the summary figures", () => {
       "12",
       "505",
       "505",
+      "AmodioJost2007",
     ]);
-    expect(candidatesOf(item).every((candidate) => candidate.sourceRecordId === row.id)).toBe(true);
+    expect(candidatesOf(item).at(-1)?.key).toMatch(/^combined\/part:/);
+    expect(
+      candidatesOf(item)
+        .slice(0, -1)
+        .every((candidate) => candidate.sourceRecordId === row.id),
+    ).toBe(true);
     // The identifier that occurs in no other source is one item, with the cell of each summary tab.
     const unknown = items.unmatchedIdentifier({
       subject: "f/identifier/amodiomaster2007",
@@ -628,6 +639,7 @@ describe("the summary figures", () => {
           claims: [
             { source: `f/${COUNTS}/nLabsSigned`, value: "9" },
             { source: `f/${COUNTS}/nLabsFinished`, value: "12" },
+            COMBINED_PART,
           ],
         }).fingerprint,
       ].sort(),
@@ -801,10 +813,10 @@ describe("the lead claims", () => {
       expect(created.filter((documentPath) => documentPath.startsWith(collection))).toEqual([]);
     }
     expect(created.filter((documentPath) => documentPath.includes("/memberships/"))).toEqual([]);
-    // The leads that the website confirmed for the five studies in question are lowered, and nothing else of them changes.
+    // The leads that the website confirmed for the four studies in question are lowered, and nothing else of them
+    // changes. The study that the combined row names beside another keeps its lead: what that row says is given to neither.
     const lowered = rewritten.filter((documentPath) => documentPath.includes("/memberships/"));
     expect(lowered.map((documentPath) => documentPath.split("/")[1])).toEqual([
-      "AmodioJost2007",
       "Boksem2006",
       "Carretie2004",
       "DelCul2007",
@@ -841,6 +853,7 @@ describe("the lead claims", () => {
         claims: [
           { source: `f/${LEADS}/oldLeader`, value: fold("Hal Pretend") },
           { source: `f/${LEADS}/leader`, value: fold("Gus Mock") },
+          COMBINED_PART,
         ],
       }),
       // The two summary tabs name different people, and one of them is not the lead that the website names.
@@ -860,6 +873,7 @@ describe("the lead claims", () => {
         claims: [
           { source: `f/${COUNTS}/leader`, value: "" },
           { source: `f/${LEADS}/leader`, value: fold("Gus Mock") },
+          COMBINED_PART,
         ],
       }),
       // One name against two.
@@ -910,14 +924,23 @@ describe("the lead claims", () => {
     expect(membership.data()).toMatchObject({ reviewStatus: "needsReview", isCurrent: true });
     const reason = await adminDb.doc(`sourceRecords/${membership.get("fieldSources").reviewStatus}`).get();
     expect(reason.get("sourceKey")).toBe("f");
-    // A study about whose lead the workbook raises nothing keeps its confirmed lead.
-    const untouched = await adminDb
-      .doc(`replications/Luck1996/memberships/${replicationMembershipId(await websitePerson("aexample"), "lead")}`)
-      .get();
-    expect(untouched.data()).toMatchObject({ reviewStatus: "confirmed", isCurrent: true });
+    // A study about whose lead the workbook raises nothing keeps its confirmed lead, and so does the study that the
+    // combined row names: a question that rests on a cell which names several studies writes to none of them.
+    for (const studyId of ["Luck1996", "AmodioJost2007"]) {
+      const untouched = await adminDb
+        .doc(`replications/${studyId}/memberships/${replicationMembershipId(await websitePerson("aexample"), "lead")}`)
+        .get();
+      expect(untouched.data(), studyId).toMatchObject({ reviewStatus: "confirmed", isCurrent: true });
+      expect(untouched.get("fieldSources").reviewStatus, studyId).not.toBe(reason.id);
+    }
+    const combined = leads.filter((item) => JSON.stringify(item.candidates).includes("combined/part:"));
+    expect(combined.map((item) => item.field).sort()).toEqual(["formerLead", "lead"]);
+    for (const item of combined) {
+      expect(item.entityRefs).toEqual([{ entityType: "replication", entityId: "AmodioJost2007" }]);
+    }
   });
 
-  it("puts lead claims under an unresolved identifier beside the leads of the study proposed for it, and links nothing", async () => {
+  it("names the study proposed for an unresolved identifier in the question about the identifier, and writes to neither study of the combined row", async () => {
     await freshDatabase();
     const fixture = websiteFixture();
     const [template] = fixture.replications;
@@ -926,9 +949,10 @@ describe("the lead claims", () => {
     }
     await run(website, writeWebsiteFixture(temporaryDirectory(), fixture), "apply");
     const file = await workbookFile();
-    const memberships = (await documentsOf("memberships", true)).size;
+    const before = await documentsOf("memberships", true);
     await run(recruitment, file, "apply");
-    expect((await documentsOf("memberships", true)).size).toBe(memberships);
+    const after = await documentsOf("memberships", true);
+    expect(after.size).toBe(before.size);
 
     // The identifier differs from one study by its year alone. The question names that study as a proposal.
     const unknown = (await itemsOf("unmatchedIdentifier")).find((item) =>
@@ -945,29 +969,37 @@ describe("the lead claims", () => {
     );
     expect(tab?.entityRefs).toEqual([{ entityType: "replication", entityId: "AmodioMaster2008" }]);
 
-    // The leader and the former leader of the combined row and the lead line of the tab differ from the lead held.
-    const [question] = await itemsOf("conflictingLead", "leadByProposal");
-    expect(question?.status).toBe("open");
-    expect(question?.entityRefs).toEqual([
-      { entityType: "replication", entityId: "AmodioMaster2008" },
-      { entityType: "person", entityId: await websitePerson("aexample") },
-    ]);
-    const sources = candidatesOf(question).map((candidate) => candidate.key.split(":")[0]);
-    expect(sources).toEqual(
-      expect.arrayContaining([
-        `f/${LEADS}/leader`,
-        `f/${LEADS}/oldLeader`,
-        `f/${sourceTabKey("AmodioMaster20072008")}/leadLine`,
-        "held/lead",
-        "proposal/otherYear",
-      ]),
+    // The lead of the combined row is compared with the leads of neither study, and no question is raised for one
+    // of them alone. Every item about the row names both studies, each marked as what it is.
+    expect(await itemsOf("conflictingLead", "leadByProposal")).toEqual([]);
+    const ofRow = (await reconciliationItems()).filter((item) =>
+      candidatesOf(item).some((candidate) => candidate.key.startsWith("combined/part:")),
     );
-    const lead = await adminDb
-      .doc(
-        `replications/AmodioMaster2008/memberships/${replicationMembershipId(await websitePerson("aexample"), "lead")}`,
-      )
-      .get();
-    expect(lead.data()).toMatchObject({ reviewStatus: "needsReview", isCurrent: true });
+    expect(ofRow.length).toBeGreaterThanOrEqual(5);
+    for (const item of ofRow) {
+      expect(item.entityRefs, `${item.kind} ${item.field}`).toEqual([
+        { entityType: "replication", entityId: "AmodioJost2007" },
+        { entityType: "replication", entityId: "AmodioMaster2008" },
+      ]);
+      const marks = candidatesOf(item)
+        .filter((candidate) => /^(combined\/part|proposal\/otherYear):/.test(candidate.key))
+        .map((candidate) => `${candidate.key.split(":")[0]} ${candidate.valueSource}`);
+      expect(marks, `${item.kind} ${item.field}`).toEqual([
+        "combined/part AmodioJost2007",
+        "proposal/otherYear AmodioMaster2008",
+      ]);
+    }
+    expect(ofRow.filter((item) => item.kind === "conflictingLead").map((item) => item.field).sort()).toEqual([
+      "formerLead",
+      "lead",
+    ]);
+    // The leads that the website confirmed for the two studies stay confirmed: nothing is written on a proposal
+    // or on a cell that names two studies.
+    for (const studyId of ["AmodioJost2007", "AmodioMaster2008"]) {
+      const path = `replications/${studyId}/memberships/${replicationMembershipId(await websitePerson("aexample"), "lead")}`;
+      expect(after.get(path), studyId).toEqual(before.get(path));
+      expect(after.get(path), studyId).toMatchObject({ reviewStatus: "confirmed", isCurrent: true });
+    }
 
     // A proposal is no match: the study gets no alias, no figure, no contact and no lead from the workbook.
     const aliases = [...(await documentsOf("aliases", true)).entries()].filter(([documentPath]) =>
@@ -975,7 +1007,9 @@ describe("the lead claims", () => {
     );
     expect(aliases.map(([, alias]) => alias.alias)).toEqual(["AmodioMaster2008"]);
     expect(
-      (await aggregates()).filter((entry) => (entry.replicationIds as string[]).includes("AmodioMaster2008")),
+      (await aggregates()).filter((entry) =>
+        (entry.replicationIds as string[]).some((id) => ["AmodioMaster2008", "AmodioJost2007"].includes(id)),
+      ),
     ).toEqual([]);
     const contacts = [...(await documentsOf("outreachContacts")).values()];
     expect(contacts.filter((entry) => entry.replicationId === "AmodioMaster2008")).toEqual([]);
@@ -1443,6 +1477,10 @@ describe("the outreach tabs", () => {
         link("HajcakMoser2005", "Jun Green", "participation", "fill", "green"),
       ].sort(),
     );
+    // The result as written is restricted to the contact. An item says that it reads as accepting, and shows no more.
+    expect(
+      [...new Set(candidates.flatMap((item) => candidatesOf(item).map((candidate) => candidate.valueSource)))].sort(),
+    ).toEqual(["accepted", "green"]);
     // No result creates a participation, a membership, a laboratory, a person or an invitation.
     const { created } = differences(before, await allDocuments());
     const collections = new Set(created.map((documentPath) => documentPath.split("/")[0]));
@@ -1465,14 +1503,18 @@ describe("the outreach tabs", () => {
     expect((await contact("Boksem2006", "Kit Placeholder")).resultSource).toBe("agreed");
   });
 
-  it("sends a result that it cannot read as a status to review, once for each distinct text, and shows no narrative", async () => {
+  it("sends a result that it cannot read as a status to review, once for each distinct text, and shows none of them", async () => {
     await run(recruitment, await workbookFile(), "apply");
     const results = await itemsOf("vocabularyReview", "result");
     expect(results).toHaveLength(3);
+    // A result is restricted to the outreach contact. The item names the first row that holds it and shows no text,
+    // neither a short status nor a long account of a person's conduct.
     const shown = results.flatMap((item) => candidatesOf(item).map((candidate) => candidate.valueSource));
-    // A short status is shown to the reviewer. A long account of a person's conduct stays in its source record.
-    expect(shown.filter((value) => value !== undefined).sort()).toEqual(["?", "busy with another invented project"]);
-    expect(shown.filter((value) => value === undefined)).toHaveLength(1);
+    expect(shown).toEqual([undefined, undefined, undefined]);
+    expect(results.every((item) => candidatesOf(item).every((candidate) => candidate.sourceRecordId !== undefined))).toBe(
+      true,
+    );
+    expect(JSON.stringify(results)).not.toMatch(/busy with another invented project|a long invented account/);
     // The result itself is stored verbatim on the restricted contact, whatever it says.
     expect((await contact("BuschVanRullen2010", "Rui Staff")).resultSource).toMatch(/^a long invented account/);
   });
@@ -1593,7 +1635,7 @@ describe("the outreach tabs", () => {
     expect((await contact("DelCul2007", "Abe First; Bex First")).contactNameSource).toBe("Abe First; Bex First");
   });
 
-  it("keeps a reversed address as written, offers the decoded one to a reviewer, and matches on neither", async () => {
+  it("keeps a reversed address as written, queues it without showing it, and matches on neither", async () => {
     await knowAddress("unreal@example.org", await websitePerson("aexample"));
     await run(recruitment, await workbookFile(), "apply");
     const reversed = await contact("DonkersvanBoxtel2004 lead", "f.unreal");
@@ -1617,10 +1659,12 @@ describe("the outreach tabs", () => {
         )
         .sort(),
     );
-    expect(defects.flatMap((item) => candidatesOf(item).map((candidate) => candidate.valueSource)).sort()).toEqual([
-      "gilunreal@example.org",
-      "unreal@example.org",
+    // The address is shown in no item, decoded or not. A reviewer reads the cell in its source record.
+    expect(defects.flatMap((item) => candidatesOf(item).map((candidate) => candidate.valueSource))).toEqual([
+      undefined,
+      undefined,
     ]);
+    expect(JSON.stringify(await reconciliationItems())).not.toMatch(/@example\.org|gro\.elpmaxe/);
   });
 
   it("links a contact to a person only through an address that already names that person, and creates nobody", async () => {
@@ -1826,7 +1870,7 @@ describe("a later import of the recruitment and contact workbook", () => {
     const copy = await run(recruitment, await workbookFile(), "apply");
     expect(copy.documentsWritten).toBe(0);
     const checks = await verify(recruitment, file);
-    expect(checks.map((check) => check.key)).toHaveLength(7);
+    expect(checks.map((check) => check.key)).toHaveLength(11);
     expect(checks.filter((check) => !check.passed)).toEqual([]);
   });
 
@@ -1983,8 +2027,9 @@ describe("personal data of the recruitment and contact workbook", () => {
     const holders = written.filter((documentPath) =>
       /@example\.org/.test(JSON.stringify(after.get(documentPath)?.data)),
     );
+    // No item of the review queue holds one: whoever works the queue reads an address in its source record.
     expect(new Set(holders.map((documentPath) => documentPath.split("/")[0]))).toEqual(
-      new Set(["sourceRecords", "outreachContacts", "reconciliationItems", "persons", "importBatches"]),
+      new Set(["sourceRecords", "outreachContacts", "persons", "importBatches"]),
     );
     expect(
       holders
@@ -1998,12 +2043,8 @@ describe("personal data of the recruitment and contact workbook", () => {
         .every((documentPath) => /^importBatches\/[^/]+\/changes\/\d{6}$/.test(documentPath)),
     ).toBe(true);
     expect(holders.filter((documentPath) => !membersCanRead(documentPath, {}))).toEqual(holders);
-    // The only addresses in the queue are the decoded candidates of the two reversed addresses.
-    const queued = holders.filter((documentPath) => documentPath.startsWith("reconciliationItems/"));
-    expect(queued.map((documentPath) => after.get(documentPath)?.data.kind)).toEqual([
-      "identifierDefect",
-      "identifierDefect",
-    ]);
+    // The queue holds no address, not even the decoded candidates of the two reversed addresses.
+    expect(holders.filter((documentPath) => documentPath.startsWith("reconciliationItems/"))).toEqual([]);
   });
 
   it("stores and prints counts, hashes and identifiers only: nothing personal reaches the batch, its log or the report", async () => {
@@ -2039,15 +2080,27 @@ describe("personal data of the recruitment and contact workbook", () => {
     const config = path.join(temporaryDirectory(), "sources.json");
     writeFileSync(config, JSON.stringify({ hashKey: TEST_HASH_KEY, sources: {} }));
     const common = ["f", "--input", file, "--observed-on", OBSERVED_ON, "--config", config];
+    // The workbook is imported after the website data and the list of studies. Without the second the tool refuses.
+    const early = cli(["run", ...common, "--mode", "preview"]);
+    expect(early.status).toBe(2);
+    expect(early.output).toMatch(/source f is imported after source d /);
+    await recordApplied("d");
     const preview = cli(["run", ...common, "--mode", "preview"]);
     const apply = cli(["run", ...common, "--mode", "apply"]);
     expect(preview.status).toBe(0);
     expect(apply.status).toBe(0);
     const batch = /batch (run__[0-9A-Za-z_]+)/.exec(apply.output)?.[1] ?? "";
     const shown = cli(["show", batch, "--config", config]);
+    // The verification compares the rows of each tab with the baseline that the configuration states.
+    writeFileSync(
+      config,
+      JSON.stringify({ hashKey: TEST_HASH_KEY, sources: { f: { baseline: await baselineOf(batch) } } }),
+    );
     const verified = cli(["verify", ...common]);
     expect(shown.status).toBe(0);
     expect(verified.status).toBe(0);
+    expect(verified.output).toMatch(/passed {2}rowBaseline: \d+ counts of 23 tabs compared with the stated baseline, all equal/);
+    expect(verified.output).toMatch(/passed {2}blankAndZero: \d+ blank cells are absent, 1 explicit zeros are stored as 0/);
     const output = [preview, apply, shown, verified].map((result) => result.output).join("\n");
     expect(output).toMatch(/outreachContacts/);
     for (const value of restrictedValues(recruitmentFixture())) expect(output).not.toContain(value);

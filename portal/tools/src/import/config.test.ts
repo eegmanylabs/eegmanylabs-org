@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { ToolRefusal } from "../environment";
-import { loadPrivateConfig, PORTAL_DIRECTORY } from "./config";
+import { externalIdentifiers, loadPrivateConfig, namesSourceDocument, PORTAL_DIRECTORY } from "./config";
 
 const directory = mkdtempSync(path.join(tmpdir(), "eegml-import-config-"));
 afterAll(() => rmSync(directory, { recursive: true, force: true }));
@@ -31,6 +31,8 @@ describe("loadPrivateConfig", () => {
       sources: {
         b: { externalId: "invented-file-identifier", exportUrl: "https://sheets.example.org/export?format=xlsx" },
       },
+      // Nothing is rehearsed unless the file says so.
+      rehearse: [],
     });
     expect(loadPrivateConfig(written("no-sources.json", { hashKey: HASH_KEY })).sources).toEqual({});
   });
@@ -63,6 +65,59 @@ describe("loadPrivateConfig", () => {
         String(index),
       ).toThrow(ToolRefusal);
     }
+  });
+
+  it("reads what the environment rehearses, the baseline of rows and the confirmed headers of a source", () => {
+    const file = written("rehearsal.json", {
+      hashKey: HASH_KEY,
+      rehearse: ["candidateStudies", "contributorLists"],
+      expectedStudies: 4,
+      sources: {
+        g: {
+          baseline: { list_members: { data: 7, header: 1, filler: 2 } },
+          confirmedHeaders: { study_description: ["StudyID", "Description"] },
+        },
+      },
+      contributorSheets: {
+        "alpha-beta": {
+          externalId: "an-invented-identifier-of-a-sheet",
+          replicationId: "AlphaBeta2001",
+          baseline: { Sheet1: { data: 5 } },
+        },
+      },
+    });
+    const config = loadPrivateConfig(file);
+    expect(config.rehearse).toEqual(["candidateStudies", "contributorLists"]);
+    expect(config.expectedStudies).toBe(4);
+    expect(config.sources.g).toEqual({
+      baseline: { list_members: { data: 7, header: 1, filler: 2 } },
+      confirmedHeaders: { study_description: ["StudyID", "Description"] },
+    });
+    expect(config.contributorSheets?.["alpha-beta"]?.baseline).toEqual({ Sheet1: { data: 5 } });
+    // An output that the plan does not withhold cannot be named, and a class of rows that does not exist neither.
+    expect(() => loadPrivateConfig(written("unknown-output.json", { hashKey: HASH_KEY, rehearse: ["everything"] }))).toThrow(
+      ToolRefusal,
+    );
+    expect(() =>
+      loadPrivateConfig(written("unknown-class.json", { hashKey: HASH_KEY, sources: { g: { baseline: { t: { rows: 1 } } } } })),
+    ).toThrow(ToolRefusal);
+  });
+
+  it("finds the identifier of a source document in a file name, and nothing shorter than an identifier", () => {
+    const config = loadPrivateConfig(
+      written("identifiers.json", {
+        hashKey: HASH_KEY,
+        sources: { b: { externalId: "an-invented-identifier-of-b" }, c: { externalId: "short" } },
+        contributorSheets: {
+          "alpha-beta": { externalId: "an-invented-identifier-of-a-sheet", replicationId: "AlphaBeta2001" },
+        },
+      }),
+    );
+    expect(externalIdentifiers(config).sort()).toEqual(["an-invented-identifier-of-a-sheet", "an-invented-identifier-of-b"]);
+    expect(namesSourceDocument("an-invented-identifier-of-b - Sheet1.xlsx", config)).toBe(true);
+    expect(namesSourceDocument("export of an-invented-identifier-of-a-sheet.xlsx", config)).toBe(true);
+    expect(namesSourceDocument("b.xlsx", config)).toBe(false);
+    expect(namesSourceDocument("a short name.xlsx", config)).toBe(false);
   });
 
   it("refuses a missing file and says what to do, without creating it", () => {

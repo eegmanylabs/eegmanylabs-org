@@ -8,6 +8,7 @@ import path from "node:path";
 import { contributorTableId, sourceTabKey } from "@eegml/shared";
 import { afterAll, describe, expect, it } from "vitest";
 import {
+  CONFIRMED_STUDY_HEADERS,
   type MembershipWorkbookOptions,
   membershipWorkbook,
   SPECIAL_TERMS,
@@ -22,11 +23,19 @@ const directory = mkdtempSync(path.join(tmpdir(), "eegml-membership-"));
 afterAll(() => rmSync(directory, { recursive: true, force: true }));
 
 let files = 0;
-async function reading(options: MembershipWorkbookOptions = {}, secret = READ_CONTEXT.secret): Promise<SourceReading> {
+/** Reads the fixture. Unless a test says otherwise, a maintainer has confirmed the header of the study descriptions. */
+async function reading(
+  options: MembershipWorkbookOptions = {},
+  secret = READ_CONTEXT.secret,
+  confirmedHeaders: Readonly<Record<string, readonly string[]>> | null = CONFIRMED_STUDY_HEADERS,
+): Promise<SourceReading> {
   files += 1;
   const file = path.join(directory, `membership-${files}.xlsx`);
   writeFileSync(file, await membershipWorkbook(options));
-  return importer.read({ path: file, observedOn: "2026-11-09" }, { secret });
+  return importer.read(
+    { path: file, observedOn: "2026-11-09" },
+    { secret, ...(confirmedHeaders === null ? {} : { confirmedHeaders }) },
+  );
 }
 
 const tab = (read: SourceReading, title: string): SourceTab => {
@@ -38,6 +47,7 @@ const dataOf = (found: SourceTab): SourceRow[] => found.rows.filter((row) => row
 const cell = (row: SourceRow | undefined, label: string): RawCell | undefined => row?.cells[row.labels.indexOf(label)];
 const checks = async (options: MembershipWorkbookOptions) =>
   (await reading(options)).issues.map((issue) => issue.check).sort();
+const canonical = (value: unknown) => JSON.stringify(value);
 
 describe("the registry entry of source G", () => {
   it("says that the importer is built against synthetic fixtures only", () => {
@@ -59,6 +69,16 @@ describe("reading the member tab", () => {
       blankRows: 1,
     });
     expect(members.rows.map((row) => row.rowClass)).toEqual(["banner", "header", ...Array(7).fill("data")]);
+    // Every member row says which of its cells name the person or hold an address: name, surname and the two addresses.
+    expect(dataOf(members).every((row) => canonical(row.personal) === canonical(["A", "B", "C", "D"]))).toBe(true);
+  });
+
+  it("counts a row of unticked boxes as filler and stores none of them", async () => {
+    const read = await reading({ fillerRows: 40 });
+    expect(read.issues).toEqual([]);
+    const members = tab(read, TAB_TITLES.members);
+    expect(members.fillerRows).toBe(40);
+    expect(dataOf(members)).toHaveLength(7);
   });
 
   it("keys a row by the keyed hash of its address, else of its name, and never by a value that can be read", async () => {
@@ -182,6 +202,72 @@ describe("the structure check of source G", () => {
     expect(tab(read, "payments").rows).toEqual([]);
   });
 
+  it("fails closed as a whole: where one tab differs from the brief, no tab gives more than its header row", async () => {
+    for (const options of [
+      { extraTab: "payments" },
+      { withoutTab: "contibutor_tables" },
+      { extraMemberColumn: { header: "Notes", value: "an invented remark" } },
+      { linkHeader: "Link to the table" },
+    ] satisfies MembershipWorkbookOptions[]) {
+      const read = await reading(options);
+      expect(read.issues.length, JSON.stringify(options)).toBeGreaterThan(0);
+      const classes = new Set(read.tabs.flatMap((found) => found.rows.map((row) => row.rowClass)));
+      expect([...classes], JSON.stringify(options)).toEqual(["header"]);
+      // No member row means no contact detail and no special-category cell in what would be stored.
+      expect(read.tabs.flatMap((found) => found.rows).some((row) => row.special !== undefined)).toBe(false);
+      expect(JSON.stringify(read.tabs)).not.toMatch(/example\.org|synthetic gender|synthetic ethnicity/i);
+    }
+  });
+
+  it("stops on a member row above the header, and lets no special-category cell of it reach a record", async () => {
+    const above = {
+      cells: {
+        name: "Quin",
+        surname: "Strayed",
+        email: "quin.strayed@example.org",
+        gender: "an invented term of a strayed row",
+        ethnicity: "another invented term of a strayed row",
+      },
+    };
+    const read = await reading({ aboveHeader: above });
+    expect(read.issues.map((issue) => issue.check)).toEqual(["rowAboveHeader"]);
+    expect(read.issues[0]?.message).toContain("1 rows above the header");
+    expect(JSON.stringify(read)).not.toMatch(/strayed/i);
+    // A row above the header that holds one special-category cell and nothing else stops the import as well.
+    const lone = await reading({ aboveHeader: { cells: { gender: "an invented term of a strayed row" } } });
+    expect(lone.issues.map((issue) => issue.check)).toEqual(["rowAboveHeader"]);
+    expect(JSON.stringify(lone)).not.toMatch(/strayed/i);
+  });
+
+  it("reads the rows of the study descriptions only under the header list that a maintainer has confirmed", async () => {
+    // Nothing is confirmed yet: the header is kept and reported, the rows are not stored, and the import stops.
+    const first = await reading({}, READ_CONTEXT.secret, null);
+    expect(first.issues).toEqual([
+      expect.objectContaining({
+        check: "unconfirmedHeaders",
+        tabKey: sourceTabKey("study_description"),
+        found: "StudyID | Description",
+      }),
+    ]);
+    expect(first.issues[0]?.message).toContain("Its 2 rows are not stored");
+    expect(JSON.stringify(first.tabs)).not.toContain("invented description");
+    // The confirmed list is checked on every run: a column that appears later stops the import again.
+    const grown = await reading({ studyHeaders: ["StudyID", "Description", "Contact"] });
+    expect(grown.issues.map((issue) => issue.check)).toEqual(["unconfirmedHeaders"]);
+    expect(grown.issues[0]).toMatchObject({ expected: "StudyID | Description", found: "StudyID | Description | Contact" });
+    expect(JSON.stringify(grown.tabs)).not.toContain("an invented value of a further column");
+  });
+
+  it("refuses a tab of study descriptions with a column of personal or special-category data, whatever is confirmed", async () => {
+    for (const header of ["Gender", "ethnicity", "E-mail", "secondary_email", "Name"]) {
+      const studyHeaders = ["StudyID", "Description", header];
+      const read = await reading({ studyHeaders }, READ_CONTEXT.secret, { study_description: studyHeaders });
+      expect(read.issues.map((issue) => issue.check), header).toEqual(["studyHeaders"]);
+      expect(read.issues[0]?.found).toBe(header);
+      expect(JSON.stringify(read.tabs)).not.toContain("an invented value of a further column");
+    }
+  });
+
   it("names the columns that are missing, and stores no member row while the structure is not what the brief states", async () => {
     const read = await reading({ memberHeaders: { ethnicity: null, country: null } });
     expect(read.issues).toEqual([
@@ -194,8 +280,8 @@ describe("the structure check of source G", () => {
     ]);
     // Only the header is kept: no cell of a member reaches a source record before the structure is confirmed.
     expect(tab(read, TAB_TITLES.members).rows.map((row) => row.rowClass)).toEqual(["header"]);
-    // The other tabs are as the brief states, and are read.
-    expect(dataOf(tab(read, TAB_TITLES.tables))).toHaveLength(5);
+    // The other tabs are as the brief states. They are not read either, because the workbook is read as a whole.
+    expect(dataOf(tab(read, TAB_TITLES.tables))).toHaveLength(0);
   });
 
   it("names every column that it does not recognise, with its letter in the message and its header in the report", async () => {

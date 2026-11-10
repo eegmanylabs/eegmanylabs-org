@@ -8,7 +8,7 @@ import { institutionCandidateId } from "../ids";
 import { systemWriteContext } from "./base";
 import { institutionCandidateDocSchema } from "./identity";
 import { affiliationSlotSchema, contributorDocSchema } from "./outputs";
-import { importBatchDocSchema, reconciliationCandidateSchema } from "./provenance";
+import { importBatchChangeStateDocSchema, importBatchDocSchema, reconciliationCandidateSchema } from "./provenance";
 import { aliasSchemeSchema } from "./replications";
 
 const NOW = { seconds: 1_800_000_000, nanoseconds: 0, toDate: () => new Date(0), toMillis: () => 0 };
@@ -139,11 +139,46 @@ describe("an import batch", () => {
     expect(parsed.error?.issues ?? []).toEqual([]);
   });
 
+  it("holds the report of its verification, with each check and no field beside them", () => {
+    const verification = {
+      checkedAt: NOW,
+      passed: false,
+      checks: [{ key: "rowAccounting", passed: false, detail: "t0: 3 data rows = 2 imported + 0 queued + 0 raw only" }],
+    };
+    expect(importBatchDocSchema.safeParse({ ...batch, verification }).error?.issues ?? []).toEqual([]);
+    expect(importBatchDocSchema.safeParse({ ...batch, verification: { ...verification, signedBy: "x" } }).success).toBe(
+      false,
+    );
+    expect(
+      importBatchDocSchema.safeParse({ ...batch, verification: { ...verification, checks: [{ key: "a", passed: true }] } })
+        .success,
+    ).toBe(false);
+  });
+
   it("refuses a file hash, a commit or a plan hash of another shape", () => {
     expect(
       importBatchDocSchema.safeParse({ ...batch, inputFiles: [{ name: "people.tsv", sha256: "abc" }] }).success,
     ).toBe(false);
     expect(importBatchDocSchema.safeParse({ ...batch, sourceCommit: "HEAD" }).success).toBe(false);
     expect(importBatchDocSchema.safeParse({ ...batch, planHash: "not-a-hash" }).success).toBe(false);
+  });
+});
+
+describe("the two states of a special-category document in the change log", () => {
+  const state = { schemaVersion: 1, createdAt: NOW, createdBy: "system:import", writeContext: STANDARD.writeContext };
+
+  it("may name the path of the document, which the entry that clients read does not", () => {
+    expect(
+      importBatchChangeStateDocSchema.safeParse({
+        ...state,
+        documentPath: "persons/p__0123456789abcdef0123/special/demographics",
+        before: null,
+        after: { genderSource: "an invented term" },
+      }).error?.issues ?? [],
+    ).toEqual([]);
+    expect(importBatchChangeStateDocSchema.safeParse({ ...state, before: null, after: null }).success).toBe(true);
+    expect(importBatchChangeStateDocSchema.safeParse({ ...state, documentPath: "", before: null, after: null }).success).toBe(
+      false,
+    );
   });
 });

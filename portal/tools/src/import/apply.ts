@@ -18,10 +18,12 @@ export class ImportStopped extends Error {
 
 interface LoggedChange {
   readonly path: string;
-  readonly operation: "create" | "update";
+  readonly operation: "create" | "update" | "delete";
   readonly relation: "created" | "updated" | "matched";
   readonly before: Record<string, unknown> | null;
-  readonly after: Record<string, unknown>;
+  readonly after: Record<string, unknown> | null;
+  /** The collection of a special-category document, whose path the client-readable entry does not name. */
+  readonly collectionPath?: string;
   readonly sourceRecordIds: readonly string[];
   readonly updateTime: Timestamp | null;
   readonly special: boolean;
@@ -32,8 +34,10 @@ interface LoggedChange {
  * that depends on the values. Whoever runs imports reads the change log, and a digest of the
  * document would let such a reader confirm a guess of its values: a demographics document has a
  * handful of possible values in each field, and everything else in it can be read from the
- * entry itself. The two states sit beside the entry in `special/state`, which no client reads
- * and from which a rollback restores them.
+ * entry itself. The entry does not say whose document it was either: it names the collection,
+ * so a reader of the log cannot tell which person has such a record or when it changed. The
+ * path and the two states sit beside the entry in `special/state`, which no client reads and
+ * from which a rollback restores them.
  */
 export function specialMarker(state: Record<string, unknown> | null): Record<string, unknown> | null {
   return state === null ? null : { specialCategory: true };
@@ -42,7 +46,10 @@ export function specialMarker(state: Record<string, unknown> | null): Record<str
 function stage(batch: WriteBatch, context: RunContext, change: LoggedChange, sequence: number): void {
   const { db, batchId, now } = context;
   const reference = db.doc(change.path);
-  if (change.before === null) {
+  const expected = change.updateTime === null ? {} : { lastUpdateTime: change.updateTime };
+  if (change.after === null) {
+    batch.delete(reference, expected);
+  } else if (change.before === null) {
     // `create` fails when the document has appeared in the meantime.
     batch.create(reference, change.after);
   } else {
@@ -50,7 +57,7 @@ function stage(batch: WriteBatch, context: RunContext, change: LoggedChange, seq
     for (const [field, value] of changedTopLevelFields(change.before, change.after)) {
       patch[field] = value === undefined ? FieldValue.delete() : value;
     }
-    batch.update(reference, patch, change.updateTime === null ? {} : { lastUpdateTime: change.updateTime });
+    batch.update(reference, patch, expected);
   }
   const entry = entryOf("importBatchChanges");
   const logPath = COLLECTIONS.importBatchChanges.docPath(batchId, sequenceId(sequence));
@@ -59,7 +66,8 @@ function stage(batch: WriteBatch, context: RunContext, change: LoggedChange, seq
     validated(entry, logPath, {
       ...appendOnlyFields(now),
       batchId,
-      documentPath: change.path,
+      // Whose special-category document was written is said only where no client reads: the entry names the collection.
+      documentPath: change.special && change.collectionPath !== undefined ? change.collectionPath : change.path,
       operation: change.operation,
       relation: change.relation,
       sourceRecordIds: [...change.sourceRecordIds],
@@ -74,6 +82,7 @@ function stage(batch: WriteBatch, context: RunContext, change: LoggedChange, seq
       db.doc(statePath),
       validated(entryOf("importBatchChangeState"), statePath, {
         ...appendOnlyFields(now),
+        documentPath: change.path,
         before: change.before,
         after: change.after,
       }),
@@ -84,6 +93,7 @@ function stage(batch: WriteBatch, context: RunContext, change: LoggedChange, seq
 const ofDocument = (change: DocumentChange): LoggedChange => ({
   ...change,
   special: entryOf(change.collection).dataClass === "special",
+  collectionPath: entryOf(change.collection).path,
 });
 
 const ofItem = (change: ItemChange): LoggedChange => ({

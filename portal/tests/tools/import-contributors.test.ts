@@ -89,6 +89,7 @@ function configWith(overrides: Partial<Record<SheetName, ColumnOverride[]>> = {}
   return {
     hashKey: TEST_HASH_KEY,
     sources: {},
+    rehearse: [],
     contributorSheets: Object.fromEntries(
       (Object.keys(FILE_IDENTIFIERS) as SheetName[]).map((name) => [
         name,
@@ -1029,6 +1030,19 @@ describe("the command line with a contributor sheet", () => {
     expect(unregistered.status).toBe(2);
     expect(unregistered.stderr).toContain("registers no contributor sheet");
 
+    // Every member could read an applied list, so the apply is withheld. A preview is possible.
+    const withheld = importCli([...base, "--sheet", "alpha-beta"]);
+    expect(withheld.status).toBe(2);
+    expect(withheld.stderr).toContain("the contributor lists, which every member could read, are withheld");
+    expect(withheld.stderr).toContain("question 10");
+    expect((await documentsOf("contributors")).size).toBe(0);
+    const previewed = importCli([...base.map((argument) => (argument === "apply" ? "preview" : argument)), "--sheet", "alpha-beta"]);
+    expect(previewed.status).toBe(0);
+    expect(previewed.stdout).toContain("contributors: 6 to create");
+    expect((await documentsOf("contributors")).size).toBe(0);
+
+    // This emulator rehearses the withheld output, as its private configuration says.
+    writeFileSync(config, JSON.stringify({ ...configWith(), rehearse: ["contributorLists"] }));
     const applied = importCli([...base, "--sheet", "alpha-beta"]);
     expect(applied.stderr).toBe("");
     expect(applied.status).toBe(0);
@@ -1049,19 +1063,36 @@ describe("the command line with a contributor sheet", () => {
     ]) {
       expect(applied.output, secret).not.toContain(secret);
     }
-    const verified = importCli([
-      "verify",
-      "ctable",
-      "--sheet",
-      "alpha-beta",
-      "--input",
-      file,
-      "--observed-on",
-      OBSERVED_ON,
-      "--config",
+    const verify = () =>
+      importCli([
+        "verify",
+        "ctable",
+        "--sheet",
+        "alpha-beta",
+        "--input",
+        file,
+        "--observed-on",
+        OBSERVED_ON,
+        "--config",
+        config,
+      ]);
+    // Without a stated baseline of rows the import is not verified.
+    const unstated = verify();
+    expect(unstated.status).toBe(3);
+    expect(unstated.stdout).toContain("FAILED  rowBaseline: no baseline of rows is stated for this source");
+    const sheets = configWith().contributorSheets ?? {};
+    const baseline = { Sheet1: { header: 1, data: 6, filler: 40, blank: 3 } };
+    writeFileSync(
       config,
-    ]);
+      JSON.stringify({
+        ...configWith(),
+        rehearse: ["contributorLists"],
+        contributorSheets: { ...sheets, "alpha-beta": { ...sheets["alpha-beta"], baseline } },
+      }),
+    );
+    const verified = verify();
     expect(verified.status).toBe(0);
+    expect(verified.stdout).toContain("passed  rowBaseline: 4 counts of 1 tabs compared with the stated baseline, all equal");
     expect(verified.stdout).toContain("Every check passed.");
   });
 });

@@ -15,6 +15,7 @@
 // | A hidden tab in the layout of an outreach tab, with a title line    | `Invented outreach`                  |
 // | Summary headers in another case and spacing, or below a title line  | The options `headers` and `headerRow` |
 // | A column that the brief does not name, and a tab of no known layout | The options `extraColumn` and `unknownTab` |
+// | A second tab with the seven summary headers, as a copy of the first would be | The option `secondSummary`  |
 import ExcelJS from "exceljs";
 
 export const SUMMARY_HEADERS = [
@@ -59,14 +60,24 @@ export interface CoordinationWorkbookOptions {
   readonly unknownTab?: boolean;
   /** Leaves the summary tab out. */
   readonly withoutSummary?: boolean;
+  /** A second tab with the seven summary headers and the same study rows, under another title. */
+  readonly secondSummary?: boolean;
 }
+
+/** The titles of the two tabs of the fixture, as a maintainer would enter them in the reviewed table. */
+export const SUMMARY_TAB_TITLE = "Invented summary";
+export const OUTREACH_TAB_TITLE = "Invented outreach";
 
 /** Builds the synthetic coordination workbook: a summary tab, and a hidden tab in the layout of an outreach tab. */
 export async function coordinationWorkbook(options: CoordinationWorkbookOptions = {}): Promise<Uint8Array> {
   const workbook = new ExcelJS.Workbook();
   const rows = options.rows ?? SUMMARY_ROWS;
-  if (!options.withoutSummary) {
-    const sheet = workbook.addWorksheet("Invented summary");
+  const titles = [
+    ...(options.withoutSummary ? [] : [SUMMARY_TAB_TITLE]),
+    ...(options.secondSummary ? ["Invented summary, an earlier copy"] : []),
+  ];
+  for (const title of titles) {
+    const sheet = workbook.addWorksheet(title);
     const headerRow = options.headerRow ?? 1;
     if (headerRow > 1) sheet.getCell("A1").value = "An invented overview of the studies";
     const headers = options.headers ?? SUMMARY_HEADERS;
@@ -92,7 +103,7 @@ export async function coordinationWorkbook(options: CoordinationWorkbookOptions 
     sheet.getCell(last + 3, 3).value = { formula: `SUM(C${headerRow + 1}:C${last})`, result: signed };
   }
   if (options.outreachTab !== false) {
-    const sheet = workbook.addWorksheet("Invented outreach", { state: "hidden" });
+    const sheet = workbook.addWorksheet(OUTREACH_TAB_TITLE, { state: "hidden" });
     sheet.getCell("A1").value = "A search of Replicating Labs";
     sheet.getRow(2).values = [
       "Contact name",

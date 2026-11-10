@@ -28,7 +28,7 @@ npm run dev
 
 This starts the functions bundler in watch mode, the emulators and the Vite development server, and stops all three together when you press Ctrl-C. With the default port base the portal is at `http://127.0.0.1:9251/`. To sign in, enter any address on the sign-in page and open the link that the Authentication emulator prints in the terminal. A link works once.
 
-`npm run seed:demo`, run in a second terminal while the emulators are up, writes two fictitious accounts with their `users` and `access` documents. Each profile is labelled `dataOrigin: "demo"`, and every document names the command as its author (`system:seedDemo`). The command refuses to run unless the emulator variables are set, so it cannot touch a real project, and it says so in one line when the emulators of the port base are not running.
+`npm run seed:demo`, run in a second terminal while the emulators are up, writes a synthetic world for local development and for end-to-end tests: twelve fictitious persons with their contact documents and email index entries, four laboratories at three institutions with their member entries, three replications with their memberships and participations, two demonstration accounts, of which one has claimed a person already, and a bootstrap record for a demonstration administrator. The fixtures in `tools/src/fixtures/` list every address and say which path of the claim flow each one exercises. Every fact-like document is labelled `dataOrigin: "demo"`, and every document names the command as its author (`system:seedDemo`). The command writes the lookup data first, resolves the access document of each account from what it wrote, and switches the second factor off for this world in `system/settings`, because the Authentication emulator cannot run a time-based one-time password. It refuses to run unless the emulator variables are set, so it cannot touch a real project, and it says so in one line when the emulators of the port base are not running. A second run writes nothing.
 
 `npm run seed:lookups`, run the same way, writes the lookup data that the application depends on: the programme, the statuses of replications, datasets and tasks, the eleven categories of participant counts with their definitions, the onboarding checklist and the fourteen CRediT contributor roles. The values are constants in `shared/src/seed/lookups.ts`. A document that already exists is never written again, so a second run performs no write, and a document whose values an administrator has changed is reported and left as it is. The command needs the Firestore emulator only and refuses any target that is not an emulator.
 
@@ -53,11 +53,23 @@ The preview builds the application and serves it with `scripts/pages-server.mjs`
 | `npm run test:tools` | Integration tests of the command-line tools | Starts the Authentication and Firestore emulators |
 | `npm run test:seed-lookups` | The integration test of `seed:lookups` alone, which proves that a second run writes nothing | Starts the Firestore emulator and no other |
 | `npm run test:e2e` | Playwright tests against the built application, including the accessibility and security checks | Builds, starts all emulators and the preview server |
-| `npm test` | All of the test commands above, with one start of the emulators | Builds first |
+| `npm test` | All of the test commands above, with two starts of the emulators: one without the functions emulator for the rules and the tools, and one with it for the functions and the browser tests | Builds first |
 
 Every command that needs emulators starts them through `firebase emulators:exec` and stops them when the tests finish, whether they pass or fail. A test command fails at once, with a message that names the port, if another run is already using the same port base. That check covers the emulator ports and, for the commands that start the preview server, its ports as well.
 
 A run can be interrupted at any point. `scripts/emulators.mjs` starts the Firebase tools in a process group of their own and, on an interrupt or a termination signal, stops that whole group: the emulators, the test runner, the preview server and the browser. It asks politely first, then insists after fifteen seconds, and it only ends once nothing of the run is left. The Firestore emulator runs outside that group, because the Firebase tools start it in a session of its own. The tools stop it themselves, and the launcher follows up on it directly if they have not done so in time. `scripts/process-group.mjs` holds that logic and `scripts/process-group.test.mjs` tests it with a real process tree.
+
+### The functions suite and the triggers
+
+The functions emulator runs the Firestore triggers for every write to the project `demo-eegml`, whichever suite makes it, and a clear of the Firestore emulator reaches them as deletions. Three conventions keep the suites apart.
+
+| Convention | Where |
+|---|---|
+| The rules and the tools are tested without the functions emulator, because the tools tests count exactly what a tool writes and a trigger would add to it. `npm test` therefore starts the emulators twice. What the triggers do with the documents of a tool is tested in the functions suite, with `seed:demo` | The `test` script in `package.json` |
+| A test file of the functions suite starts each test with `resetWorld` and ends with `leaveNoTrace`, which switches the triggers off around its clear, so no file leaves documents or late deliveries to the next | `tests/functions/support.ts` |
+| A caller in a functions test is a hand-made sign-in token, which states the account, whether its address is verified and whether a second factor was presented. The functions emulator decodes a token without verifying it, so this proves nothing about token verification | `tokenOf` in `tests/functions/support.ts` |
+
+`setBackgroundTriggers` in `tests/support/emulators.ts` switches the triggers through the emulator hub. Switching them off waits for the trigger work that is queued. Switching them on makes the functions emulator load its triggers anew under new names, and the earlier names stay registered and answer nothing, which is why this is done once for a test file and never for a test, and why the test that delivers an event by hand asks the emulator for the current name.
 
 ### Security rules and their tests
 
@@ -174,6 +186,9 @@ The wrapper also works around one defect. When an outbound proxy is configured t
 | `functions/` | `@eegml/functions`. Cloud Functions, second generation, in `europe-west2` |
 | `functions/src/framework/` | `defineCallable`, the audit helper, the error type and the Admin SDK set-up |
 | `functions/src/callables/` | One file per callable function |
+| `functions/src/triggers/` | The Firestore triggers: the audit trigger, the triggers that keep `access/{uid}` in line with its sources, and the trigger that derives the units of a person |
+| `functions/src/access/` | Maintenance of `access/{uid}`: the draft that a callable function resolves and writes in its own transaction, and the rebuild that the triggers run |
+| `functions/src/claims/`, `functions/src/roles/`, `functions/src/people/`, `functions/src/notifications/` | What several functions share: the link between an account and a person, role assignments as documents, the confirmation of an entry, and notifications |
 | `tools/` | `@eegml/tools`. Admin SDK command-line tools, run with `tsx` from a trusted environment |
 | `tests/rules/` | Security-rules tests: the registry-driven matrix with its policy model, fixtures and synthetic world, the hand-written tests of special rules, the catalogue of scoped queries, and the test of the registry-driven references and queries of the web data layer against the Firestore emulator |
 | `tests/functions/` | Integration tests of the functions, run against the emulators |
@@ -203,6 +218,9 @@ Each kind of change has one place where it starts. The registries below are that
 | A kind of record that a polymorphic reference can point at | The registry in `shared/src/entities.ts` |
 | A callable function | A contract in `shared/src/callables.ts`, a file in `functions/src/callables/` that uses `defineCallable`, an export in `functions/src/index.ts`, and an integration test |
 | A kind of audit event | The registry in `shared/src/schemas/system.ts` |
+| A Firestore trigger | A file in `functions/src/triggers/` that takes its options from `documentTrigger`, an export in `functions/src/index.ts`, and an integration test that proves a second delivery changes nothing |
+| A reason that a function gives for a refusal, for the interface to act on | The registry `CALLABLE_ERROR_REASONS` in `shared/src/callables.ts` |
+| A notification | `writeNotification` in `functions/src/notifications/notify.ts`, in the transaction of the change. The owner marks it as read under the security rules |
 | A capability | The registry and the default matrix in `shared/src/capabilities.ts`. `shared/src/access.ts` resolves them into `access/{uid}` and answers `can` |
 | Lookup data that a new database starts with | `shared/src/seed/lookups.ts`, which `npm run seed:lookups` writes |
 | A page | The route table in `web/src/app/router.tsx` |
@@ -213,6 +231,32 @@ Each kind of change has one place where it starts. The registries below are that
 | A colour, or a new combination of two colours | `web/src/styles/tokens.css`, and the table of pairs in `tests/architecture/contrast.test.ts` |
 | A command-line tool | A file in `tools/src/commands/` and an entry in the registry in `tools/src/cli.ts` |
 | A port | The offsets in `scripts/ports.mjs` |
+
+## Identity, claiming and administration
+
+The functions under `functions/src` are the trusted side of identity. Each callable function is declared with `defineCallable`, validates its input and output against its contract in `shared/src/callables.ts`, reads the caller's access document inside the function, authorises with `can`, asks for the second factor wherever that document requires one, and writes its audit entry in the transaction of its change. The comment above each function says who may call it and what it writes.
+
+| Area | Functions |
+|---|---|
+| Sessions and the first administrators | `sessionStart`, which also uses a bootstrap record and records the enrolment of a second factor |
+| Account claims | `claimProfile`, `requestAccess`, `listAccountClaims`, `reviewAccountClaim`, `unlinkAccountClaim` |
+| Roles and accounts | `setRoleAssignment`, `setCapabilityGrant`, `setRoleCapabilityOverride`, `setUserStatus` |
+| Laboratory claims | `requestLabClaim`, `reviewLabClaim` |
+| Records of people | `resolveCorrectionRequest`, `getPersonDemographics`, `setPersonOrcid`, `confirmLaboratoryMembership`, `confirmReplicationMembership` |
+| Triggers | `auditDocumentWrites`, the eight triggers whose names begin with `accessOn`, and the two whose names begin with `personUnitsOn` |
+| Scheduled | `accessExpirySweep`, which every fifteen minutes marks a role assignment that has run out as expired and resolves the access document of an account whose assignment or named grant has run out |
+
+`access/{uid}` is written in two ways, and both go through `functions/src/access/maintain.ts`. A callable function that changes a role, a grant, a link or a suspension resolves the access document in its own transaction, so the change holds from the account's next request. The triggers resolve it after every other change, such as an import, and write only where the result differs, which is also why a second delivery of an event changes nothing. `npm run access:rebuild` does the same for every account, for a change to how access is resolved.
+
+The audit trigger is one function for every document. It records a write to any collection that the registry flags as audited and lets clients write. A callable function names its audit entry in `writeContext.auditEventId` of each document it writes, and the security rules refuse a client write that names one, so the trigger passes over a write whose named entry is new with that write and exists. Everything else it records under the identifier of the event.
+
+Three settings belong to a deployment and have no value in this repository.
+
+| Setting | Meaning |
+|---|---|
+| The secret `IDENTITY_HASH_KEY` | The key of the keyed hashes behind `personEmailIndex`, `identityKeys` and `bootstrapAdmins`. It must be the `hashKey` that the importers of the same project use. The emulator uses a public demonstration key instead, and so do the tools when they write to the emulator |
+| `requireSecondFactor` in `system/settings` | Whether holders of a programme role or of a named grant must enrol and present a second factor. Absent means true. Only `seed:demo` switches it off, for the emulator |
+| A record in `bootstrapAdmins` | Written by `npm run admin:bootstrap -- --email <address>`. The first account that signs in with that address, verified, becomes a programme administrator. Only the keyed hash of the address is stored |
 
 ## Sessions, tabs and what stays in the browser
 
@@ -228,7 +272,7 @@ The address typed into the sign-in form is remembered in `localStorage` only unt
 
 ## What has not been verified
 
-Some things cannot be proven with the emulators and wait for a staging project. The Google sign-in pop-up needs a script from Google that the tests do not load, so the button is switched off by default and only its presence behind the build flag is tested. App Check has no emulator: `defineCallable` carries the option to enforce it, and the option is always off in the emulator. The production Content-Security-Policy is generated and unit tested, and has not yet been exercised against production hosts. Time-based one-time passwords are not implemented by the Authentication emulator.
+Some things cannot be proven with the emulators and wait for a staging project. The functions emulator accepts a sign-in token without verifying it, and the functions tests rely on that to state what a token claims, so no test here proves token verification or the second-factor claim of a real sign-in. The principal that the platform names for a write is a placeholder in the emulator: the audit trigger takes the actor from the document, treats the principal `app_user` as a signed-in person because that is what the event format defines, and has to be checked against a real event on staging. A deletion by a client is therefore recorded without its actor in the emulator. The audit trigger matches every document with the pattern `{document=**}`, which the emulator supports and production has yet to confirm. The Google sign-in pop-up needs a script from Google that the tests do not load, so the button is switched off by default and only its presence behind the build flag is tested. App Check has no emulator: `defineCallable` carries the option to enforce it, and the option is always off in the emulator. The production Content-Security-Policy is generated and unit tested, and has not yet been exercised against production hosts. Time-based one-time passwords are not implemented by the Authentication emulator.
 
 Three further behaviours are verified on the emulators only. The Firestore emulator ends an open listener as soon as the rules refuse its account. Whether production does the same, or goes on delivering until the listener reconnects, is not known, and the page handles both: the second case is covered by unit tests alone. Callable functions accept browser calls only from the origins in the parameter `PORTAL_ORIGINS`, which is empty by default so that a deployment that forgets it fails closed. The emulator accepts every origin, so the restriction itself has not been exercised. The lifetime of six hours for a remembered sign-in request is a conservative reading of how long a link lasts. When it is too short, a link that still works asks for the address again, and nothing worse.
 

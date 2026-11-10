@@ -13,7 +13,6 @@
 // rules run as a lint that reports what departs from them and corrects nothing. The workbook
 // is imported as a whole or not at all, and no replication is created from it.
 import { existsSync, readFileSync, statSync } from "node:fs";
-import path from "node:path";
 import { type AliasScheme, type EntityRef, LIMITS, lookupFold, shortHash } from "@eegml/shared";
 import { holdsContent, rawCellOf } from "../cells";
 import type {
@@ -29,9 +28,13 @@ import type {
 import { WorkbookFormatError } from "../ooxml";
 import { PlanBuilder } from "../plan";
 import { aliasDocuments, cellValue } from "../records";
-import { STUDY_ID_PATTERN } from "../studies";
 import { contentRowKey, sha256OfBytes } from "../values";
 import { cellsByRow, columnLetters, readWorkbook, type Workbook } from "../workbook";
+import { inputFileOf } from "../workbook-rows";
+
+/** The hidden state of a row is provenance of every workbook. That of a column is said once, on the header record. */
+const HIDDEN_ROW = { hiddenRow: true } as const;
+const HIDDEN_STATE = { hidden: true } as const;
 
 const SOURCE_KEY = "b";
 /** The key of the one tab. The tab is selected by position, and its title is the spreadsheet default. */
@@ -69,7 +72,7 @@ async function read(input: ImportInput): Promise<SourceReading> {
   }
   const bytes = readFileSync(input.path);
   const contentHash = sha256OfBytes(bytes);
-  const inputFiles = [{ name: path.basename(input.path).slice(0, LIMITS.shortText), sha256: contentHash }];
+  const inputFiles = [inputFileOf(input.path, contentHash)];
   let workbook: Workbook;
   try {
     workbook = readWorkbook(bytes);
@@ -113,25 +116,25 @@ async function read(input: ImportInput): Promise<SourceReading> {
         rowClass: "header",
         rowNumber: 1,
         rowKey: "header",
-        cells: columns.map((column) => rawCellOf(cells?.get(column))),
+        cells: columns.map((column) => rawCellOf(cells?.get(column), HIDDEN_STATE)),
         labels: columns.map(columnLetters),
       });
       continue;
     }
     // A cell under a blank header belongs to no field. It is captured by itself, as an annotation.
     for (const column of columns.filter((candidate) => !headed.includes(candidate))) {
-      const stray = rawCellOf(cells?.get(column));
+      const stray = rawCellOf(cells?.get(column), HIDDEN_ROW);
       if (!holdsContent(stray)) continue;
       rows.push({
         rowClass: "annotation",
         rowNumber: row,
-        rowKey: contentRowKey([stray], unkeyed),
+        rowKey: contentRowKey([stray], row, unkeyed),
         cells: [stray],
         labels: [columnLetters(column)],
         cellLevel: true,
       });
     }
-    const record = headed.map((column) => rawCellOf(cells?.get(column)));
+    const record = headed.map((column) => rawCellOf(cells?.get(column), HIDDEN_ROW));
     if (!record.some(holdsContent)) {
       blankRows += 1;
       continue;
@@ -140,7 +143,7 @@ async function read(input: ImportInput): Promise<SourceReading> {
     const folded = typeof name === "string" ? lookupFold(name) : "";
     const keyed = folded !== "" && folded.length <= LIMITS.shortText && !keys.has(folded);
     if (typeof name === "string" && name.trim() !== "" && !keyed) badKeys += 1;
-    const rowKey = keyed ? folded : contentRowKey(record, unkeyed);
+    const rowKey = keyed ? folded : contentRowKey(record, row, unkeyed);
     keys.add(rowKey);
     rows.push({
       // A row with content and no name is no study. It is kept, and a reviewer places it.
@@ -299,14 +302,26 @@ async function plan(context: PlanContext): Promise<ImportPlan> {
       );
       continue;
     }
-    const resolution = STUDY_ID_PATTERN.test(text.name) ? await studies.resolve(text.name) : null;
-    if (resolution?.status !== "resolved") {
+    // The name is resolved whatever its shape: a lower-case initial or a diacritic names the study it folds to.
+    const resolution = await studies.resolve(text.name);
+    const claim = { source, value: text.name, valueSource: text.name, sourceRecordId: row.recordId };
+    if (resolution.status !== "resolved") {
       // No replication is created from this workbook. The row waits until its study exists.
       builder.item(
         items.unmatchedIdentifier({
           subject: `${source}/${row.rowKey}`,
-          entityRefs: resolution?.status === "ambiguous" ? resolution.replicationIds.map(replication) : [],
-          claims: [{ source, value: text.name, valueSource: text.name, sourceRecordId: row.recordId }],
+          entityRefs: resolution.status === "ambiguous" ? resolution.replicationIds.map(replication) : [],
+          claims: [claim],
+        }),
+      );
+    } else if (text.name !== resolution.replicationId) {
+      // The name resolves to its study through another spelling of the identifier, which a reviewer confirms.
+      builder.item(
+        items.aliasConfirmation({
+          subject: resolution.replicationId,
+          field: "programme",
+          entityRefs: [replication(resolution.replicationId)],
+          claims: [claim],
         }),
       );
     }
@@ -314,7 +329,7 @@ async function plan(context: PlanContext): Promise<ImportPlan> {
       row,
       text,
       formula,
-      replicationId: resolution?.status === "resolved" ? resolution.replicationId : null,
+      replicationId: resolution.status === "resolved" ? resolution.replicationId : null,
     });
   }
 
@@ -521,6 +536,8 @@ export const importer: ImporterDefinition = {
   sourceKey: SOURCE_KEY,
   summary: "Naming conventions: the cloud-account, BIDS and EEGNet names of every study.",
   inputDescription: "the Excel export of the workbook",
+  // The names are given to studies that exist. It runs after the website data, and once more after the list of studies.
+  after: ["h"],
   read,
   plan,
 };

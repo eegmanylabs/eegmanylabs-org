@@ -13,7 +13,7 @@
 // |----------------------------------------------------------------|----------------------------------------------------------------|
 // | Skip a hidden row                                              | Reads it as data and stores that it is hidden                  |
 // | Read the text `null` as a missing value                        | Stores `null-sig` verbatim                                     |
-// | Turn `replicated` into a boolean, a result or a status         | Stores the label verbatim, in the restricted document of the replication, as an unverified label |
+// | Turn `replicated` into a boolean, a result or a status         | Keeps the label verbatim in the source record and queues it as an unverified label. The restricted document of the replication receives it only where the run rehearses that withheld output |
 // | Take the address of a link from its label                      | Reads the hyperlink target of the cell                         |
 // | Create a replication                                           | Resolves the identifier through the folded lookup, or queues the row |
 // | Parse a footer counter                                         | Recounts from the data and reports a counter that disagrees    |
@@ -235,7 +235,7 @@ function readHypotheses(sheet: WorkbookSheet, issues: StructureIssue[]): SourceT
       rows.push({ ...draft, rowKey: repeat > 1 ? `${natural}__${repeat}` : natural });
       lastDataRow = row;
     } else if (grid.holdsContent(row)) {
-      rows.push({ ...draft, rowClass: "annotation", rowKey: contentRowKey(draft.cells, unkeyed) });
+      rows.push({ ...draft, rowClass: "annotation", rowKey: contentRowKey(draft.cells, draft.rowNumber, unkeyed) });
     } else blankRows += 1;
   }
 
@@ -270,7 +270,7 @@ function readReview(sheet: WorkbookSheet, issues: StructureIssue[]): SourceTab {
     rowClass: "header",
     rowNumber: 1,
     rowKey: "header",
-    cells: grid.cells(1),
+    cells: grid.cells(1, { hidden: true }),
     labels: letters,
   };
   const found = columnsOf(first);
@@ -318,7 +318,7 @@ function readReview(sheet: WorkbookSheet, issues: StructureIssue[]): SourceTab {
     const folded = idColumn === undefined ? "" : lookupFold(cellText(draft, idColumn) ?? "");
     if (folded === "" || folded.length > LIMITS.shortText) {
       // A row that names no study is no record of the tab. It is kept for a reviewer to place.
-      rows.push({ ...draft, rowClass: "annotation", rowKey: contentRowKey(draft.cells, unkeyed) });
+      rows.push({ ...draft, rowClass: "annotation", rowKey: contentRowKey(draft.cells, draft.rowNumber, unkeyed) });
       continue;
     }
     const repeat = (keys.get(folded) ?? 0) + 1;
@@ -354,7 +354,7 @@ function readQuestions(sheet: WorkbookSheet, issues: StructureIssue[]): SourceTa
     const draft: SourceRow = { rowClass: "data", rowNumber: row, rowKey: "", cells: record(row), labels };
     const question = collapsed(questionColumn === undefined ? "" : (cellText(draft, questionColumn) ?? ""));
     if (question === "") {
-      rows.push({ ...draft, rowClass: "annotation", rowKey: contentRowKey(draft.cells, unkeyed) });
+      rows.push({ ...draft, rowClass: "annotation", rowKey: contentRowKey(draft.cells, draft.rowNumber, unkeyed) });
       continue;
     }
     const choices = choicesColumn === undefined ? "" : collapsed(cellText(draft, choicesColumn) ?? "");
@@ -893,7 +893,10 @@ class PredictionMarketPlan {
     const held =
       labelled.length > 0 ||
       (await readDocuments(this.#db, [detailPath])).get(detailPath)?.data.replicatedSource !== undefined;
-    if (held) {
+    // Who may see the labels before scientific review is an open question (docs/MIGRATION_PLAN.md, section 11,
+    // question 7). Until it is answered they stay in the source records and in the items below, and the document
+    // that the team of the replication can read is written only where the run rehearses it.
+    if (held && this.#context.writes("replicatedLabels")) {
       builder.document({
         collection: "replicationDetail",
         ids: [replicationId],
@@ -1313,6 +1316,8 @@ export const importer: ImporterDefinition = {
   sourceKey: SOURCE_KEY,
   summary: "Prediction-market hypotheses: the hypotheses of every study, their links and the survey questions.",
   inputDescription: "the Excel export of the workbook",
+  // Its hypotheses belong to studies, all of which exist once the list of studies has been applied.
+  after: ["h", "d"],
   read,
   plan: (context) => new PredictionMarketPlan(context).build(),
 };

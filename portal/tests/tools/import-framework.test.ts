@@ -1,9 +1,11 @@
 // Integration tests of the import framework against the Firestore emulator: snapshot, plan,
 // preview, apply, idempotency, ownership of fields, the review queue, rollback and verification.
 // The input is the synthetic website fixture: every study, person and address in it is invented.
+import { writeFileSync } from "node:fs";
 import { COLLECTIONS, importBatchId, sourceRecordId } from "@eegml/shared";
-import { Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { ToolRefusal } from "../../tools/src/environment";
 import { APPLY_CHUNK_SIZE, applyDiff, ImportStopped } from "../../tools/src/import/apply";
 import { createdFields, IMPORT_ACTOR } from "../../tools/src/import/context";
 import {
@@ -12,10 +14,12 @@ import {
   websiteFixture,
   writeWebsiteFixture,
 } from "../../tools/src/import/fixtures/website";
+import { namingWorkbook } from "../../tools/src/import/fixtures/workbooks";
 import { SOURCE_DEFINITIONS } from "../../tools/src/import/registry";
 import { rollbackBatch } from "../../tools/src/import/rollback";
 import { compute, runImport } from "../../tools/src/import/run";
 import { compareSnapshot, recordRows } from "../../tools/src/import/snapshot";
+import { importer as naming } from "../../tools/src/import/sources/naming-conventions";
 import { importer as website } from "../../tools/src/import/sources/website-data";
 import { rowHash } from "../../tools/src/import/values";
 import { adminDb } from "../support/admin";
@@ -100,7 +104,7 @@ describe("snapshot", () => {
     // An empty field is stored as an empty cell, never as an empty text.
     const gamma = replications.find((record) => record.rowKey === "alphagamma2002");
     expect(gamma?.raw).toMatchObject({ PublicationId: null, PublicationYear: "2002a" });
-    const hash = rowHash(cells);
+    const hash = rowHash(cells, 4);
     expect(delta).toMatchObject({
       id: sourceRecordId("h", "replications", "delta1999", hash),
       rawHash: hash,
@@ -191,7 +195,14 @@ describe("preview and apply", () => {
   it("previews what an apply would write, per collection, and the apply then writes exactly that", async () => {
     const data = input();
     const preview = await run(website, data, "preview");
-    expect(preview.collections.replications).toEqual({ created: 6, changed: 0, matched: 0, unchanged: 0, fields: {} });
+    expect(preview.collections.replications).toEqual({
+      created: 6,
+      changed: 0,
+      removed: 0,
+      matched: 0,
+      unchanged: 0,
+      fields: {},
+    });
     expect(preview.collections.persons?.created).toBe(15);
     expect(preview.collections.manuscripts?.created).toBe(5);
     expect(await entityCount()).toBe(0);
@@ -432,6 +443,101 @@ describe("ownership of fields", () => {
     expect(items.find((item) => item.status === "open")?.candidates[1]).toMatchObject({ valueSource: "Memory" });
   });
 
+  it("leaves a field cleared that a person has cleared in the portal, and queues the source value beside it", async () => {
+    const data = input();
+    await run(website, data, "apply");
+    // A person removes the theme of a replication and the name of a vocabulary term: a member document and a public one.
+    await adminDb.doc("replications/Delta1999").update({ theme: FieldValue.delete() });
+    const [termId] = [...(await documentsOf("vocabularyTerms"))].find(([, term]) => term.kind === "theme") ?? [""];
+    await adminDb.doc(`vocabularyTerms/${termId}`).update({ name: FieldValue.delete() });
+
+    const second = await run(website, data, "apply");
+    expect((await adminDb.doc("replications/Delta1999").get()).data()).not.toHaveProperty("theme");
+    expect((await adminDb.doc(`vocabularyTerms/${termId}`).get()).data()).not.toHaveProperty("name");
+    expect(second.conflicts).toBe(2);
+    expect(second.items.raise).toEqual({ valueConflict: 2 });
+    const [item] = (await conflictsOf("Delta1999")).filter((candidate) => candidate.field === "theme");
+    expect(item?.candidates).toEqual([
+      { key: expect.stringMatching(/^portal:[0-9a-f]{20}$/), valueSource: "(cleared)" },
+      expect.objectContaining({ key: expect.stringMatching(/^h:/), valueSource: "Attention" }),
+    ]);
+    // The cleared fields stay cleared on every later run, which writes nothing.
+    const third = await run(website, data, "apply");
+    expect(third).toMatchObject({ documentsWritten: 0, conflicts: 2 });
+    expect((await adminDb.doc("replications/Delta1999").get()).data()).not.toHaveProperty("theme");
+  });
+
+  it("does not add a member again that a person has removed from a list, in a document of any class", async () => {
+    const data = input();
+    await run(website, data, "apply");
+    // A reviewer detaches a study from a spelling of the folded lookup (members read it), a person from an
+    // identity key and a spelling from an institution candidate (restricted), and a label from a term (public).
+    const lists = [
+      ["studyAliasIndex", "replicationIds"],
+      ["identityKeys", "entityIds"],
+      ["institutionCandidates", "affiliationsSource"],
+      ["vocabularyTerms", "labelsSource"],
+    ] as const;
+    const shortened = new Map<string, unknown[]>();
+    for (const [collection, field] of lists) {
+      const [id, document] = [...(await documentsOf(collection))]
+        .sort(([a], [b]) => (a < b ? -1 : 1))
+        .find(([, candidate]) => Array.isArray(candidate[field]) && candidate[field].length > 0) ?? ["", {}];
+      expect(id, collection).not.toBe("");
+      const kept = (document[field] as unknown[]).slice(1);
+      await adminDb.doc(`${collection}/${id}`).update({ [field]: kept });
+      shortened.set(`${collection}/${id}`, kept);
+    }
+    const second = await run(website, data, "apply");
+    for (const [index, [, field]] of lists.entries()) {
+      const [path, kept] = [...shortened][index] ?? ["", []];
+      expect((await adminDb.doc(path).get()).get(field), path).toEqual(kept);
+    }
+    expect(second.conflicts).toBe(4);
+    expect(second.items.raise).toEqual({ valueConflict: 4 });
+    const raised = new Map(
+      (await reconciliationItems())
+        .filter((item) => item.batchId === second.batchId)
+        .map((item) => [
+          String(item.field),
+          (item.candidates as { valueSource?: string }[]).map((candidate) => candidate.valueSource),
+        ]),
+    );
+    expect(raised.get("replicationIds")).toEqual(expect.arrayContaining(["(memberRemoved)"]));
+    expect(raised.get("labelsSource")).toEqual(expect.arrayContaining(["(memberRemoved)"]));
+    // A removed member of a restricted document is named by its field and its record. Its value is not shown.
+    expect(raised.get("entityIds")).toEqual([undefined, undefined]);
+    expect(raised.get("affiliationsSource")).toEqual([undefined, undefined]);
+    // The removals stand on every later run, which writes nothing.
+    expect(await run(website, data, "apply")).toMatchObject({ documentsWritten: 0, conflicts: 4 });
+  });
+
+  it("adds a member that the source states for the first time, and one that a rolled-back batch had added", async () => {
+    await run(website, input(), "apply");
+    // A further member whose affiliation is another spelling of one that an institution candidate holds already.
+    const more = input((fixture) => {
+      fixture.members.push({
+        SequenceNumber: "8",
+        PersonId: "max-madeup",
+        FullName: "Max Madeup",
+        Affiliation: "imaginary  college, NOWHERELAND",
+        Country: "Nowhereland",
+      });
+    });
+    const second = await run(website, more, "apply");
+    expect(second.conflicts).toBe(0);
+    expect(second.collections.institutionCandidates).toMatchObject({ created: 0, changed: 1 });
+    const [candidate] = [...(await documentsOf("institutionCandidates")).values()].filter(
+      (document) => document.affiliationFolded === "imaginarycollegenowhereland",
+    );
+    expect(candidate?.affiliationsSource).toEqual(["Imaginary College, Nowhereland", "imaginary  college, NOWHERELAND"]);
+    // A batch that was rolled back added nothing that counts: a new apply adds the member again.
+    await rollbackBatch(adminDb, second.batchId);
+    const again = await run(website, more, "apply");
+    expect(again.conflicts).toBe(0);
+    expect(again.changesCommitted).toBe(second.changesCommitted);
+  });
+
   it("lets a field follow the source again once the edit and the source agree", async () => {
     await run(website, input(), "apply");
     await adminDb.doc("replications/Delta1999").update({ theme: "Memory" });
@@ -637,6 +743,50 @@ describe("rollback", () => {
     expect((await adminDb.doc(COLLECTIONS.importBatches.docPath(applied.batchId)).get()).get("status")).toBe("applied");
   });
 
+  it("carries on where an earlier attempt stopped: what is reversed already is skipped, and the rest is reversed", async () => {
+    await run(website, input(), "apply");
+    const changed = await run(
+      website,
+      input((fixture) => {
+        row(fixture.replications, "StudyId", "Iota2004").Theme = "Memory";
+        fixture.members.push({
+          SequenceNumber: "8",
+          PersonId: "max-madeup",
+          FullName: "Max Madeup",
+          Affiliation: "Madeup Institute, Nowhereland",
+          Country: "Nowhereland",
+        });
+      }),
+      "apply",
+    );
+    const log = await adminDb.collection(COLLECTIONS.importBatchChanges.collectionPath(changed.batchId)).get();
+    // An attempt that stopped after its first piece left some documents in their earlier state and the batch as applied.
+    const created = log.docs.filter(
+      (entry) => entry.get("before") === null && !String(entry.get("documentPath")).startsWith("reconciliationItems/"),
+    );
+    const updated = log.docs.find((entry) => entry.get("documentPath") === "replications/Iota2004");
+    expect(created.length).toBeGreaterThan(2);
+    await adminDb.doc(String(created[0]?.get("documentPath"))).delete();
+    await adminDb.doc("replications/Iota2004").set(updated?.get("before"));
+    // A document that a person has edited since would still stop the rollback as a whole.
+    await adminDb.doc(String(created[1]?.get("documentPath"))).update({ updatedBy: "uid-of-a-person" });
+    expect(await rollbackBatch(adminDb, changed.batchId)).toEqual({
+      status: "refused",
+      changedDocuments: [created[1]?.get("documentPath")],
+    });
+    await adminDb.doc(String(created[1]?.get("documentPath"))).set(created[1]?.get("after"));
+
+    const result = await rollbackBatch(adminDb, changed.batchId);
+    expect(result).toMatchObject({ status: "rolledBack", removed: created.length - 1 });
+    for (const entry of created) {
+      expect((await adminDb.doc(String(entry.get("documentPath"))).get()).exists, entry.get("documentPath")).toBe(false);
+    }
+    expect((await adminDb.doc("replications/Iota2004").get()).get("theme")).not.toBe("Memory");
+    expect((await adminDb.doc(COLLECTIONS.importBatches.docPath(changed.batchId)).get()).get("status")).toBe(
+      "rolledBack",
+    );
+  });
+
   it("leaves an item in place that a reviewer has decided, and reports it", async () => {
     const applied = await run(website, input(), "apply");
     const [item] = (await reconciliationItems()).filter((candidate) => candidate.kind === "conflictingLead");
@@ -667,13 +817,22 @@ describe("verification", () => {
     expect(checks.map((check) => [check.key, check.passed])).toEqual([
       ["structure", true],
       ["rowAccounting", true],
+      ["rowBaseline", true],
       ["rawFidelity", true],
       ["secondRun", true],
       ["traceToSource", true],
       ["noOrphans", true],
+      ["studyRegistry", true],
+      ["derivedValues", true],
+      ["blankAndZero", true],
       ["noAddress", true],
     ]);
     expect(differences(before, await allDocuments())).toEqual({ created: [], removed: [], rewritten: [] });
+    // The identifiers of the six studies stay apart after folding, and no study has two DOIs.
+    expect(checks.find((check) => check.key === "studyRegistry")?.detail).toContain(
+      "6 replications, 0 with a programme identifier, no number of studies stated; 0 identifiers collide after folding; " +
+        "0 studies have more than one DOI",
+    );
     // Every row is accounted for: imported, held in the queue, or kept raw for a stated reason.
     const accounting = checks.find((check) => check.key === "rowAccounting")?.detail ?? "";
     expect(accounting).toContain("replications: 6 data rows = 6 imported + 0 queued + 0 raw only");
@@ -714,12 +873,250 @@ describe("verification", () => {
     expect(await failed(data)).toEqual(expect.arrayContaining(["secondRun", "traceToSource", "noOrphans"]));
   });
 
-  it("fails when a document that members can read holds an address", async () => {
+  it("fails when a document that members can read holds an address, however it came there", async () => {
+    const data = input();
+    await run(website, data, "apply");
+    const [person] = [...(await documentsOf("persons")).keys()].sort();
+    // The address did not come from the source, so only the check of the stored documents can find it.
+    await adminDb.doc(`persons/${person}`).update({ custom: { note: "write to hal@example.org" } });
+    expect(await failed(data)).toEqual(["noAddress"]);
+  });
+
+  it("compares the rows of each tab with the baseline that the operator states, by title or by key", async () => {
+    const data = input();
+    await run(website, data, "apply");
+    const baseline = {
+      rows: {
+        replications: { header: 1, data: 6 },
+        publications: { data: 5 },
+        people: { data: 8 },
+        members: { data: 7, blank: 0 },
+        files: { data: 7 },
+      },
+    };
+    const rowBaseline = async (extra: Parameters<typeof verify>[2]) =>
+      (await verify(website, data, extra)).find((check) => check.key === "rowBaseline");
+    expect(await rowBaseline({ baseline, requireBaseline: true })).toMatchObject({
+      passed: true,
+      detail: "7 counts of 5 tabs compared with the stated baseline, all equal",
+    });
+    // A row more or less than stated fails, and the detail names the tab, the class and the two counts.
+    const fewer = { rows: { ...baseline.rows, members: { data: 6 } } };
+    expect(await rowBaseline({ baseline: fewer })).toMatchObject({
+      passed: false,
+      detail: expect.stringContaining("members: 7 data rows where 6 are stated"),
+    });
+    // A tab without a baseline, and a baseline for a tab that the source does not hold, fail as well.
+    const { files: _files, ...withoutFiles } = baseline.rows;
+    expect((await rowBaseline({ baseline: { rows: withoutFiles } }))?.detail).toContain("files: no baseline");
+    expect((await rowBaseline({ baseline: { rows: { ...baseline.rows, archive: { data: 1 } } } }))?.passed).toBe(false);
+    // On the command line a source without any baseline is not verified. A test of one importer may leave it out.
+    expect(await rowBaseline({ requireBaseline: true })).toMatchObject({ passed: false });
+    expect(await rowBaseline({})).toMatchObject({ passed: true });
+  });
+
+  it("checks the registry of studies: the stated number, distinct identifiers after folding and one DOI for each", async () => {
+    const data = input();
+    await run(website, data, "apply");
+    const registry = async (studies?: number) =>
+      (await verify(website, data, studies === undefined ? {} : { baseline: { studies } })).find(
+        (check) => check.key === "studyRegistry",
+      );
+    // The number of studies is compared only once the list of studies has been applied.
+    expect(await registry(27)).toMatchObject({ passed: true, detail: expect.stringContaining("not yet comparable") });
+    // A second DOI for one study, as another source would write it under a mistyped DOI, fails the check.
+    const [lookup] = [...(await documentsOf("integrationMappings"))].filter(
+      ([, mapping]) => mapping.entityType === "replication",
+    );
+    const [, mapping] = lookup ?? ["", {}];
+    await adminDb.doc("integrationMappings/doi__replication__0123456789abcdef0123").set({
+      ...mapping,
+      externalId: "10.1000/an-invented-other-doi",
+    });
+    expect(await registry()).toMatchObject({
+      passed: false,
+      detail: expect.stringContaining(`1 studies have more than one DOI across the sources (${mapping?.entityId})`),
+    });
+    await adminDb.doc("integrationMappings/doi__replication__0123456789abcdef0123").delete();
+    // Two identifiers that fold alike fail it too.
+    const delta = (await adminDb.doc("replications/Delta1999").get()).data() ?? {};
+    await adminDb.doc("replications/delta1999").set({ ...delta, studyKey: "delta1999" });
+    expect(await registry()).toMatchObject({
+      passed: false,
+      detail: expect.stringContaining("2 identifiers collide after folding (Delta1999, delta1999)"),
+    });
+  });
+
+  it("stores its report on the latest applied batch of the source, which is verified only while every check passes", async () => {
+    const data = input();
+    const preview = await run(website, data, "preview");
+    const applied = await run(website, data, "apply");
+    const batch = async (id: string) => (await adminDb.doc(COLLECTIONS.importBatches.docPath(id)).get()).data();
+    const checks = await verify(website, data, { record: true });
+    expect((await batch(applied.batchId))?.verification).toMatchObject({
+      passed: true,
+      checks: checks.map((check) => ({ key: check.key, passed: true, detail: check.detail })),
+    });
+    expect((await batch(applied.batchId))?.status).toBe("applied");
+    expect(await batch(preview.batchId)).not.toHaveProperty("verification");
+    expect(await schemaProblems()).toEqual([]);
+    // A later verification that fails replaces the report: the batch no longer counts as verified.
+    const [person] = [...(await documentsOf("persons")).keys()].sort();
+    await adminDb.doc(`persons/${person}`).delete();
+    await verify(website, data, { record: true });
+    const stored = (await batch(applied.batchId))?.verification as { passed: boolean; checks: { key: string; passed: boolean }[] };
+    expect(stored.passed).toBe(false);
+    expect(stored.checks.filter((check) => !check.passed).map((check) => check.key)).toEqual(
+      expect.arrayContaining(["secondRun", "noOrphans"]),
+    );
+  });
+});
+
+describe("the privacy guard", () => {
+  it("blocks a batch whose plan would put an address where every member can read it, at the preview already", async () => {
     const data = input((fixture) => {
       row(fixture.people, "PersonId", "hnobody").Affiliation = "Imaginary College (write to hal@example.org)";
     });
+    const preview = await run(website, data, "preview");
+    expect(preview.blocking.map((check) => check.check)).toEqual(["privacy/address"]);
+    expect(preview.blocking[0]?.message).toContain("personAffiliations");
+    expect(preview.blocking[0]?.message).toContain("affiliationSource");
+    // The item that explains the block is written at once. It names the row and the field, and no value.
+    const [item] = await reconciliationItems();
+    expect(item).toMatchObject({ kind: "privacyReview", status: "open", field: "address" });
+    expect(JSON.stringify(item)).not.toContain("example.org");
+    expect(JSON.stringify(preview)).not.toContain("example.org");
+
+    // An apply writes no entity at all, and the batch record says that it failed.
+    const applied = await run(website, data, "apply");
+    expect(applied).toMatchObject({ status: "failed", changesCommitted: 0 });
+    expect(await entityCount()).toBe(0);
+    for (const [path, document] of await allDocuments()) {
+      if (path.startsWith("sourceRecords/")) continue;
+      expect(JSON.stringify(document.data), path).not.toContain("hal@example.org");
+    }
+    // Once the source is corrected the import goes through, and the item is closed by the importer.
+    const corrected = await run(website, input(), "apply");
+    expect(corrected).toMatchObject({ status: "applied", blocking: [] });
+    expect(corrected.items.clear).toEqual({ privacyReview: 1 });
+  });
+});
+
+describe("the order of the sources", () => {
+  const namingFile = async () => {
+    const file = `${temporaryDirectory()}/naming.xlsx`;
+    writeFileSync(file, await namingWorkbook());
+    return file;
+  };
+
+  it("refuses a source whose earlier sources have no applied batch, before anything is written", async () => {
+    const file = await namingFile();
+    const before = await allDocuments();
+    for (const mode of ["preview", "apply"] as const) {
+      await expect(run(naming, file, mode, { order: "required" })).rejects.toThrow(ToolRefusal);
+      await expect(run(naming, file, mode, { order: "required" })).rejects.toThrow(/after source h .*section 5/);
+    }
+    expect(differences(before, await allDocuments())).toEqual({ created: [], removed: [], rewritten: [] });
+    // A preview of the earlier source is no applied batch, and neither is one that was rolled back.
+    await run(website, input(), "preview", { order: "required" });
+    await expect(run(naming, file, "apply", { order: "required" })).rejects.toThrow(ToolRefusal);
+    const applied = await run(website, input(), "apply", { order: "required" });
+    await rollbackBatch(adminDb, applied.batchId);
+    await expect(run(naming, file, "apply", { order: "required" })).rejects.toThrow(ToolRefusal);
+  });
+
+  it("runs a source once every earlier source has been applied", async () => {
+    await run(website, input(), "apply", { order: "required" });
+    const report = await run(naming, await namingFile(), "apply", { order: "required" });
+    expect(report.status).toBe("applied");
+    expect(naming.after).toEqual(["h"]);
+    expect(website.after).toBeUndefined();
+  });
+});
+
+describe("the record of the input", () => {
+  it("names a workbook neutrally, whatever its file is called, and identifies it by its hash", async () => {
+    await run(website, input(), "apply");
+    // An export is often named after the identifier of its document, which is private.
+    const file = `${temporaryDirectory()}/an-invented-identifier-of-the-workbook - Sheet1.xlsx`;
+    writeFileSync(file, await namingWorkbook());
+    const report = await run(naming, file, "preview");
+    const batch = (await adminDb.doc(COLLECTIONS.importBatches.docPath(report.batchId)).get()).data();
+    expect(batch?.inputFiles).toEqual([{ name: "input.xlsx", sha256: batch?.contentHash }]);
+    for (const [path, document] of await allDocuments()) {
+      expect(`${path} ${JSON.stringify(document.data)}`, path).not.toContain("an-invented-identifier-of-the-workbook");
+    }
+  });
+});
+
+describe("a renamed natural key", () => {
+  const renamed = (to: string) =>
+    input((fixture) => {
+      row(fixture.members, "PersonId", "lu-mockup").PersonId = to;
+    });
+  const people = async () => (await adminDb.collection("persons").count().get()).data().count;
+  const renameItems = async () =>
+    (await reconciliationItems()).filter(
+      (item) => item.kind === "missingFromSource" && JSON.stringify(item.candidates).includes("renamedTo"),
+    );
+
+  it("presents the row that has gone and the row that replaces it together, and creates no second record", async () => {
+    await run(website, input(), "apply");
+    const before = await people();
+    const data = renamed("lu-mock-up");
+    const second = await run(website, data, "apply");
+    expect(await people()).toBe(before);
+    expect(second.items.raise).toEqual({ missingFromSource: 1 });
+    expect(second.sourceRecords).toMatchObject({ created: 1, missing: 1 });
+    expect(second.collections.persons?.created ?? 0).toBe(0);
+    expect(second.collections.identityKeys?.created ?? 0).toBe(0);
+    const [item] = await renameItems();
+    // One item names both rows, and the records that the earlier row had produced.
+    expect((item?.candidates as { key: string }[]).map((candidate) => candidate.key.split(":")[0])).toEqual([
+      "h/members/gone",
+      "h/members/renamedTo",
+    ]);
+    expect(item?.entityRefs).toEqual(expect.arrayContaining([expect.objectContaining({ entityType: "person" })]));
+    // The new row waits in the queue: it is accounted for and writes nothing.
+    const members = second.tabs.find((tab) => tab.tabKey === "members");
+    expect(members).toMatchObject({ imported: 6, queued: 1 });
+    // Nothing more happens on the next run, although the new row is no longer new to the snapshot.
+    const third = await run(website, data, "apply");
+    expect(third).toMatchObject({ documentsWritten: 0 });
+    expect(await people()).toBe(before);
+    expect((await verify(website, data)).filter((check) => !check.passed)).toEqual([]);
+  });
+
+  it("treats a key that differs by case alone in the same way", async () => {
+    await run(website, input(), "apply");
+    const before = await people();
+    await run(website, renamed("Lu-Mockup"), "apply");
+    expect(await people()).toBe(before);
+    expect(await renameItems()).toHaveLength(1);
+  });
+
+  it("imports the new row once a reviewer has dismissed the pair, and pairs no row that differs in more than its key", async () => {
+    await run(website, input(), "apply");
+    const before = await people();
+    const data = renamed("lu-mock-up");
     await run(website, data, "apply");
-    expect(await failed(data)).toEqual(["noAddress"]);
+    const [item] = await renameItems();
+    await adminDb.doc(`reconciliationItems/${item?.id}`).update({ status: "dismissed", resolvedBy: "uid-of-a-reviewer" });
+    const report = await run(website, data, "apply");
+    expect(report.collections.persons?.created).toBe(1);
+    expect(await people()).toBe(before + 1);
+    // A row that has gone and a row with another key and another name are two things: the usual item, and a new person.
+    await freshDatabase();
+    await run(website, input(), "apply");
+    const replaced = input((fixture) => {
+      const lu = row(fixture.members, "PersonId", "lu-mockup");
+      lu.PersonId = "lou-mockup";
+      lu.FullName = "Lou Mockup";
+    });
+    const other = await run(website, replaced, "apply");
+    expect(other.collections.persons?.created).toBe(1);
+    expect(await renameItems()).toEqual([]);
+    expect(other.items.raise).toMatchObject({ missingFromSource: 1 });
   });
 });
 

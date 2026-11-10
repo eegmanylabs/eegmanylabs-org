@@ -31,16 +31,20 @@ import type {
   ImporterDefinition,
   ImportInput,
   ImportPlan,
+  PlannedItem,
   RecordedRow,
   RowClass,
   SourceReading,
 } from "./model";
 import { PlanBuilder } from "./plan";
 import { comparePlan, entityRefOf, type ItemAction, type PlanDiff } from "./preview";
+import { guardPlan, withGuard } from "./privacy-guard";
 import { type ItemBuilders, itemBuilders } from "./reconcile";
 import { type PrivateLocations, sourceDefinition, syncRegistry } from "./registry";
 import { compareSnapshot, recordRows, type SnapshotState, writeSnapshot } from "./snapshot";
 import { StudyResolver } from "./studies";
+import { canonicalJson } from "./values";
+import { DEFAULT_TARGET, type RunTarget, requireReleased, writesWithheld } from "./withheld";
 
 export interface TabAccount {
   readonly tabKey: string;
@@ -61,6 +65,8 @@ export interface TabAccount {
 export interface CollectionAccount {
   created: number;
   changed: number;
+  /** Documents that the run removes: the special-category cells of a row once they stand in their own document. */
+  removed: number;
   /** Documents whose values stay and whose source records are brought up to date. */
   matched: number;
   unchanged: number;
@@ -105,6 +111,13 @@ export interface RunOptions {
   readonly locations?: PrivateLocations;
   /** A previewed batch that the apply must match. */
   readonly previewBatchId?: string;
+  /** Where the run writes. Without it: the emulators, with no withheld output rehearsed. */
+  readonly target?: RunTarget;
+  /**
+   * `notChecked` lets a source run before the sources that the plan puts ahead of it. It is for
+   * the test or the rehearsal of one importer by itself, and the command line never says it.
+   */
+  readonly order?: "required" | "notChecked";
   readonly now?: Date;
 }
 
@@ -128,16 +141,95 @@ function planOfIssues(sourceKey: string, reading: SourceReading, items: ItemBuil
   return builder.build();
 }
 
+/** A row that has gone together with the row that probably replaces it under another key. */
+interface RenamePair {
+  readonly gone: { readonly id: string; readonly tabKey: string; readonly rowKey: string };
+  readonly row: RecordedRow;
+  readonly item: PlannedItem;
+}
+
+/**
+ * Pairs a row that has gone from the source with a data row of the same tab whose cells equal
+ * its cells in every column but one: a renamed natural key (docs/MIGRATION_PLAN.md, section 6).
+ * The two are presented together in one item, and the new row waits in the queue instead of
+ * creating a second record beside the first. A row counts as new while this run sees it for the
+ * first time, or while the item that pairs it is open or resolved. An item that a reviewer has
+ * dismissed says that the rows are two records, and the new row is imported.
+ */
+async function probableRenames(
+  context: RunContext,
+  rows: ReadonlyMap<string, readonly RecordedRow[]>,
+  state: SnapshotState,
+  items: ItemBuilders,
+): Promise<RenamePair[]> {
+  if (state.missing.length === 0) return [];
+  const stored = await readDocuments(
+    context.db,
+    state.missing.map((record) => COLLECTIONS.sourceRecords.docPath(record.id)),
+  );
+  const created = new Set(state.created.map((row) => row.recordId));
+  const candidates: { readonly gone: RenamePair["gone"]; readonly row: RecordedRow; readonly item: PlannedItem }[] = [];
+  for (const gone of state.missing) {
+    const raw = stored.get(COLLECTIONS.sourceRecords.docPath(gone.id))?.data.raw as Record<string, unknown> | undefined;
+    if (raw === undefined) continue;
+    const labels = Object.keys(raw).sort();
+    for (const row of rows.get(gone.tabKey) ?? []) {
+      if (row.rowClass !== "data" || row.cellLevel === true || row.rowKey === gone.rowKey) continue;
+      if (canonicalJson([...row.labels].sort()) !== canonicalJson(labels)) continue;
+      const differing = row.labels.filter(
+        (label, index) => canonicalJson(raw[label] ?? null) !== canonicalJson(row.cells[index] ?? null),
+      );
+      if (differing.length !== 1) continue;
+      const source = `${context.sourceKey}/${gone.tabKey}`;
+      candidates.push({
+        gone,
+        row,
+        item: items.missingFromSource({
+          subject: `${source}/rename/${gone.id}`,
+          claims: [
+            { source: `${source}/gone`, value: gone.id, sourceRecordId: gone.id },
+            { source: `${source}/renamedTo`, value: row.recordId, sourceRecordId: row.recordId },
+          ],
+        }),
+      });
+    }
+  }
+  // One row that could replace two, and two rows that could replace one, are no pair. Each is then treated by itself.
+  const count = <Key>(keys: readonly Key[]) => {
+    const counts = new Map<Key, number>();
+    for (const key of keys) counts.set(key, (counts.get(key) ?? 0) + 1);
+    return counts;
+  };
+  const perGone = count(candidates.map((candidate) => candidate.gone.id));
+  const perRow = count(candidates.map((candidate) => candidate.row.recordId));
+  const single = candidates.filter(
+    (candidate) => perGone.get(candidate.gone.id) === 1 && perRow.get(candidate.row.recordId) === 1,
+  );
+  const standing = await readDocuments(
+    context.db,
+    single
+      .filter((candidate) => !created.has(candidate.row.recordId))
+      .map((candidate) => COLLECTIONS.reconciliationItems.docPath(candidate.item.fingerprint)),
+  );
+  return single.filter((candidate) => {
+    if (created.has(candidate.row.recordId)) return true;
+    const status = standing.get(COLLECTIONS.reconciliationItems.docPath(candidate.item.fingerprint))?.data.status;
+    return status === "open" || status === "resolved";
+  });
+}
+
 /**
  * Adds the items for what has gone from the source: a row that is absent from the reading, and a
  * document that an earlier revision of a row produced and that the plan no longer produces, as
- * an alias does whose value has changed. Nothing is deleted. A person decides.
+ * an alias does whose value has changed. A row that has gone and the row that probably replaces
+ * it are named in one item. Nothing is deleted. A person decides.
  */
 async function withDepartures(
   context: RunContext,
   plan: ImportPlan,
   state: SnapshotState,
   items: ItemBuilders,
+  renames: readonly RenamePair[],
 ): Promise<ImportPlan> {
   const gone = [...state.missing.map((record) => record.id), ...state.retired];
   if (gone.length === 0) return plan;
@@ -152,7 +244,8 @@ async function withDepartures(
       .get();
     for (const entry of entries.docs) {
       const path = entry.get("documentPath") as string;
-      if (planned.has(path) || path.startsWith(itemsPrefix)) continue;
+      // The entry of a special-category document names its collection only, and no document.
+      if (planned.has(path) || path.startsWith(itemsPrefix) || path.includes("{")) continue;
       for (const id of entry.get("sourceRecordIds") as string[]) {
         if (!piece.includes(id)) continue;
         const paths = derived.get(id) ?? new Set<string>();
@@ -180,9 +273,16 @@ async function withDepartures(
     const ids = entry.path.split("/").flatMap((part, index) => (part.startsWith("{") ? [segments[index] ?? ""] : []));
     return entityRefOf(entry.key, ids);
   };
+  const renamed = new Map(renames.map((pair) => [pair.gone.id, pair]));
   const additions = [];
   for (const record of state.missing) {
     const paths = [...(derived.get(record.id) ?? [])].sort();
+    const pair = renamed.get(record.id);
+    if (pair !== undefined) {
+      // The two rows are one question. The records that the earlier row produced are named, and none is touched.
+      additions.push({ ...pair.item, entityRefs: paths.flatMap((path) => refOfPath(path) ?? []) });
+      continue;
+    }
     additions.push(
       items.missingFromSource({
         subject: `${context.sourceKey}/${record.tabKey}/${record.id}`,
@@ -261,15 +361,18 @@ export function accountRows(
 function summarise(diff: PlanDiff): Pick<RunReport, "collections" | "items"> {
   const collections: Partial<Record<CollectionKey, CollectionAccount>> = {};
   const of = (collection: CollectionKey) => {
-    collections[collection] ??= { created: 0, changed: 0, matched: 0, unchanged: 0, fields: {} };
+    collections[collection] ??= { created: 0, changed: 0, removed: 0, matched: 0, unchanged: 0, fields: {} };
     return collections[collection];
   };
   for (const change of diff.changes) {
     const account = of(change.collection);
     if (change.operation === "create") account.created += 1;
+    else if (change.operation === "delete") account.removed += 1;
     else if (change.relation === "matched") account.matched += 1;
     else {
       account.changed += 1;
+      // Which field of a special-category document changes is said to nobody: the count of documents is enough.
+      if (entryOf(change.collection).dataClass === "special") continue;
       for (const field of change.changedFields) account.fields[field] = (account.fields[field] ?? 0) + 1;
     }
   }
@@ -309,7 +412,7 @@ function statsOf(report: Omit<RunReport, "status">): Record<string, number> {
     for (const [reason, count] of Object.entries(tab.rawOnly)) stats[`rows:${tab.tabKey}:rawOnly:${reason}`] = count;
   }
   for (const [collection, account] of Object.entries(report.collections)) {
-    for (const key of ["created", "changed", "matched", "unchanged"] as const) {
+    for (const key of ["created", "changed", "removed", "matched", "unchanged"] as const) {
       if (account[key] > 0) stats[`${key}:${collection}`] = account[key];
     }
   }
@@ -338,23 +441,40 @@ export async function compute(
   reading: SourceReading,
   rows: Map<string, RecordedRow[]>,
   state: SnapshotState,
+  target: RunTarget = DEFAULT_TARGET,
 ): Promise<Computation> {
   const items = itemBuilders(secret);
   const interpreted = reading.issues.length === 0;
-  const drafted = interpreted
+  // A row that probably replaces a row which has gone waits in the queue. The importer plans without it.
+  const renames = interpreted ? await probableRenames(context, rows, state, items) : [];
+  const waiting = new Set(renames.map((pair) => pair.row.recordId));
+  const visible =
+    waiting.size === 0
+      ? rows
+      : new Map([...rows].map(([tabKey, tab]) => [tabKey, tab.filter((row) => !waiting.has(row.recordId))]));
+  const stated = interpreted
     ? await importer.plan({
         sourceKey: importer.sourceKey,
         input,
-        rows,
+        rows: visible,
         secret,
         studies: new StudyResolver(context.db),
         identities: new IdentityResolver(context.db, secret),
         items,
         db: context.db,
+        writes: (output) => writesWithheld(target, output),
       })
     : planOfIssues(importer.sourceKey, reading, items);
-  const plan =
-    interpreted && drafted.blocking.length === 0 ? await withDepartures(context, drafted, state, items) : drafted;
+  // Nothing that fails the guard is compared with the database, let alone written.
+  const drafted = interpreted ? withGuard(stated, guardPlan(stated, rows), importer.sourceKey, items) : stated;
+  const departed =
+    interpreted && drafted.blocking.length === 0
+      ? await withDepartures(context, drafted, state, items, renames)
+      : drafted;
+  const plan: ImportPlan =
+    waiting.size === 0 || departed.blocking.length > 0
+      ? departed
+      : { ...departed, held: new Set([...departed.held, ...waiting]) };
   const tabs = accountRows(reading, rows, plan, interpreted && plan.blocking.length === 0);
   const unaccounted = tabs.filter((tab) => tab.unaccounted > 0);
   if (unaccounted.length > 0) {
@@ -368,8 +488,35 @@ export async function compute(
     ownRecordIds: state.ownRecordIds,
     items,
     complete: plan.blocking.length === 0,
+    specialRows: [...rows.values()].flat().filter((row) => Object.keys(row.special ?? {}).length > 0),
   });
   return { reading, rows, state, plan, diff, tabs };
+}
+
+/**
+ * Refuses a run while a source that the plan puts ahead of this one has no applied batch
+ * (docs/MIGRATION_PLAN.md, section 5). The order decides which source creates a record and which
+ * source a shared field follows, so it is no choice of the operator.
+ */
+async function requireOrder(db: Firestore, importer: ImporterDefinition): Promise<void> {
+  const waitingFor: string[] = [];
+  for (const sourceKey of importer.after ?? []) {
+    const applied = await db
+      .collection(COLLECTIONS.importBatches.collectionPath())
+      .where("sourceKey", "==", sourceKey)
+      .where("mode", "==", "apply")
+      .where("status", "==", "applied")
+      .limit(1)
+      .get();
+    if (applied.empty) waitingFor.push(sourceKey);
+  }
+  if (waitingFor.length > 0) {
+    throw new ToolRefusal(
+      `Refusing to run: source ${importer.sourceKey} is imported after ${waitingFor.length === 1 ? "source" : "sources"} ` +
+        `${waitingFor.join(", ")} (docs/MIGRATION_PLAN.md, section 5), and no applied batch of ${waitingFor.join(", ")} exists. ` +
+        "Apply the earlier sources first.",
+    );
+  }
 }
 
 async function requireMatchingPreview(
@@ -409,8 +556,17 @@ export async function runImport(options: RunOptions): Promise<RunReport> {
     ...options.locations,
     ...(derived === undefined || importer.location === undefined ? {} : { [derived.key]: importer.location }),
   };
+  const target = options.target ?? DEFAULT_TARGET;
+  if (options.order !== "notChecked") await requireOrder(db, importer);
+  if (mode === "apply" && importer.withheld !== undefined) {
+    requireReleased(target, importer.withheld, importer.sourceKey);
+  }
   const started = options.now ?? new Date();
-  const reading = await importer.read(input, { secret });
+  const confirmedHeaders = locations[importer.sourceKey]?.confirmedHeaders;
+  const reading = await importer.read(input, {
+    secret,
+    ...(confirmedHeaders === undefined ? {} : { confirmedHeaders }),
+  });
   const batchId = importBatchId(started, reading.contentHash);
   const context: RunContext = { db, sourceKey: importer.sourceKey, batchId, now: Timestamp.fromDate(started) };
   const batchEntry = entryOf("importBatches");
@@ -446,7 +602,7 @@ export async function runImport(options: RunOptions): Promise<RunReport> {
     const state = await compareSnapshot(context, rows);
     const snapshot = await writeSnapshot(context, state, input.observedOn);
     documentsWritten += snapshot.writes;
-    const { plan, diff, tabs } = await compute(context, importer, input, secret, reading, rows, state);
+    const { plan, diff, tabs } = await compute(context, importer, input, secret, reading, rows, state, target);
 
     const blocked = plan.blocking.length > 0;
     let changesCommitted = 0;

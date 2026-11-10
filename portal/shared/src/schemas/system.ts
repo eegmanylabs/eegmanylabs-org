@@ -40,6 +40,7 @@ import {
  * | `role.proposed`                 | A role implied by imported data is created and awaits approval     |
  * | `role.granted`                  | A role assignment becomes active                                   |
  * | `role.revoked`                  | A role assignment is revoked                                       |
+ * | `role.expired`                  | The scheduled sweep ends a role assignment at its expiry time      |
  * | `capability.granted`            | A named capability is granted to an account                        |
  * | `capability.revoked`            | A named capability grant is revoked                                |
  * | `roleCapabilities.changed`      | An override of the capability matrix is set or cleared             |
@@ -69,6 +70,7 @@ export const AUDIT_ACTIONS = [
   "role.proposed",
   "role.granted",
   "role.revoked",
+  "role.expired",
   "capability.granted",
   "capability.revoked",
   "roleCapabilities.changed",

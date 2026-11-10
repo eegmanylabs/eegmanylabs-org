@@ -6,6 +6,18 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { MIN_HASH_SECRET_BYTES, z } from "@eegml/shared";
 import { ToolRefusal } from "../environment";
+import { ROW_CLASSES } from "./model";
+import { WITHHELD_OUTPUT_KEYS } from "./withheld";
+
+/**
+ * The rows that each tab of a source is expected to hold, by the title or the key of the tab and
+ * by the class of row. `import verify` compares a fresh reading with it, and a difference stands
+ * until the operator has explained it by stating the new numbers here.
+ */
+const baselineSchema = z.record(
+  z.string().min(1).max(300),
+  z.partialRecord(z.enum(ROW_CLASSES), z.number().int().min(0)),
+);
 
 const privateSourceSchema = z.strictObject({
   /** The identifier that the host gives the document. */
@@ -14,6 +26,14 @@ const privateSourceSchema = z.strictObject({
   url: z.url({ protocol: /^https?$/ }).optional(),
   /** The address of the anonymous XLSX export, for a sheet that anyone with the link can read. */
   exportUrl: z.url({ protocol: /^https?$/ }).optional(),
+  baseline: baselineSchema.optional(),
+  /**
+   * The header lists that a maintainer has confirmed, by tab title, for a tab whose columns no
+   * description of the source states. Until a list is stored here the importer keeps the header
+   * of such a tab and nothing below it, and it reads the rows only while the header still equals
+   * the stored list.
+   */
+  confirmedHeaders: z.record(z.string().min(1).max(300), z.array(z.string().max(300)).max(200)).optional(),
 });
 export type PrivateSource = z.output<typeof privateSourceSchema>;
 
@@ -41,6 +61,7 @@ const contributorSheetSchema = z.strictObject({
   url: z.url({ protocol: /^https?$/ }).optional(),
   exportUrl: z.url({ protocol: /^https?$/ }).optional(),
   columnOverrides: z.array(columnOverrideSchema).max(10).optional(),
+  baseline: baselineSchema.optional(),
 });
 export type PrivateContributorSheet = z.output<typeof contributorSheetSchema>;
 
@@ -56,6 +77,13 @@ const privateConfigSchema = z.strictObject({
    * with `--sheet`. A sheet that is not registered here is refused.
    */
   contributorSheets: z.record(z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/), contributorSheetSchema).optional(),
+  /**
+   * The withheld outputs that this environment writes for rehearsal (withheld.ts). It is read
+   * for the emulators only: a real project never receives a withheld output, whatever stands here.
+   */
+  rehearse: z.array(z.enum(WITHHELD_OUTPUT_KEYS)).max(WITHHELD_OUTPUT_KEYS.length).default([]),
+  /** The number of studies of the programme, which the verification compares once the list of studies is applied. */
+  expectedStudies: z.number().int().min(1).max(10_000).optional(),
 });
 export type PrivateConfig = z.output<typeof privateConfigSchema>;
 
@@ -88,4 +116,19 @@ export function loadPrivateConfig(configPath: string = DEFAULT_CONFIG_PATH): Pri
     );
   }
   return result.data;
+}
+
+/** The shortest identifier of a source document that a file name is searched for. A shorter text names nothing. */
+const MIN_IDENTIFIER_LENGTH = 8;
+
+/** The identifiers that the hosts give the source documents of a configuration. They are private. */
+export function externalIdentifiers(config: PrivateConfig): string[] {
+  return [...Object.values(config.sources), ...Object.values(config.contributorSheets ?? {})]
+    .flatMap((source) => (source.externalId === undefined ? [] : [source.externalId]))
+    .filter((identifier) => identifier.length >= MIN_IDENTIFIER_LENGTH);
+}
+
+/** Whether a file name holds the identifier of a source document, as an export that a browser has named often does. */
+export function namesSourceDocument(fileName: string, config: PrivateConfig): boolean {
+  return externalIdentifiers(config).some((identifier) => fileName.includes(identifier));
 }

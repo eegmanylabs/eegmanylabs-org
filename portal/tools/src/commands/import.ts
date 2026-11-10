@@ -8,6 +8,7 @@
 //   import show <batch>
 //   import rollback <batch>
 //   import verify <source> --input <path> [--sheet <name>] [--observed-on <date>] [--config <file>]
+//   import purge-special (--source <source> | --batch <batch>)
 //
 // `--sheet` names one member of a family of sources, such as one contributor sheet, by the name
 // under which the private configuration registers it.
@@ -35,15 +36,18 @@ import {
   DEFAULT_CONFIG_PATH,
   DEFAULT_EXPORTS_DIRECTORY,
   loadPrivateConfig,
+  namesSourceDocument,
   type PrivateConfig,
 } from "../import/config";
 import { discoverImporters } from "../import/discover";
 import { fetchExport } from "../import/fetch";
 import type { ImporterDefinition, ImportInput } from "../import/model";
+import { purgeSpecial } from "../import/purge";
 import { SOURCE_DEFINITIONS, SOURCE_FAMILIES } from "../import/registry";
 import { rollbackBatch } from "../import/rollback";
 import { type RunReport, runImport } from "../import/run";
-import { verifyImport } from "../import/verify";
+import { type VerificationBaseline, verifyImport } from "../import/verify";
+import type { RunTarget } from "../import/withheld";
 
 const EXIT_BLOCKED = 3;
 const EXIT_STOPPED = 4;
@@ -57,6 +61,7 @@ const USAGE = [
   "  import show <batch>",
   "  import rollback <batch>",
   "  import verify <source> --input <path> [--sheet <name>] [--observed-on <date>] [--config <file>]",
+  "  import purge-special (--source <source> | --batch <batch>)",
 ].join("\n");
 
 const VALUE_OPTIONS = [
@@ -69,6 +74,8 @@ const VALUE_OPTIONS = [
   "--out",
   "--project",
   "--sheet",
+  "--source",
+  "--batch",
 ];
 const FLAGS = ["--production"];
 
@@ -153,6 +160,29 @@ function commitOf(directory: string): string | undefined {
   }
 }
 
+/**
+ * Whether a file written to a directory could be committed: the directory lies in a git work
+ * tree and git does not ignore it. A directory that does not exist yet is judged by its path.
+ */
+function isCommittable(directory: string): boolean {
+  let existing = directory;
+  while (!existsSync(existing) && path.dirname(existing) !== existing) existing = path.dirname(existing);
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", existing, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  try {
+    if (git("rev-parse", "--is-inside-work-tree") !== "true") return false;
+  } catch {
+    return false;
+  }
+  try {
+    // `check-ignore` ends with status 0 for an ignored path and with status 1 for one that is not.
+    git("check-ignore", "--quiet", path.join(directory, "export.xlsx"));
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 /** The day on which a fetched export was retrieved, from the record that `import fetch` writes beside it. */
 function fetchedOn(inputPath: string): string | undefined {
   const record = inputPath.replace(/\.xlsx$/i, ".json");
@@ -165,8 +195,16 @@ function fetchedOn(inputPath: string): string | undefined {
   }
 }
 
-function inputOf(given: Arguments): ImportInput {
+function inputOf(given: Arguments, config: PrivateConfig): ImportInput {
   const inputPath = path.resolve(required(given.values.get("--input"), "--input"));
+  if (namesSourceDocument(path.basename(inputPath), config)) {
+    // The name is neither stored nor printed. A file that carries the identifier of its document in its name is
+    // still refused, so that the identifier stays out of every place a file name can travel to.
+    throw new ToolRefusal(
+      "Refusing to run: the name of the input file holds the identifier of a source document, which is private. " +
+        "Give the file a neutral name, such as the letter of its source, and run the command again.",
+    );
+  }
   if (!existsSync(inputPath)) throw new ToolRefusal(`Refusing to run: the input ${inputPath} does not exist.`);
   const stated = given.values.get("--observed-on");
   const observedOn = stated ?? fetchedOn(inputPath) ?? new Date().toISOString().slice(0, 10);
@@ -218,6 +256,7 @@ function printReport(report: RunReport, target: string): void {
   for (const [collection, account] of collections) {
     console.log(
       `  ${collection}: ${account.created} ${would ? "to create" : "created"}, ${account.changed} ${would ? "to change" : "changed"}, ` +
+        (account.removed > 0 ? `${account.removed} ${would ? "to remove" : "removed"}, ` : "") +
         `${account.matched} with source records brought up to date, ${account.unchanged} left alone.`,
     );
     if (Object.keys(account.fields).length > 0) console.log(`    fields that change: ${counted(account.fields)}`);
@@ -234,7 +273,7 @@ function printReport(report: RunReport, target: string): void {
   }
   const pending =
     Object.values(report.collections).reduce(
-      (sum, account) => sum + account.created + account.changed + account.matched,
+      (sum, account) => sum + account.created + account.changed + account.removed + account.matched,
       0,
     ) +
     (["raise", "reopen", "supersede", "clear"] as const).reduce(
@@ -292,11 +331,14 @@ async function fetchSource(given: Arguments): Promise<number | undefined> {
       `Refusing to fetch: the private configuration names no export address for source ${sourceKey}.`,
     );
   }
-  const fetched = await fetchExport({
-    sourceKey,
-    exportUrl,
-    directory: path.resolve(given.values.get("--out") ?? DEFAULT_EXPORTS_DIRECTORY),
-  });
+  const directory = path.resolve(given.values.get("--out") ?? DEFAULT_EXPORTS_DIRECTORY);
+  if (isCommittable(directory)) {
+    throw new ToolRefusal(
+      "Refusing to fetch: the directory named with --out lies in a git work tree and git does not ignore it, " +
+        "so the export could be committed. Leave --out away, or name a directory that git ignores.",
+    );
+  }
+  const fetched = await fetchExport({ sourceKey, exportUrl, directory });
   console.log(
     `Fetched source ${sourceKey}: ${fetched.filePath} (${fetched.bytes} bytes, ${fetched.tabs} tabs, SHA-256 ${fetched.sha256}), ` +
       `retrieved at ${fetched.retrievedAt}. The record of the fetch is ${fetched.recordPath}.`,
@@ -311,8 +353,9 @@ async function run(given: Arguments): Promise<number | undefined> {
   const config = loadPrivateConfig(given.values.get("--config") ?? DEFAULT_CONFIG_PATH);
   const importer = await importerOf(source, given, config);
   const previewBatchId = given.values.get("--preview");
-  const input = inputOf(given);
+  const input = inputOf(given, config);
   const { db, label, production } = await database(given);
+  const target: RunTarget = { production, rehearse: config.rehearse };
   if (production && mode === "apply" && previewBatchId === undefined) {
     throw new ToolRefusal(
       "Refusing to run: an apply against a real project carries out a previewed batch. Name it with --preview <batch>.",
@@ -326,6 +369,7 @@ async function run(given: Arguments): Promise<number | undefined> {
       mode,
       secret: config.hashKey,
       locations: config.sources,
+      target,
       ...(previewBatchId === undefined ? {} : { previewBatchId }),
     });
     printReport(report, label);
@@ -414,19 +458,65 @@ async function rollback(given: Arguments): Promise<number | undefined> {
 async function verify(given: Arguments): Promise<number | undefined> {
   const config = loadPrivateConfig(given.values.get("--config") ?? DEFAULT_CONFIG_PATH);
   const importer = await importerOf(required(given.positional[1], "The source"), given, config);
-  const input = inputOf(given);
-  const { db, label } = await database(given);
-  const checks = await verifyImport({ db, importer, input, secret: config.hashKey });
+  const input = inputOf(given, config);
+  const { db, label, production } = await database(given);
+  const sheet = given.values.get("--sheet");
+  const rows =
+    sheet === undefined ? config.sources[importer.sourceKey]?.baseline : config.contributorSheets?.[sheet]?.baseline;
+  const baseline: VerificationBaseline = {
+    ...(rows === undefined ? {} : { rows }),
+    ...(config.expectedStudies === undefined ? {} : { studies: config.expectedStudies }),
+  };
+  const confirmedHeaders = config.sources[importer.sourceKey]?.confirmedHeaders;
+  const checks = await verifyImport({
+    db,
+    importer,
+    input,
+    secret: config.hashKey,
+    target: { production, rehearse: config.rehearse },
+    baseline,
+    requireBaseline: true,
+    record: true,
+    ...(confirmedHeaders === undefined ? {} : { confirmedHeaders }),
+  });
   console.log(`Verification of source ${importer.sourceKey} in ${label}:`);
   for (const check of checks) console.log(`  ${check.passed ? "passed" : "FAILED"}  ${check.key}: ${check.detail}`);
   const failed = checks.filter((check) => !check.passed).length;
-  console.log(failed === 0 ? "Every check passed." : `${failed} checks failed. The import is not verified.`);
+  console.log(
+    failed === 0
+      ? "Every check passed. The report is stored on the latest applied batch of the source."
+      : `${failed} checks failed. The import is not verified. The report is stored on the latest applied batch of the source.`,
+  );
   return failed === 0 ? undefined : EXIT_BLOCKED;
+}
+
+/**
+ * Removes the special-category copies that imports keep where no client reads them: the cells of
+ * rows that wait in the queue, and the states that the change log keeps for a rollback. It is
+ * the decision of an administrator, for one source or for one batch, and it prints counts only.
+ */
+async function purge(given: Arguments): Promise<number | undefined> {
+  const sourceKey = given.values.get("--source")?.toLowerCase();
+  const batchId = given.values.get("--batch");
+  if ((sourceKey === undefined) === (batchId === undefined)) {
+    throw new ToolRefusal(`purge-special names one source or one batch.\n\n${USAGE}`);
+  }
+  const { db, label } = await database(given);
+  const result = await purgeSpecial(db, {
+    ...(sourceKey === undefined ? {} : { sourceKey }),
+    ...(batchId === undefined ? {} : { batchId }),
+  });
+  console.log(
+    `Special-category copies of ${sourceKey === undefined ? `batch ${batchId}` : `source ${sourceKey}`} in ${label}: ` +
+      `${result.cellsRemoved} documents of cells beneath source records removed, ${result.statesRemoved} kept states of the change log removed. ` +
+      "A batch whose kept states are removed can no longer be rolled back.",
+  );
+  return undefined;
 }
 
 export const importCommand: Command = {
   name: "import",
-  summary: "Import a source: list, fetch, run (preview or apply), show, rollback, verify.",
+  summary: "Import a source: list, fetch, run (preview or apply), show, rollback, verify, purge-special.",
   async run(args) {
     const given = parse(args);
     switch (given.positional[0]) {
@@ -442,6 +532,8 @@ export const importCommand: Command = {
         return rollback(given);
       case "verify":
         return verify(given);
+      case "purge-special":
+        return purge(given);
       default:
         throw new ToolRefusal(USAGE);
     }

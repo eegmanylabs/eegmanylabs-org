@@ -78,7 +78,7 @@ export function aliasDocuments(builder: PlanBuilder, studies: StudyResolver, inp
     union: { replicationIds: [input.replicationId] },
     sourceRecordIds: [input.recordId],
   });
-  studies.declare(input.alias, input.replicationId);
+  studies.declare(input.alias, input.replicationId, input.scheme);
   return true;
 }
 

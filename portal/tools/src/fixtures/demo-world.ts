@@ -6,15 +6,19 @@
 // every address uses the example.org domain, which is reserved for documentation and can never
 // receive mail. The values of the special categories are placeholders that describe nobody.
 //
+// One institution lists example.org among its email domains, so that a request to represent one
+// of its laboratories finds an address in the domain of the institution. The other two list
+// domains under the reserved name "example", which no address of the world lies in.
+//
 // The world exercises each path of the claim flow:
 //
 // | Address                                  | Signing in with it                                         |
 // |------------------------------------------|------------------------------------------------------------|
 // | `demo.admin@example.org`                 | Becomes the programme administrator, through the bootstrap record, and matches Ada Example |
-// | `ben.sample@northfield.example.org`      | Matches one unclaimed person who leads a replication and is the principal investigator of a laboratory |
-// | `gus.specimen@harbour.example.org`       | Matches one person through a secondary address              |
+// | `ben.sample@example.org`      | Matches one unclaimed person who leads a replication and is the principal investigator of a laboratory |
+// | `gus.specimen.second@example.org`       | Matches one person through a secondary address              |
 // | `shared.mock@example.org`                | Is held by two persons, so the claim goes to review         |
-// | `kit.sampleton@ridgeway.example.org`     | Is held in a way that no claim may rest on, so the claim goes to review |
+// | `kit.sampleton@example.org`     | Is held in a way that no claim may rest on, so the claim goes to review |
 // | `demo.one@example.org`                   | Belongs to an account that has claimed Ivy Pretend already  |
 // | `demo.two@example.org`                   | Matches nobody                                              |
 
@@ -34,21 +38,21 @@ export const DEMO_INSTITUTIONS: readonly DemoInstitution[] = [
     name: "Northfield Example University",
     countryCode: "GB",
     city: "Northfield",
-    emailDomains: ["northfield.example.org"],
+    emailDomains: ["example.org"],
   },
   {
     id: "demo-inst-harbour",
     name: "Harbour Example Institute",
     countryCode: "DE",
     city: "Harbourtown",
-    emailDomains: ["harbour.example.org"],
+    emailDomains: ["harbour.example"],
   },
   {
     id: "demo-inst-ridgeway",
     name: "Ridgeway Example College",
     countryCode: "NL",
     city: "Ridgeway",
-    emailDomains: ["ridgeway.example.org"],
+    emailDomains: ["ridgeway.example"],
   },
 ];
 
@@ -123,7 +127,7 @@ export const DEMO_PERSONS: readonly DemoPerson[] = [
     givenName: "Ben",
     familyName: "Sample",
     institutionId: "demo-inst-northfield",
-    emails: [primary("ben.sample@northfield.example.org")],
+    emails: [primary("ben.sample@example.org")],
     demographics: { genderSource: "synthetic gender term A", ethnicitySource: "synthetic ethnicity term A" },
   },
   {
@@ -132,7 +136,7 @@ export const DEMO_PERSONS: readonly DemoPerson[] = [
     givenName: "Cleo",
     familyName: "Placeholder",
     institutionId: "demo-inst-northfield",
-    emails: [primary("cleo.placeholder@northfield.example.org")],
+    emails: [primary("cleo.placeholder@example.org")],
   },
   {
     id: "demo-person-dev",
@@ -140,7 +144,7 @@ export const DEMO_PERSONS: readonly DemoPerson[] = [
     givenName: "Dev",
     familyName: "Fictional",
     institutionId: "demo-inst-harbour",
-    emails: [primary("dev.fictional@harbour.example.org")],
+    emails: [primary("dev.fictional@example.org")],
   },
   {
     id: "demo-person-eli",
@@ -148,7 +152,7 @@ export const DEMO_PERSONS: readonly DemoPerson[] = [
     givenName: "Eli",
     familyName: "Madeup",
     institutionId: "demo-inst-northfield",
-    emails: [primary("eli.madeup@northfield.example.org")],
+    emails: [primary("eli.madeup@example.org")],
   },
   {
     id: "demo-person-fay",
@@ -156,7 +160,7 @@ export const DEMO_PERSONS: readonly DemoPerson[] = [
     givenName: "Fay",
     familyName: "Invented",
     institutionId: "demo-inst-harbour",
-    emails: [primary("fay.invented@harbour.example.org")],
+    emails: [primary("fay.invented@example.org")],
   },
   {
     id: "demo-person-gus",
@@ -165,8 +169,8 @@ export const DEMO_PERSONS: readonly DemoPerson[] = [
     familyName: "Specimen",
     institutionId: "demo-inst-ridgeway",
     emails: [
-      primary("gus.specimen@ridgeway.example.org"),
-      { email: "gus.specimen@harbour.example.org", kind: "secondary", claimEligible: true },
+      primary("gus.specimen@example.org"),
+      { email: "gus.specimen.second@example.org", kind: "secondary", claimEligible: true },
     ],
   },
   // Two persons who hold one address: a data error that the claim flow sends to review.
@@ -208,7 +212,7 @@ export const DEMO_PERSONS: readonly DemoPerson[] = [
     familyName: "Sampleton",
     institutionId: "demo-inst-ridgeway",
     // An address that no claim may rest on.
-    emails: [primary("kit.sampleton@ridgeway.example.org", false)],
+    emails: [primary("kit.sampleton@example.org", false)],
   },
 ];
 

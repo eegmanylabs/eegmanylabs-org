@@ -93,6 +93,7 @@ export const claimProfile = defineCallable(claimProfileContract, {
     const indexReference = db.doc(
       COLLECTIONS.personEmailIndex.docPath(personEmailIndexId(emailLower, identityHashKey())),
     );
+    const userReference = db.doc(COLLECTIONS.users.docPath(uid));
     const at = context.clock.now();
 
     return db.runTransaction(async (transaction) => {
@@ -100,7 +101,11 @@ export const claimProfile = defineCallable(claimProfileContract, {
       const answered = answerOf(records);
       if (answered !== null) return answered;
 
-      const index = (await transaction.get(indexReference)).data() ?? null;
+      const [profile, indexSnapshot] = await transaction.getAll(userReference, indexReference);
+      if (profile?.exists !== true) {
+        throw new AppError("failed-precondition", "Start the portal before you claim a profile.");
+      }
+      const index = indexSnapshot?.data() ?? null;
       const candidates = [...new Set(texts(index?.personIds))].sort();
       if (candidates.length === 0) return { status: "noMatch" };
 
@@ -123,10 +128,6 @@ export const claimProfile = defineCallable(claimProfileContract, {
           else if (obstacle !== null) reason = "personUnavailable";
         }
       }
-      if (link?.user == null && reason === null) {
-        throw new AppError("failed-precondition", "Start the portal before you claim a profile.");
-      }
-
       if (reason !== null || link === null || only === undefined) {
         const reviewers = await holdersOf(db, transaction, "claims.review");
         const auditEventId = writeAudit(

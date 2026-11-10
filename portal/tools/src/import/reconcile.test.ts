@@ -77,14 +77,52 @@ describe("itemBuilders", () => {
         { source: "b/t0", value: long, valueSource: long, sourceRecordId: "record-2" },
       ],
     });
-    expect(item.candidates[0]).toMatchObject({ valueSource: " short ", sourceRecordId: "record-1" });
-    expect(item.candidates[1]).not.toHaveProperty("valueSource");
+    const byRecord = new Map(item.candidates.map((candidate) => [candidate.sourceRecordId, candidate]));
+    expect(byRecord.get("record-1")).toMatchObject({ valueSource: " short ", sourceRecordId: "record-1" });
+    expect(byRecord.get("record-2")).not.toHaveProperty("valueSource");
     expect(item.blocking).toBe(false);
     expect(item.kind).toBe("annotationReview");
+  });
+
+  it("gives every statement of a shared question one key, whatever its candidates, and no key to any other item", () => {
+    const first = items.duplicatePerson({
+      subject: "contributorName/aa",
+      shared: true,
+      claims: [{ source: "ctable__one", value: "row-one" }],
+    });
+    const fuller = items.duplicatePerson({
+      subject: "contributorName/aa",
+      shared: true,
+      claims: [
+        { source: "ctable__one", value: "row-one" },
+        { source: "ctable__two", value: "row-two" },
+      ],
+    });
+    expect(first.fingerprint).not.toBe(fuller.fingerprint);
+    expect(first.subjectKey).toMatch(/^[0-9a-f]{20}$/);
+    expect(fuller.subjectKey).toBe(first.subjectKey);
+    // The key follows the kind, the subject and the field.
+    const about = { subject: "contributorName/aa", shared: true, claims: [] } as const;
+    expect(items.ambiguousEmail(about).subjectKey).not.toBe(first.subjectKey);
+    expect(items.duplicatePerson({ ...about, field: "email" }).subjectKey).not.toBe(first.subjectKey);
+    expect(items.duplicatePerson({ ...about, subject: "contributorName/bb" }).subjectKey).not.toBe(first.subjectKey);
+    expect(items.duplicatePerson({ subject: "contributorName/aa", claims: [] })).not.toHaveProperty("subjectKey");
   });
 
   it("refuses a subject that is empty or spans lines", () => {
     expect(() => items.unparsedValue({ subject: "", claims: [] })).toThrow(RangeError);
     expect(() => items.unparsedValue({ subject: "one\ntwo", claims: [] })).toThrow(RangeError);
+  });
+
+  it("gives an item the same fingerprint in whatever order its claims were made, and keeps the order of the claims", () => {
+    const claims = [
+      { source: "f/leads", value: "b", valueSource: "B", sourceRecordId: "record-2" },
+      { source: "f/counts", value: "a", valueSource: "A", sourceRecordId: "record-1" },
+    ];
+    const forward = items.conflictingLead({ subject: "Delta1999", claims });
+    const backward = items.conflictingLead({ subject: "Delta1999", claims: [...claims].reverse() });
+    expect(backward.fingerprint).toBe(forward.fingerprint);
+    // The first claim is what the importer states first, such as the stored value before the expected one.
+    expect(forward.candidates.map((candidate) => candidate.sourceRecordId)).toEqual(["record-2", "record-1"]);
   });
 });

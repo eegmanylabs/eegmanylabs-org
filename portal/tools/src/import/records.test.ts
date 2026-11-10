@@ -69,7 +69,10 @@ describe("aliasDocuments", () => {
       owned: { part1: "Del" },
     });
     expect(documents.get("studyAliasIndex/delt")).toMatchObject({ union: { replicationIds: ["Delta1999"] } });
-    expect(await studies.resolve("DELT")).toEqual({ status: "resolved", replicationId: "Delta1999" });
+    // A name of another naming scheme is listed in the lookup and resolves no identifier.
+    expect(await studies.resolve("DELT")).toEqual({ status: "unresolved" });
+    aliasDocuments(builder, studies, { replicationId: "Delta1999", scheme: "website", alias: "Delta1999", recordId: "r-1" });
+    expect(await studies.resolve("delta1999")).toEqual({ status: "resolved", replicationId: "Delta1999" });
   });
 
   it("flags the spelling that equals the identifier as canonical, and writes no lookup entry for a spelling that folds to nothing", () => {

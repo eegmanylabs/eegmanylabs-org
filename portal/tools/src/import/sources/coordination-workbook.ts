@@ -13,17 +13,18 @@
 //
 // | What the structure check finds                                      | What happens                              |
 // |---------------------------------------------------------------------|-------------------------------------------|
-// | A summary tab with the seven headers in row 1, each once            | The tab is imported                       |
+// | One summary tab with the seven headers in row 1, each once, and no other headed column | The tab is imported      |
 // | A tab with the layout of the leads tab or of an outreach tab        | The tab is imported as in source F        |
-// | No summary tab at all                                               | The import stops                          |
+// | No summary tab, or more than one, or more than one leads tab        | The import stops                          |
 // | A tab whose headers are the summary headers under another spelling, or in another row | The import stops, and the report names each header as found |
 // | A tab with none of the three layouts                                | The import stops, and the report names the tab |
-// | A further headed column in a summary tab                            | The column is named in the queue, and its cells stay in the source records |
+// | A further headed column in a summary tab                            | The import stops, and the report names the column |
+// | A set of tabs other than the reviewed one, once a maintainer has entered it below | The import stops           |
 //
 // The figures of this workbook are a historical snapshot of their own. They are bound to the
 // source records of this workbook and are never merged with those of source F: where the two
 // workbooks state different numbers for one study, both are kept and the difference is queued.
-import { COLLECTIONS, type EntityRef, LIMITS, lookupFold } from "@eegml/shared";
+import { COLLECTIONS, type EntityRef, LIMITS } from "@eegml/shared";
 import { readDocuments } from "../context";
 import type {
   ImporterDefinition,
@@ -33,7 +34,6 @@ import type {
   PlannedItem,
   RawScalar,
   ReadContext,
-  RecordedRow,
   SourceReading,
   SourceRow,
   StructureIssue,
@@ -53,12 +53,14 @@ export const SUMMARY_COLUMNS: readonly ExpectedColumn[] = (Object.entries(COUNT_
 );
 
 /**
- * The studies of the outreach tabs, by the exact title of each tab, as a reviewer has confirmed
- * them. It is empty, because no title of this workbook is known: a title is a label that is
- * never resolved by its spelling, so the rows of an outreach tab wait in the queue until a
- * maintainer has entered its title here.
+ * The reviewed table of tabs: the exact title of each tab with its kind and, for an outreach
+ * tab, its study, as a maintainer has confirmed them after the first preview of the real
+ * workbook. It is empty, because no title of this workbook is known. While it is empty the tabs
+ * are recognised by their headers alone, exactly one summary tab is accepted, and the rows of an
+ * outreach tab wait in the queue, because a title is a label that is never resolved by its
+ * spelling. Once it holds entries the workbook must hold exactly these tabs.
  */
-const REVIEWED_OUTREACH_TABS: ReadonlyMap<string, string> = new Map();
+export const REVIEWED_TABS: readonly ReviewedTab[] = [];
 
 /** The fewest summary headers, under tolerant matching, that make a row a candidate for the summary header. */
 const NEAR_MISS_HEADERS = 3;
@@ -97,17 +99,48 @@ function structureIssues(tabs: readonly TabOfReading[]): StructureIssue[] {
   const issues: StructureIssue[] = [];
   const wanted = SUMMARY_COLUMNS.map((column) => column.header).join(" | ");
   const counted = (kind: DetectedTabKind) => tabs.filter((tab) => tab.kind === kind).length;
-  if (counted("counts") === 0) {
+  if (counted("counts") !== 1) {
+    // Two summaries would give one study two current figures for one metric. Which one counts is for a maintainer.
     issues.push({
       check: "summary",
       tabKey: null,
       message:
-        `No tab of the workbook holds the seven summary headers in row 1, each once. ${tabs.length} tabs were read: ` +
-        `${counted("leads")} with the layout of a leads tab, ${counted("outreach")} with the layout of an outreach tab and ` +
-        `${counted("unknown")} with none of the layouts that the importer reads.`,
+        `The workbook holds ${counted("counts")} tabs with the seven summary headers in row 1, each once, where exactly one is expected. ` +
+        `${tabs.length} tabs were read: ${counted("leads")} with the layout of a leads tab, ${counted("outreach")} with the layout of an ` +
+        `outreach tab and ${counted("unknown")} with none of the layouts that the importer reads.`,
       expected: wanted,
-      found: "no summary tab",
+      found: counted("counts") === 0 ? "no summary tab" : `${counted("counts")} summary tabs`,
     });
+  }
+  if (counted("leads") > 1) {
+    issues.push({
+      check: "leads",
+      tabKey: null,
+      message: `The workbook holds ${counted("leads")} tabs with the layout of a leads tab, where one at most is expected.`,
+      expected: "one leads tab at most",
+      found: `${counted("leads")} leads tabs`,
+    });
+  }
+  const known = new Set(SUMMARY_COLUMNS.map((column) => column.header));
+  for (const tab of tabs.filter((candidate) => candidate.kind === "counts")) {
+    const header = tab.rows.find((row) => row.rowClass === "header");
+    const further = (header?.labels ?? []).flatMap((label, index) => {
+      const value = storedValue(header?.cells[index]);
+      const text = typeof value === "string" ? value.trim() : value === null || value === undefined ? "" : String(value);
+      return text === "" || known.has(text) ? [] : [`${label}: ${text.slice(0, LIMITS.shortText)}`];
+    });
+    if (further.length > 0) {
+      // A column that the brief does not name may hold anything. Nothing of the tab is imported before it is known.
+      issues.push({
+        check: "unknownColumn",
+        tabKey: tab.tabKey,
+        message:
+          `The summary tab holds ${further.length} headed columns that the brief does not name. ` +
+          "The import stops until a maintainer has looked at each and entered it in the importer.",
+        expected: wanted,
+        found: further.join(" | "),
+      });
+    }
   }
   for (const tab of tabs.filter((candidate) => candidate.kind === "unknown")) {
     const width = Math.max(0, ...tab.rows.map((row) => row.cells.length));
@@ -155,35 +188,6 @@ async function read(input: ImportInput, context: ReadContext): Promise<SourceRea
 }
 
 const replication = (id: string): EntityRef => ({ entityType: "replication", entityId: id });
-
-/** One item for each headed column of a summary tab that is no field of the brief. Its cells stay in the source records. */
-function unknownColumnItems(context: PlanContext, tabs: readonly TabOfReading[]): PlannedItem[] {
-  const known = new Set(SUMMARY_COLUMNS.map((column) => column.header));
-  const items: PlannedItem[] = [];
-  for (const tab of tabs.filter((candidate) => candidate.kind === "counts")) {
-    const header = tab.rows.find((row): row is RecordedRow => row.rowClass === "header" && "recordId" in row);
-    if (header === undefined) continue;
-    for (const [index, label] of header.labels.entries()) {
-      const value = storedValue(header.cells[index]);
-      const text = typeof value === "string" ? value.trim() : "";
-      if (text === "" || known.has(text)) continue;
-      items.push(
-        context.items.structureChange({
-          subject: `${SOURCE_KEY}/${tab.tabKey}/header/${lookupFold(text) || label}`,
-          claims: [
-            {
-              source: `${SOURCE_KEY}/${tab.tabKey}/header`,
-              value: text,
-              valueSource: text.slice(0, LIMITS.shortText),
-              sourceRecordId: header.recordId,
-            },
-          ],
-        }),
-      );
-    }
-  }
-  return items;
-}
 
 /**
  * Compares the figures that the plan states with the current figures of source F, study by
@@ -241,33 +245,41 @@ async function comparisonItems(context: PlanContext, plan: ImportPlan): Promise<
   return items;
 }
 
-async function plan(context: PlanContext): Promise<ImportPlan> {
+/** Plans the workbook against a reviewed table of tabs, or by the layouts of its tabs alone where the table is empty. */
+async function plan(context: PlanContext, reviewedTabs: readonly ReviewedTab[]): Promise<ImportPlan> {
   const tabs = tabsOf(context.rows);
-  // The tabs are recognised by their headers, since no title of this workbook is known.
-  const reviewed: ReviewedTab[] = tabs.flatMap((tab) =>
-    tab.kind === "unknown"
-      ? []
-      : [
-          tab.kind === "outreach"
-            ? { title: tab.title, kind: tab.kind, studyId: REVIEWED_OUTREACH_TABS.get(tab.title) ?? null }
-            : { title: tab.title, kind: tab.kind },
-        ],
-  );
+  // While no title is reviewed, the tabs are recognised by their headers and an outreach tab has no study.
+  const reviewed: readonly ReviewedTab[] =
+    reviewedTabs.length > 0
+      ? reviewedTabs
+      : tabs.flatMap((tab) =>
+          tab.kind === "unknown"
+            ? []
+            : [tab.kind === "outreach" ? { title: tab.title, kind: tab.kind, studyId: null } : { title: tab.title, kind: tab.kind }],
+        );
   const drafted = await planRecruitmentWorkbook({ sourceKey: SOURCE_KEY, tabs: reviewed }, context);
   if (drafted.blocking.length > 0) return drafted;
   const stated = new Set(drafted.items.map((item) => item.fingerprint));
-  const added = [...unknownColumnItems(context, tabs), ...(await comparisonItems(context, drafted))].filter(
-    (item) => !stated.has(item.fingerprint),
-  );
+  const added = (await comparisonItems(context, drafted)).filter((item) => !stated.has(item.fingerprint));
   return { ...drafted, items: [...drafted.items, ...added] };
 }
 
-export const importer: ImporterDefinition = {
-  key: "coordinationWorkbook",
-  sourceKey: SOURCE_KEY,
-  summary:
-    "Historical replication coordination workbook, built against synthetic fixtures only: study-level figures as a historical snapshot of its own, compared with the recruitment and contact workbook.",
-  inputDescription: "the Excel workbook, as downloaded from the drive",
-  read,
-  plan,
-};
+/**
+ * The importer for a reviewed table of tabs. The committed importer uses the committed table,
+ * and a test states the table of its synthetic workbook.
+ */
+export function coordinationImporter(reviewedTabs: readonly ReviewedTab[]): ImporterDefinition {
+  return {
+    key: "coordinationWorkbook",
+    sourceKey: SOURCE_KEY,
+    summary:
+      "Historical replication coordination workbook, built against synthetic fixtures only: study-level figures as a historical snapshot of its own, compared with the recruitment and contact workbook.",
+    inputDescription: "the Excel workbook, as downloaded from the drive",
+    // Its figures are compared with those of the recruitment and contact workbook, which must be present (section 5, step 9).
+    after: [COMPARED_SOURCE_KEY],
+    read,
+    plan: (context) => plan(context, reviewedTabs),
+  };
+}
+
+export const importer: ImporterDefinition = coordinationImporter(REVIEWED_TABS);

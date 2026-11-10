@@ -99,6 +99,7 @@ describe("mergeDocument", () => {
     expect(result.conflicts).toEqual([
       {
         field: "theme",
+        liveState: "differs",
         liveValue: "Edited by a person",
         liveOrigin: "portal",
         sourceValue: "Memory",
@@ -138,6 +139,7 @@ describe("mergeDocument", () => {
     expect(result.conflicts).toEqual([
       {
         field: "theme",
+        liveState: "differs",
         liveValue: "Conflict",
         liveOrigin: "otherSource",
         liveSourceRecordId: "d-9",
@@ -146,6 +148,68 @@ describe("mergeDocument", () => {
       },
     ]);
     expect(result.data).toBeNull();
+  });
+
+  it("leaves a field cleared that a person has cleared in the portal, and reports the source value beside it", () => {
+    // The import had set the theme. A person removed it: the field is absent and the record of the import remains.
+    const { theme: _cleared, ...cleared } = stored;
+    const plan = planned({ theme: "Attention", psychConstruct: "attention" });
+    const result = mergeDocument(plan, entry, cleared, context);
+    expect(result.changedFields).toEqual([]);
+    expect(result.data).toBeNull();
+    expect(result.conflicts).toEqual([
+      {
+        field: "theme",
+        liveState: "cleared",
+        liveValue: undefined,
+        liveOrigin: "portal",
+        sourceValue: "Attention",
+        sourceRecordId: "h-1",
+      },
+    ]);
+    // A changed source value is recorded beside the cleared field, which stays cleared on every later run.
+    const changed = mergeDocument(planned({ theme: "Memory", psychConstruct: "attention" }), entry, cleared, context);
+    expect(changed.changedFields).toEqual([]);
+    expect(changed.data).not.toHaveProperty("theme");
+    expect(changed.data).toMatchObject({ importedValues: { theme: "Memory" } });
+    const again = mergeDocument(
+      planned({ theme: "Memory", psychConstruct: "attention" }),
+      entry,
+      changed.data ?? {},
+      context,
+    );
+    expect(again.data).toBeNull();
+    expect(again.conflicts.map((conflict) => conflict.liveState)).toEqual(["cleared"]);
+  });
+
+  it("leaves a cleared field alone without a report where the importer declares the field silent", () => {
+    const { theme: _cleared, ...cleared } = stored;
+    const result = mergeDocument(planned({ theme: "Attention" }, { silent: ["theme"] }), entry, cleared, context);
+    expect(result.conflicts).toEqual([]);
+    expect(result.data).toBeNull();
+  });
+
+  it("leaves a field cleared that another source had supplied, and does not take its place", () => {
+    const { theme: _cleared, ...cleared } = {
+      ...stored,
+      fieldSources: { theme: "d-9", psychConstruct: "h-1" },
+      importedValues: { theme: "Conflict", psychConstruct: "attention" },
+    };
+    const result = mergeDocument(planned({ theme: "Memory", psychConstruct: "attention" }), entry, cleared, context);
+    expect(result.data).toBeNull();
+    expect(result.conflicts).toMatchObject([{ field: "theme", liveState: "cleared", liveOrigin: "portal" }]);
+  });
+
+  it("fills a field again that the source itself had stopped stating", () => {
+    const emptied = mergeDocument(planned({ theme: undefined, psychConstruct: "attention" }), entry, stored, context);
+    const refilled = mergeDocument(
+      planned({ theme: "Attention", psychConstruct: "attention" }),
+      entry,
+      emptied.data ?? {},
+      context,
+    );
+    expect(refilled.conflicts).toEqual([]);
+    expect(refilled.data).toMatchObject({ theme: "Attention" });
   });
 
   it("treats a value that nobody imported as an edit made in the portal", () => {
@@ -172,6 +236,46 @@ describe("mergeDocument", () => {
     const result = mergeDocument(spec, index, { replicationIds: ["A", "B"] }, context);
     expect(result.data).toMatchObject({ replicationIds: ["A", "B", "C"] });
     expect(mergeDocument(spec, index, { replicationIds: ["C", "B", "A"] }, context).data).toBeNull();
+  });
+
+  it("does not add a member again that a person has removed from a list, and reports it", () => {
+    const index = COLLECTIONS.studyAliasIndex as CollectionEntry;
+    const spec = {
+      ...planned({}),
+      collection: "studyAliasIndex" as const,
+      fixed: {},
+      union: { replicationIds: ["A", "B", "C"] },
+    };
+    // The change log says that an earlier import had added B, and the list no longer holds it.
+    const result = mergeDocument(spec, index, { replicationIds: ["A"] }, context, { replicationIds: ["B"] });
+    expect(result.data).toMatchObject({ replicationIds: ["A", "C"] });
+    expect(result.conflicts).toEqual([
+      {
+        field: "replicationIds",
+        liveState: "memberRemoved",
+        liveValue: undefined,
+        liveOrigin: "portal",
+        sourceValue: "B",
+        sourceRecordId: "h-1",
+      },
+    ]);
+    // Once only the removed member is missing, nothing is written, and the removal is still reported.
+    const settled = mergeDocument(spec, index, { replicationIds: ["A", "C"] }, context, { replicationIds: ["B"] });
+    expect(settled.data).toBeNull();
+    expect(settled.conflicts).toHaveLength(1);
+  });
+
+  it("keeps the source records of a document in one order, whatever order the rows were read in", () => {
+    const first = newDocument(planned({ theme: "Attention" }, { sourceRecordIds: ["h-2", "h-1"] }), entry, context);
+    expect(first.sourceRecordIds).toEqual(["h-1", "h-2"]);
+    const withOthers = { ...stored, sourceRecordIds: ["h-1", "d-9"] };
+    const merged = mergeDocument(
+      planned({ theme: "Attention", psychConstruct: "attention" }, { sourceRecordIds: ["h-2", "h-1"] }),
+      entry,
+      withOthers,
+      context,
+    );
+    expect(merged.data).toMatchObject({ sourceRecordIds: ["d-9", "h-1", "h-2"] });
   });
 
   it("replaces an earlier revision of its own source record and keeps the records of other sources", () => {

@@ -13,13 +13,13 @@
 // Nearly everything in such a workbook is personal. A row key that is built from a name is a
 // keyed hash, and nothing here writes a name, an address or the content of a cell to a message.
 import { existsSync, readFileSync, statSync } from "node:fs";
-import path from "node:path";
 import { keyedShortHash, LIMITS, lookupFold, outreachNameHash, sourceTabKey } from "@eegml/shared";
 import { type FormattingAsData, holdsContent, rawCellOf } from "./cells";
 import type { ImportInput, RawCell, ReadContext, SourceReading, SourceRow, SourceTab, StructureIssue } from "./model";
 import { WorkbookFormatError } from "./ooxml";
 import { classifyNameCell, type NameCellClass, textOf } from "./recruitment-values";
-import { canonicalJson, sha256OfBytes } from "./values";
+import { canonicalJson, positionFree, sha256OfBytes } from "./values";
+import { inputFileOf } from "./workbook-rows";
 import {
   cellsByRow,
   columnLetters,
@@ -178,8 +178,9 @@ class TabReader {
   }
 
   /** The key of a row that has no natural key: a keyed hash of its content, since the content may be personal. */
-  #contentKey(prefix: string, cells: readonly RawCell[]): string {
-    return this.#keyed(`${prefix}__${keyedShortHash(canonicalJson(cells), this.#secret)}`);
+  #contentKey(prefix: string, cells: readonly RawCell[], row: number): string {
+    // The content is taken without the numbers of rows, so that a line inserted above gives the row no new key.
+    return this.#keyed(`${prefix}__${keyedShortHash(canonicalJson(positionFree(cells, row)), this.#secret)}`);
   }
 
   #push(row: SourceRow): void {
@@ -191,25 +192,28 @@ class TabReader {
   }
 
   /** The key of a study row: the lookup fold of its identifier cell, where that is usable and not taken. */
-  #studyKey(cell: RawCell, record: readonly RawCell[], taken: Set<string>): string {
+  #studyKey(cell: RawCell, record: readonly RawCell[], taken: Set<string>, row: number): string {
     const folded = lookupFold(textOf(cell) ?? "");
-    if (folded === "" || folded.length > LIMITS.shortText || taken.has(folded)) return this.#contentKey("row", record);
+    if (folded === "" || folded.length > LIMITS.shortText || taken.has(folded))
+      return this.#contentKey("row", record, row);
     taken.add(folded);
     return folded;
   }
 
   #counts(): void {
-    const formatting = { strike: true } as const;
+    const formatting = { strike: true, hiddenRow: true } as const;
     const all = this.#columns();
     const headers = new Map(all.map((column) => [column, header(this.#byRow.get(1)?.get(column))]));
     const headed = all.filter((column) => headers.get(column) !== "");
     const labels = headed.map(columnLetters);
     const studyColumn = headed.find((column) => headers.get(column) === COUNT_HEADERS.study) ?? 1;
+    // The cell of the leader names a person. No identifier that the plan derives from the row may hold a word of it.
+    const personal = headed.filter((column) => headers.get(column) === COUNT_HEADERS.leader).map(columnLetters);
     this.#push({
       rowClass: "header",
       rowNumber: 1,
       rowKey: "header",
-      cells: this.#cells(1, all, formatting),
+      cells: this.#cells(1, all, { ...formatting, hidden: true }),
       labels: all.map(columnLetters),
     });
     const taken = new Set<string>();
@@ -224,7 +228,7 @@ class TabReader {
         this.#push({
           rowClass: "annotation",
           rowNumber: row,
-          rowKey: this.#contentKey(`side__${columnLetters(column)}`, [stray]),
+          rowKey: this.#contentKey(`side__${columnLetters(column)}`, [stray], row),
           cells: [stray],
           labels: [columnLetters(column)],
           cellLevel: true,
@@ -243,9 +247,10 @@ class TabReader {
         this.#push({
           rowClass: "data",
           rowNumber: row,
-          rowKey: this.#studyKey(study, record, taken),
+          rowKey: this.#studyKey(study, record, taken, row),
           cells: record,
           labels,
+          personal,
         });
         continue;
       }
@@ -259,7 +264,7 @@ class TabReader {
         rowNumber: row,
         rowKey:
           label === ""
-            ? this.#contentKey("below", record)
+            ? this.#contentKey("below", record, row)
             : this.#keyed(`below__${keyedShortHash(label, this.#secret)}`),
         cells: record,
         labels,
@@ -268,12 +273,20 @@ class TabReader {
   }
 
   #leads(): void {
-    const formatting = { strike: true } as const;
+    const formatting = { strike: true, hiddenRow: true } as const;
     const all = this.#columns();
     const labels = all.map(columnLetters);
     const headers = all.map((column) => header(this.#byRow.get(1)?.get(column)));
     const studyColumn = all[headers.indexOf(LEAD_HEADERS.study)] ?? 1;
-    this.#push({ rowClass: "header", rowNumber: 1, rowKey: "header", cells: this.#cells(1, all, formatting), labels });
+    // Every cell of a row except its study names a person or holds an address, the cells under no header included.
+    const personal = labels.filter((_label, index) => headers[index] !== LEAD_HEADERS.study);
+    this.#push({
+      rowClass: "header",
+      rowNumber: 1,
+      rowKey: "header",
+      cells: this.#cells(1, all, { ...formatting, hidden: true }),
+      labels,
+    });
     const taken = new Set<string>();
     for (let row = 2; row <= this.#sheet.lastRow; row += 1) {
       // The cell beside the address column belongs to its row, so the whole width of the row is one record.
@@ -287,15 +300,16 @@ class TabReader {
       this.#push({
         rowClass: hasStudy ? "data" : "annotation",
         rowNumber: row,
-        rowKey: hasStudy ? this.#studyKey(study, record, taken) : this.#contentKey("row", record),
+        rowKey: hasStudy ? this.#studyKey(study, record, taken, row) : this.#contentKey("row", record, row),
         cells: record,
         labels,
+        ...(hasStudy ? { personal } : {}),
       });
     }
   }
 
   #outreach(headerRow: number): void {
-    const formatting = { strike: true, fill: true, merge: true } as const;
+    const formatting = { strike: true, fill: true, merge: true, hiddenRow: true } as const;
     const width = Math.max(this.#sheet.lastColumn, OUTREACH_HEADERS.length);
     const all = Array.from({ length: width }, (_unused, index) => index + 1);
     const labels = all.map(columnLetters);
@@ -321,7 +335,7 @@ class TabReader {
       rowClass: "header",
       rowNumber: headerRow,
       rowKey: "header",
-      cells: this.#cells(headerRow, all, formatting),
+      cells: this.#cells(headerRow, all, { ...formatting, hidden: true }),
       labels,
     });
     // Blank rows occur inside the data, so every row is read down to the end of the used range.
@@ -339,10 +353,12 @@ class TabReader {
         rowNumber: row,
         rowKey:
           kind === "empty"
-            ? this.#contentKey(prefix, record)
+            ? this.#contentKey(prefix, record, row)
             : this.#keyed(`${prefix}__${outreachNameHash(name ?? "", this.#secret)}`),
         cells: record,
         labels,
+        // The name and the address of a contact.
+        ...(kind === "contact" ? { personal: labels.slice(0, 2) } : {}),
       });
     }
   }
@@ -357,7 +373,7 @@ class TabReader {
         this.#push({
           rowClass: "annotation",
           rowNumber: row,
-          rowKey: this.#contentKey("row", record),
+          rowKey: this.#contentKey("row", record, row),
           cells: record,
           labels,
         });
@@ -415,7 +431,7 @@ export async function readRecruitmentWorkbook(input: ImportInput, context: ReadC
   }
   const bytes = readFileSync(input.path);
   const contentHash = sha256OfBytes(bytes);
-  const inputFiles = [{ name: path.basename(input.path).slice(0, LIMITS.shortText), sha256: contentHash }];
+  const inputFiles = [inputFileOf(input.path, contentHash)];
   let workbook: Workbook;
   try {
     workbook = readWorkbook(bytes);

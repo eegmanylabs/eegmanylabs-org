@@ -9,12 +9,18 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   type CoordinationWorkbookOptions,
   coordinationWorkbook,
+  OUTREACH_TAB_TITLE,
   SUMMARY_ROWS,
+  SUMMARY_TAB_TITLE,
   type SummaryRow,
 } from "../../tools/src/import/fixtures/coordination-workbook";
 import { websiteFixture, writeWebsiteFixture } from "../../tools/src/import/fixtures/website";
 import { itemBuilders } from "../../tools/src/import/reconcile";
-import { importer as coordination } from "../../tools/src/import/sources/coordination-workbook";
+import {
+  importer as coordination,
+  coordinationImporter,
+  SUMMARY_COLUMNS,
+} from "../../tools/src/import/sources/coordination-workbook";
 import { importer as website } from "../../tools/src/import/sources/website-data";
 import { adminDb } from "../support/admin";
 import { importCli } from "./cli-support";
@@ -25,6 +31,7 @@ import {
   freshDatabase,
   OBSERVED_ON,
   reconciliationItems,
+  recordApplied,
   removeTemporaryDirectories,
   run,
   schemaProblems,
@@ -183,26 +190,56 @@ describe("the coordination workbook importer", () => {
     expect(finished.map((item) => item.entityRefs[0]?.entityId)).toEqual(["Delta1999"]);
   });
 
-  it("names every column of the summary that the brief does not state, and keeps its cells in the source records", async () => {
+  it("stops on a column of the summary that the brief does not state, and imports no figure beside it", async () => {
     await applyWebsite();
     const report = await run(
       coordination,
       await workbookFile({ extraColumn: { header: "Comments", value: "an invented comment" } }),
       "apply",
     );
-    expect(report.status).toBe("applied");
+    expect(report.status).toBe("failed");
+    expect(report.blocking.map((check) => check.check)).toEqual(["unknownColumn"]);
+    expect((await documentsOf("historicalAggregates")).size).toBe(0);
+    expect((await documentsOf("outreachContacts")).size).toBe(0);
+    // The item that explains the stop is written at once, and names the column as found.
     const [column] = await openItems("structureChange");
-    expect(column?.candidates).toEqual([expect.objectContaining({ valueSource: "Comments" })]);
-    expect(column?.id).toBe(
-      items.structureChange({
-        subject: `a/${SUMMARY}/header/comments`,
-        claims: [{ source: `a/${SUMMARY}/header`, value: "Comments" }],
-      }).fingerprint,
-    );
+    expect(column?.candidates.map((candidate: { valueSource?: string }) => candidate.valueSource)).toEqual([
+      SUMMARY_COLUMNS.map((entry) => entry.header).join(" | "),
+      "H: Comments",
+    ]);
+    // The cells of the column are in the raw rows and nowhere else.
     const documents = await allDocuments();
     const holding = [...documents].filter(([, stored]) => JSON.stringify(stored.data).includes("an invented comment"));
     expect(holding.length).toBe(6);
     for (const [documentPath] of holding) expect(documentPath).toMatch(/^sourceRecords\//);
+  });
+
+  it("stops on a second summary tab, which would give one study two current figures for one metric", async () => {
+    await applyWebsite();
+    const report = await run(coordination, await workbookFile({ secondSummary: true }), "apply");
+    expect(report.status).toBe("failed");
+    expect(report.blocking.map((check) => check.check)).toEqual(["summary"]);
+    expect((await documentsOf("historicalAggregates")).size).toBe(0);
+  });
+
+  it("holds a workbook to the reviewed table of tabs once a maintainer has entered one", async () => {
+    await applyWebsite();
+    const reviewed = coordinationImporter([
+      { title: SUMMARY_TAB_TITLE, kind: "counts" },
+      { title: OUTREACH_TAB_TITLE, kind: "outreach", studyId: "Delta1999" },
+    ]);
+    // The reviewed table names the study of the outreach tab, which its title alone never does.
+    const report = await run(reviewed, await workbookFile(), "apply");
+    expect(report.status).toBe("applied");
+    const contacts = [...(await documentsOf("outreachContacts")).values()];
+    expect(contacts.map((contact) => contact.replicationId)).toEqual(["Delta1999", "Delta1999"]);
+    // A tab that the table does not name stops the import, although its layout is one that the importer reads.
+    await freshDatabase();
+    await applyWebsite();
+    const narrower = coordinationImporter([{ title: SUMMARY_TAB_TITLE, kind: "counts" }]);
+    const blocked = await run(narrower, await workbookFile(), "apply");
+    expect(blocked.blocking.map((check) => check.check)).toEqual(["tabs"]);
+    expect((await documentsOf("historicalAggregates")).size).toBe(0);
   });
 
   it("keeps its figures apart from those of the recruitment workbook, and queues each difference with both values", async () => {
@@ -351,6 +388,11 @@ describe("the command line with the coordination workbook", () => {
     const config = path.join(temporaryDirectory(), "sources.json");
     writeFileSync(config, JSON.stringify({ hashKey: TEST_HASH_KEY, sources: {} }));
     const base = ["--observed-on", OBSERVED_ON, "--config", config];
+    // The workbook is compared with the recruitment and contact workbook, so it runs after that one.
+    const early = importCli(["run", "a", "--input", await workbookFile(), "--mode", "apply", ...base]);
+    expect(early.status).toBe(2);
+    expect(early.stderr).toContain("source a is imported after source f");
+    await recordApplied("f");
     const applied = importCli(["run", "a", "--input", await workbookFile(), "--mode", "apply", ...base]);
     expect(applied.stderr).toBe("");
     expect(applied.status).toBe(0);

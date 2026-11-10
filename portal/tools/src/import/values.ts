@@ -36,20 +36,51 @@ export function contentHash(value: unknown): string {
   return createHash("sha256").update(canonicalJson(value), "utf8").digest("hex");
 }
 
+/** A cell reference inside a formula or a range: an optional sheet, a column and a row. */
+const CELL_REFERENCE = /(?<![A-Za-z0-9_.])(\$?[A-Z]{1,3}\$?)(\d{1,7})(?![A-Za-z0-9_(])/g;
+
+/** A text with the row of every cell reference written as its distance from a row. */
+const relativeTo = (text: string, rowNumber: number): string =>
+  text.replace(CELL_REFERENCE, (_all, column: string, row: string) => `${column}{${Number(row) - rowNumber}}`);
+
+/**
+ * The form in which a cell enters the hash of its row. The formula text and the merged range of
+ * a cell name rows of the sheet, so a line inserted above would change them although nothing of
+ * the row has changed. In the hashed form each such row is written as its distance from the row
+ * of the cell. The stored record keeps both exactly as the file holds them.
+ */
+function hashedForm(cell: unknown, rowNumber: number): unknown {
+  if (cell === null || typeof cell !== "object" || Array.isArray(cell)) return cell;
+  const record = cell as Record<string, unknown>;
+  if (typeof record.f !== "string" && typeof record.merge !== "string") return cell;
+  return {
+    ...record,
+    ...(typeof record.f === "string" ? { f: relativeTo(record.f, rowNumber) } : {}),
+    ...(typeof record.merge === "string" ? { merge: relativeTo(record.merge, rowNumber) } : {}),
+  };
+}
+
 /**
  * The hash of a row: the first 12 hexadecimal characters of SHA-256 over the compact JSON of its
- * raw cell records in column order, with `null` for an empty cell.
+ * raw cell records in column order, with `null` for an empty cell. Row numbers are part of no
+ * key, so the references to rows inside a formula or a merged range are taken relative to the
+ * row itself.
  */
-export function rowHash(cells: readonly unknown[]): string {
-  return contentHash(cells).slice(0, ROW_HASH_LENGTH);
+export function rowHash(cells: readonly unknown[], rowNumber: number): string {
+  return contentHash(positionFree(cells, rowNumber)).slice(0, ROW_HASH_LENGTH);
+}
+
+/** The cells of a row in the form in which they are hashed, where no row of the sheet is named by its number. */
+export function positionFree(cells: readonly unknown[], rowNumber: number): unknown[] {
+  return cells.map((cell) => hashedForm(cell, rowNumber));
 }
 
 /**
  * The key of a row that has no natural key: the hash of its content with its ordinal among the
  * rows of equal content, so that the row number is no part of it. `seen` counts the rows of one tab.
  */
-export function contentRowKey(cells: readonly unknown[], seen: Map<string, number>): string {
-  const hash = rowHash(cells);
+export function contentRowKey(cells: readonly unknown[], rowNumber: number, seen: Map<string, number>): string {
+  const hash = rowHash(cells, rowNumber);
   const ordinal = (seen.get(hash) ?? 0) + 1;
   seen.set(hash, ordinal);
   return `row__${hash}__${ordinal}`;
@@ -59,6 +90,11 @@ export function contentRowKey(cells: readonly unknown[], seen: Map<string, numbe
 export function wholeNumberOf(text: string): number | null {
   const trimmed = text.trim();
   return /^\d{1,15}$/.test(trimmed) ? Number(trimmed) : null;
+}
+
+/** The order of two texts by code point, which no locale changes: for a list that has to come out the same everywhere. */
+export function byCodePoint(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /** Whether two stored values are equal in every part. */

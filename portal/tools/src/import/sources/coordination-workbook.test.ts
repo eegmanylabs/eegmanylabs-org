@@ -13,7 +13,7 @@ import {
 } from "../fixtures/coordination-workbook";
 import type { SourceReading } from "../model";
 import { SOURCE_DEFINITIONS, SYNTHETIC_FIXTURES_ONLY } from "../registry";
-import { importer, SUMMARY_COLUMNS } from "./coordination-workbook";
+import { importer, REVIEWED_TABS, SUMMARY_COLUMNS } from "./coordination-workbook";
 
 const READ_CONTEXT = { secret: "a-synthetic-hash-key-for-the-import-tests" };
 const directory = mkdtempSync(path.join(tmpdir(), "eegml-coordination-"));
@@ -67,11 +67,32 @@ describe("the structure check of source A", () => {
         check: "summary",
         tabKey: null,
         expected: SUMMARY_HEADERS.join(" | "),
+        found: "no summary tab",
         message:
-          "No tab of the workbook holds the seven summary headers in row 1, each once. 1 tabs were read: " +
+          "The workbook holds 0 tabs with the seven summary headers in row 1, each once, where exactly one is expected. 1 tabs were read: " +
           "0 with the layout of a leads tab, 1 with the layout of an outreach tab and 0 with none of the layouts that the importer reads.",
       }),
     ]);
+  });
+
+  it("stops on a second summary tab, which would give one study two current figures for one metric", async () => {
+    const read = await reading({ secondSummary: true });
+    expect(read.issues).toEqual([expect.objectContaining({ check: "summary", tabKey: null, found: "2 summary tabs" })]);
+  });
+
+  it("stops on a headed column of the summary that the brief does not name, and names the column in the report", async () => {
+    const read = await reading({ extraColumn: { header: "Comments", value: "an invented comment" } });
+    expect(read.issues).toEqual([
+      expect.objectContaining({ check: "unknownColumn", expected: SUMMARY_HEADERS.join(" | "), found: "H: Comments" }),
+    ]);
+    // The message, which is printed and logged, quotes no header and no cell.
+    expect(read.issues[0]?.message).toContain("1 headed columns that the brief does not name");
+    expect(read.issues[0]?.message).not.toMatch(/Comments|invented comment/);
+  });
+
+  it("keeps an empty table of reviewed tabs in the module, since no title of the real workbook is known", () => {
+    expect(REVIEWED_TABS).toEqual([]);
+    expect(importer.after).toEqual(["f"]);
   });
 
   it("recognises summary headers in another spelling, and names each as found, each missing one and each unknown one", async () => {

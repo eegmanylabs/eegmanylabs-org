@@ -14,12 +14,47 @@ export const FIRESTORE_URL = `http://${HOST}:${PORTS.firestore}`;
 export const FUNCTIONS_URL = `http://${HOST}:${PORTS.functions}`;
 export const STORAGE_URL = `http://${HOST}:${PORTS.storage}`;
 
-/** Deletes every document of a project in the Firestore emulator. Does not fire triggers. */
+const HUB_URL = `http://${HOST}:${PORTS.hub}`;
+
+/** The status of a clear that found a transaction in progress: a trigger that is still writing, for example. */
+const CONFLICT = 409;
+
+/**
+ * Deletes every document of a project in the Firestore emulator. The emulator refuses while a
+ * transaction is in progress, which a trigger of the functions emulator can be, so a refused
+ * clear is tried again for a few seconds.
+ *
+ * With the functions emulator running, the deletions reach the triggers like any other write.
+ * A suite that must not see those events clears between `setBackgroundTriggers(false)` and
+ * `setBackgroundTriggers(true)`.
+ */
 export async function clearFirestore(projectId: string = PROJECT_ID): Promise<void> {
-  const response = await fetch(`${FIRESTORE_URL}/emulator/v1/projects/${projectId}/databases/(default)/documents`, {
-    method: "DELETE",
-  });
-  if (!response.ok) throw new Error(`Could not clear the Firestore emulator: ${response.status}`);
+  const deadline = Date.now() + 15_000;
+  for (;;) {
+    const response = await fetch(`${FIRESTORE_URL}/emulator/v1/projects/${projectId}/databases/(default)/documents`, {
+      method: "DELETE",
+    });
+    if (response.ok) return;
+    if (response.status !== CONFLICT || Date.now() > deadline) {
+      throw new Error(`Could not clear the Firestore emulator: ${response.status}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
+/**
+ * Switches the Firestore triggers of the functions emulator off or on, through the emulator
+ * hub. Switching them off first waits for the trigger work that is queued, so it is also the
+ * way to wait for the triggers to finish. Returns false when the functions emulator is not
+ * running, in which case there are no triggers to switch.
+ */
+export async function setBackgroundTriggers(enabled: boolean): Promise<boolean> {
+  const action = enabled ? "enableBackgroundTriggers" : "disableBackgroundTriggers";
+  try {
+    return (await fetch(`${HUB_URL}/functions/${action}`, { method: "PUT" })).ok;
+  } catch {
+    return false;
+  }
 }
 
 /** Deletes every account of a project in the Authentication emulator. */

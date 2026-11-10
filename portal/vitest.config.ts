@@ -3,6 +3,11 @@ import { defineConfig } from "vitest/config";
 // One configuration, five projects. `npm run test:unit` runs the first two, which need nothing
 // running. The other three expect the emulators and are started through
 // `node scripts/emulators.mjs exec`, which is what the test:* scripts in package.json do.
+//
+// `rules` and `tools` run without the functions emulator. The functions emulator runs the
+// Firestore triggers for every write to the demonstration project, and the tools tests count
+// exactly what a tool writes, so `npm test` starts the emulators twice: once without the
+// functions for those two projects, and once with them for `functions` and the browser tests.
 const emulated = {
   environment: "node",
   // No Google credentials exist locally: skip the metadata-server probe of the Admin SDK.
@@ -32,7 +37,15 @@ export default defineConfig({
       },
       "web/vitest.config.ts",
       { test: { ...emulated, name: "rules", include: ["tests/rules/**/*.test.ts"] } },
-      { test: { ...emulated, name: "functions", include: ["tests/functions/**/*.test.ts"] } },
+      {
+        test: {
+          ...emulated,
+          name: "functions",
+          include: ["tests/functions/**/*.test.ts"],
+          // A test may wait for a trigger, whose first run after the emulator has loaded takes seconds.
+          testTimeout: 60_000,
+        },
+      },
       { test: { ...emulated, name: "tools", include: ["tests/tools/**/*.test.ts"] } },
     ],
   },

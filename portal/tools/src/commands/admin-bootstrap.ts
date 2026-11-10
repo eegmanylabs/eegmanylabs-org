@@ -106,8 +106,11 @@ export const adminBootstrapCommand: Command = {
       hashKey = loadPrivateConfig(values.get("--config") ?? DEFAULT_CONFIG_PATH).hashKey;
       db = connectToProject(target.projectId).db;
     } else {
-      if (values.has("--config"))
-        throw new ToolRefusal("--config names the key of a real project and is read only together with --production.");
+      if (values.has("--config")) {
+        throw new ToolRefusal(
+          `--config names the key of a real project and is read only together with --production.\n\n${USAGE}`,
+        );
+      }
       hashKey = emulatorHashKey();
       await requireRunningEmulators(target, process.env, 1_000, ["firestore"]);
       db = connectToEmulators(target).db;

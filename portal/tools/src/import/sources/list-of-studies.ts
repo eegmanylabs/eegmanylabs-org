@@ -391,7 +391,7 @@ function readTab(tab: Tab, sheet: WorkbookSheet, issues: StructureIssue[]): Sour
       ...draft,
       // A row of a paper tab that names no paper is no record of the tab. It is kept for a reviewer to place.
       rowClass: keyless ? "annotation" : "data",
-      rowKey: natural === null ? contentRowKey(draft.cells, unkeyed) : repeat > 1 ? `${natural}__${repeat}` : natural,
+      rowKey: natural === null ? contentRowKey(draft.cells, draft.rowNumber, unkeyed) : repeat > 1 ? `${natural}__${repeat}` : natural,
     });
   }
   if (repeatedKeys > 0) {
@@ -771,14 +771,16 @@ class ListOfStudiesPlan {
       );
     for (const row of this.#data("list")) {
       const studyId = tidied(this.#text("list", row, "studyId") ?? "");
-      const resolution = STUDY_ID_PATTERN.test(studyId) ? await studies.resolve(studyId) : null;
-      if (resolution?.status === "resolved" || resolution?.status === "unresolved") {
+      // The spelling is resolved first, whatever its shape: a lower-case initial or a diacritic names the study it
+      // folds to. The shape is asked only of a spelling that resolves to nothing and would name a new replication.
+      const resolution = await studies.resolve(studyId);
+      if (resolution.status === "resolved" || (resolution.status === "unresolved" && STUDY_ID_PATTERN.test(studyId))) {
         const known = resolution.status === "resolved";
         const target = known ? resolution.replicationId : studyId;
         claims.set(target, [...(claims.get(target) ?? []), { row, studyId, known }]);
       } else {
         // Malformed, or a spelling that several replications carry: no replication is created.
-        unmatched(row, studyId, resolution?.status === "ambiguous" ? resolution.replicationIds : []);
+        unmatched(row, studyId, resolution.status === "ambiguous" ? resolution.replicationIds : []);
       }
     }
     for (const [replicationId, rows] of claims) {
@@ -800,7 +802,7 @@ class ListOfStudiesPlan {
         year: null,
       };
       this.#studies.push({ entry, studyId: own.studyId, replicationId, exists });
-      studies.declare(own.studyId, replicationId);
+      studies.declare(own.studyId, replicationId, "programme");
       const paper = this.#paperOfRow.get(own.row.recordId)?.paper;
       if (paper !== undefined && !paper.replicationIds.includes(replicationId))
         paper.replicationIds.push(replicationId);
@@ -1492,16 +1494,24 @@ class ListOfStudiesPlan {
   }
 
   /**
-   * Writes the candidate studies of the three archived tabs, each with the selection status that
-   * the tabs give it. A paper that became a study is `selected` and names its replication, a
+   * Writes the candidate studies of the three archived tabs, where the run writes them at all,
+   * each with the selection status that the tabs give it. A paper that became a study is `selected` and names its replication, a
    * paper of the shortlist or of the subproject is `shortlisted`, and any other is a
    * `rankedCandidate`. No status is ever read out of an on-hold or exclusion remark.
    */
   #candidates(): void {
     const { items } = this.#context;
+    // Where a candidate paper lives is an open question (docs/MIGRATION_PLAN.md, section 11, question 9). Until it
+    // is answered the rows of the three tabs stay source records, and a candidate is written only where the run
+    // rehearses that withheld output.
+    const written = this.#context.writes("candidateStudies");
     for (const paper of [...this.#papers.values()].sort((a, b) => (a.key < b.key ? -1 : 1))) {
       const archived = paper.rows.filter((entry) => entry.tab !== "list");
       if (archived.length === 0) continue;
+      if (!written) {
+        for (const entry of archived) this.#builder.rawOnly(entry.row.recordId, "candidateWithheld");
+        continue;
+      }
       const ranked = archived.filter((entry) => entry.tab === "ranked");
       const cited = archived.filter((entry) => entry.tab !== "ranked");
       const [first] = ranked;
@@ -1596,7 +1606,8 @@ class ListOfStudiesPlan {
         const candidateId = placed?.paper.candidateId ?? null;
         const subject = candidateId ?? `${source}/${row.rowKey}`;
         const refs = candidateId === null ? [] : [candidate(candidateId)];
-        this.#keywords(tab, row);
+        // The keywords of a candidate paper become terms only together with the candidate.
+        if (this.#context.writes("candidateStudies")) this.#keywords(tab, row);
         if (tab !== "ranked") {
           this.#statusCells(tab, row, subject, refs);
           this.#groupLeftovers(tab, row, subject, refs);
@@ -1727,6 +1738,8 @@ export const importer: ImporterDefinition = {
   sourceKey: SOURCE_KEY,
   summary: "List of studies: the extraction data of every study, and the candidate papers of the earlier phases.",
   inputDescription: "the Excel export of the workbook",
+  // The website data creates the studies that it lists, as live records. This workbook creates the others.
+  after: ["h"],
   read,
   plan: (context) => new ListOfStudiesPlan(context).build(),
 };

@@ -138,7 +138,7 @@ function readSheet(input: ImportInput, context: ReadContext): SourceReading {
   }
 
   const grid = gridOf(sheet);
-  const headerCells = grid.cells(1);
+  const headerCells = grid.cells(1, { hidden: true });
   const headers: HeaderCell[] = grid.labels.map((label, index) => {
     const value = storedValue(headerCells[index]);
     return { label, text: typeof value === "string" ? value : value === null ? "" : String(value) };
@@ -196,6 +196,8 @@ function readSheet(input: ImportInput, context: ReadContext): SourceReading {
   const firstNameColumn = columns.fields.get("firstName");
   const surnameColumn = columns.fields.get("surname");
   const orderColumn = columns.fields.get("orderInPublication");
+  // The cells that name the person or identify them. No identifier that the plan derives from a row may hold a word of them.
+  const personal = PERSONAL_FIELDS.flatMap((field) => columns.fields.get(field) ?? []);
   let fillerRows = 0;
   let blankRows = 0;
   for (let row = 2; row <= grid.lastRow; row += 1) {
@@ -208,7 +210,7 @@ function readSheet(input: ImportInput, context: ReadContext): SourceReading {
     if (rowClass === "filler") fillerRows += 1;
     else if (rowClass === "blank") blankRows += 1;
     if (rowClass === "filler" || rowClass === "blank") continue;
-    const stored = { rowNumber: row, cells, labels: grid.labels };
+    const stored = { rowNumber: row, cells, labels: grid.labels, personal };
     if (rowClass === "contributor") {
       // The key of a contributor row is the keyed hash of its folded name, with an ordinal among equal names.
       const nameHash = contributorNameHash(String(firstName), String(surname), context.secret);
@@ -742,7 +744,8 @@ class SheetPlan {
     const linked = orcidLink === null ? null : validOrcid(orcidLink);
     if (orcidText !== null && (orcid === null || (orcidLink !== null && linked !== orcid))) {
       this.#builder.item(
-        items.identifierDefect({ ...subject, field: "orcid", claims: [this.#claim(row, orcidText.trim())] }),
+        // An identifier of a person is shown in no item. A reviewer reads the cell in its source record.
+        items.identifierDefect({ ...subject, field: "orcid", claims: [this.#claim(row, orcidText.trim(), false)] }),
       );
     }
     const emailText = this.#text(row, columns.fields.get("email"));
@@ -1114,6 +1117,12 @@ class SheetPlan {
 const SUMMARY =
   "Contributor sheets: the contributors of a manuscript with their CRediT roles, and their addresses in restricted documents.";
 const INPUT = "the Excel export of one contributor sheet";
+/** The fields of a contributor row that name the person or identify them. */
+const PERSONAL_FIELDS = ["firstName", "middleName", "surname", "email", "orcid"] as const;
+/** The people of the website are the link targets of a contributor row (docs/MIGRATION_PLAN.md, section 5, step 7). */
+const AFTER = ["h"] as const;
+/** Every member could read an applied list, so the apply waits for the answer to question 10 of section 11. */
+const WITHHELD = "contributorLists" as const;
 
 /** The importer of one registered contributor sheet. */
 function importerOf(name: string, registration: PrivateContributorSheet): ImporterDefinition {
@@ -1127,6 +1136,8 @@ function importerOf(name: string, registration: PrivateContributorSheet): Import
     sourceKey: sheet.sourceKey,
     summary: SUMMARY,
     inputDescription: INPUT,
+    after: AFTER,
+    withheld: WITHHELD,
     source: {
       key: sheet.sourceKey,
       title: `Contributor sheet of ${registration.replicationId} (${name})`.slice(0, LIMITS.shortText),
@@ -1176,6 +1187,8 @@ export const importer: ImporterDefinition = {
   sourceKey: FAMILY_KEY,
   summary: SUMMARY,
   inputDescription: INPUT,
+  after: AFTER,
+  withheld: WITHHELD,
   select,
   read: unbound,
   plan: unbound,

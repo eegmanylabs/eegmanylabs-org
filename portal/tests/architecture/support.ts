@@ -6,7 +6,7 @@ import { PORTAL_ROOT } from "../../scripts/paths.mjs";
 export { PORTAL_ROOT };
 
 /** Directories that hold generated files or installed packages, never source. */
-const GENERATED_DIRECTORIES = new Set(["node_modules", "out", ".run", ".private"]);
+const GENERATED_DIRECTORIES = new Set(["node_modules", "out", ".run", ".private", ".vitest"]);
 const GENERATED_FILES = [/^firebase\.run-\d+\.json$/, /^package-lock\.json$/, /\.log$/, /^\.env(\..+)?\.local$/];
 
 export interface SourceFile {

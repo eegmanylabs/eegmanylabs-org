@@ -11,7 +11,12 @@
 // Nothing is decided between two values here. The numbers carry no date, so an aggregate has no
 // snapshot date. A blank number is absent and an explicit zero is zero. The counts of the main
 // experiment and of the resting state are two metrics and are never added. A row that names two
-// studies gives its numbers, its lead and its address to neither.
+// studies gives its numbers, its lead and its address to neither: every item about such a row
+// names every study of the row, marks each as a part of a combined cell, and writes to none.
+//
+// An identifier that resolves to nothing stays unresolved. The one study whose identifier differs
+// from it by the year alone is named as a proposal in the item about the identifier, and in no
+// other place: no lead is compared with the leads of a proposed study, and nothing is written to it.
 import {
   COLLECTIONS,
   type EntityRef,
@@ -30,6 +35,7 @@ import { readDocuments } from "./context";
 import { personEvidence } from "./identity";
 import type { DocumentSpec, ImportPlan, PlanContext, PlannedItem, RawCell, RecordedRow } from "./model";
 import { PlanBuilder } from "./plan";
+import { COMBINED_PREFIX, PROPOSAL_PREFIX } from "./preview";
 import type { ItemClaim } from "./reconcile";
 import { aliasDocuments, VocabularyCollector } from "./records";
 import {
@@ -42,7 +48,6 @@ import {
   nameChecks,
   peopleIn,
   proposeResult,
-  RESULT_STATUS_MAX_LENGTH,
   readAddress,
   readOutreachDate,
   recomputeAggregate,
@@ -131,8 +136,12 @@ interface StudyView {
   /** The one replication of the row, or null for a row that names two studies or none that is known. */
   replicationId: string | null;
   refs: readonly EntityRef[];
-  /** The studies proposed for the identifiers of the row that resolve to nothing. A proposal links nothing. */
-  proposed: string[];
+  /**
+   * For a row that names several studies: the claims that mark each study as a part of the
+   * combined cell, resolved or proposed. They stand in every item about the row, so that the
+   * item is found under each study and nothing is ever written to one of them on its strength.
+   */
+  parts: ItemClaim[];
   counts?: LeadCell & { readonly struck: boolean; readonly leaderStruck: boolean };
   leads?: LeadCell;
 }
@@ -141,7 +150,14 @@ type Purpose = "leadSearch" | "labSearch" | "unknown";
 
 /** The claim that names the study proposed for an identifier which resolves to nothing. */
 const proposalClaims = (studyId: string | null): ItemClaim[] =>
-  studyId === null ? [] : [{ source: "proposal/otherYear", value: studyId, valueSource: studyId }];
+  studyId === null ? [] : [{ source: `${PROPOSAL_PREFIX}otherYear`, value: studyId, valueSource: studyId }];
+
+/** The claim that marks a study as one of several that a combined cell names. */
+const partClaim = (studyId: string): ItemClaim => ({
+  source: `${COMBINED_PREFIX}part`,
+  value: studyId,
+  valueSource: studyId,
+});
 
 interface ContactView {
   readonly tab: TabView;
@@ -197,14 +213,12 @@ class RecruitmentPlan {
   >();
   readonly #contacts: ContactView[] = [];
   /** Results that the importer cannot read as a status, by their trimmed and case-folded text. */
-  readonly #unreadResults = new Map<string, { readonly label: string; readonly row: RecordedRow }>();
+  readonly #unreadResults = new Map<string, RecordedRow>();
   readonly #leadLines: {
     readonly tab: TabView;
     readonly row: RecordedRow;
     readonly lead: Named;
     readonly replicationId: string | null;
-    /** The study proposed for a tab whose title resolves to nothing. */
-    readonly proposed: string | null;
   }[] = [];
   /** Tabs of which nothing is imported, because a check of the tab itself has failed. */
   readonly #blockedTabs = new Set<string>();
@@ -272,9 +286,9 @@ class RecruitmentPlan {
   /**
    * The one study whose identifier differs from a spelling by its year alone, where the spelling
    * resolves to nothing: the same letters, followed by another year or by two years. It is a
-   * proposal for a reviewer and no match. No alias, figure or contact is given to the study. The
-   * question about the identifier names it, and lead claims made under the spelling are put
-   * beside its leads for review.
+   * proposal for a reviewer and no match. No alias, figure, contact or lead is given to the
+   * study, and no lead claim is compared with its leads. The question about the identifier
+   * names it, and nothing else does.
    */
   #proposedStudy(spelling: string): string | null {
     const letters = /^(\p{L}+)\d{4}(?:\d{4})?$/u.exec(spelling.normalize("NFC").trim())?.[1];
@@ -290,7 +304,7 @@ class RecruitmentPlan {
   #study(key: string): StudyView {
     let view = this.#studies.get(key);
     if (view === undefined) {
-      view = { key, replicationId: null, refs: [], proposed: [] };
+      view = { key, replicationId: null, refs: [], parts: [] };
       this.#studies.set(key, view);
     }
     return view;
@@ -417,7 +431,7 @@ class RecruitmentPlan {
       entry.claims.push(claim(raw.trim()));
       if (held) entry.held.push(row.recordId);
       this.#unresolved.set(folded, entry);
-      if (proposed !== null && !view.proposed.includes(proposed)) view.proposed.push(proposed);
+      return proposed;
     };
     const resolution = await studies.resolve(cell);
     if (resolution.status === "resolved") {
@@ -445,11 +459,19 @@ class RecruitmentPlan {
       return "resolved";
     }
     if (resolution.status === "combined") {
-      const resolved = resolution.parts.flatMap((part) =>
-        part.resolution.status === "resolved" ? [part.resolution.replicationId] : [],
-      );
-      view.refs = [...new Set(resolved)].sort().map(replication);
-      for (const part of resolution.parts) if (part.resolution.status !== "resolved") note(part.raw, false);
+      // Every part is named, the resolved ones and the proposed ones alike, and each is marked as what it is.
+      const parts = new Map<string, ItemClaim>();
+      for (const part of resolution.parts) {
+        if (part.resolution.status === "resolved") {
+          parts.set(part.resolution.replicationId, partClaim(part.resolution.replicationId));
+          continue;
+        }
+        const proposed = note(part.raw, false);
+        const [proposal] = proposalClaims(proposed);
+        if (proposed !== null && proposal !== undefined && !parts.has(proposed)) parts.set(proposed, proposal);
+      }
+      view.refs = [...parts.keys()].sort().map(replication);
+      view.parts = [...parts].sort(([a], [b]) => (a < b ? -1 : 1)).map(([, claim]) => claim);
       return "combined";
     }
     if (resolution.status === "ambiguous") view.refs = resolution.replicationIds.map(replication);
@@ -482,8 +504,16 @@ class RecruitmentPlan {
       for (const metric of METRICS) {
         const cell = this.#cell(row, columns.get(COUNT_HEADERS[metric]));
         const value = storedValue(cell);
+        const place = {
+          recordId: row.recordId,
+          path: COLLECTIONS.historicalAggregates.docPath(historicalAggregateId(metric, row.recordId)),
+          field: "valueNumeric",
+        };
         // A blank cell is absent. It is never read as zero, and nothing is written for it.
-        if (value === null || (typeof value === "string" && value.trim() === "")) continue;
+        if (value === null || (typeof value === "string" && value.trim() === "")) {
+          this.#builder.numericCell({ ...place, state: "blank" });
+          continue;
+        }
         const raw = textOf(cell) ?? "";
         const claim = {
           source: `${tab.source}/${metric}`,
@@ -499,12 +529,22 @@ class RecruitmentPlan {
           cellPart(cell, "z") === null;
         if (!whole) {
           // Text, a fraction, a negative number or a formula is no count that the importer may read.
-          this.#item(items.unparsedValue({ subject, field: metric, entityRefs: view.refs, claims: [claim] }));
+          this.#item(
+            items.unparsedValue({ subject, field: metric, entityRefs: view.refs, claims: [claim, ...view.parts] }),
+          );
+          this.#builder.numericCell({ ...place, state: "held" });
           continue;
         }
         numbers.set(metric, { value, raw });
         figures.push(claim);
+        // A number is written only for a row that names one study. Any other row holds its numbers in the queue.
+        this.#builder.numericCell(
+          status === "resolved" && view.replicationId !== null
+            ? { ...place, state: "number", value }
+            : { ...place, state: "held" },
+        );
       }
+      if (row.cells.some((cell) => cellPart(cell, "hiddenRow") === true)) this.#hiddenRow(tab, row, subject, view);
       if (status === "resolved" && view.replicationId !== null) {
         for (const [metric, { value, raw }] of numbers) {
           this.#document({
@@ -537,6 +577,7 @@ class RecruitmentPlan {
                 sourceRecordId: row.recordId,
               },
               ...figures,
+              ...view.parts,
             ],
           }),
         );
@@ -552,12 +593,15 @@ class RecruitmentPlan {
             subject,
             field,
             entityRefs: view.refs,
-            claims: [first, second].map((metric) => ({
-              source: `${tab.source}/${metric}`,
-              value: numbers.get(metric)?.raw ?? "",
-              valueSource: numbers.get(metric)?.raw ?? "",
-              sourceRecordId: row.recordId,
-            })),
+            claims: [
+              ...[first, second].map((metric) => ({
+                source: `${tab.source}/${metric}`,
+                value: numbers.get(metric)?.raw ?? "",
+                valueSource: numbers.get(metric)?.raw ?? "",
+                sourceRecordId: row.recordId,
+              })),
+              ...view.parts,
+            ],
           }),
         );
       if (signed !== undefined && finished !== undefined && finished.value > signed.value) {
@@ -573,7 +617,10 @@ class RecruitmentPlan {
             subject,
             field: "totalNRest",
             entityRefs: view.refs,
-            claims: [{ source: `${tab.source}/totalNRest/blank`, value: "blank", sourceRecordId: row.recordId }],
+            claims: [
+              { source: `${tab.source}/totalNRest/blank`, value: "blank", sourceRecordId: row.recordId },
+              ...view.parts,
+            ],
           }),
         );
       }
@@ -588,6 +635,7 @@ class RecruitmentPlan {
             claims: [
               { source: `${tab.source}/strike`, value: String(struck), sourceRecordId: row.recordId },
               { source: `${tab.source}/signUpNumbers`, value: String(planned), sourceRecordId: row.recordId },
+              ...view.parts,
             ],
           }),
         );
@@ -661,31 +709,55 @@ class RecruitmentPlan {
         if (typeof formula !== "string") continue;
         const field = row.labels[index] ?? "";
         const cached = storedValue(cell);
-        const report = (check: string, values: readonly [string, string][]) =>
-          this.#item(
-            items.annotationReview({
-              subject: `${tab.source}/${row.rowKey}`,
-              field,
-              claims: values.map(([part, value]) => ({
-                source: `${tab.source}/derived/${check}/${part}`,
-                value,
-                valueSource: value.slice(0, LIMITS.shortText),
-                sourceRecordId: row.recordId,
-              })),
-            }),
-          );
+        const report = (check: string, values: readonly [string, string][]): string => {
+          const item = items.annotationReview({
+            subject: `${tab.source}/${row.rowKey}`,
+            field,
+            claims: values.map(([part, value]) => ({
+              source: `${tab.source}/derived/${check}/${part}`,
+              value,
+              valueSource: value.slice(0, LIMITS.shortText),
+              sourceRecordId: row.recordId,
+            })),
+          });
+          this.#item(item);
+          return item.fingerprint;
+        };
         const recomputed = recomputeAggregate(formula, numberAt);
-        if (recomputed === null) report("unchecked", [["formula", formula]]);
-        else if (typeof cached !== "number" || Math.abs(recomputed - cached) > 1e-9) {
-          report("stale", [
-            ["cached", String(cached)],
-            ["recomputed", String(recomputed)],
-          ]);
-        }
+        // A value that cannot be recomputed, and one that differs from its recomputation, is reported and never replaced.
+        const reportedBy =
+          recomputed === null
+            ? report("unchecked", [["formula", formula]])
+            : typeof cached !== "number" || Math.abs(recomputed - cached) > 1e-9
+              ? report("stale", [
+                  ["cached", String(cached)],
+                  ["recomputed", String(recomputed)],
+                ])
+              : undefined;
+        this.#builder.derivedValue({
+          recordId: row.recordId,
+          matches: reportedBy === undefined,
+          ...(reportedBy === undefined ? {} : { reportedBy }),
+        });
         // A total that is put together by hand, from single cells or from two columns, is no figure of the tab.
         if (recomputed !== null && !isPlainColumnAggregate(formula)) report("handBuilt", [["formula", formula]]);
       }
     }
+  }
+
+  /** A hidden row says something that only its hidden state holds. It changes no status and asks what is meant. */
+  #hiddenRow(tab: TabView, row: RecordedRow, subject: string, view?: StudyView): void {
+    this.#item(
+      this.#context.items.formattingSignal({
+        subject,
+        field: "hiddenRow",
+        entityRefs: view?.refs ?? [],
+        claims: [
+          { source: `${tab.source}/hiddenRow`, value: "hidden", sourceRecordId: row.recordId },
+          ...(view?.parts ?? []),
+        ],
+      }),
+    );
   }
 
   /** Sends a row that is no data row to review. Its content stays in its source record. */
@@ -714,6 +786,7 @@ class RecruitmentPlan {
       const former = namesIn(textOf(this.#cell(row, columns.get(LEAD_HEADERS.oldLeader))));
       view.leads = { tab, row, leaders, former };
       const subject = this.#subject(view);
+      if (row.cells.some((cell) => cellPart(cell, "hiddenRow") === true)) this.#hiddenRow(tab, row, subject, view);
       if (status === "combined") {
         this.#hold(
           row.recordId,
@@ -727,6 +800,7 @@ class RecruitmentPlan {
                 valueSource: studyCell.slice(0, LIMITS.shortText),
                 sourceRecordId: row.recordId,
               },
+              ...view.parts,
             ],
           }),
         );
@@ -744,15 +818,12 @@ class RecruitmentPlan {
             subject,
             field: "email",
             entityRefs: view.refs,
+            // The address is shown in no item, decoded or not: a reviewer reads the cell in its source record.
             claims: [
               address.status === "reversed"
-                ? {
-                    source: `${tab.source}/email/reversed`,
-                    value: address.decoded,
-                    valueSource: address.decoded,
-                    sourceRecordId: row.recordId,
-                  }
+                ? { source: `${tab.source}/email/reversed`, value: address.decoded, sourceRecordId: row.recordId }
                 : { source: `${tab.source}/email/invalid`, value: row.rawHash, sourceRecordId: row.recordId },
+              ...view.parts,
             ],
           }),
         );
@@ -776,6 +847,7 @@ class RecruitmentPlan {
                 value: text.trim().toLowerCase(),
                 sourceRecordId: row.recordId,
               })),
+              ...view.parts,
             ],
           }),
         );
@@ -904,7 +976,11 @@ class RecruitmentPlan {
             subject,
             field: "formerLead",
             entityRefs: view.refs,
-            claims: [...claimsOf(leads, leads.former, "oldLeader"), ...claimsOf(leads, leads.leaders, "leader")],
+            claims: [
+              ...claimsOf(leads, leads.former, "oldLeader"),
+              ...claimsOf(leads, leads.leaders, "leader"),
+              ...view.parts,
+            ],
           }),
         );
       }
@@ -925,6 +1001,7 @@ class RecruitmentPlan {
               ...(further
                 ? held.map((entry) => ({ source: "held/lead", value: entry.lead.folded, valueSource: entry.lead.name }))
                 : []),
+              ...view.parts,
             ],
           }),
         );
@@ -958,13 +1035,12 @@ class RecruitmentPlan {
               ...(leads !== undefined && leads.leaders.length > 0
                 ? [{ source: `${leads.tab.source}/leader/listed`, value: "listed", sourceRecordId: leads.row.recordId }]
                 : []),
+              ...view.parts,
             ],
           }),
         );
       }
     }
-
-    await this.#proposedLeadItems(claimsOf);
 
     // The lead line of an outreach tab against the current leads of its study.
     const rows = [...this.#studies.values()].flatMap((view) =>
@@ -991,63 +1067,6 @@ class RecruitmentPlan {
             },
             ...own.flatMap(({ cell }) => claimsOf(cell, cell.leaders, "leader")),
             ...formerOf.flatMap(({ cell }) => claimsOf(cell, cell.former, "oldLeader")),
-          ],
-        }),
-      );
-    }
-  }
-
-  /**
-   * Lead claims that stand under an identifier or a tab title which resolves to nothing, put
-   * beside the leads of the study proposed for it. Where they name anybody else, the question is
-   * raised for that study, so that its lead is reviewed before the identifier is decided.
-   */
-  async #proposedLeadItems(claimsOf: (cell: LeadCell, names: readonly Named[], part: string) => ItemClaim[]) {
-    const { items } = this.#context;
-    const stated = new Map<string, { readonly names: Named[]; readonly claims: ItemClaim[] }>();
-    const add = (studyId: string, names: readonly Named[], claims: readonly ItemClaim[]) => {
-      const entry = stated.get(studyId) ?? { names: [], claims: [] };
-      entry.names.push(...names);
-      entry.claims.push(...claims);
-      stated.set(studyId, entry);
-    };
-    for (const view of [...this.#studies.values()].sort((a, b) => (a.key < b.key ? -1 : 1))) {
-      for (const studyId of view.proposed) {
-        for (const cell of [view.counts, view.leads]) {
-          if (cell === undefined) continue;
-          add(studyId, cell.leaders, claimsOf(cell, cell.leaders, "leader"));
-          add(studyId, cell.former, claimsOf(cell, cell.former, "oldLeader"));
-        }
-      }
-    }
-    for (const line of this.#leadLines) {
-      if (line.proposed === null) continue;
-      add(
-        line.proposed,
-        [line.lead],
-        [
-          {
-            source: `${line.tab.source}/leadLine`,
-            value: line.lead.folded,
-            valueSource: line.lead.name.slice(0, LIMITS.shortText),
-            sourceRecordId: line.row.recordId,
-          },
-        ],
-      );
-    }
-    for (const [studyId, entry] of [...stated].sort(([a], [b]) => (a < b ? -1 : 1))) {
-      const held = await this.#heldLeads(studyId);
-      if (held.length === 0) continue;
-      if (!entry.names.some((named) => !held.some((other) => other.lead.folded === named.folded))) continue;
-      this.#item(
-        items.conflictingLead({
-          subject: studyId,
-          field: "leadByProposal",
-          entityRefs: [replication(studyId), ...held.map((other) => person(other.personId))],
-          claims: [
-            ...entry.claims,
-            ...held.map((other) => ({ source: "held/lead", value: other.lead.folded, valueSource: other.lead.name })),
-            ...proposalClaims(studyId),
           ],
         }),
       );
@@ -1145,9 +1164,8 @@ class RecruitmentPlan {
     const reviewed = reviewedStudy ?? (await this.#storedTabStudy(tab.title));
     let replicationId: string | null = null;
     let blocked = false;
-    let proposed: string | null = null;
     if (reviewed === null || !this.#replications.has(reviewed)) {
-      proposed = reviewed === null ? this.#proposedStudy(tab.title) : null;
+      const proposed = reviewed === null ? this.#proposedStudy(tab.title) : null;
       this.#item(
         items.unmatchedIdentifier({
           subject: `${tab.source}/study`,
@@ -1206,7 +1224,7 @@ class RecruitmentPlan {
       this.#blockedTabs.add(tab.tabKey);
       return;
     }
-    if (lead !== null) this.#leadLines.push({ tab, ...lead, replicationId, proposed });
+    if (lead !== null) this.#leadLines.push({ tab, ...lead, replicationId });
 
     for (const row of tab.rows.filter((candidate) => candidate.rowClass === "annotation")) {
       const kind = Object.values(OUTREACH_ROW_PREFIX).find((prefix) => row.rowKey.startsWith(`${prefix}__`)) ?? "row";
@@ -1245,6 +1263,15 @@ class RecruitmentPlan {
     const at = (part: string) => `${tab.source}/${part}`;
     const recordId = row.recordId;
 
+    if (row.cells.some((cell) => cellPart(cell, "hiddenRow") === true)) {
+      this.#item(
+        items.formattingSignal({
+          ...base,
+          field: "hiddenRow",
+          claims: [{ source: at("hiddenRow"), value: "hidden", sourceRecordId: recordId }],
+        }),
+      );
+    }
     const above = this.#mergedWith(tab, row);
     if (above.length > 0) {
       // The date or the result of the row above covers this row too. Nothing of it is copied down.
@@ -1297,14 +1324,7 @@ class RecruitmentPlan {
         items.identifierDefect({
           ...base,
           field: "contactEmail",
-          claims: [
-            {
-              source: at("contactEmail/reversed"),
-              value: address.decoded,
-              valueSource: address.decoded,
-              sourceRecordId: recordId,
-            },
-          ],
+          claims: [{ source: at("contactEmail/reversed"), value: address.decoded, sourceRecordId: recordId }],
         }),
       );
     } else if (address.status === "invalid") {
@@ -1355,7 +1375,7 @@ class RecruitmentPlan {
     const proposal = proposeResult(result);
     if (result !== "" && proposal === null) {
       const folded = result.toLowerCase();
-      if (!this.#unreadResults.has(folded)) this.#unreadResults.set(folded, { label: result, row });
+      if (!this.#unreadResults.has(folded)) this.#unreadResults.set(folded, row);
     }
     const bucketOf = (index: number): FillBucket => {
       const cell = row.cells[index];
@@ -1390,8 +1410,9 @@ class RecruitmentPlan {
           ...base,
           field: purpose === "leadSearch" ? "lead" : "participation",
           claims: [
+            // The result as written is restricted to the outreach contact. The item says only that it reads as accepting.
             proposal === "accepted"
-              ? { source: at("result"), value: result.toLowerCase(), valueSource: result, sourceRecordId: recordId }
+              ? { source: at("result"), value: result.toLowerCase(), valueSource: proposal, sourceRecordId: recordId }
               : { source: at("fill"), value: fill, valueSource: fill, sourceRecordId: recordId },
           ],
         }),
@@ -1516,7 +1537,7 @@ class RecruitmentPlan {
   /** One item for each distinct result that the importer cannot read as a status. */
   #resultItems(): void {
     const { sourceKey } = this.#definition;
-    for (const [folded, { label, row }] of [...this.#unreadResults].sort(([a], [b]) => (a < b ? -1 : 1))) {
+    for (const [folded, row] of [...this.#unreadResults].sort(([a], [b]) => (a < b ? -1 : 1))) {
       this.#item(
         this.#context.items.vocabularyReview({
           subject: `${sourceKey}/outreachResult/${keyedShortHash(folded, this.#context.secret)}`,
@@ -1524,10 +1545,9 @@ class RecruitmentPlan {
           personal: true,
           claims: [
             {
+              // A result is restricted to the outreach contact, so the item shows none: it names the first row that holds it.
               source: `${sourceKey}/result`,
               value: folded,
-              // A narrative about a person stays in the source record. A short status is shown to the reviewer.
-              ...(label.length <= RESULT_STATUS_MAX_LENGTH ? { valueSource: label } : {}),
               sourceRecordId: row.recordId,
             },
           ],

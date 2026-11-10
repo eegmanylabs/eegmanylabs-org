@@ -20,9 +20,15 @@
 // |                     | `isCoauthor`                | The source record only: the model has no field for it            |
 // | `contibutor_tables` | `ReplicationID`, `TableLink` | The contributor table of the sheet that the link names          |
 // |                     | `IsOnlySignUpTable`, `IsPublished`, `PubLink`, `PDFLink` | Fields of that contributor table      |
-// | `study_description` | (none stated)               | Source records only                                              |
+// | `study_description` | (none stated)               | Source records only, and only once a maintainer has confirmed its header |
 //
 // The tab title `contibutor_tables` is the spelling of the workbook and is kept.
+//
+// The workbook is read as a whole or not at all. Where any tab differs from the brief, nothing
+// but the header row of each tab is stored, so that no member row reaches a source record before
+// somebody has looked at the structure. The same holds for `study_description`, whose columns the
+// brief does not state: its header is stored and reported, and its rows are read only once a
+// maintainer has entered that header list in the private configuration.
 //
 // A member row creates a person only where it carries an address that is exactly one address.
 // Gender and ethnicity are stored as the workbook writes them, without any standardisation or
@@ -65,7 +71,7 @@ import { PlanBuilder } from "../plan";
 import type { ItemClaim } from "../reconcile";
 import { affiliationDocuments, isStorableUrl } from "../records";
 import { storedValue } from "../recruitment-values";
-import { canonicalJson } from "../values";
+import { canonicalJson, positionFree } from "../values";
 import { cellsByRow, columnLetters, type WorkbookSheet } from "../workbook";
 import { collapsed, openWorkbook, tidied } from "../workbook-rows";
 import {
@@ -113,6 +119,14 @@ export const TABLE_COLUMNS: readonly ExpectedColumn[] = [
 
 /** The member fields whose cells are special-category data. */
 const SPECIAL_FIELDS = ["gender", "ethnicity"] as const;
+/** The member fields whose cells name a person or hold an address. No identifier may hold a word of them. */
+const PERSONAL_FIELDS = ["name", "surname", "email", "secondaryEmail"] as const;
+/**
+ * Headers under which the tab of study descriptions would hold personal or special-category
+ * data, by their lookup fold. Such a tab is refused, whatever a maintainer has confirmed: the
+ * importer has a place for those cells in the member tab only.
+ */
+const REFUSED_STUDY_HEADERS = new Set(["gender", "ethnicity", "email", "secondaryemail", "name", "surname"]);
 /** The type of the marker that stands for a special-category cell in a source record. */
 const SPECIAL_MARKER = "specialCategory";
 /** The fewest expected headers that make a row the header of its tab. */
@@ -196,13 +210,21 @@ function checkTab(
   return { match, issues };
 }
 
+/** Whether a row holds nothing except unticked boxes: stored `FALSE` values, and no other content. */
+function isFiller(cells: readonly RawCell[]): boolean {
+  const held = cells.filter(holdsContent).map((cell) => storedValue(cell));
+  return held.length > 0 && held.every((value) => value === false || value === "FALSE");
+}
+
 class WorkbookReader {
   readonly #secret: string;
+  readonly #confirmedHeaders: Readonly<Record<string, readonly string[]>>;
   readonly #issues: StructureIssue[] = [];
   readonly #tabs: SourceTab[] = [];
 
-  constructor(secret: string) {
-    this.#secret = secret;
+  constructor(context: ReadContext) {
+    this.#secret = context.secret;
+    this.#confirmedHeaders = context.confirmedHeaders ?? {};
   }
 
   /** A key with an ordinal among the rows of one tab that share its stem, from 1. */
@@ -277,9 +299,10 @@ class WorkbookReader {
     }
 
     if (kind === "studies") {
-      // The brief states no field of this tab. Its first row with content is taken as its header, and every
-      // later row is kept as a source record and interpreted by nothing.
+      // The brief states no field of this tab. Its first row with content is taken as its header. The rows below
+      // are read only where a maintainer has confirmed exactly that header list, which is checked on every run.
       let headerRow: number | undefined;
+      let below = 0;
       for (let row = 1; row <= sheet.lastRow; row += 1) {
         const cells = cellsOf(row);
         if (!cells.some(holdsContent)) {
@@ -288,9 +311,36 @@ class WorkbookReader {
           headerRow = row;
           rows.push({ rowClass: "header", rowNumber: row, rowKey: "header", cells, labels });
         } else {
-          const rowKey = this.#keyed(ordinals, `row__${this.#hash(canonicalJson(cells))}`);
+          below += 1;
+          const rowKey = this.#keyed(ordinals, `row__${this.#hash(canonicalJson(positionFree(cells, row)))}`);
           rows.push({ rowClass: "data", rowNumber: row, rowKey, cells, labels });
         }
+      }
+      const headers = headerRow === undefined ? [] : valuesOf(headerRow).map((value) => (value === null ? "" : String(value)));
+      while (headers.at(-1) === "") headers.pop();
+      const refused = headers.filter((header) => REFUSED_STUDY_HEADERS.has(lookupFold(header)));
+      const confirmed = this.#confirmedHeaders[TAB_TITLES.studies];
+      if (refused.length > 0) {
+        this.#issues.push({
+          check: "studyHeaders",
+          tabKey,
+          message:
+            `The tab ${TAB_TITLES.studies} has ${refused.length} columns whose header names personal or special-category data. ` +
+            "The importer reads such data from the member tab only, so nothing of the workbook is imported.",
+          expected: "no column of names, addresses, gender or ethnicity",
+          found: refused.join(" | "),
+        });
+      } else if (below > 0 && (confirmed === undefined || canonicalJson(confirmed) !== canonicalJson(headers))) {
+        this.#issues.push({
+          check: "unconfirmedHeaders",
+          tabKey,
+          message:
+            `The header of the tab ${TAB_TITLES.studies} is not confirmed: the brief states no column of this tab, and ` +
+            `${confirmed === undefined ? "the private configuration holds no header list for it" : "its header differs from the list in the private configuration"}. ` +
+            `Its ${below} rows are not stored until a maintainer has entered the ${headers.length} headers under confirmedHeaders.`,
+          expected: (confirmed ?? []).join(" | ") || "a confirmed header list",
+          found: headers.join(" | "),
+        });
       }
       this.#tabs.push({ ...base, ...(headerRow === undefined ? {} : { headerRow }), rows, fillerRows: 0, blankRows });
       return;
@@ -322,6 +372,24 @@ class WorkbookReader {
     }
 
     const special = kind === "members" ? SPECIAL_FIELDS.map((field) => match.columns.get(field) ?? "") : [];
+    const personal =
+      kind === "members" ? PERSONAL_FIELDS.flatMap((field) => match.columns.get(field) ?? []) : undefined;
+    // The special-category cells leave every row of the member tab, whatever the class of the row. A marker with
+    // a keyed hash stands in the place of each, so that a changed value is a new revision of the row. The hash
+    // covers the key of the row, so that two rows with one value carry different markers and nobody can count
+    // how often a value occurs.
+    const withoutSpecial = (rowKey: string, cells: readonly RawCell[]) => {
+      const apart: Record<string, RawCell> = {};
+      const kept = cells.map((cell, index) => {
+        const label = labels[index] ?? "";
+        if (!special.includes(label) || !holdsContent(cell)) return cell;
+        apart[label] = cell;
+        return { t: SPECIAL_MARKER, k: this.#hash(`${rowKey}\n${label}\n${canonicalJson(cell)}`) };
+      });
+      return { cells: kept, ...(Object.keys(apart).length === 0 ? {} : { special: apart }) };
+    };
+    let fillerRows = 0;
+    let filledAbove = 0;
     for (let row = 1; row <= sheet.lastRow; row += 1) {
       const cells = cellsOf(row);
       if (!cells.some(holdsContent)) {
@@ -329,7 +397,12 @@ class WorkbookReader {
         continue;
       }
       if (row < match.headerRow) {
-        rows.push({ rowClass: "banner", rowNumber: row, rowKey: this.#keyed(ordinals, "banner"), cells, labels });
+        // A title line above the header is one cell. A row above the header that holds more, or anything in a
+        // special-category column, may be a member row that has strayed there: it stops the import.
+        const filled = cells.filter(holdsContent).length;
+        if (filled > 1 || special.some((label) => holdsContent(cells[labels.indexOf(label)] ?? null))) filledAbove += 1;
+        const rowKey = this.#keyed(ordinals, "banner");
+        rows.push({ rowClass: "banner", rowNumber: row, rowKey, labels, ...withoutSpecial(rowKey, cells) });
         continue;
       }
       if (row === match.headerRow) {
@@ -341,27 +414,33 @@ class WorkbookReader {
         rows.push({ rowClass: "data", rowNumber: row, rowKey, cells, labels });
         continue;
       }
-      // The special-category cells leave the row. A marker with a keyed hash stands in the place of each, so
-      // that a changed value is a new revision of the row. The hash covers the key of the row, so that two
-      // rows with one value carry different markers and nobody can count how often a value occurs.
+      if (isFiller(cells)) {
+        // A row of unticked boxes is no member. It is counted and not stored.
+        fillerRows += 1;
+        continue;
+      }
       const rowKey = this.#keyed(ordinals, this.#memberKey(cells, labels, match));
-      const apart: Record<string, RawCell> = {};
-      const kept = cells.map((cell, index) => {
-        const label = labels[index] ?? "";
-        if (!special.includes(label) || !holdsContent(cell)) return cell;
-        apart[label] = cell;
-        return { t: SPECIAL_MARKER, k: this.#hash(`${rowKey}\n${label}\n${canonicalJson(cell)}`) };
-      });
       rows.push({
         rowClass: "data",
         rowNumber: row,
         rowKey,
-        cells: kept,
         labels,
-        ...(Object.keys(apart).length === 0 ? {} : { special: apart }),
+        ...withoutSpecial(rowKey, cells),
+        ...(personal === undefined ? {} : { personal }),
       });
     }
-    this.#tabs.push({ ...base, headerRow: match.headerRow, rows, fillerRows: 0, blankRows });
+    if (filledAbove > 0) {
+      this.#issues.push({
+        check: "rowAboveHeader",
+        tabKey,
+        message:
+          `${filledAbove} rows above the header of the tab ${TAB_TITLES[kind]}, which stands in row ${match.headerRow}, hold more than a title. ` +
+          "A row of data above the header is read by nothing, so the import stops until the tab has been looked at.",
+        expected: "at most a title line above the header",
+        found: `${filledAbove} rows with several cells or with special-category cells`,
+      });
+    }
+    this.#tabs.push({ ...base, headerRow: match.headerRow, rows, fillerRows, blankRows });
   }
 
   read(sheets: readonly WorkbookSheet[]): { readonly tabs: SourceTab[]; readonly issues: StructureIssue[] } {
@@ -378,7 +457,13 @@ class WorkbookReader {
       });
     }
     for (const sheet of sheets) this.#tab(sheet, kindOf(sheet));
-    return { tabs: this.#tabs, issues: this.#issues };
+    if (this.#issues.length === 0) return { tabs: this.#tabs, issues: this.#issues };
+    // The workbook is not what the brief describes. It fails closed as a whole: of every tab only the header
+    // row is kept, so that no member row and no cell of an unconfirmed column reaches a source record.
+    return {
+      tabs: this.#tabs.map((tab) => ({ ...tab, rows: tab.rows.filter((row) => row.rowClass === "header") })),
+      issues: this.#issues,
+    };
   }
 }
 
@@ -386,7 +471,7 @@ async function read(input: ImportInput, context: ReadContext): Promise<SourceRea
   const opened = openWorkbook(input);
   const { contentHash, inputFiles, workbook } = opened;
   if (workbook === null) return { contentHash, inputFiles, tabs: [], issues: opened.issues };
-  const { tabs, issues } = new WorkbookReader(context.secret).read(workbook.sheets);
+  const { tabs, issues } = new WorkbookReader(context).read(workbook.sheets);
   return { contentHash, inputFiles, tabs, issues };
 }
 
@@ -512,16 +597,43 @@ class MembershipPlan {
       }
     }
 
+    // Every remaining row is resolved before any document is stated, so that two rows which name one person are
+    // seen together. Such rows are one person twice, or a wrong link: neither is imported.
+    type Resolved = { readonly member: MemberRow; readonly personId: string; readonly created: boolean };
+    const resolved: Resolved[] = [];
     for (const member of members.filter((candidate) => !shared.has(candidate))) {
       const { row } = member;
       const fullName = collapsed([member.name, member.surname].filter((part) => part !== null).join(" "));
-      const namesake = personEvidence.nameAffiliation(fullName, member.affiliation ?? "");
-      // A row without a usable address is linked by its name with its affiliation, where both equal those
-      // of exactly one person. It creates no person on that basis.
-      const resolution = await identities.resolvePerson(
-        member.evidence.length > 0 ? member.evidence : namesake === null ? [] : [namesake],
-      );
+      const namesakes = peopleByName.get(lookupFold(fullName)) ?? [];
       const subject = `${source}/${row.rowKey}`;
+      if (member.evidence.length === 0) {
+        // A row without a usable address carries no identifier. Its name with its affiliation may equal those of
+        // exactly one person, and that is a basis for a reviewer and for nothing else: on a name the row writes no
+        // contact detail and no special-category cell to anybody's record. It waits, and the item says on what
+        // basis the person is proposed.
+        const namesake = personEvidence.nameAffiliation(fullName, member.affiliation ?? "");
+        const link = namesake === null ? null : await identities.resolvePerson([namesake]);
+        if (link?.status === "erased") {
+          this.#builder.rawOnly(row.recordId, "erasedPerson");
+          continue;
+        }
+        const proposed = link?.status === "existing" ? [link.personId] : link?.status === "ambiguous" ? link.personIds : [];
+        const others = namesakes.filter((id) => !proposed.includes(id));
+        this.#builder.hold(
+          row.recordId,
+          items.duplicatePerson({
+            subject,
+            entityRefs: [...proposed, ...others].map(person),
+            claims: [
+              this.#claim(source, row, row.rowKey, false),
+              ...proposed.map((id) => ({ source: "basis/nameAffiliation", value: id })),
+              ...others.map((id) => ({ source: "person", value: id })),
+            ],
+          }),
+        );
+        continue;
+      }
+      const resolution = await identities.resolvePerson(member.evidence);
       if (resolution.status === "erased") {
         this.#builder.rawOnly(row.recordId, "erasedPerson");
         continue;
@@ -538,24 +650,26 @@ class MembershipPlan {
         );
         continue;
       }
-      const namesakes = peopleByName.get(lookupFold(fullName)) ?? [];
-      if (resolution.status === "unresolved") {
-        // A name is no identity. The row waits, and its special-category cells stay where no client reads them.
-        this.#builder.hold(
-          row.recordId,
-          items.duplicatePerson({
-            subject,
-            entityRefs: namesakes.map(person),
-            claims: [
-              this.#claim(source, row, row.rowKey, false),
-              ...namesakes.map((id) => ({ source: "person", value: id })),
-            ],
-          }),
-        );
+      if (resolution.status === "unresolved") continue;
+      resolved.push({ member, personId: resolution.personId, created: resolution.status === "new" });
+    }
+
+    const rowsOfPerson = new Map<string, Resolved[]>();
+    for (const entry of resolved) rowsOfPerson.set(entry.personId, [...(rowsOfPerson.get(entry.personId) ?? []), entry]);
+    for (const [personId, entries] of [...rowsOfPerson].sort(([a], [b]) => (a < b ? -1 : 1))) {
+      if (entries.length > 1) {
+        const item = items.duplicatePerson({
+          subject: `${source}/person/${personId}`,
+          entityRefs: [person(personId)],
+          claims: entries.map(({ member }) => this.#claim(source, member.row, member.row.rowKey, false)),
+        });
+        for (const { member } of entries) this.#builder.hold(member.row.recordId, item);
         continue;
       }
-      const { personId } = resolution;
-      const others = namesakes.filter((id) => id !== personId);
+      const [{ member, created } = { member: undefined, created: false }] = entries;
+      if (member === undefined) continue;
+      const fullName = collapsed([member.name, member.surname].filter((part) => part !== null).join(" "));
+      const others = (peopleByName.get(lookupFold(fullName)) ?? []).filter((id) => id !== personId);
       if (others.length > 0) {
         // Another source knows a person of this name. The two records are never merged here: a reviewer decides.
         this.#builder.item(
@@ -563,13 +677,13 @@ class MembershipPlan {
             subject: personId,
             entityRefs: [person(personId), ...others.map(person)],
             claims: [
-              this.#claim(source, row, personId, false),
+              this.#claim(source, member.row, personId, false),
               ...others.map((id) => ({ source: "person", value: id })),
             ],
           }),
         );
       }
-      await this.#person(member, personId, resolution.status === "new", columns, source);
+      await this.#person(member, personId, created, columns, source);
     }
   }
 
@@ -916,6 +1030,10 @@ export const importer: ImporterDefinition = {
   summary:
     "Membership and contributor workbook, built against synthetic fixtures only: members with their restricted and special-category data, and the registry of contributor tables.",
   inputDescription: "the Excel export of the workbook",
+  // The people of the website are the baseline against which members are compared (section 5, step 8).
+  after: ["h"],
+  // No demographic value is imported before the lawful basis for holding it is recorded (section 11, question 20).
+  withheld: "demographics",
   read,
   plan: (context) => new MembershipPlan(context).run(),
 };

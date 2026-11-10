@@ -11,6 +11,7 @@ import type { PrivateConfig, PrivateSource } from "./config";
 import type { IdentityResolver } from "./identity";
 import type { ItemBuilders } from "./reconcile";
 import type { StudyResolver } from "./studies";
+import type { WithheldOutput } from "./withheld";
 
 /**
  * The class of a row. Every non-empty row of a tab falls into exactly one.
@@ -79,6 +80,12 @@ export interface SourceRow {
    * row and nothing in the record, its hash or its identifier lets a reader confirm a guess.
    */
   readonly special?: Readonly<Record<string, RawCell>>;
+  /**
+   * The names of the cells that hold the name or an address of a person, where the source is
+   * restricted. No identifier that the plan derives from the row may hold a word of such a cell:
+   * the framework checks every planned path against them before anything is compared or written.
+   */
+  readonly personal?: readonly string[];
 }
 
 export interface SourceTab {
@@ -139,6 +146,11 @@ export interface ReadContext {
    * name of a contact. It never reaches a log or a document.
    */
   readonly secret: string;
+  /**
+   * The header lists that a maintainer has confirmed in the private configuration, by tab title,
+   * for a tab whose columns no description of the source states.
+   */
+  readonly confirmedHeaders?: Readonly<Record<string, readonly string[]>>;
 }
 
 /** A source row together with the source record that holds it. */
@@ -181,6 +193,35 @@ export interface ItemCandidate {
   readonly sourceRecordId?: string;
 }
 
+/**
+ * What a numeric cell of the source says, for the check that a blank stays absent and a zero
+ * stays zero (docs/MIGRATION_PLAN.md, section 8).
+ *
+ * | State    | The cell                         | In the database                                     |
+ * |----------|----------------------------------|-----------------------------------------------------|
+ * | `blank`  | holds nothing                    | The field, or the whole document, is absent         |
+ * | `number` | holds a number, zero included    | The field holds exactly that number                 |
+ * | `held`   | holds a number that waits in the queue, or one that cannot be read | The field, or the whole document, is absent |
+ */
+export interface NumericCell {
+  readonly recordId: string;
+  /** The document and the field that hold the number of the cell, where it is written. */
+  readonly path: string;
+  readonly field: string;
+  readonly state: "blank" | "number" | "held";
+  /** The number of the cell, for the state `number`. */
+  readonly value?: number;
+}
+
+/** One value that the source computes from its rows, as the importer has recomputed it. */
+export interface DerivedValue {
+  readonly recordId: string;
+  /** Whether the recomputed value equals the value that the file holds. */
+  readonly matches: boolean;
+  /** The item that reports the difference, where there is one. A difference without one fails the verification. */
+  readonly reportedBy?: string;
+}
+
 /** One reconciliation item that an importer wants raised. */
 export interface PlannedItem {
   readonly fingerprint: string;
@@ -214,6 +255,10 @@ export interface ImportPlan {
   /** Data rows whose own record waits in the queue, although other documents may name them. */
   readonly held: ReadonlySet<string>;
   readonly blocking: readonly BlockingCheck[];
+  /** The numeric cells of the source, for the check of blank and zero. Empty where the importer states none. */
+  readonly numericCells: readonly NumericCell[];
+  /** The derived values of the source as recomputed. Empty where the importer recomputes none. */
+  readonly derivedValues: readonly DerivedValue[];
 }
 
 /** What an importer may use while it plans. It reads the database through the resolvers only. */
@@ -230,6 +275,12 @@ export interface PlanContext {
   readonly items: ItemBuilders;
   /** For reads that no resolver covers. An importer never writes through it. */
   readonly db: Firestore;
+  /**
+   * Whether this run writes an output that the migration plan withholds until the maintainers
+   * have answered a question. An importer asks before it states such an output, and keeps the
+   * rows behind it as source records only where the answer is no.
+   */
+  writes(output: WithheldOutput): boolean;
 }
 
 /**
@@ -279,6 +330,18 @@ export interface ImporterDefinition {
   readonly source?: DerivedSource;
   /** The private location of such a source. It reaches the location document of the registry and nothing else. */
   readonly location?: PrivateSource;
+  /**
+   * The sources that must have been applied before this one (docs/MIGRATION_PLAN.md, section 5).
+   * A run is refused while one of them has no applied batch, because a field that is set at
+   * creation, and every field that the first source to write it keeps, would otherwise depend on
+   * the order of the runs.
+   */
+  readonly after?: readonly string[];
+  /**
+   * Set where the apply of the importer as a whole is an output that the migration plan
+   * withholds. A preview is always possible.
+   */
+  readonly withheld?: WithheldOutput;
   /** Reads the input and classifies every row. Never contacts the database. */
   read(input: ImportInput, context: ReadContext): Promise<SourceReading>;
   /** Interprets the rows and returns the plan. */

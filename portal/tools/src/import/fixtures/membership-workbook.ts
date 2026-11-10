@@ -18,6 +18,9 @@
 // | A flag that is a stored boolean, a text, a blank and something else  | `isCoauthor`, `IsPublished`       |
 // | A link that is a hyperlink on a label, and a cell that names no sheet | `contibutor_tables`               |
 // | A table that no contributor sheet import has read, and a study that does not exist | `Iota2004`, `NoSuchStudy1999` |
+// | A member row that stands above the header, where nothing reads it    | The option `aboveHeader`          |
+// | Rows of unticked boxes below the last member, in a table left at its default length | The option `fillerRows` |
+// | A tab whose columns nobody has described, and one with a column of personal data | `study_description`, the option `studyHeaders` |
 import ExcelJS from "exceljs";
 
 export type MemberCell = string | number | boolean | null;
@@ -199,7 +202,18 @@ export interface MembershipWorkbookOptions {
   readonly extraTab?: string;
   /** Replaces the header of the link column of the tab of contributor tables. */
   readonly linkHeader?: string;
+  /** A member row in row 2, between the title line and the header in row 3, where no reader of the table looks. */
+  readonly aboveHeader?: MemberRow;
+  /** Rows below the last member that hold an unticked `isCoauthor` box and nothing else. */
+  readonly fillerRows?: number;
+  /** The header of the tab of study descriptions, and a value for every further column of its two rows. */
+  readonly studyHeaders?: readonly string[];
 }
+
+/** The header of the tab of study descriptions of this fixture, as a maintainer would confirm it. */
+export const STUDY_HEADERS = ["StudyID", "Description"] as const;
+/** The confirmation of that header, in the form of the private configuration. */
+export const CONFIRMED_STUDY_HEADERS = { study_description: STUDY_HEADERS } as const;
 
 /**
  * Builds the synthetic membership workbook: the member tab with its header below a title line,
@@ -219,7 +233,17 @@ export async function membershipWorkbook(options: MembershipWorkbookOptions = {}
     });
     const extra = options.extraMemberColumn;
     if (extra !== undefined && extra.header !== null) sheet.getCell(headerRow, fields.length + 1).value = extra.header;
-    (options.members ?? MEMBER_ROWS).forEach((member, offset) => {
+    const members = options.members ?? MEMBER_ROWS;
+    if (options.aboveHeader !== undefined) {
+      fields.forEach((field, index) => {
+        const value = options.aboveHeader?.cells[field] ?? null;
+        if (value !== null) sheet.getCell(headerRow - 1, index + 1).value = value;
+      });
+    }
+    for (let filler = 0; filler < (options.fillerRows ?? 0); filler += 1) {
+      sheet.getCell(headerRow + 1 + members.length + filler, fields.indexOf("isCoauthor") + 1).value = false;
+    }
+    members.forEach((member, offset) => {
       const at = headerRow + 1 + offset;
       fields.forEach((field, index) => {
         const value = member.cells[field] ?? null;
@@ -232,9 +256,11 @@ export async function membershipWorkbook(options: MembershipWorkbookOptions = {}
   }
   if (options.withoutTab !== "study_description") {
     const sheet = workbook.addWorksheet("study_description", { state: "hidden" });
-    sheet.getRow(1).values = ["StudyID", "Description"];
-    sheet.getRow(2).values = ["AlphaBeta2001", "An invented description of an invented study."];
-    sheet.getRow(4).values = ["Delta1999", "Another invented description."];
+    const headers = options.studyHeaders ?? STUDY_HEADERS;
+    const further = headers.slice(STUDY_HEADERS.length).map(() => "an invented value of a further column");
+    sheet.getRow(1).values = [...headers];
+    sheet.getRow(2).values = ["AlphaBeta2001", "An invented description of an invented study.", ...further];
+    sheet.getRow(4).values = ["Delta1999", "Another invented description.", ...further];
   }
   if (options.withoutTab !== "contibutor_tables") {
     const sheet = workbook.addWorksheet("contibutor_tables");

@@ -1,12 +1,17 @@
 // Rollback of a batch from its change log (docs/MIGRATION_PLAN.md, section 6).
 //
 // The entries of the batch are walked in reverse order. A document that still is what the batch
-// wrote gets its earlier state back, or is removed if the batch created it. If any document has
-// changed since, the rollback refuses as a whole and lists those documents, so that a person
-// decides and nothing that was edited in the portal is lost. Source records stay, because they
-// remain true statements of what the source said. Open reconciliation items that the batch
-// raised are closed as withdrawn, and items that a reviewer has decided are reported and left
-// in place.
+// wrote gets its earlier state back, is removed if the batch created it, or is written again if
+// the batch removed it. If any document has changed since, the rollback refuses as a whole and
+// lists those documents, so that a person decides and nothing that was edited in the portal is
+// lost. Source records stay, because they remain true statements of what the source said. Open
+// reconciliation items that the batch raised are closed as withdrawn, and items that a reviewer
+// has decided are reported and left in place.
+//
+// A rollback that stopped part-way is carried on by running it again: a document that is already
+// in its earlier state counts as reversed and is skipped. The states of special-category
+// documents, which the change log keeps where no client reads them, are removed once the batch
+// is reversed, because nothing needs them any more.
 import { COLLECTIONS, sequenceId } from "@eegml/shared";
 import { FieldValue, type Firestore, Timestamp } from "firebase-admin/firestore";
 import { appendOnlyFields, chunked, IMPORT_ACTOR, readDocuments, updatedFields } from "./context";
@@ -41,16 +46,24 @@ export async function rollbackBatch(db: Firestore, batchId: string, at: Date = n
 
   const log = await db.collection(COLLECTIONS.importBatchChanges.collectionPath(batchId)).get();
   const entries = log.docs.sort((a, b) => (a.id < b.id ? 1 : -1));
+  const marked = (entry: (typeof entries)[number]) =>
+    [entry.get("before"), entry.get("after")].some(
+      (state) => (state as { specialCategory?: boolean } | null)?.specialCategory === true,
+    );
+  const statePath = (id: string) => COLLECTIONS.importBatchChangeState.docPath(batchId, id);
   const special = await readDocuments(
     db,
-    entries
-      .filter((entry) => (entry.get("after") as { specialCategory?: boolean } | null)?.specialCategory === true)
-      .map((entry) => COLLECTIONS.importBatchChangeState.docPath(batchId, entry.id)),
+    entries.filter(marked).map((entry) => statePath(entry.id)),
   );
+  // Without its kept states a special-category document cannot be given back what it held. Nothing is reversed then.
+  const stateless = entries.filter((entry) => marked(entry) && !special.get(statePath(entry.id)));
+  if (stateless.length > 0) {
+    return { status: "refused", changedDocuments: stateless.map((entry) => entry.ref.path).sort() };
+  }
   const states = entries.map((entry) => {
-    const kept = special.get(COLLECTIONS.importBatchChangeState.docPath(batchId, entry.id));
+    const kept = special.get(statePath(entry.id));
     return {
-      path: entry.get("documentPath") as string,
+      path: (kept?.data.documentPath as string | undefined) ?? (entry.get("documentPath") as string),
       before: (kept ? kept.data.before : entry.get("before")) as Record<string, unknown> | null,
       after: (kept ? kept.data.after : entry.get("after")) as Record<string, unknown> | null,
     };
@@ -61,10 +74,16 @@ export async function rollbackBatch(db: Firestore, batchId: string, at: Date = n
   );
 
   const isItem = (path: string) => path.startsWith(ITEMS_PREFIX);
-  const unchangedSince = (state: (typeof states)[number]) =>
-    sameValue(current.get(state.path)?.data ?? null, state.after);
+  const holds = (state: (typeof states)[number], wanted: Record<string, unknown> | null) =>
+    sameValue(current.get(state.path)?.data ?? null, wanted);
+  const unchangedSince = (state: (typeof states)[number]) => holds(state, state.after);
+  /** A document that an earlier attempt of this rollback has reversed already: it is in its earlier state, or withdrawn. */
+  const reversed = (state: (typeof states)[number]) =>
+    !unchangedSince(state) &&
+    (holds(state, state.before) ||
+      (isItem(state.path) && state.before === null && current.get(state.path)?.data.status === "withdrawn"));
   const changedDocuments = states
-    .filter((state) => !isItem(state.path) && !unchangedSince(state))
+    .filter((state) => !isItem(state.path) && !unchangedSince(state) && !reversed(state))
     .map((state) => state.path);
   if (changedDocuments.length > 0) return { status: "refused", changedDocuments: changedDocuments.sort() };
 
@@ -78,6 +97,7 @@ export async function rollbackBatch(db: Firestore, batchId: string, at: Date = n
       const reference = db.doc(state.path);
       const stored = current.get(state.path) ?? null;
       const precondition = stored === null ? {} : { lastUpdateTime: stored.updateTime };
+      if (reversed(state)) continue;
       if (isItem(state.path)) {
         if (stored === null) continue;
         if (!unchangedSince(state)) {
@@ -97,6 +117,10 @@ export async function rollbackBatch(db: Firestore, batchId: string, at: Date = n
       } else if (state.before === null) {
         write.delete(reference, precondition);
         removed += 1;
+      } else if (state.after === null) {
+        // The batch removed the document. It is written again as it was.
+        write.create(reference, state.before);
+        restored += 1;
       } else {
         const patch: Record<string, unknown> = {};
         for (const [field, value] of changedTopLevelFields(state.after ?? {}, state.before)) {
@@ -121,5 +145,11 @@ export async function rollbackBatch(db: Firestore, batchId: string, at: Date = n
       `${itemsLeft.length} decided items left in place. Source records were kept.`,
   });
   await finish.commit();
+  // The kept states of special-category documents have served their purpose. No copy of a value outlives the reversal.
+  for (const piece of chunked([...special.keys()], 200)) {
+    const clean = db.batch();
+    for (const path of piece) clean.delete(db.doc(path));
+    await clean.commit();
+  }
   return { status: "rolledBack", restored, removed, itemsWithdrawn, itemsLeft: itemsLeft.sort() };
 }

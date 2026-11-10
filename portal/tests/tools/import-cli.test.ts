@@ -83,6 +83,7 @@ const batchOf = (output: string): string => /batch (run__[0-9A-Za-z_]+)/.exec(ou
 let server: Server;
 let workbook: Uint8Array;
 let config = "";
+let configWithBaseline = "";
 let data = "";
 
 beforeAll(async () => {
@@ -100,6 +101,26 @@ beforeAll(async () => {
     JSON.stringify({
       hashKey: TEST_HASH_KEY,
       sources: { b: { externalId: "an-invented-file-identifier", exportUrl } },
+    }),
+  );
+  // The same configuration with the rows that each file of the website fixture holds, as an operator states them.
+  configWithBaseline = path.join(temporaryDirectory(), "sources.json");
+  writeFileSync(
+    configWithBaseline,
+    JSON.stringify({
+      hashKey: TEST_HASH_KEY,
+      sources: {
+        b: { externalId: "an-invented-file-identifier", exportUrl },
+        h: {
+          baseline: {
+            replications: { header: 1, data: 6 },
+            publications: { header: 1, data: 5 },
+            people: { header: 1, data: 8 },
+            members: { header: 1, data: 7 },
+            files: { data: 7 },
+          },
+        },
+      },
     }),
   );
   data = fixtureDirectory();
@@ -160,6 +181,40 @@ describe("import list and import fetch", () => {
     const result = cli(["fetch", "d", "--config", config, "--out", temporaryDirectory()], {});
     expect(result.status).toBe(2);
     expect(result.stderr).toContain("names no export address for source d");
+  });
+
+  it("refuses to fetch into a directory of the repository that git does not ignore, before anything is contacted", () => {
+    for (const out of [path.join(PORTAL_ROOT, "tools", "exports"), path.join(PORTAL_ROOT, "tests", "tools")]) {
+      const result = cli(["fetch", "b", "--config", config, "--out", out], {});
+      expect(result.status, out).toBe(2);
+      expect(result.stderr, out).toContain("git does not ignore it, so the export could be committed");
+    }
+    expect(existsSync(path.join(PORTAL_ROOT, "tools", "exports"))).toBe(false);
+    expect(readdirSync(path.join(PORTAL_ROOT, "tests", "tools")).filter((name) => /\.(xlsx|json)$/.test(name))).toEqual([]);
+  });
+
+  it("refuses an input whose file name holds the identifier of a source document, and repeats the identifier nowhere", async () => {
+    const named = path.join(temporaryDirectory(), "an-invented-file-identifier - Sheet1.xlsx");
+    writeFileSync(named, workbook);
+    const before = (await adminDb.collection("importBatches").count().get()).data().count;
+    for (const command of ["run", "verify"]) {
+      const result = cli([command, "b", "--input", named, "--mode", "preview", "--config", config].filter(
+        (argument, index, all) => command === "run" || (argument !== "--mode" && all[index - 1] !== "--mode"),
+      ));
+      expect(result.status, command).toBe(2);
+      expect(result.stderr, command).toContain("the name of the input file holds the identifier of a source document");
+      expect(result.output, command).not.toContain("an-invented-file-identifier");
+    }
+    expect((await adminDb.collection("importBatches").count().get()).data().count).toBe(before);
+  });
+
+  it("refuses a source whose earlier sources have not been applied, and says which", async () => {
+    const file = path.join(temporaryDirectory(), "b.xlsx");
+    writeFileSync(file, workbook);
+    const result = cli(["run", "b", "--input", file, "--mode", "preview", "--observed-on", OBSERVED_ON, "--config", config]);
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("source b is imported after source h (docs/MIGRATION_PLAN.md, section 5)");
+    expect((await adminDb.collection("sourceRecords").count().get()).data().count).toBe(0);
   });
 });
 
@@ -222,19 +277,59 @@ describe("import run, show, verify and rollback", () => {
     expect(cli(["show", "run__no-such-batch"]).status).toBe(2);
   });
 
-  it("verifies the import, and fails the verification when the input says something else", () => {
-    const result = cli(["verify", "h", "--input", data, "--observed-on", OBSERVED_ON, "--config", config]);
+  it("verifies the import against the stated baseline, stores the report on the batch, and fails when the input says something else", async () => {
+    // The report is stored on the latest applied batch, which here is the second apply that wrote nothing.
+    const verification = async () => {
+      const applied = await adminDb.collection("importBatches").where("sourceKey", "==", "h").get();
+      const latest = applied.docs
+        .filter((doc) => doc.get("mode") === "apply" && doc.get("status") === "applied")
+        .sort((a, b) => (a.id < b.id ? 1 : -1))[0];
+      expect(latest?.id).not.toBe(applyBatch);
+      return latest?.get("verification") as { passed: boolean; checks: { key: string; passed: boolean }[] } | undefined;
+    };
+    // Without a baseline of rows in the private configuration the import is not verified.
+    const unstated = cli(["verify", "h", "--input", data, "--observed-on", OBSERVED_ON, "--config", config]);
+    expect(unstated.status).toBe(3);
+    expect(unstated.stdout).toContain("FAILED  rowBaseline: no baseline of rows is stated for this source");
+    expect(await verification()).toMatchObject({ passed: false });
+
+    const verify = (input: string) =>
+      cli(["verify", "h", "--input", input, "--observed-on", OBSERVED_ON, "--config", configWithBaseline]);
+    const result = verify(data);
     expect(result.status).toBe(0);
     expect(result.stdout).toContain(
       "passed  secondRun: a second run would write 0 source records, 0 documents and 0 items",
     );
-    expect(result.stdout).toContain("Every check passed.");
+    expect(result.stdout).toContain("passed  rowBaseline: 9 counts of 5 tabs compared with the stated baseline, all equal");
+    expect(result.stdout).toContain("Every check passed. The report is stored on the latest applied batch of the source.");
+    const stored = await verification();
+    expect(stored?.passed).toBe(true);
+    expect(stored?.checks.map((check) => check.key)).toHaveLength(11);
     const other = fixtureDirectory((fixture) => {
       fixture.members.pop();
     });
-    const failed = cli(["verify", "h", "--input", other, "--observed-on", OBSERVED_ON, "--config", config]);
+    const failed = verify(other);
     expect(failed.status).toBe(3);
     expect(failed.stdout).toContain("FAILED  secondRun");
+    expect(failed.stdout).toContain("FAILED  rowBaseline: 9 counts of 5 tabs compared with the stated baseline; differences: members: 6 data rows where 7 are stated");
+    expect((await verification())?.passed).toBe(false);
+    // The batch counts as verified again once the input that was imported passes every check.
+    expect(verify(data).status).toBe(0);
+    expect((await verification())?.passed).toBe(true);
+  });
+
+  it("removes the special-category copies of one source or one batch on request, and prints counts only", () => {
+    const result = cli(["purge-special", "--source", "h"]);
+    expect(result.stderr).toBe("");
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain(
+      "Special-category copies of source h in demo-eegml (emulator): 0 documents of cells beneath source records removed, " +
+        "0 kept states of the change log removed.",
+    );
+    expect(cli(["purge-special", "--batch", applyBatch]).stdout).toContain(`Special-category copies of batch ${applyBatch}`);
+    // The command names one source or one batch, and never everything.
+    expect(cli(["purge-special"]).status).toBe(2);
+    expect(cli(["purge-special", "--source", "h", "--batch", applyBatch]).status).toBe(2);
   });
 
   it("refuses a rollback, and lists the documents, when a document has changed since the batch wrote it", async () => {

@@ -208,7 +208,7 @@ const RESULT_WORDS: Readonly<Record<ResultProposal, readonly RegExp[]>> = {
 };
 
 /** The longest result, in characters and in words, that is read as a status. A longer one is a narrative. */
-export const RESULT_STATUS_MAX_LENGTH = 60;
+const RESULT_STATUS_MAX_LENGTH = 60;
 export const RESULT_STATUS_MAX_WORDS = 8;
 
 export function proposeResult(result: string): ResultProposal | null {

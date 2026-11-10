@@ -18,6 +18,7 @@ import {
   nullLikeOf,
   numberOf,
   numbersIn,
+  inputFileOf,
   openWorkbook,
   rawOf,
   rowsInColumn,
@@ -34,13 +35,18 @@ afterAll(() => rmSync(directory, { recursive: true, force: true }));
 const input = (file: string) => ({ path: path.join(directory, file), observedOn: "2026-11-09" });
 
 describe("openWorkbook", () => {
-  it("opens an Excel export and names the file by its hash", async () => {
-    writeFileSync(path.join(directory, "awkward.xlsx"), await awkwardWorkbook());
-    const opened = openWorkbook(input("awkward.xlsx"));
+  it("opens an Excel export and identifies the file by its hash, under a neutral name", async () => {
+    // An export is often named after the identifier of its document, which is private. The name is never recorded.
+    const named = "an-invented-identifier-of-the-document - Sheet1.xlsx";
+    writeFileSync(path.join(directory, named), await awkwardWorkbook());
+    const opened = openWorkbook(input(named));
     expect(opened.issues).toEqual([]);
     expect(opened.workbook?.sheets).toHaveLength(3);
-    expect(opened.inputFiles).toEqual([{ name: "awkward.xlsx", sha256: opened.contentHash }]);
+    expect(opened.inputFiles).toEqual([{ name: "input.xlsx", sha256: opened.contentHash }]);
     expect(opened.contentHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(inputFileOf("/exports/An Identifier.XLSX", "ab")).toEqual({ name: "input.xlsx", sha256: "ab" });
+    expect(inputFileOf("/exports/identifier.with a strange ending", "ab").name).toBe("input");
+    expect(inputFileOf("/exports/identifier", "ab").name).toBe("input");
   });
 
   it("reports a missing file and a file of another format as issues of the source, and throws nothing", () => {
@@ -97,10 +103,14 @@ describe("gridOf and the readers of a stored cell", async () => {
     for (const entry of captured.rows) expect(entry.rowKey).toMatch(/^row__[0-9a-f]{12}__1$/);
   });
 
-  it("reads a formatting flag only where the importer asked for the formatting to be captured", () => {
-    expect(flagOf(row(5), "A", "hiddenRow")).toBe(false);
+  it("always says that a row is hidden, and reads any other flag only where the importer asked for it", () => {
+    expect(flagOf(row(5), "A", "hiddenRow")).toBe(true);
     expect(flagOf(row(5, { hidden: true }), "A", "hiddenRow")).toBe(true);
-    expect(flagOf(row(4, { hidden: true }), "A", "hiddenRow")).toBe(false);
+    expect(flagOf(row(4), "A", "hiddenRow")).toBe(false);
+    expect(flagOf(row(6), "A", "bold")).toBe(false);
+    // That a column is hidden is said where the importer asks for it: on the header record of a tab.
+    expect(flagOf(row(3), "B", "hiddenColumn")).toBe(false);
+    expect(flagOf(row(3, { hidden: true }), "B", "hiddenColumn")).toBe(true);
     expect(flagOf(row(6, { font: true }), "A", "bold")).toBe(true);
     expect(flagOf(row(5, { font: true }), "C", "italic")).toBe(true);
   });

@@ -1,5 +1,7 @@
 {
   "hashKey": "REPLACE-WITH-A-RANDOM-SECRET-OF-AT-LEAST-32-BYTES",
+  "rehearse": [],
+  "expectedStudies": 27,
   "sources": {
     "a": {
       "externalId": "REPLACE-WITH-THE-FILE-IDENTIFIER-OF-SOURCE-A"
@@ -11,7 +13,13 @@
     },
     "c": {
       "externalId": "REPLACE-WITH-THE-FILE-IDENTIFIER-OF-SOURCE-C",
-      "exportUrl": "https://sheets.example.org/REPLACE/export?format=xlsx"
+      "exportUrl": "https://sheets.example.org/REPLACE/export?format=xlsx",
+      "baseline": {
+        "Sheet1": {
+          "header": 1,
+          "data": 0
+        }
+      }
     },
     "d": {
       "externalId": "REPLACE-WITH-THE-FILE-IDENTIFIER-OF-SOURCE-D",
@@ -26,7 +34,10 @@
       "exportUrl": "https://sheets.example.org/REPLACE/export?format=xlsx"
     },
     "g": {
-      "externalId": "REPLACE-WITH-THE-FILE-IDENTIFIER-OF-SOURCE-G"
+      "externalId": "REPLACE-WITH-THE-FILE-IDENTIFIER-OF-SOURCE-G",
+      "confirmedHeaders": {
+        "study_description": ["REPLACE-WITH-THE-FIRST-HEADER-OF-THE-TAB"]
+      }
     }
   },
   "contributorSheets": {
@@ -35,7 +46,13 @@
       "replicationId": "AmodioJost2007",
       "url": "https://sheets.example.org/REPLACE/edit",
       "exportUrl": "https://sheets.example.org/REPLACE/export?format=xlsx",
-      "columnOverrides": []
+      "columnOverrides": [],
+      "baseline": {
+        "Sheet1": {
+          "header": 1,
+          "data": 0
+        }
+      }
     }
   }
 }

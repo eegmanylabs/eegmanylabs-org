@@ -4,12 +4,15 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { COLLECTION_ENTRIES, COLLECTIONS } from "@eegml/shared";
-import type { DocumentData } from "firebase-admin/firestore";
+import { COLLECTION_ENTRIES, COLLECTIONS, importBatchId } from "@eegml/shared";
+import { type DocumentData, Timestamp } from "firebase-admin/firestore";
 import { seedLookups } from "../../tools/src/commands/seed-lookups";
-import type { ImporterDefinition } from "../../tools/src/import/model";
+import { createdFields, IMPORT_ACTOR } from "../../tools/src/import/context";
+import { type ImporterDefinition, ROW_CLASSES, type RowClass } from "../../tools/src/import/model";
+import type { PrivateLocations } from "../../tools/src/import/registry";
 import { type RunReport, runImport } from "../../tools/src/import/run";
-import { verifyImport } from "../../tools/src/import/verify";
+import { type VerifyOptions, verifyImport } from "../../tools/src/import/verify";
+import { type RunTarget, WITHHELD_OUTPUT_KEYS } from "../../tools/src/import/withheld";
 import { adminDb } from "../support/admin";
 import { clearFirestore, PROJECT_ID } from "../support/emulators";
 
@@ -45,11 +48,23 @@ export function nextInstant(): Date {
   return new Date(clock);
 }
 
+/** An emulator on which every withheld output is rehearsed, as the suites of the single importers need it. */
+export const REHEARSAL: RunTarget = { production: false, rehearse: WITHHELD_OUTPUT_KEYS };
+
+export interface RunExtra {
+  readonly previewBatchId?: string;
+  /** Where the run writes. Without it: the emulators, with every withheld output rehearsed. */
+  readonly target?: RunTarget;
+  /** `required` enforces the order of the sources, as the command line does. Without it one importer runs by itself. */
+  readonly order?: "required" | "notChecked";
+  readonly locations?: PrivateLocations;
+}
+
 export function run(
   importer: ImporterDefinition,
   inputPath: string,
   mode: "preview" | "apply",
-  extra: { readonly previewBatchId?: string } = {},
+  extra: RunExtra = {},
 ): Promise<RunReport> {
   return runImport({
     db: adminDb,
@@ -58,17 +73,65 @@ export function run(
     mode,
     secret: TEST_HASH_KEY,
     now: nextInstant(),
+    target: REHEARSAL,
+    order: "notChecked",
     ...extra,
   });
 }
 
-export function verify(importer: ImporterDefinition, inputPath: string) {
+export function verify(
+  importer: ImporterDefinition,
+  inputPath: string,
+  extra: Partial<Pick<VerifyOptions, "target" | "baseline" | "requireBaseline" | "record" | "confirmedHeaders">> = {},
+) {
   return verifyImport({
     db: adminDb,
     importer,
     input: { path: inputPath, observedOn: OBSERVED_ON },
     secret: TEST_HASH_KEY,
+    target: REHEARSAL,
+    ...extra,
   });
+}
+
+/**
+ * Records that a source has been applied, as its own apply would. It is for a test that runs a
+ * later source under the order of the plan and needs nothing of the earlier source but that fact.
+ */
+export async function recordApplied(sourceKey: string): Promise<string> {
+  const started = nextInstant();
+  const contentHash = "0".repeat(64);
+  const batchId = importBatchId(started, contentHash);
+  const now = Timestamp.fromDate(started);
+  await adminDb.doc(COLLECTIONS.importBatches.docPath(batchId)).create({
+    ...createdFields(now),
+    schemaVersion: COLLECTIONS.importBatches.schemaVersion,
+    sourceKey,
+    mode: "apply",
+    status: "applied",
+    contentHash,
+    startedBy: IMPORT_ACTOR,
+    startedAt: now,
+    finishedAt: now,
+    stats: {},
+  });
+  return batchId;
+}
+
+/** The rows of each class that a batch counted in each tab, in the form of a baseline of the private configuration. */
+export async function baselineOf(batchId: string): Promise<Record<string, Partial<Record<RowClass, number>>>> {
+  const stats = ((await adminDb.doc(COLLECTIONS.importBatches.docPath(batchId)).get()).get("stats") ?? {}) as Record<
+    string,
+    number
+  >;
+  const baseline: Record<string, Partial<Record<RowClass, number>>> = {};
+  for (const [key, count] of Object.entries(stats)) {
+    const [kind, tabKey = "", rowClass = ""] = key.split(":");
+    if (kind !== "rows") continue;
+    baseline[tabKey] ??= {};
+    if ((ROW_CLASSES as readonly string[]).includes(rowClass)) (baseline[tabKey] ?? {})[rowClass as RowClass] = count;
+  }
+  return baseline;
 }
 
 export interface StoredDocument {

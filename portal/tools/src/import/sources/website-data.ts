@@ -264,7 +264,7 @@ function readFile(spec: FileSpec, name: string, bytes: Uint8Array, issues: Struc
     if (rowKey === "" || rowKey.length > LIMITS.shortText || keys.has(rowKey)) {
       // A row without a usable key of its own is still captured, under the hash of its content.
       if (fits) badKeys += 1;
-      rowKey = contentRowKey(cells, unkeyed);
+      rowKey = contentRowKey(cells, line.lineNumber, unkeyed);
     }
     keys.add(rowKey);
     rows.push({
@@ -475,13 +475,15 @@ class WebsitePlan {
     const claims = new Map<string, { readonly row: RecordedRow; readonly studyId: string }[]>();
     for (const row of this.#rows("replications")) {
       const studyId = cellText(row, "StudyId") ?? "";
-      const resolution = STUDY_ID_PATTERN.test(studyId) ? await studies.resolve(studyId) : null;
-      if (resolution?.status === "resolved" || resolution?.status === "unresolved") {
+      // The spelling is resolved first, whatever its shape: a lower-case initial or a diacritic names the study it
+      // folds to. The shape is asked only of a spelling that resolves to nothing and would name a new replication.
+      const resolution = await studies.resolve(studyId);
+      if (resolution.status === "resolved" || (resolution.status === "unresolved" && STUDY_ID_PATTERN.test(studyId))) {
         const target = resolution.status === "resolved" ? resolution.replicationId : studyId;
         claims.set(target, [...(claims.get(target) ?? []), { row, studyId }]);
       } else {
         // Malformed, or a spelling that several replications carry: no replication is created.
-        unmatched(row, studyId, resolution?.status === "ambiguous" ? resolution.replicationIds : []);
+        unmatched(row, studyId, resolution.status === "ambiguous" ? resolution.replicationIds : []);
       }
     }
     for (const [replicationId, rows] of claims) {
@@ -492,7 +494,7 @@ class WebsitePlan {
         if (candidate === own) this.#studyOfRow.set(candidate.row.rowKey, replicationId);
         else unmatched(candidate.row, candidate.studyId, [replicationId]);
       }
-      if (own !== undefined) studies.declare(own.studyId, replicationId);
+      if (own !== undefined) studies.declare(own.studyId, replicationId, "website");
     }
   }
 
@@ -868,6 +870,17 @@ class WebsitePlan {
       alias: written,
       recordId: row.recordId,
     });
+    if (written !== studyId) {
+      // The row resolves to the replication through another spelling of its identifier, which a reviewer confirms.
+      builder.item(
+        items.aliasConfirmation({
+          subject: studyId,
+          field: "website",
+          entityRefs: [replication(studyId)],
+          claims: [{ source, value: written, valueSource: written, sourceRecordId: row.recordId }],
+        }),
+      );
+    }
     if (doi !== undefined) {
       const sharing = this.#rows("replications").filter(
         (other) => doiKey(cellText(other, "Doi") ?? "") === doiKey(doi),

@@ -1,8 +1,18 @@
 # Portal tools
 
-Admin SDK command-line tools for the members' portal: seeding and the importers that migrate the programme's sources. They run with full access to the database, outside the security rules, so they run only from a trusted environment and never from the public site. `docs/MIGRATION_PLAN.md` specifies what the importers do, and `docs/DATA_MODEL.md` specifies what they write.
+Admin SDK command-line tools for the members' portal: seeding, the tools for identity and access, and the importers that migrate the programme's sources. They run with full access to the database, outside the security rules, so they run only from a trusted environment and never from the public site. `docs/MIGRATION_PLAN.md` specifies what the importers do, and `docs/DATA_MODEL.md` specifies what they write.
 
 Run every command from the `portal` directory, through its npm script or as `npm run -w @eegml/tools cli -- <command>`. A command writes to the Local Emulator Suite only and refuses to start when it cannot tell that its target is an emulator. `node scripts/emulators.mjs run <command>` supplies the emulator addresses of the current port base.
+
+## Identity and access
+
+| Command | What it does |
+|---|---|
+| `npm run seed:demo` | Writes the synthetic demonstration world to the emulators: persons, laboratories, institutions, replications, two demonstration accounts and a bootstrap record. Emulator only. The fixtures are in `src/fixtures/` |
+| `npm run admin:bootstrap -- --email <address>` | Prepares the first programme administrator. It stores one record under the keyed hash of the address in `bootstrapAdmins`, and the function `sessionStart` makes the first account that signs in with that address, verified, a programme administrator. The address is neither stored nor printed. It does reach the history of the shell it is typed in |
+| `npm run access:rebuild` | Resolves the access document of every account again from its sources and writes each one that differs. A second run writes nothing. A document that does not fit its schema confers nothing and is named on the error stream |
+
+`admin:bootstrap` and `access:rebuild` write to the emulators unless `--production --project <identifier>` and credentials are given together, under the rules of `import run` below. For a real project `admin:bootstrap` reads the key of the hash from the private configuration, which must be the key that the functions of that project read from the secret `IDENTITY_HASH_KEY`. For the emulators it uses the public demonstration key, as the functions emulator does, unless `IDENTITY_HASH_KEY` is set in the environment.
 
 ## Importing a source
 

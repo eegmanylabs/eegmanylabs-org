@@ -8,7 +8,7 @@
 // | Laboratory claims   | `requestLabClaim`, `reviewLabClaim`                                        |
 // | Records of people   | `resolveCorrectionRequest`, `getPersonDemographics`, `setPersonOrcid`, `confirmLaboratoryMembership`, `confirmReplicationMembership` |
 // | Audit trigger       | `auditDocumentWrites`                                                      |
-// | Access maintenance  | The triggers whose names begin with `accessOn`                             |
+// | Access maintenance  | The triggers whose names begin with `accessOn`, and the scheduled `accessExpirySweep` |
 // | Derived directory   | The triggers whose names begin with `personUnitsOn`                        |
 import { FUNCTIONS_REGION } from "@eegml/shared";
 import { setGlobalOptions } from "firebase-functions";
@@ -44,6 +44,7 @@ export {
   accessOnSystemSettingsWritten,
   accessOnUserWritten,
 } from "./triggers/access";
+export { accessExpirySweep } from "./triggers/access-expiry";
 export { auditDocumentWrites } from "./triggers/audit";
 export {
   personUnitsOnLaboratoryMemberWritten,
