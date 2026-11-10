@@ -1,3 +1,5 @@
+{#- Members' portal entry. portal.address is empty while the gate in settings.jinja2 is closed. See portal_entry.jinja2. -#}
+{%- import 'portal_entry.jinja2' as portal with context -%}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -16,6 +18,9 @@
     <link rel="canonical" href="{{ index.address }}">
     <link rel="sitemap" type="application/xml" href="/sitemap.xml">
     <link rel="stylesheet" href="/assets/css/index.css?v={{ index.meta.timestamp.isoformat() }}">
+    {%- if portal.address %}
+    {{ portal.styles() }}
+    {%- endif %}
     {% if index.name in ["network-map", "members"] %}
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
@@ -29,7 +34,7 @@
     {% endif %}
     <title>EEGManyLabs | International EEG Replication Initiative</title>
 </head>
-<body>
+<body{% if portal.address %} class="has-portal-entry"{% endif %}>
   {% set nav_labels = {"people": "Core team", "members": "Members", "related_projects": "Related projects"} %}
   {% set nav_order = ["about", "replications", "people", "members", "publications", "related_projects", "partners", "contact"] %}
   <a class="skip-link" href="#main-content">Skip to content</a>
@@ -44,6 +49,9 @@
             {% endif %}
           {% endfor %}
         {% endfor %}
+        {%- if portal.address %}
+        {{ portal.nav_link() }}
+        {%- endif %}
       </nav>
       <button class="menu-toggle" type="button" aria-controls="mobile-menu" aria-expanded="false" data-menu-toggle>
         <span class="sr-only">Open navigation</span><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18" /></svg>
@@ -61,13 +69,16 @@
             {% endif %}
           {% endfor %}
         {% endfor %}
+        {%- if portal.address %}
+        {{ portal.nav_link() }}
+        {%- endif %}
       </nav>
     </div>
   </div>
   <main id="main-content">{% block main %}{% endblock %}</main>
   <footer class="site-footer">
     <div class="footer-inner"><div class="footer-links">{% for leaf in root.leaves if leaf.name != "contact" %}{% include 'section_leaf.jinja2' %}{% endfor %}</div></div>
-    <div class="footer-base"><nav aria-label="Footer information"><a href="/site_map/">Sitemap</a><a href="/privacy/">Privacy</a><a href="/contact/">Contact</a></nav></div>
+    <div class="footer-base"><nav aria-label="Footer information"><a href="/site_map/">Sitemap</a><a href="/privacy/">Privacy</a><a href="/contact/">Contact</a>{% if portal.address %}{{ portal.footer_link() }}{% endif %}</nav></div>
   </footer>
   <script type="module">
     import { registerIconLibrary } from 'https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.15.0/cdn/utilities/icon-library.js';

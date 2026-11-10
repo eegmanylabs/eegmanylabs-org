@@ -1,0 +1,63 @@
+{#
+  Members' portal entry on the public site.
+
+  The gate is the address in settings.jinja2 for the environment being built. This file reads it into `address` and
+  holds everything the public pages show about the portal: the navigation link, the footer link, the sitemap card
+  and their style rules. The /portal/ page itself is content/portal/index.md, rendered by portal.jinja2.
+
+  While the gate is closed, `address` is empty, the templates that import this file render nothing from it, and the
+  "portal" content node is taken out of the build tree below. Syrinx renders the home page before it walks the
+  other content branches, so no /portal/ directory, page or sitemap entry is created.
+
+  The style rules live here and not in index.css because index.css is copied into every build, and a build with
+  the gate closed must stay exactly as it was before this entry existed.
+#}
+{% from 'settings.jinja2' import portal_addresses %}
+{% set address = (portal_addresses.get(index.meta.environment) or "")|trim %}
+{% if not address %}
+  {% for node in root.branches|selectattr("name", "equalto", "portal")|list %}
+    {% set _ = root.branches.remove(node) %}
+  {% endfor %}
+{% endif %}
+
+{% set site_map_card = {"title": "Members’ portal", "description": "Sign in to the private workspace for #EEGManyLabs members.", "url": "/portal/", "icon": "fas-right-to-bracket"} %}
+
+{% macro nav_link() -%}
+<a class="nav-portal" href="/portal/"><span>Members’ portal</span><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M4 12h11M11 8l4 4-4 4" /></svg></a>
+{%- endmacro %}
+
+{% macro footer_link() -%}
+<a href="/portal/">Members’ portal</a>
+{%- endmacro %}
+
+{# Every rule is scoped to .has-portal-entry, the class master.jinja2 puts on <body> only while the gate is open. #}
+{% macro styles() -%}
+<style>
+      /* Members' portal entry: a restrained sign-in action in the header and the mobile menu. */
+      .has-portal-entry .nav-portal { white-space: nowrap; }
+      .has-portal-entry .nav-portal svg { width: 16px; height: 16px; flex: 0 0 auto; }
+      .has-portal-entry .mobile-nav a.nav-portal { justify-content: space-between; gap: 16px; margin-top: 28px; border-top: 1px solid rgba(255,255,255,.22); }
+      .has-portal-entry .mobile-nav a.nav-portal svg { width: 22px; height: 22px; color: var(--aqua); }
+      /* Nine rows can be taller than the screen, so the open menu has to scroll. */
+      .has-portal-entry .mobile-menu { overflow-y: auto; overscroll-behavior: contain; }
+      /* On short screens the rows are tightened so that the entry is in view when the menu opens. */
+      @media (max-height: 780px) {
+        .has-portal-entry .mobile-nav { margin-top: 28px; }
+        .has-portal-entry .mobile-nav a { min-height: 56px; }
+        .has-portal-entry .mobile-nav a.nav-portal { margin-top: 20px; }
+      }
+      @media (min-width: 760px) {
+        .has-portal-entry .desktop-nav a.nav-portal { display: inline-flex; align-items: center; gap: 7px; padding: 8px 13px; border: 1px solid var(--aqua-deep); border-radius: 8px; color: var(--aqua-deep); font-weight: 500; transition: background 160ms ease, color 160ms ease, transform 160ms ease; }
+        .has-portal-entry .desktop-nav a.nav-portal::after { content: none; }
+        .has-portal-entry .desktop-nav a.nav-portal:hover { background: var(--aqua-deep); color: var(--paper-strong); transform: translateY(-1px); }
+      }
+      @media (hover: none) {
+        .has-portal-entry .desktop-nav a.nav-portal:hover { transform: none; }
+      }
+      /* Nine header items need about 1120px of content width. Below 1220px the menu button replaces the row of links. */
+      @media (min-width: 760px) and (max-width: 1219px) {
+        .has-portal-entry .desktop-nav { display: none; }
+        .has-portal-entry .menu-toggle { display: inline-grid; }
+      }
+    </style>
+{%- endmacro %}

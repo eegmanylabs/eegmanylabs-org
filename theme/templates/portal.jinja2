@@ -1,0 +1,64 @@
+{#- The /portal/ page: forwards visitors to the members' portal at the address set in settings.jinja2.
+    Syrinx picks this template for the content node named "portal". The node is only built while the gate is open.
+    The else branches are a safeguard: if the page were ever rendered without an address, it would not redirect. -#}
+{%- import 'portal_entry.jinja2' as portal with context -%}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#302a2a">
+    <meta syrinx-environment="{{ index.meta.environment }}" syrinx-timestamp="{{ index.meta.timestamp.isoformat() }}" syrinx-version="{{ index.meta.syrinx_version }}" />
+    <meta name="robots" content="noindex{% if index.meta.environment != 'production' %}, nofollow{% endif %}">
+    {%- if portal.address %}
+    <meta http-equiv="refresh" content="0; url={{ portal.address|e }}">
+    <link rel="canonical" href="{{ portal.address|e }}">
+    {%- endif %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400..700&family=Fraunces:opsz,wght@9..144,400..600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/css/index.css?v={{ index.meta.timestamp.isoformat() }}">
+    <style>
+      .portal-redirect { width: var(--content); margin: 36px auto 0; }
+      .portal-redirect p { max-width: 680px; margin-bottom: 22px; }
+      .portal-redirect__action { display: inline-flex; min-height: 44px; padding: 11px 15px; align-items: center; gap: 9px; border: 1px solid var(--aqua-deep); border-radius: 9px; background: var(--paper-strong); color: var(--aqua-deep); font-size: .9rem; font-weight: 500; transition: background 160ms ease, color 160ms ease, transform 160ms ease; }
+      .portal-redirect__action:hover { background: var(--aqua-deep); color: var(--paper-strong); transform: translateY(-1px); }
+      .portal-redirect__action svg { width: 16px; height: 16px; flex: 0 0 auto; }
+      .portal-redirect__note { color: var(--muted); font-size: .92rem; }
+      .portal-redirect__note a { color: var(--aqua-deep); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+      @media (hover: none) {
+        .portal-redirect__action:hover { transform: none; }
+      }
+    </style>
+    <title>EEGManyLabs | Members’ portal</title>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="/" aria-label="EEGManyLabs home"><img class="brand-image" src="/assets/images/logo.png" alt="EEGManyLabs"></a>
+    </div>
+  </header>
+  <main id="main-content">
+    <article id="portal" class="section-page section-page--portal">
+      <section class="section-hero">
+        <div class="section-hero__title">
+          {%- if portal.address %}
+          {{ index.content_html|safe }}
+          {%- else %}
+          <h1>Members’ portal</h1>
+          <p>The members’ portal is not open yet.</p>
+          {%- endif %}
+        </div>
+      </section>
+      <section class="portal-redirect">
+        {%- if portal.address %}
+        <p><a class="portal-redirect__action" href="{{ portal.address|e }}"><span>Continue to the members’ portal</span><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M4 12h11M11 8l4 4-4 4" /></svg></a></p>
+        <p class="portal-redirect__note">If the portal does not open by itself, use the link above. You can also <a href="/">return to the #EEGManyLabs website</a>.</p>
+        {%- else %}
+        <p class="portal-redirect__note"><a href="/">Return to the #EEGManyLabs website</a></p>
+        {%- endif %}
+      </section>
+    </article>
+  </main>
+</body>
+</html>

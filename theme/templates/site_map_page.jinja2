@@ -13,6 +13,10 @@
     {"title": "Contact", "description": "Social channels, community links, and a direct email form.", "url": "/contact/", "icon": "fas-envelope"}
   ]}
 ] %}
+{%- if portal.address -%}
+  {#- Members' portal card, present only while the gate in settings.jinja2 is open. -#}
+  {%- set _ = map_sections[1]["items"].append(portal.site_map_card) -%}
+{%- endif %}
 <section class="site-map-layout">
   {% for section in map_sections %}
     <section class="site-map-section" aria-labelledby="site-map-{{ loop.index }}">

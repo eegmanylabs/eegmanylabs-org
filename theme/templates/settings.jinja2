@@ -1,0 +1,3 @@
+{# Members' portal gate: the full public address of the portal for each build environment, beginning with https://.
+   While the value for the environment being built is empty, nothing about the portal is rendered and no /portal/ page is built. #}
+{% set portal_addresses = {"production": "", "staging": ""} %}

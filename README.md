@@ -195,6 +195,7 @@ General page content lives under `content/`. Each `index.md` usually contains TO
 | Privacy notice | `theme/templates/privacy_page.jinja2` |
 | Visual Sitemap | `theme/templates/site_map_page.jinja2` |
 | Footer resources | `content/resources.md`, `content/contact_links.md`, and `content/funders.md` |
+| Members’ portal entry | `theme/templates/settings.jinja2`. See section 5.7. |
 
 Keep prose concise, evidence-based, and written in UK English. Preserve existing factual claims unless their source has been checked. Do not introduce promotional statistics, invented claims, or generic statements solely to fill visual space.
 
@@ -252,6 +253,30 @@ The `DOI` field must contain a **bare DOI**, for example `10.31234/osf.io/27atx_
 Related Project entries are Markdown pages beneath `content/related_projects/`. Their card imagery is declared in page front matter and lives under `assets/images/stock/` or `assets/images/related_projects/`. Detail-page presentation is handled by `theme/templates/related_project_page.jinja2`.
 
 Partner names, descriptions, logos, and URLs currently live in `theme/templates/partners_page.jinja2`. Partner logos are kept in `assets/images/partners/`. All partner links open in a new tab and carry a screen-reader label that makes this explicit. Keep descriptions factual and short enough to maintain aligned cards.
+
+### 5.7 Members’ portal entry
+
+The members’ portal is a separate application with an address of its own. The public site only points to it: a Members’ portal action in the desktop navigation and the mobile menu, a link in the footer base row, a card on the Sitemap page, and a small page at `/portal/` that forwards visitors to the portal’s address.
+
+The whole entry sits behind one gate, the portal’s address for each build environment in `theme/templates/settings.jinja2`:
+
+```jinja
+{% set portal_addresses = {"production": "", "staging": ""} %}
+```
+
+While the value for the environment being built is empty, the build contains nothing about the portal: no links, no card, no style rules, no `/portal/` page, and no sitemap entry. The built site is then file for file what it was before the entry existed. Both values are empty at present.
+
+| Part | Source |
+|---|---|
+| Gate | `theme/templates/settings.jinja2` |
+| Navigation link, footer link, Sitemap card, and their style rules | `theme/templates/portal_entry.jinja2` |
+| Forwarding page | `content/portal/index.md` and `theme/templates/portal.jinja2` |
+
+> **Opening the gate is the last step of the portal rollout.** Do it only after the portal is live at its confirmed address and the wording of the Privacy page has been reviewed. `content/privacy/index.md` currently states that the site does not provide user accounts.
+
+To open the gate, enter the full address, beginning with `https://`, as an ordinary change through the update route in section 1. Set `staging` first, review the result on staging, and set `production` only after that review. The two environments can point to different portal addresses. Check the header at 375, 1219, and 1220 pixels wide, the mobile menu on a short screen, the footer, the Sitemap page, and that `/portal/` forwards to the portal. With the entry present the header holds nine items, so the menu button replaces the row of links below 1220 pixels instead of below 760 pixels.
+
+Two details explain the structure. The style rules for the entry live in `portal_entry.jinja2` and not in `index.css`, because `index.css` is copied into every build and must not change while the gate is closed. Syrinx has no setting that skips a content page, so `portal_entry.jinja2` removes the portal page from the build while the gate is closed. This relies on Syrinx `0.0.15` building the homepage before the other pages. If the Syrinx version changes, build with both values empty and confirm that `dist/portal/` does not exist.
 
 ## 6. Interaction and accessibility checklist
 
