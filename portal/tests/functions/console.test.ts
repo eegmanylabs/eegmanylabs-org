@@ -18,6 +18,7 @@ import {
   auditOf,
   type Caller,
   call,
+  callRaw,
   codeOf,
   coreTeamMember,
   grantCapability,
@@ -98,8 +99,8 @@ describe("listUsers", () => {
     const member = await account("uid-member");
     await laboratory("lab-a");
     await grantRole("uid-member", "lab_coordinator", "laboratory", "lab-a");
+    // No system setting waives the factor here, so the access document requires it.
     const withoutFactor = await administrator("uid-admin", { secondFactor: false });
-    await adminDb.doc(COLLECTIONS.access.docPath("uid-admin")).update({ secondFactorRequired: true });
 
     expect(await codeOf(call(member, listUsersContract, {}))).toBe("permission-denied");
     const refused = await refusal(call(withoutFactor, listUsersContract, {}));
@@ -244,7 +245,7 @@ describe("endAllSessions", () => {
     const other = await signedInAccount("someone.else@example.org");
     await call(caller, endAllSessionsContract, {});
     expect((await accessOf(other.uid)).sessionsValidAfter).toBeNull();
-    expect(await codeOf(call(caller, endAllSessionsContract, { uid: other.uid } as never))).toBe("invalid-argument");
+    expect(await codeOf(callRaw(caller, endAllSessionsContract.name, { uid: other.uid }))).toBe("invalid-argument");
 
     await call(admin, setUserStatusContract, { uid: other.uid, status: "suspended", reason: "A synthetic reason." });
     expect(await codeOf(call(other, endAllSessionsContract, {}))).toBe("permission-denied");

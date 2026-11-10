@@ -42,6 +42,8 @@ export interface Caller {
   readonly emailVerified?: boolean;
   /** Whether the sign-in token names a second factor that was verified in the session. */
   readonly secondFactor?: boolean;
+  /** When the session began, in seconds since the epoch. Now, unless the test says otherwise. */
+  readonly authTime?: number;
 }
 
 const encoded = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
@@ -54,7 +56,7 @@ export function tokenOf(caller: Caller): string {
     encoded({
       iss: `https://securetoken.google.com/${PROJECT_ID}`,
       aud: PROJECT_ID,
-      auth_time: now,
+      auth_time: caller.authTime ?? now,
       iat: now,
       exp: now + 3600,
       sub: caller.uid,
