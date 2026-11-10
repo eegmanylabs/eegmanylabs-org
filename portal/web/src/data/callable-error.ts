@@ -1,6 +1,6 @@
 // How a failed call to a function is described to the rest of the application. This file
 // imports nothing from Firebase, so it can be tested by itself.
-import { isPublicErrorDetails } from "@eegml/shared";
+import { type CallableErrorReason, isPublicErrorDetails, publicErrorReason } from "@eegml/shared";
 
 /** The reasons a call can fail, as the interface needs to tell them apart. */
 export type CallableErrorCode =
@@ -36,6 +36,8 @@ export class CallableError extends Error {
     readonly code: CallableErrorCode,
     /** Safe to show to the person using the portal. */
     message: string = GENERAL_MESSAGES[code],
+    /** Why the server refused, where it said so, so that the interface can offer the next step. */
+    readonly reason: CallableErrorReason | null = null,
   ) {
     super(message);
   }
@@ -56,7 +58,7 @@ export function toCallableError(error: unknown): CallableError {
   if (isPublicErrorDetails(details) && error instanceof Error) {
     // The SDK appends the HTTP status, for example " [400]", to the server's message.
     const message = error.message.replace(/\s*\[\d{3}\]$/, "").trim();
-    if (message !== "") return new CallableError(code, message);
+    if (message !== "") return new CallableError(code, message, publicErrorReason(details));
   }
   return new CallableError(code);
 }

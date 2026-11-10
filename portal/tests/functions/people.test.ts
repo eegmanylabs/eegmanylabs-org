@@ -103,6 +103,7 @@ describe("resolveCorrectionRequest", () => {
     ).toEqual({
       requestId: "request-audited",
       status: "accepted",
+      applied: false,
     });
 
     const stored = await dataOf("correctionRequests/request-audited");
@@ -121,6 +122,7 @@ describe("resolveCorrectionRequest", () => {
           requestId: "request-audited",
           field: "familyName",
           outcome: "accepted",
+          applied: false,
           message: "Corrected today.",
         },
       },
@@ -145,6 +147,75 @@ describe("resolveCorrectionRequest", () => {
     expect((await auditOfPath("correctionRequests/request-audited")).map((audit) => audit.action)).toEqual([
       "document.created",
     ]);
+  });
+});
+
+describe("resolveCorrectionRequest with apply", () => {
+  async function request(id: string, field: string, proposedValue: string, entityId = "person-1"): Promise<void> {
+    await adminDb.doc(`correctionRequests/${id}`).set({
+      ...standard(),
+      createdBy: "uid-requester",
+      updatedBy: "uid-requester",
+      uid: "uid-requester",
+      entityType: "person",
+      entityId,
+      field,
+      proposedValue,
+      status: "open",
+      resolvedBy: null,
+      resolvedAt: null,
+    });
+  }
+
+  it("sets the proposed value on the person in the same transaction, audited with its before and after", async () => {
+    await linkedMember("uid-requester", "person-1", { familyName: "Mistaken" });
+    const core = await coreTeamMember("uid-core");
+    await request("request-apply", "familyName", " Corrected ");
+
+    expect(
+      await call(core, resolveCorrectionRequestContract, {
+        requestId: "request-apply",
+        outcome: "accepted",
+        apply: true,
+      }),
+    ).toEqual({ requestId: "request-apply", status: "accepted", applied: true });
+
+    const stored = await dataOf("persons/person-1");
+    expect(stored).toMatchObject({ familyName: "Corrected", updatedBy: "uid-core" });
+    const [entry] = await auditOf("correction.resolved", "person-1");
+    expect(entry?.changes).toContainEqual({ field: "familyName", before: "Mistaken", after: "Corrected" });
+    expect(stored?.writeContext.auditEventId).toBe(entry?.writeContext.auditEventId);
+    expect(await notificationsOf("uid-requester")).toMatchObject([{ payload: { outcome: "accepted", applied: true } }]);
+  });
+
+  it("refuses to apply a derived detail, a value that does not fit, and a rejection, and changes nothing", async () => {
+    await linkedMember("uid-requester", "person-1", { countryCode: "GB" });
+    const core = await coreTeamMember("uid-core");
+    await request("request-derived", "affiliationSummary", "Another University");
+    await request("request-unfit", "countryCode", "Atlantis");
+
+    const derived = await refusal(
+      call(core, resolveCorrectionRequestContract, { requestId: "request-derived", outcome: "accepted", apply: true }),
+    );
+    expect(derived.code).toBe("failed-precondition");
+    expect(derived.message).toContain("comes from other records");
+    expect(
+      await codeOf(
+        call(core, resolveCorrectionRequestContract, { requestId: "request-unfit", outcome: "accepted", apply: true }),
+      ),
+    ).toBe("invalid-argument");
+    expect(
+      await codeOf(
+        callRaw(core, "resolveCorrectionRequest", { requestId: "request-unfit", outcome: "rejected", apply: true }),
+      ),
+    ).toBe("invalid-argument");
+    expect(await dataOf("persons/person-1")).toMatchObject({ countryCode: "GB" });
+    expect(await dataOf("correctionRequests/request-derived")).toMatchObject({ status: "open" });
+
+    // Accepting without applying records the decision and leaves the record to be corrected where it comes from.
+    expect(
+      await call(core, resolveCorrectionRequestContract, { requestId: "request-derived", outcome: "accepted" }),
+    ).toEqual({ requestId: "request-derived", status: "accepted", applied: false });
   });
 });
 

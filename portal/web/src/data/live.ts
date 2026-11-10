@@ -2,7 +2,15 @@
 // and every registry entry of @eegml/shared is served by the same two hooks: there is no hook
 // per collection.
 import type { CollectionKey, DocPathIds, ListableCollectionKey } from "@eegml/shared";
-import { type DocumentReference, type FirestoreError, onSnapshot, type SnapshotMetadata } from "firebase/firestore";
+import {
+  type DocumentReference,
+  disableNetwork,
+  enableNetwork,
+  type FirestoreError,
+  onSnapshot,
+  type SnapshotMetadata,
+} from "firebase/firestore";
+import { useSyncExternalStore } from "react";
 import { DataShapeError, type RecordOf } from "./converter";
 import { db } from "./firebase";
 import { type LiveQuery, liveQueryKey } from "./query-spec";
@@ -91,6 +99,28 @@ export function useLiveQuery<K extends ListableCollectionKey>(
 
 /** Opens anew every listener that has given up after repeated failures. For "Try again" buttons. */
 export function retryFailedLiveData(): void {
+  cache.retryFailed();
+}
+
+const subscribeConnection = (listener: () => void) => cache.subscribeConnection(listener);
+const readConnection = () => cache.disconnected;
+
+/**
+ * Whether what the page shows comes from the browser's copy because the database cannot be
+ * reached, or still waits for the database with only that copy to go on. It is briefly true
+ * while a page starts, so a reader waits a few seconds before telling the person.
+ */
+export function useLiveDataDisconnected(): boolean {
+  return useSyncExternalStore(subscribeConnection, readConnection);
+}
+
+/**
+ * Asks Firestore to connect again at once, instead of at its next attempt, and opens anew the
+ * listeners that have given up. For the "Retry" of the connection banner.
+ */
+export async function reconnectLiveData(): Promise<void> {
+  await disableNetwork(db);
+  await enableNetwork(db);
   cache.retryFailed();
 }
 

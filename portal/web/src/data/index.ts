@@ -7,6 +7,8 @@ export {
   isSignInLink,
   observeSession,
   requestSignInLink,
+  type SecondFactorChallenge,
+  SecondFactorChallengeError,
   type SessionUser,
   SignInError,
   type SignInFailure,
@@ -16,7 +18,14 @@ export {
 export { callFunction } from "./callable";
 export { CallableError, type CallableErrorCode } from "./callable-error";
 export { DataShapeError, type RecordOf, type WithId } from "./converter";
-export { liveListenerCount, retryFailedLiveData, useLiveDocument, useLiveQuery } from "./live";
+export {
+  liveListenerCount,
+  reconnectLiveData,
+  retryFailedLiveData,
+  useLiveDataDisconnected,
+  useLiveDocument,
+  useLiveQuery,
+} from "./live";
 export { discardLocalData } from "./local-data";
 export {
   type FieldOf,
@@ -27,4 +36,17 @@ export {
   type QueryOrder,
   type QueryValue,
 } from "./query-spec";
+export { secondFactor } from "./second-factor";
+export {
+  type EnrolledFactor,
+  normaliseCode,
+  SECOND_FACTOR_MESSAGES,
+  type SecondFactorApi,
+  SecondFactorError,
+  type SecondFactorFailure,
+  SUPPORTED_FACTOR_IDS,
+  type TotpEnrolment,
+} from "./second-factor-model";
 export type { Live, LiveError } from "./subscription-cache";
+export { type CallResult, useCallResult } from "./use-call";
+export { type CorrectionRequestInput, createCorrectionRequest, markNotificationRead } from "./writes";

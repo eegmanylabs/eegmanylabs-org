@@ -7,6 +7,13 @@
 // A subscription can fail, for example when the server refuses it. A failed subscription has
 // stopped for good, so the cache starts a new one after a short wait, a few times. Only when
 // that keeps failing do the consumers see an error, and `retryFailed` lets them ask again.
+//
+// A value that comes from the local copy before the server has ever confirmed the subscription
+// is held back, and the consumers keep seeing `loading`. Without the server the local copy may
+// be empty or out of date, and an empty list shown as "nothing here" would be untrue. Once the
+// server has confirmed the subscription, values from the local copy are shown, marked
+// `fromCache`, and the cache reports itself `disconnected` while any watched value is in that
+// state or still waits for the server, so that the shell can say so.
 
 export interface LiveError {
   /** A short machine-readable reason, for example "permission-denied" or "data/invalid-shape". */
@@ -50,6 +57,10 @@ interface Entry {
   generation: number;
   /** Automatic new starts since the last value arrived. */
   failures: number;
+  /** Whether the server has ever confirmed a value of this subscription. */
+  confirmed: boolean;
+  /** Whether the latest value came from the local copy, shown or held back. */
+  local: boolean;
   teardown: ReturnType<typeof setTimeout> | undefined;
   retry: ReturnType<typeof setTimeout> | undefined;
 }
@@ -58,6 +69,8 @@ const stopped = () => {};
 
 export class SubscriptionCache {
   readonly #entries = new Map<string, Entry>();
+  readonly #connectionListeners = new Set<() => void>();
+  #disconnected = false;
   readonly #keepAliveMs: number;
   readonly #retryDelaysMs: readonly number[];
   #closed = false;
@@ -76,6 +89,21 @@ export class SubscriptionCache {
   /** Number of subscriptions the cache holds, running or waiting to start again. */
   get size(): number {
     return this.#entries.size;
+  }
+
+  /**
+   * Whether a watched value comes from the local copy because the server cannot be reached,
+   * or waits for the server with only a local copy to go on. It is briefly true on every start,
+   * while the server has yet to answer, so a reader waits a moment before saying so.
+   */
+  get disconnected(): boolean {
+    return this.#disconnected;
+  }
+
+  /** Registers a listener for changes of `disconnected`. Returns the function that removes it. */
+  subscribeConnection(listener: () => void): () => void {
+    this.#connectionListeners.add(listener);
+    return () => this.#connectionListeners.delete(listener);
   }
 
   /** The current value for a key. `loading` when nothing has been published yet. */
@@ -97,6 +125,8 @@ export class SubscriptionCache {
       stop: stopped,
       generation: 0,
       failures: 0,
+      confirmed: false,
+      local: false,
       teardown: undefined,
       retry: undefined,
     };
@@ -118,6 +148,7 @@ export class SubscriptionCache {
 
     return () => {
       entry.listeners.delete(listener);
+      this.#updateConnection();
       if (entry.listeners.size > 0 || this.#entries.get(key) !== entry) return;
       // A subscription that is failing is not worth keeping for a consumer that may come back.
       if (entry.stop === stopped) {
@@ -153,6 +184,7 @@ export class SubscriptionCache {
       this.#halt(entry);
       this.#notify(entry);
     }
+    this.#updateConnection();
   }
 
   #open(entry: Entry): void {
@@ -164,10 +196,15 @@ export class SubscriptionCache {
     const accepts = () => starting || (entry.generation === generation && entry.stop !== stopped);
     const publish: Publish<unknown> = (state) => {
       if (!accepts()) return;
-      if (state.status === "ready" && state.fromCache && entry.failures > 0) {
-        // The subscription was started again after a failure, and this value is the local copy
-        // from before it. The server has not confirmed it and may be about to refuse again, so
-        // it is neither shown nor taken as a sign that the subscription works.
+      if (state.status === "ready") {
+        entry.local = state.fromCache;
+        if (!state.fromCache) entry.confirmed = true;
+        this.#updateConnection();
+      }
+      if (state.status === "ready" && state.fromCache && (entry.failures > 0 || !entry.confirmed)) {
+        // A local copy that the server has not confirmed. After a failure the server may be about
+        // to refuse again. Before any confirmation the copy may be empty or out of date. Either
+        // way it is neither shown nor taken as a sign that the subscription works.
         return;
       }
       entry.state = state;
@@ -210,6 +247,16 @@ export class SubscriptionCache {
     for (const notify of entry.listeners) notify();
   }
 
+  #updateConnection(): void {
+    let disconnected = false;
+    for (const entry of this.#entries.values()) {
+      if (entry.listeners.size > 0 && entry.local && entry.stop !== stopped) disconnected = true;
+    }
+    if (disconnected === this.#disconnected) return;
+    this.#disconnected = disconnected;
+    for (const notify of this.#connectionListeners) notify();
+  }
+
   #halt(entry: Entry): void {
     clearTimeout(entry.teardown);
     clearTimeout(entry.retry);
@@ -224,6 +271,7 @@ export class SubscriptionCache {
   #drop(key: string, entry: Entry): void {
     this.#halt(entry);
     if (this.#entries.get(key) === entry) this.#entries.delete(key);
+    this.#updateConnection();
   }
 
   #forget(entry: Entry): void {

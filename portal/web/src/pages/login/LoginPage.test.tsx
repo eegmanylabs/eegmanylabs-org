@@ -272,14 +272,22 @@ describe("the sign-in page", () => {
     expect(auth.value.retryLink).toHaveBeenCalledOnce();
   });
 
-  it("tells the holder of a disabled account whom to contact, and does not send them round for new links", async () => {
+  it("tells the holder of a suspended account how to ask about it, and does not send them round for new links", async () => {
     auth.value.link = { status: "failed", reason: "account-disabled", retryable: false };
     await renderLogin();
     const alert = screen.getByRole("alert");
-    expect(alert.textContent).toContain("This account has been disabled.");
-    expect(alert.textContent).toContain("Contact a programme administrator.");
+    expect(alert.textContent).toContain("This account has been suspended.");
+    expect(screen.getByRole("link", { name: /Contact the programme/ }).getAttribute("href")).toBe(
+      "https://eegmanylabs.org/contact/",
+    );
     expect(alert.textContent).not.toContain("no longer works");
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("keeps saying that the account is suspended after a suspended account has signed out", async () => {
+    auth.value.suspendedNotice = true;
+    await renderLogin();
+    expect(screen.getByRole("alert").textContent).toContain("This account has been suspended.");
   });
 
   it.each(["unknown", "service-unavailable"] as const)(
@@ -297,7 +305,13 @@ describe("the sign-in page", () => {
   it("sends a signed-in visitor on to the page they asked for, and only to a page inside the portal", async () => {
     auth.value.session = {
       status: "signed-in",
-      user: { uid: "uid-1", email: "member@example.org", displayName: null, signedInAt: 1_700_000_000 },
+      user: {
+        uid: "uid-1",
+        email: "member@example.org",
+        displayName: null,
+        signedInAt: 1_700_000_000,
+        secondFactor: false,
+      },
     };
     const router = await renderLogin("/login?next=%2Flabs%2Flab-1");
     expect(screen.getByTestId("elsewhere")).toBeTruthy();

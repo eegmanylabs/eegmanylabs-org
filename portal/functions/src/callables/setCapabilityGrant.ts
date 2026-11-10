@@ -5,6 +5,7 @@ import {
   capabilityGrantId,
   LIMITS,
   parseStoredDocument,
+  SENSITIVE_CAPABILITIES,
   setCapabilityGrantContract,
 } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
@@ -16,10 +17,15 @@ import {
   defineCallable,
   readAccessDocument,
   requireCapability,
+  requireProgrammeAdministrator,
   touchedFields,
   writeAudit,
 } from "../framework";
 import { writeNotification } from "../notifications/notify";
+
+const OWN_GRANT_MESSAGE = "You cannot grant a capability to your own account. Ask a programme administrator.";
+const SENSITIVE_GRANT_MESSAGE =
+  "Only a programme administrator can grant or revoke role management, suspension, special-category data, import rollback, integration credentials or publishing approval.";
 
 /** Whether a grant confers its capability at an instant: neither revoked nor past its expiry time. */
 function confers(grant: CapabilityGrantDoc | null, at: Date): boolean {
@@ -51,6 +57,13 @@ function earlierPeriod(grant: CapabilityGrantDoc): CapabilityGrantDoc["history"]
  * moves the earlier period to `history`. A revocation records its own reason on the grant and
  * keeps the reason of the grant in `history`.
  *
+ * Nobody grants a capability to their own account, so that every named grant, the grant of
+ * special-category data above all, involves two people. A sensitive capability
+ * (`SENSITIVE_CAPABILITIES`) is granted and revoked by programme administrators alone, as the
+ * overrides of the capability matrix are, because a member of the core team who holds
+ * `roles.manage` through an override must not hand out the other sensitive powers. Revoking a
+ * grant of one's own is allowed: it only gives something up.
+ *
  * The grant, the access document of the account and the audit entry are written in one
  * transaction, so a revoked grant stops working on the account's next request.
  */
@@ -74,7 +87,12 @@ export const setCapabilityGrant = defineCallable(setCapabilityGrantContract, {
     const reference = db.doc(COLLECTIONS.capabilityGrants.docPath(id));
 
     return db.runTransaction(async (transaction) => {
-      requireCapability(context, await readAccessDocument(db, actor, transaction), "roles.manage", "programme");
+      const access = await readAccessDocument(db, actor, transaction);
+      requireCapability(context, access, "roles.manage", "programme");
+      if (input.action === "grant" && input.uid === actor) throw new AppError("permission-denied", OWN_GRANT_MESSAGE);
+      if ((SENSITIVE_CAPABILITIES as readonly string[]).includes(input.capability)) {
+        requireProgrammeAdministrator(access, SENSITIVE_GRANT_MESSAGE);
+      }
       const snapshot = await transaction.get(reference);
       let stored: CapabilityGrantDoc | null = null;
       if (snapshot.exists) {

@@ -15,9 +15,9 @@ import {
   callerStamp,
   createdFields,
   defineCallable,
-  NOT_ALLOWED_MESSAGE,
   readAccessDocument,
   requireCapability,
+  requireProgrammeAdministrator,
   touchedFields,
   writeAudit,
 } from "../framework";
@@ -50,9 +50,7 @@ export const setRoleCapabilityOverride = defineCallable(setRoleCapabilityOverrid
     return db.runTransaction(async (transaction) => {
       const access = await readAccessDocument(db, actor, transaction);
       requireCapability(context, access, "roles.manage", "programme");
-      if (!access.programmeRoles.includes("programme_admin")) {
-        throw new AppError("permission-denied", NOT_ALLOWED_MESSAGE);
-      }
+      requireProgrammeAdministrator(access);
       if (!roleCanHold(input.role, input.capability)) {
         throw new AppError(
           "failed-precondition",

@@ -66,9 +66,9 @@ describe("listUsers", () => {
     expect((await call(admin, listUsersContract, { search: "Bo Synth" })).users.map((user) => user.uid)).toEqual([
       "uid-bo",
     ]);
-    expect((await call(admin, listUsersContract, { search: "amy.synthetic@" })).users.map((user) => user.uid)).toEqual(
-      ["uid-amy"],
-    );
+    expect((await call(admin, listUsersContract, { search: "amy.synthetic@" })).users.map((user) => user.uid)).toEqual([
+      "uid-amy",
+    ]);
     const page = await call(admin, listUsersContract, { offset: 1, limit: 1 });
     expect(page).toMatchObject({ total: 3 });
     expect(page.users.map((user) => user.uid)).toEqual(["uid-bo"]);
@@ -140,6 +140,10 @@ describe("listAuditEvents", () => {
   it("pages through the trail newest first, filters it, and keeps withheld values withheld", async () => {
     const admin = await administrator("uid-auditor");
     await named("uid-auditor", "Audit Reader");
+    // A name that an account gives itself is self-asserted and never names an actor in the trail.
+    await account("uid-impostor");
+    await named("uid-impostor", "Programme administrator");
+    await entry("zz-entry-impostor", { actorUid: "uid-impostor", actorKind: "user" }, new Date("2026-03-01T11:59:30Z"));
     const base = Date.parse("2026-03-01T12:00:00Z");
     for (let index = 0; index < 5; index += 1) {
       await entry(
@@ -176,8 +180,15 @@ describe("listAuditEvents", () => {
     const byActor = await call(admin, listAuditEventsContract, { ...window, actorUid: "uid-auditor" });
     expect(byActor.events.map((event) => event.eventId)).toEqual(["zz-entry-4", "zz-entry-2", "zz-entry-0"]);
     expect(byActor.next).toBeNull();
+    const impostor = await call(admin, listAuditEventsContract, { ...window, actorUid: "uid-impostor" });
+    expect(impostor.events).toMatchObject([{ eventId: "zz-entry-impostor", actorName: null }]);
+    // Once the account is linked, the trail names it by its person.
+    await person("person-auditor", [], { displayName: "Avery Auditor", userId: "uid-auditor" });
+    await adminDb.doc(COLLECTIONS.users.docPath("uid-auditor")).update({ personId: "person-auditor" });
+    const linked = await call(admin, listAuditEventsContract, { ...window, actorUid: "uid-auditor" });
+    expect(linked.events[0]?.actorName).toBe("Avery Auditor");
     expect(byActor.events[0]).toMatchObject({
-      actorName: "Audit Reader",
+      actorName: null,
       action: "role.granted",
       changes: [
         { field: "status", before: "pendingApproval", after: "active" },

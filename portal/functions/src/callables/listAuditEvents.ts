@@ -55,7 +55,12 @@ const matches = (event: AuditEvent, filters: Filters) =>
   (filters.entityType === undefined || event.entityType === filters.entityType) &&
   (filters.action === undefined || event.action === filters.action);
 
-/** The names of the acting accounts: the linked person's, or else the one the account gives itself. */
+/**
+ * The names of the acting accounts: the name of the person each one is linked to. The name an
+ * account gives itself is self-asserted (an account could call itself "Programme
+ * administrator"), so an account that is not linked has no name here and the trail shows its
+ * identifier.
+ */
 async function actorNames(db: Firestore, uids: readonly string[]): Promise<Map<string, string>> {
   const names = new Map<string, string>();
   if (uids.length === 0) return names;
@@ -66,9 +71,7 @@ async function actorNames(db: Firestore, uids: readonly string[]): Promise<Map<s
     linked.length === 0 ? [] : await db.getAll(...linked.map((id) => db.doc(COLLECTIONS.persons.docPath(id))));
   const personName = new Map(persons.map((person) => [person.id, person.get("displayName")] as const));
   users.forEach((user, index) => {
-    const fromPerson: unknown = personName.get(personIds[index]);
-    const own: unknown = user.get("displayName");
-    const name = typeof fromPerson === "string" && fromPerson !== "" ? fromPerson : own;
+    const name: unknown = personName.get(personIds[index]);
     if (typeof name === "string" && name !== "") names.set(user.id, name);
   });
   return names;

@@ -13,6 +13,11 @@ const data = vi.hoisted(() => {
       super(reason);
     }
   }
+  class SecondFactorChallengeError extends SignInError {
+    constructor(readonly challenge: { factors: unknown[]; answer: (uid: string, code: string) => Promise<unknown> }) {
+      super("second-factor");
+    }
+  }
   class CallableError extends Error {
     constructor(
       readonly code: string,
@@ -23,7 +28,9 @@ const data = vi.hoisted(() => {
   }
   return {
     SignInError,
+    SecondFactorChallengeError,
     CallableError,
+    callFunction: vi.fn(),
     emit: (() => {}) as (user: SessionUser | null) => void,
     observeSession: vi.fn(),
     startSession: vi.fn(),
@@ -50,12 +57,14 @@ const member: SessionUser = {
   email: "member@example.org",
   displayName: null,
   signedInAt: 1_700_000_000,
+  secondFactor: false,
 };
 const someoneElse: SessionUser = {
   uid: "uid-other",
   email: "other.member@example.org",
   displayName: null,
   signedInAt: 1_700_000_000,
+  secondFactor: false,
 };
 const LINK = "http://localhost/?apiKey=fake&oobCode=code-1&mode=signIn";
 const PENDING_KEY = "portal.signIn.pending";
@@ -129,6 +138,7 @@ beforeEach(() => {
   data.signOut.mockResolvedValue(undefined);
   data.discardLocalData.mockResolvedValue(undefined);
   data.useAccessRecord.mockReturnValue({ status: "idle" });
+  data.callFunction.mockResolvedValue({ sessionsValidAfter: "2026-11-10T12:00:00.000Z" });
 });
 
 describe("AuthProvider", () => {
@@ -568,5 +578,74 @@ describe("AuthProvider and sign-in links", () => {
     await act(() => context.confirmLinkEmail("member@example.org"));
     await waitFor(() => expect(state()).toBe("signed-in | none | done | /"));
     expect(screen.queryByText("You are already signed in.")).toBeNull();
+  });
+});
+
+describe("AuthProvider with a second factor", () => {
+  const challenge = () => ({
+    factors: [{ uid: "factor-1", displayName: "Phone", factorId: "totp", enrolledAt: null }],
+    answer: vi.fn().mockResolvedValue(member),
+  });
+
+  it("waits for the second factor after the link, and goes where the visitor was heading once it is answered", async () => {
+    rememberRequest("/labs/lab-1");
+    const waiting = challenge();
+    data.completeSignInLink.mockRejectedValueOnce(new data.SecondFactorChallengeError(waiting));
+    await renderProvider(LINK);
+    act(() => data.emit(null));
+    await waitFor(() => expect(state()).toBe("signed-out | second-factor | idle | /"));
+
+    await act(() => context.answerSecondFactor("factor-1", "123456"));
+    expect(waiting.answer).toHaveBeenCalledExactlyOnceWith("factor-1", "123456");
+    expect(state()).toBe("signed-out | none | idle | /labs/lab-1");
+    // The address is forgotten once the sign-in has finished.
+    expect(window.localStorage.getItem(PENDING_KEY)).toBeNull();
+  });
+
+  it("keeps the challenge open when the code is refused", async () => {
+    rememberRequest(null);
+    const waiting = challenge();
+    waiting.answer.mockRejectedValueOnce(new Error("invalid-code"));
+    data.completeSignInLink.mockRejectedValueOnce(new data.SecondFactorChallengeError(waiting));
+    await renderProvider(LINK);
+    act(() => data.emit(null));
+    await waitFor(() => expect(state()).toContain("second-factor"));
+
+    await expect(context.answerSecondFactor("factor-1", "000000")).rejects.toThrow("invalid-code");
+    expect(state()).toBe("signed-out | second-factor | idle | /");
+    expect(window.localStorage.getItem(PENDING_KEY)).not.toBeNull();
+  });
+
+  it("asks for the second factor after Google sign-in as well", async () => {
+    data.signInWithGoogle.mockRejectedValueOnce(new data.SecondFactorChallengeError(challenge()));
+    await renderProvider();
+    act(() => data.emit(null));
+    await act(() => context.signInWithGoogle());
+    expect(state()).toBe("signed-out | second-factor | idle | /");
+  });
+});
+
+describe("AuthProvider signing out everywhere", () => {
+  it("asks the server to end every session, then signs out here with its own confirmation", async () => {
+    await renderProvider();
+    act(() => data.emit(member));
+    await waitFor(() => expect(state()).toContain("done"));
+
+    await act(() => context.signOutEverywhere());
+    expect(data.callFunction).toHaveBeenCalledOnce();
+    expect(data.callFunction.mock.calls[0]?.[0]).toMatchObject({ name: "endAllSessions" });
+    expect(data.signOut).toHaveBeenCalledOnce();
+    expect(window.sessionStorage.getItem(NOTICE_KEY)).toBe("signed-out-everywhere");
+  });
+
+  it("stays signed in when the server refuses", async () => {
+    data.callFunction.mockRejectedValueOnce(new data.CallableError("unavailable"));
+    await renderProvider();
+    act(() => data.emit(member));
+    await waitFor(() => expect(state()).toContain("done"));
+
+    await expect(context.signOutEverywhere()).rejects.toThrow();
+    expect(data.signOut).not.toHaveBeenCalled();
+    expect(window.sessionStorage.getItem(NOTICE_KEY)).toBeNull();
   });
 });

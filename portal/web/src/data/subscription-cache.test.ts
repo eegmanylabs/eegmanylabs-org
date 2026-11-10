@@ -247,13 +247,46 @@ describe("a subscription that fails", () => {
     expect(state.starts).toBe(3);
   });
 
-  it("shows the local copy of a subscription that has not failed, as before", () => {
+  it("holds back a local copy until the server has confirmed the subscription, and says it is disconnected", () => {
+    const cache = new SubscriptionCache();
+    const { state, start } = source<string[]>();
+    const connection = vi.fn();
+    cache.subscribeConnection(connection);
+    cache.subscribe("query:a", start, () => {});
+    const offline = (data: string[]): Live<string[]> => ({
+      status: "ready",
+      data,
+      fromCache: true,
+      hasPendingWrites: false,
+    });
+
+    // Offline from the start: the browser's copy is empty, which is no reason to say "nothing here".
+    state.publish(offline([]));
+    expect(cache.read("query:a")).toEqual(loading);
+    expect(cache.disconnected).toBe(true);
+    expect(connection).toHaveBeenCalledTimes(1);
+
+    state.publish(ready(["from the server"]));
+    expect(cache.read("query:a")).toEqual(ready(["from the server"]));
+    expect(cache.disconnected).toBe(false);
+
+    // Confirmed once, the copy is shown when the connection drops, marked as such.
+    state.publish(offline(["from the server"]));
+    expect(cache.read("query:a")).toEqual(offline(["from the server"]));
+    expect(cache.disconnected).toBe(true);
+    state.publish(ready(["from the server"]));
+    expect(cache.disconnected).toBe(false);
+    expect(connection).toHaveBeenCalledTimes(4);
+  });
+
+  it("stops saying it is disconnected when nobody watches the value any more", () => {
     const cache = new SubscriptionCache();
     const { state, start } = source<string>();
-    cache.subscribe("doc:a", start, () => {});
-    const cached: Live<string> = { status: "ready", data: "offline copy", fromCache: true, hasPendingWrites: false };
-    state.publish(cached);
-    expect(cache.read("doc:a")).toEqual(cached);
+    const stop = cache.subscribe("doc:a", start, () => {});
+    state.publish({ status: "ready", data: "copy", fromCache: true, hasPendingWrites: false });
+    expect(cache.disconnected).toBe(true);
+    stop();
+    expect(cache.disconnected).toBe(false);
   });
 
   it("counts new starts afresh once a value has arrived", () => {

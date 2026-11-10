@@ -1,4 +1,4 @@
-import { accountStanding, type Capability, capabilitiesOf } from "@eegml/shared";
+import { accountStanding, type Capability, capabilitiesOf, endAllSessionsContract } from "@eegml/shared";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { leaveNotice, restartApplication, takeNotice } from "@/app/restart";
@@ -7,11 +7,14 @@ import {
   type AccessRecord,
   CallableError,
   type CallableErrorCode,
+  callFunction,
   completeSignInLink,
   discardLocalData,
   type Live,
   observeSession,
   requestSignInLink,
+  type SecondFactorChallenge,
+  SecondFactorChallengeError,
   type SessionUser,
   SignInError,
   type SignInFailure,
@@ -35,6 +38,8 @@ export type LinkState =
   | { readonly status: "completing" }
   /** The link was opened on a device that did not ask for it, so the address is needed again. */
   | { readonly status: "needs-email" }
+  /** The account has a second factor, and signing in finishes once it is answered. */
+  | { readonly status: "second-factor"; readonly challenge: SecondFactorChallenge }
   | {
       readonly status: "failed";
       readonly reason: SignInFailure;
@@ -62,6 +67,8 @@ export interface AuthContextValue {
   readonly registration: RegistrationState;
   /** What the interface may show. Rules and functions make the real decisions. */
   readonly capabilities: ReadonlySet<Capability>;
+  /** Whether the application started again after a suspended account signed out, so the sign-in page says why. */
+  readonly suspendedNotice: boolean;
   /** Emails a sign-in link. `next` is where to go once the link has been opened. */
   sendLink(email: string, next: string | null): Promise<void>;
   /** Forgets the address a link was asked for, for someone who wants to use another one. */
@@ -73,8 +80,21 @@ export interface AuthContextValue {
   /** Gives up on the link this page was opened from, so that a new one can be asked for. */
   abandonLink(): void;
   signInWithGoogle(): Promise<void>;
-  /** Signs out. The application then starts afresh at the sign-in page. */
-  signOut(): Promise<void>;
+  /**
+   * Answers the second factor that a sign-in waits for, with the code of an authenticator app.
+   * Rejects with a `SecondFactorError` when the code is refused, and the challenge stays open.
+   */
+  answerSecondFactor(factorUid: string, code: string): Promise<void>;
+  /**
+   * Signs out. The application then starts afresh at the sign-in page, which says that the
+   * account is suspended when `reason` is `suspended`.
+   */
+  signOut(reason?: "signed-out" | "suspended"): Promise<void>;
+  /**
+   * Ends every session of the account, on every device, and signs out here. Rejects with a
+   * `CallableError` when the server refuses, and nothing has changed.
+   */
+  signOutEverywhere(): Promise<void>;
   retryRegistration(): void;
 }
 
@@ -145,8 +165,17 @@ export function AuthProvider({ signInLink, children }: AuthProviderProps) {
 
   // What was left to say before the application started again. `takeNotice` hands it out once,
   // so the second run of this effect in StrictMode finds nothing.
+  const [suspendedNotice, setSuspendedNotice] = useState(false);
   useEffect(() => {
-    if (takeNotice() === "signed-out") toast.show({ title: "You have signed out." });
+    const notice = takeNotice();
+    if (notice === "suspended") setSuspendedNotice(true);
+    if (notice === "signed-out") toast.show({ title: "You have signed out." });
+    if (notice === "signed-out-everywhere") {
+      toast.show({
+        title: "You have signed out everywhere.",
+        description: "Every device that was signed in to your account has to sign in again.",
+      });
+    }
   }, [toast]);
 
   // The address and destination of the latest attempt to complete the link, kept for `retryLink`.
@@ -164,6 +193,11 @@ export function AuthProvider({ signInLink, children }: AuthProviderProps) {
         setLink({ status: "none" });
         navigate(safeReturnPath(next), { replace: true });
       } catch (error) {
+        if (error instanceof SecondFactorChallengeError) {
+          // The link has done its part. What remains is the second factor.
+          setLink({ status: "second-factor", challenge: error.challenge });
+          throw error;
+        }
         const reason = failureOf(error);
         if (reason === "email-mismatch") {
           // A wrong address can be corrected, and the link is still good.
@@ -275,6 +309,7 @@ export function AuthProvider({ signInLink, children }: AuthProviderProps) {
       link,
       access,
       registration,
+      suspendedNotice,
       capabilities: capabilitiesOf({
         signedIn: session.status === "signed-in",
         access: access.status === "ready" ? access.data : null,
@@ -306,11 +341,26 @@ export function AuthProvider({ signInLink, children }: AuthProviderProps) {
         setLink({ status: "none" });
       },
       async signInWithGoogle() {
-        await signInWithGoogle();
+        try {
+          await signInWithGoogle();
+        } catch (error) {
+          if (!(error instanceof SecondFactorChallengeError)) throw error;
+          attempt.current = null;
+          setLink({ status: "second-factor", challenge: error.challenge });
+        }
       },
-      async signOut() {
+      async answerSecondFactor(factorUid, code) {
+        if (link.status !== "second-factor") throw new SignInError("unknown");
+        await link.challenge.answer(factorUid, code);
+        const next = attempt.current?.next ?? readPendingSignIn()?.next ?? null;
         clearPendingSignIn();
-        leaveNotice("signed-out");
+        attempt.current = null;
+        setLink({ status: "none" });
+        navigate(safeReturnPath(next), { replace: true });
+      },
+      async signOut(reason: "signed-out" | "suspended" = "signed-out") {
+        clearPendingSignIn();
+        leaveNotice(reason);
         try {
           // The observer above sees the account go, discards its data and restarts the
           // application at the sign-in page.
@@ -320,12 +370,20 @@ export function AuthProvider({ signInLink, children }: AuthProviderProps) {
           throw error;
         }
       },
+      async signOutEverywhere() {
+        // The server refuses every session that began before now, this one included, so the
+        // sign-out here follows at once.
+        await callFunction(endAllSessionsContract, {});
+        clearPendingSignIn();
+        leaveNotice("signed-out-everywhere");
+        await signOut().catch(() => restartApplication("/login"));
+      },
       retryRegistration() {
         if (uid !== null) registrations.delete(uid);
         setRegistrationAttempt((count) => count + 1);
       },
     }),
-    [session, link, access, registration, signInLink, completeLink, uid],
+    [session, link, access, registration, suspendedNotice, signInLink, completeLink, uid, navigate],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

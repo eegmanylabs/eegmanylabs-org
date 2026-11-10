@@ -1,5 +1,6 @@
 // Shared fixtures and helpers of the end-to-end tests.
 // All accounts are synthetic: invented addresses on the example.org domain.
+import AxeBuilder from "@axe-core/playwright";
 import { type BrowserContext, test as base, expect, type Page } from "@playwright/test";
 import { HOST, latestSignInLink, PORTS } from "../support/emulators";
 
@@ -129,4 +130,17 @@ export async function signOutThroughMenu(page: Page): Promise<void> {
   await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/#\/login$/);
   await expect(page.getByRole("heading", { level: 1, name: SIGN_IN_HEADING })).toBeVisible();
+}
+
+/** The serious and critical findings of axe-core on the page as it is now, against WCAG 2.2 AA. */
+export async function seriousFindings(page: Page): Promise<string[]> {
+  const results = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+    .analyze();
+  return results.violations
+    .filter((violation) => violation.impact === "serious" || violation.impact === "critical")
+    .map(
+      (violation) =>
+        `${violation.id}: ${violation.help} (${violation.nodes.map((node) => node.target.join(" ")).join(", ")})`,
+    );
 }

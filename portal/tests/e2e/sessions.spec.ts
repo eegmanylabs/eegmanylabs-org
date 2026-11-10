@@ -32,14 +32,14 @@ test.describe("two tabs of one browser", () => {
     const newTab = await context.newPage();
     await newTab.goto(await latestSignInLink(email));
 
-    // The new tab shows the account, read from the server.
-    await expect(newTab.getByRole("heading", { level: 1, name: "Home" })).toBeVisible();
+    // The new tab shows the account, read from the server, on the page that links a profile.
+    await expect(newTab.getByRole("heading", { level: 1, name: "Your member profile" })).toBeVisible();
     await expect(newTab.getByTestId("account-details")).toContainText(email);
     await expect(newTab.getByTestId("account-details")).toContainText("Active");
     await expect(newTab.getByRole("alert")).toHaveCount(0);
 
     // The older tab follows: the browser shares the session, and it shows the account as well.
-    await expect(page.getByRole("heading", { level: 1, name: "Home" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Your member profile" })).toBeVisible();
     await expect(page.getByTestId("account-details")).toContainText(email);
 
     // Both stay live: a change made by trusted code reaches each of them.
@@ -78,7 +78,7 @@ test.describe("two tabs of one browser", () => {
     await requestSignInLink(page, email);
     await page.goto(await latestSignInLink(email));
     for (const tab of [page, second]) {
-      await expect(tab.getByRole("heading", { level: 1, name: "Home" })).toBeVisible();
+      await expect(tab.getByRole("heading", { level: 1, name: "Your member profile" })).toBeVisible();
       await expect(tab.getByTestId("account-details")).toContainText(email);
       await expect(tab.getByRole("alert")).toHaveCount(0);
     }
@@ -106,31 +106,31 @@ test.describe("an account that is stopped from acting", () => {
 
     // The account's data leaves the page at once, without a reload by hand.
     await expect(panel.getByTestId("account-details")).toHaveCount(0);
-    // Then the page says why, in the words of the server.
-    await expect(panel.getByRole("alert")).toContainText(
-      "This account cannot use the portal at the moment.",
-      AFTER_RETRIES,
-    );
-    await expect(panel.getByRole("alert")).toContainText(
-      "This account has been suspended. Contact a programme administrator.",
-    );
+    // Then the page says why, and where to ask about it.
+    await expect(panel.getByRole("alert")).toContainText("This account has been suspended.", AFTER_RETRIES);
+    await expect(panel.getByRole("link", { name: /Contact the programme/ })).toBeVisible();
     await expect(panel).not.toContainText(email);
-    // The browser's copy of the documents is gone as well.
+    // The browser's copy of the documents is gone as well, and the shell offers nothing to open.
     await expect.poll(() => firestoreDatabases(page)).toEqual([]);
     expect(await liveListenerCount(page)).toBe(0);
+    await expect(page.getByRole("button", { name: /^Notifications/ })).toHaveCount(0);
+    await expect(page.getByRole("navigation", { name: "Main" })).toHaveCount(0);
 
     // It stays that way on the next start: the rules and the function both refuse.
     await page.reload();
-    await expect(panel.getByRole("alert")).toContainText(
-      "This account has been suspended. Contact a programme administrator.",
-    );
+    await expect(panel.getByRole("alert")).toContainText("This account has been suspended.", AFTER_RETRIES);
     await expect(panel.getByTestId("account-details")).toHaveCount(0);
     await expect.poll(() => firestoreDatabases(page)).toEqual([]);
 
-    // Reinstated: one press brings the account back.
+    // Signing out keeps the explanation on the sign-in page.
+    await panel.getByRole("button", { name: "Sign out" }).click();
+    await expect(page.getByRole("heading", { name: "Sign in to the members' portal" })).toBeVisible();
+    await expect(page.getByRole("alert")).toContainText("This account has been suspended.");
+
+    // Reinstated: signing in again brings the account back.
     await adminDb.doc(`access/${uid}`).update({ suspended: false });
     await adminDb.doc(`users/${uid}`).update({ status: "active" });
-    await panel.getByRole("button", { name: "Try again" }).click();
+    await signIn(page, email);
     await expect(panel.getByTestId("account-details")).toContainText(email);
     await expect(panel.getByTestId("account-details")).toContainText("Active");
     await expect(panel.getByRole("alert")).toHaveCount(0);

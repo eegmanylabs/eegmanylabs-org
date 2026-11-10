@@ -225,6 +225,21 @@ export const QUERY_CATALOGUE: readonly CataloguedQuery[] = [
       limit: LIMIT,
     },
   ),
+  catalogued(
+    "the requests to represent any of a coordinator's laboratories that await a decision, oldest first",
+    "ownCoordinator",
+    "laboratoryId",
+    {
+      collection: "labClaims",
+      within: [],
+      where: [
+        ["laboratoryId", "in", [OWN_LABORATORY]],
+        ["status", "==", "pendingReview"],
+      ],
+      orderBy: [["submittedAt", "asc"]],
+      limit: LIMIT,
+    },
+  ),
   catalogued("the requests to represent any laboratory that await a decision, oldest first", "admin", null, {
     collection: "labClaims",
     within: [],

@@ -39,6 +39,8 @@ const BATCH = "batch-demographics";
 const PERSON = "person-synthetic-demographics";
 const SOURCE_RECORD = "source-record-demographics";
 const DEMOGRAPHICS = `persons/${PERSON}/special/demographics`;
+/** What the change log names in place of the path of a special-category document. */
+const DEMOGRAPHICS_COLLECTION = "persons/{personId}/special/demographics";
 /** The key of the keyed hash in this test. It protects nothing, because every value hashed with it is invented. */
 const HASH_KEY = "a-synthetic-hash-key-for-the-red-team-tests";
 
@@ -130,9 +132,14 @@ describe("the change log of an import that wrote a demographics document", () =>
 
   it("does not let a reader who lacks demographics.read confirm a guess of the values", async () => {
     const db = firestoreOf(environment, CALLERS.coreTeam);
-    // The change log is searched by the path of the document, as the data model describes.
-    const found = await getDocs(
+    // The change log is searched by the path of the document, as the data model describes. The
+    // entry of a special-category document does not name the person: it names the collection.
+    const byPerson = await getDocs(
       query(collectionGroup(db, "changes"), where("documentPath", "==", DEMOGRAPHICS), limit(5)),
+    );
+    expect(byPerson.empty).toBe(true);
+    const found = await getDocs(
+      query(collectionGroup(db, "changes"), where("documentPath", "==", DEMOGRAPHICS_COLLECTION), limit(5)),
     );
     const entry = found.docs[0]?.data() as
       | { createdAt: Timestamp; after: { specialCategory?: boolean; sha256: string } }

@@ -3,8 +3,11 @@
 //
 // To add a page: add its route here with a `handle.title`, and, if it belongs in the sidebar,
 // one entry in navigation.ts.
+import type { ComponentType } from "react";
 import { createHashRouter, type RouteObject } from "react-router";
 import { RequireAuth } from "@/auth/RequireAuth";
+import { LoadingState } from "@/components/feedback/loading-state";
+import { ClaimPage } from "@/pages/claim/ClaimPage";
 import { HomePage } from "@/pages/home/HomePage";
 import { LoginPage } from "@/pages/login/LoginPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
@@ -14,6 +17,13 @@ import type { RouteHandle } from "./route-meta";
 import { AppShell } from "./shell/AppShell";
 
 const titled = (title: string): { handle: RouteHandle } => ({ handle: { title } });
+
+// The sign-in page, Home and the claim page are in the first bundle, because every visit starts
+// with one of them. The account page and the administration console load when first opened,
+// so that a member on a slow connection waits for less.
+const lazyPage = (load: () => Promise<ComponentType>): Pick<RouteObject, "lazy"> => ({
+  lazy: async () => ({ Component: await load() }),
+});
 
 /**
  * Routes of emulator builds only. Vite replaces `import.meta.env.MODE` with the mode's name
@@ -37,6 +47,8 @@ export function portalRoutes(signInLink: string | null): RouteObject[] {
   return [
     {
       element: <Root signInLink={signInLink} />,
+      // Shown while the first page of a visit loads, when it is one that loads on demand.
+      hydrateFallbackElement: <LoadingState label="Loading the members' portal" size="page" />,
       // Catches a failure in the frame itself. Failures inside a page are caught further down.
       errorElement: <RouteError />,
       children: [
@@ -52,7 +64,47 @@ export function portalRoutes(signInLink: string | null): RouteObject[] {
             {
               // A page that fails is replaced by an error message. The shell stays usable.
               errorElement: <RouteError />,
-              children: [{ index: true, element: <HomePage />, ...titled("Home") }],
+              children: [
+                { index: true, element: <HomePage />, ...titled("Home") },
+                { path: "/claim", element: <ClaimPage />, ...titled("Your member profile") },
+                {
+                  path: "/account",
+                  ...lazyPage(async () => (await import("@/pages/account/AccountPage")).AccountPage),
+                  ...titled("Account and security"),
+                },
+                // Each page of the console checks the capability of its navigation entry itself
+                // (AdminPage), so typing the address opens nothing more than the sidebar shows.
+                {
+                  path: "/admin/claims",
+                  ...lazyPage(async () => (await import("@/pages/admin/ClaimsPage")).ClaimsPage),
+                  ...titled("Account claims"),
+                },
+                {
+                  path: "/admin/lab-claims",
+                  ...lazyPage(async () => (await import("@/pages/admin/LabClaimsPage")).LabClaimsPage),
+                  ...titled("Laboratory claims"),
+                },
+                {
+                  path: "/admin/corrections",
+                  ...lazyPage(async () => (await import("@/pages/admin/CorrectionsPage")).CorrectionsPage),
+                  ...titled("Correction requests"),
+                },
+                {
+                  path: "/admin/users",
+                  ...lazyPage(async () => (await import("@/pages/admin/UsersPage")).UsersPage),
+                  ...titled("Users"),
+                },
+                {
+                  path: "/admin/roles",
+                  ...lazyPage(async () => (await import("@/pages/admin/RolesPage")).RolesPage),
+                  ...titled("Roles and capabilities"),
+                },
+                {
+                  path: "/admin/audit",
+                  ...lazyPage(async () => (await import("@/pages/admin/AuditPage")).AuditPage),
+                  ...titled("Audit log"),
+                },
+              ],
             },
           ],
         },

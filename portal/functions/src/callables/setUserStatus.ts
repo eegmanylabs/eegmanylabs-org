@@ -7,11 +7,17 @@ import {
   defineCallable,
   readAccessDocument,
   requireCapability,
+  requireProgrammeAdministrator,
   touchedFields,
   withheldChanges,
   writeAudit,
 } from "../framework";
-import { LAST_ADMINISTRATOR_MESSAGE, otherAdministrators } from "../roles/administrators";
+import {
+  holdsProgrammeRole,
+  LAST_ADMINISTRATOR_MESSAGE,
+  otherAdministrators,
+  PROGRAMME_STAFF_ACCOUNT_MESSAGE,
+} from "../roles/administrators";
 import { inForce } from "../roles/assignments";
 
 /**
@@ -44,7 +50,9 @@ async function applyToAccount(uid: string, status: UserStatus): Promise<"applied
  * | Its refresh tokens are revoked                    | Open sessions end when their token runs out       |
  *
  * A caller never suspends their own account, and the last active programme administrator is
- * never suspended. A call that asks for the status the account has already changes no
+ * never suspended. The account of programme staff, a programme administrator or a member of
+ * the core team, is suspended and reinstated by a programme administrator only, because the
+ * core team can hold `users.suspend` through an override. A call that asks for the status the account has already changes no
  * document and still repeats the two steps on the Authentication account, so a call that
  * failed half way is completed by calling again.
  */
@@ -56,13 +64,17 @@ export const setUserStatus = defineCallable(setUserStatusContract, {
     const userReference = db.doc(COLLECTIONS.users.docPath(input.uid));
 
     await db.runTransaction(async (transaction) => {
-      requireCapability(context, await readAccessDocument(db, actor, transaction), "users.suspend", "programme");
+      const access = await readAccessDocument(db, actor, transaction);
+      requireCapability(context, access, "users.suspend", "programme");
       if (input.uid === actor) {
         throw new AppError("permission-denied", "You cannot suspend or reinstate your own account.");
       }
       const draft = await draftAccess(db, transaction, input.uid, at);
       if (draft === null) {
         throw new AppError("not-found", "This account does not exist, or it has never started the portal.");
+      }
+      if (holdsProgrammeRole(draft.inputs.roleAssignments, at)) {
+        requireProgrammeAdministrator(access, PROGRAMME_STAFF_ACCOUNT_MESSAGE);
       }
       if (draft.inputs.user.status === input.status) return;
       if (

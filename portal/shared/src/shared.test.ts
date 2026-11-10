@@ -30,6 +30,12 @@ describe("normaliseEmail", () => {
     expect(normaliseEmail("  Synthetic.Person@Example.ORG ")).toBe("synthetic.person@example.org");
   });
 
+  it("lowers ASCII letters only, so an address that folds to another stays another", () => {
+    expect(normaliseEmail("\u212Aim@Example.org")).toBe("\u212Aim@example.org");
+    expect(normaliseEmail("\u212Aim@example.org")).not.toBe(normaliseEmail("kim@example.org"));
+    expect(normaliseEmail("\u00C9LISE@example.org")).toBe("\u00C9lise@example.org");
+  });
+
   it("gives the same result when applied twice", () => {
     const once = normaliseEmail(" A.B@example.org");
     expect(normaliseEmail(once)).toBe(once);
@@ -65,6 +71,12 @@ describe("normaliseDisplayName", () => {
 
   it.each([undefined, null, 42, { name: "x" }, ["x"]])("gives null for %j, which is not text", (value) => {
     expect(normaliseDisplayName(value)).toBeNull();
+  });
+
+  it("lowers ASCII letters only, so an address that folds to another stays another", () => {
+    expect(normaliseEmail("\u212Aim@Example.org")).toBe("\u212Aim@example.org");
+    expect(normaliseEmail("\u212Aim@example.org")).not.toBe(normaliseEmail("kim@example.org"));
+    expect(normaliseEmail("\u00C9LISE@example.org")).toBe("\u00C9lise@example.org");
   });
 
   it("gives the same result when applied twice", () => {

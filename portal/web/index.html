@@ -7,7 +7,12 @@
     <title>EEGManyLabs members' portal</title>
   </head>
   <body>
+    <!-- Shown until the application starts, which can take a while on a slow connection. main.tsx removes it. -->
+    <p id="boot-status" role="status" style="margin: 2rem 1rem">Loading the members' portal.</p>
     <div id="root"></div>
+    <noscript>
+      <p style="margin: 2rem 1rem">The members' portal needs JavaScript. Turn it on in your browser and reload the page.</p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

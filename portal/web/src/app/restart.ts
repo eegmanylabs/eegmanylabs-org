@@ -4,11 +4,13 @@ import { readStored, writeStored } from "@/utils/storage";
 const NOTICE_KEY = "portal.notice";
 
 /**
- * | Notice       | Shown after the restart as                |
- * |--------------|-------------------------------------------|
- * | `signed-out` | The confirmation "You have signed out."   |
+ * | Notice                  | Shown after the restart as                          |
+ * |-------------------------|-----------------------------------------------------|
+ * | `signed-out`            | The confirmation "You have signed out."             |
+ * | `signed-out-everywhere` | The confirmation that every session has been ended  |
+ * | `suspended`             | The sign-in page says that the account is suspended  |
  */
-export const RESTART_NOTICES = ["signed-out"] as const;
+export const RESTART_NOTICES = ["signed-out", "signed-out-everywhere", "suspended"] as const;
 export type RestartNotice = (typeof RESTART_NOTICES)[number];
 
 /** Leaves a notice for the application to show after it has started again, in this tab only. */

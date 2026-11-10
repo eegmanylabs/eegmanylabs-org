@@ -6,6 +6,7 @@ import {
   defineCallable,
   identityHashKey,
   requireVerifiedEmail,
+  touchedFields,
   withheldChanges,
   writeAudit,
 } from "../framework";
@@ -19,7 +20,8 @@ import { holdersOf, notifyAll } from "../notifications/notify";
  *
  * | The caller's claim     | The call                                                       |
  * |------------------------|----------------------------------------------------------------|
- * | Awaits review          | Is refused: one request may be open per account                |
+ * | Awaits review after an address match, with no statement yet | Adds the statement to the review record for the reviewer, and changes nothing else |
+ * | Awaits review otherwise | Is refused: one request may be open per account               |
  * | Is approved            | Is refused: the account is linked already                      |
  * | Was rejected, or none  | Opens a request, notifies the reviewers, answers `pendingReview` |
  *
@@ -39,7 +41,39 @@ export const requestAccess = defineCallable(requestAccessContract, {
 
     return db.runTransaction(async (transaction) => {
       const records = await readClaim(db, transaction, uid);
-      if (records.claim?.status === "pendingReview") {
+      const { claim, review } = records;
+      if (
+        claim?.status === "pendingReview" &&
+        review !== null &&
+        review.matchBasis !== "manual" &&
+        review.evidence.statedName === undefined
+      ) {
+        // A claim that an address match sent to review: what the claimant says helps the reviewer
+        // tell the candidates apart. The match, its candidates and its reason stay as they are.
+        const auditEventId = writeAudit(
+          transaction,
+          {
+            action: "claim.requested",
+            actor: { kind: "user", uid },
+            entityType: "user",
+            entityId: uid,
+            changes: withheldChanges(["evidence"]),
+            at,
+          },
+          db,
+        );
+        transaction.update(records.reviewReference, {
+          evidence: {
+            ...review.evidence,
+            statedName: input.statedName,
+            affiliation: input.affiliation,
+            message: input.message,
+          },
+          ...touchedFields(callerStamp(uid, at, auditEventId)),
+        });
+        return { status: "pendingReview" as const };
+      }
+      if (claim?.status === "pendingReview") {
         throw new AppError(
           "resource-exhausted",
           "A request of yours is waiting for review already. You will be notified when it has been decided.",

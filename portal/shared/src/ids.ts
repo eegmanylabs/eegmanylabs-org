@@ -159,6 +159,22 @@ export const groupScopeKey = (groupKey: string): string => scopeKey("group", gro
 export const userScopeKey = (uid: string): string => scopeKey("user", uid);
 export const roleScopeKey = (role: Role): string => scopeKey("role", role);
 
+const SCOPE_KEY_KINDS = { rep: "replication", lab: "laboratory", group: "group", user: "user", role: "role" } as const;
+export type ScopeKeyKind = (typeof SCOPE_KEY_KINDS)[keyof typeof SCOPE_KEY_KINDS];
+
+/**
+ * What a scope key names: the kind of unit and its identifier, the reverse of the builders
+ * above. Null for `programme`, `members` and anything that is not a well-formed scope key.
+ */
+export function parseScopeKey(key: string): { kind: ScopeKeyKind; id: string } | null {
+  const separator = key.indexOf(":");
+  if (separator <= 0) return null;
+  const prefix = key.slice(0, separator);
+  const id = key.slice(separator + 1);
+  if (!Object.hasOwn(SCOPE_KEY_KINDS, prefix) || id === "" || id.includes("/")) return null;
+  return { kind: SCOPE_KEY_KINDS[prefix as keyof typeof SCOPE_KEY_KINDS], id };
+}
+
 /**
  * The `scopeKeys` of a document whose scope is its own replication, its own laboratory or
  * both: their keys in that order. The security rules rebuild the same array on each client write.

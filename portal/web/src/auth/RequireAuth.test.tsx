@@ -47,7 +47,13 @@ describe("RequireAuth", () => {
   it("shows the page to a signed-in account", () => {
     auth.value.session = {
       status: "signed-in",
-      user: { uid: "uid-1", email: "member@example.org", displayName: null, signedInAt: 1_700_000_000 },
+      user: {
+        uid: "uid-1",
+        email: "member@example.org",
+        displayName: null,
+        signedInAt: 1_700_000_000,
+        secondFactor: false,
+      },
     };
     renderAt("/labs/lab-1");
     expect(screen.getByText("Protected page")).toBeTruthy();

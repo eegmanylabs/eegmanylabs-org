@@ -237,7 +237,7 @@ describe("setRoleAssignment", () => {
     expect((await assignmentOf(own)).status).toBe("active");
   });
 
-  it("never revokes the last active programme administrator", async () => {
+  it("leaves programme roles to programme administrators, and never revokes the last one", async () => {
     const admin = await administrator("uid-admin");
     // A member of the core team for whom an override switches the capability on.
     const core = await coreTeamMember("uid-core");
@@ -247,24 +247,57 @@ describe("setRoleAssignment", () => {
     await eventually(async () => can(await accessOf("uid-core"), "roles.manage", "programme"), "the override");
     const last = "uid-admin__programme_admin__programme__eegmanylabs";
 
+    // roles.manage through an override is no licence to remove an administrator, or to make one.
     const refused = await refusal(
       call(core, setRoleAssignmentContract, { action: "revoke", assignmentId: last, reason: "A coup." }),
     );
-    expect(refused.code).toBe("failed-precondition");
-    expect(refused.message).toContain("last active programme administrator");
+    expect(refused.code).toBe("permission-denied");
+    expect(refused.message).toContain("Only a programme administrator");
+    await account("uid-other");
+    for (const role of ["programme_admin", "core_team"] as const) {
+      expect(
+        await codeOf(
+          call(core, setRoleAssignmentContract, {
+            action: "grant",
+            uid: "uid-other",
+            role,
+            scopeType: "programme",
+            scopeId: "eegmanylabs",
+          }),
+        ),
+      ).toBe("permission-denied");
+    }
+    // A scoped role is still within the override.
+    await laboratory("lab-q");
+    expect(
+      await call(core, setRoleAssignmentContract, {
+        action: "grant",
+        uid: "uid-other",
+        role: "lab_member",
+        scopeType: "laboratory",
+        scopeId: "lab-q",
+      }),
+    ).toMatchObject({ status: "active" });
     expect((await assignmentOf(last)).status).toBe("active");
 
-    // A suspended administrator does not count as another one.
-    await account("uid-suspended-admin", { mfaEnrolled: true, status: "suspended" });
-    await grantRole("uid-suspended-admin", "programme_admin");
-    expect(
-      await codeOf(call(core, setRoleAssignmentContract, { action: "revoke", assignmentId: last, reason: "A coup." })),
-    ).toBe("failed-precondition");
+    // An administrator never carries an expiry time, so expiry can never leave the programme without one.
+    const expiring = await refusal(
+      call(admin, setRoleAssignmentContract, {
+        action: "grant",
+        uid: "uid-other",
+        role: "programme_admin",
+        scopeType: "programme",
+        scopeId: "eegmanylabs",
+        expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+      }),
+    );
+    expect(expiring.code).toBe("invalid-argument");
+    expect(expiring.message).toContain("cannot carry an expiry time");
 
-    // With a second active administrator the first can be revoked, by somebody else.
-    await administrator("uid-second-admin");
+    // With a second active administrator the first can be revoked, by that administrator.
+    const second = await administrator("uid-second-admin");
     expect(
-      await call(core, setRoleAssignmentContract, { action: "revoke", assignmentId: last, reason: "Handed over." }),
+      await call(second, setRoleAssignmentContract, { action: "revoke", assignmentId: last, reason: "Handed over." }),
     ).toEqual({
       assignmentId: last,
       status: "revoked",
@@ -372,6 +405,57 @@ describe("setCapabilityGrant", () => {
 
     await call(admin, setCapabilityGrantContract, { ...demographics, expiresAt: inAnHour() });
     expect(can(await accessOf("uid-target"), "demographics.read", "programme")).toBe(true);
+  });
+
+  it("never lets an account grant to itself, and leaves the sensitive capabilities to administrators", async () => {
+    const admin = await administrator("uid-admin");
+    await account("uid-target", { mfaEnrolled: true });
+    const core = await coreTeamMember("uid-core");
+    await adminDb
+      .doc("roleCapabilities/core_team")
+      .set({ ...standard(), role: "core_team", overrides: { rolesManage: true } });
+    await eventually(async () => can(await accessOf("uid-core"), "roles.manage", "programme"), "the override");
+
+    // Not even an administrator grants to its own account: special-category access needs two people.
+    const own = await refusal(
+      call(admin, setCapabilityGrantContract, {
+        action: "grant",
+        uid: "uid-admin",
+        capability: "demographics.read",
+        reason: "My own reading.",
+        expiresAt: inAnHour(),
+      }),
+    );
+    expect(own.code).toBe("permission-denied");
+    expect(own.message).toContain("your own account");
+    expect(await codeOf(call(core, setCapabilityGrantContract, { ...grant, uid: "uid-core" }))).toBe(
+      "permission-denied",
+    );
+
+    // roles.manage through an override grants an ordinary capability to somebody else, and no sensitive one.
+    expect(await call(core, setCapabilityGrantContract, grant)).toEqual({
+      grantId: "uid-target__audit.read",
+      active: true,
+    });
+    for (const capability of ["roles.manage", "users.suspend", "demographics.read"] as const) {
+      const sensitive = await refusal(
+        call(core, setCapabilityGrantContract, { ...grant, capability, expiresAt: inAnHour() }),
+      );
+      expect(sensitive.code).toBe("permission-denied");
+      expect(sensitive.message).toContain("Only a programme administrator");
+    }
+    expect(can(await accessOf("uid-target"), "users.suspend", "programme")).toBe(false);
+
+    // An account may give up a grant of its own.
+    await call(admin, setCapabilityGrantContract, { ...grant, uid: "uid-core" });
+    expect(
+      await call(core, setCapabilityGrantContract, {
+        ...grant,
+        action: "revoke",
+        uid: "uid-core",
+        reason: "No longer needed.",
+      }),
+    ).toEqual({ grantId: "uid-core__audit.read", active: false });
   });
 });
 
@@ -519,9 +603,10 @@ describe("setUserStatus", () => {
     expect(await call(caller, sessionStartContract, {})).toMatchObject({ member: true });
   });
 
-  it("never lets a caller suspend their own account, and never suspends the last active programme administrator", async () => {
+  it("never lets a caller suspend their own account, and leaves programme staff to programme administrators", async () => {
     const admin = await administrator("uid-admin");
     const core = await coreTeamMember("uid-core");
+    await coreTeamMember("uid-core-2");
     await adminDb
       .doc("roleCapabilities/core_team")
       .set({ ...standard(), role: "core_team", overrides: { usersSuspend: true } });
@@ -530,16 +615,24 @@ describe("setUserStatus", () => {
     const own = await refusal(call(admin, setUserStatusContract, { ...suspension, uid: "uid-admin" }));
     expect(own.code).toBe("permission-denied");
     expect(own.message).toContain("your own account");
-    const last = await refusal(call(core, setUserStatusContract, { ...suspension, uid: "uid-admin" }));
-    expect(last.code).toBe("failed-precondition");
-    expect(last.message).toContain("last active programme administrator");
+    // users.suspend through an override reaches members, and never programme staff.
+    for (const uid of ["uid-admin", "uid-core-2"]) {
+      const staff = await refusal(call(core, setUserStatusContract, { ...suspension, uid }));
+      expect(staff.code).toBe("permission-denied");
+      expect(staff.message).toContain("Only a programme administrator can change it");
+    }
     expect((await dataOf("users/uid-admin"))?.status).toBe("active");
+    await account("uid-member");
+    expect(await call(core, setUserStatusContract, { ...suspension, uid: "uid-member" })).toEqual({
+      uid: "uid-member",
+      status: "suspended",
+    });
     expect(await codeOf(call(admin, setUserStatusContract, { ...suspension, uid: "uid-never-seen" }))).toBe(
       "not-found",
     );
 
-    await administrator("uid-second-admin");
-    expect(await call(core, setUserStatusContract, { ...suspension, uid: "uid-admin" })).toEqual({
+    const second = await administrator("uid-second-admin");
+    expect(await call(second, setUserStatusContract, { ...suspension, uid: "uid-admin" })).toEqual({
       uid: "uid-admin",
       status: "suspended",
     });

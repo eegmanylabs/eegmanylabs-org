@@ -8,11 +8,12 @@
 import { grantableCapabilitySchema, roleSchema, roleScopeTypeSchema } from "./capabilities";
 import { entityTypeSchema } from "./entities";
 import { hasValidOrcidCheckDigit } from "./identifiers";
-import { idSchema, orcidSchema, shortTextSchema, uidSchema } from "./schemas/base";
+import { idListSchema, idSchema, orcidSchema, shortTextSchema, uidSchema } from "./schemas/base";
 import {
   claimMatchBasisSchema,
   claimStatusSchema,
   correctionRequestStatusSchema,
+  emailKindSchema,
   labClaimRoleSchema,
   roleAssignmentStatusSchema,
   userStatusSchema,
@@ -72,7 +73,8 @@ export const claimProfileContract = {
   input: noArguments,
   output: z.discriminatedUnion("status", [
     z.strictObject({ status: z.literal("linked"), personId: idSchema }),
-    z.strictObject({ status: z.literal("pendingReview") }),
+    /** `statementGiven`: whether the caller has told the reviewer about themselves with `requestAccess`. */
+    z.strictObject({ status: z.literal("pendingReview"), statementGiven: z.boolean() }),
     z.strictObject({ status: z.literal("rejected") }),
     z.strictObject({ status: z.literal("noMatch") }),
   ]),
@@ -81,7 +83,8 @@ export type ClaimProfileOutput = CallableOutput<typeof claimProfileContract>;
 
 /**
  * Asks a reviewer for access on behalf of a signed-in caller whose address matched nobody. One
- * request may be open per account. The answer is always `pendingReview`.
+ * request may be open per account. A caller whose claim a match sent to review may send the
+ * same statement once, to help the reviewer. The answer is always `pendingReview`.
  */
 export const requestAccessContract = {
   name: "requestAccess",
@@ -100,7 +103,34 @@ const claimCandidateSchema = z.strictObject({
   affiliationSummary: shortTextSchema.nullable(),
   /** Whether another account has claimed the person already. */
   claimed: z.boolean(),
+  /** How the person's record holds the claimant's address, or null where it does not hold it. */
+  addressKind: emailKindSchema.nullable(),
+  institutionId: idSchema.nullable(),
+  laboratoryIds: idListSchema,
+  replicationIds: idListSchema,
 });
+
+/**
+ * Why a claim waits for a reviewer, as the claim function recorded it.
+ *
+ * | Reason               | The claimant's verified address                                  |
+ * |----------------------|------------------------------------------------------------------|
+ * | `severalCandidates`  | Is held by more than one person                                  |
+ * | `notClaimEligible`   | Is held by one person in a way that no claim may rest on         |
+ * | `addressNotOnRecord` | Is in the index, and the person's contact document lacks it      |
+ * | `personUnavailable`  | Belongs to a person who is missing or archived                   |
+ * | `alreadyClaimed`     | Belongs to a person whom another account has claimed             |
+ * | `requestedAccess`    | Matched nobody, and the claimant asked for access                |
+ */
+export const claimReviewReasonSchema = z.enum([
+  "severalCandidates",
+  "notClaimEligible",
+  "addressNotOnRecord",
+  "personUnavailable",
+  "alreadyClaimed",
+  "requestedAccess",
+]);
+export type ClaimReviewReason = z.output<typeof claimReviewReasonSchema>;
 
 /**
  * Lists account claims for reviewers, oldest first. Capability: `claims.review`. No security
@@ -126,8 +156,10 @@ export const listAccountClaimsContract = {
           displayName: z.string().nullable(),
           /** The person the claim is approved for, once it is. */
           personId: idSchema.nullable(),
+          /** Why the claim waits for a reviewer. Null for a claim that is decided. */
+          reviewReason: claimReviewReasonSchema.nullable(),
           candidates: z.array(claimCandidateSchema).max(50),
-          /** What the claimant wrote, for a request made with `requestAccess`. */
+          /** What the claimant wrote, with `requestAccess`, to ask for access or to help a reviewer. */
           request: z.strictObject({ statedName: z.string(), affiliation: z.string(), message: z.string() }).nullable(),
         }),
       )
@@ -139,7 +171,8 @@ export type ListAccountClaimsOutput = CallableOutput<typeof listAccountClaimsCon
 /**
  * Decides a claim that awaits review. Capability: `claims.review`. An approval links the
  * account to the chosen person exactly as a match would, and is refused for a person whom
- * another account has claimed.
+ * another account has claimed. Nobody decides the claim of their own account, and a link to a
+ * person who is not among the claim's candidates is for programme administrators only.
  */
 export const reviewAccountClaimContract = {
   name: "reviewAccountClaim",
@@ -177,8 +210,10 @@ export const unlinkAccountClaimContract = {
  * | `approve` | An assignment that awaits approval becomes active                                |
  * | `revoke`  | An active or pending assignment is revoked, with a reason                        |
  *
- * A caller never changes an assignment of `programme_admin` to their own account, and the last
- * active programme administrator is never revoked.
+ * Only a programme administrator changes a programme role (`programme_admin` or `core_team`).
+ * A caller never changes an assignment of `programme_admin` to their own account, such an
+ * assignment never carries an expiry time, and the last active programme administrator is
+ * never revoked.
  */
 export const setRoleAssignmentContract = {
   name: "setRoleAssignment",
@@ -202,7 +237,8 @@ export const setRoleAssignmentContract = {
 
 /**
  * Grants a named capability to an account, or revokes the grant. Capability: `roles.manage`.
- * A grant of `demographics.read` must carry an expiry time.
+ * A grant of `demographics.read` must carry an expiry time. Nobody grants to their own account,
+ * and only a programme administrator grants or revokes a sensitive capability.
  */
 export const setCapabilityGrantContract = {
   name: "setCapabilityGrant",
@@ -247,7 +283,8 @@ export const setRoleCapabilityOverrideContract = {
 
 /**
  * Suspends an account or lifts its suspension. Capability: `users.suspend`. A caller never
- * suspends their own account, and the last active programme administrator is never suspended.
+ * suspends their own account, the last active programme administrator is never suspended, and
+ * only a programme administrator suspends or reinstates programme staff.
  */
 export const setUserStatusContract = {
   name: "setUserStatus",
@@ -285,19 +322,30 @@ export const reviewLabClaimContract = {
 
 /**
  * Records the outcome of a correction request and notifies whoever made it. Capability:
- * `people.manage`. The function records the decision. It does not edit the record.
+ * `people.manage`. The function records the decision. With `apply`, an accepted request about
+ * a directly edited field of a person (`PERSON_CORRECTION_APPLICABLE_FIELDS`) also sets the
+ * proposed value on the person, in the same transaction.
  */
 export const resolveCorrectionRequestContract = {
   name: "resolveCorrectionRequest",
-  input: z.strictObject({
-    requestId: idSchema,
-    outcome: correctionRequestStatusSchema.extract(["accepted", "rejected"]),
-    /** A sentence for the person who asked, shown in their notification. */
-    messageToRequester: z.string().trim().min(1).max(500).exactOptional(),
-  }),
+  input: z
+    .strictObject({
+      requestId: idSchema,
+      outcome: correctionRequestStatusSchema.extract(["accepted", "rejected"]),
+      /** A sentence for the person who asked, shown in their notification. */
+      messageToRequester: z.string().trim().min(1).max(500).exactOptional(),
+      /** Sets the proposed value on the record. For an accepted request only. */
+      apply: z.boolean().exactOptional(),
+    })
+    .refine((input) => input.apply !== true || input.outcome === "accepted", {
+      error: "Only an accepted request is applied",
+      path: ["apply"],
+    }),
   output: z.strictObject({
     requestId: idSchema,
     status: correctionRequestStatusSchema.extract(["accepted", "rejected"]),
+    /** Whether the proposed value was set on the record. */
+    applied: z.boolean(),
   }),
 } as const satisfies CallableContract;
 

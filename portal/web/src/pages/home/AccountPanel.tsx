@@ -1,14 +1,20 @@
 import type { ReactNode } from "react";
-import { restartApplication } from "@/app/restart";
+import { formatDate } from "@/app/labels";
 import { type RegistrationState, useAuth, useSignedInUser } from "@/auth/AuthProvider";
 import { ErrorState } from "@/components/feedback/error-state";
 import { LiveView } from "@/components/feedback/live-view";
+import { SuspendedState } from "@/components/feedback/suspended-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { type AccessRecord, type Live, retryFailedLiveData, type UserRecord, useUserRecord } from "@/data";
-
-const dateTime = new Intl.DateTimeFormat("en-GB", { dateStyle: "long", timeStyle: "short" });
+import {
+  type AccessRecord,
+  type Live,
+  retryFailedLiveData,
+  type UserRecord,
+  useLiveDocument,
+  useUserRecord,
+} from "@/data";
 
 interface AccountRecords {
   readonly user: UserRecord;
@@ -60,14 +66,10 @@ function AccountSkeleton() {
 function RegistrationFailure({ failure }: { failure: Extract<RegistrationState, { status: "failed" }> }) {
   const { retryRegistration, signOut } = useAuth();
   if (failure.code === "permission-denied") {
-    // For example a suspended account. The page has let go of the account's data by now, so
-    // trying again means starting afresh. The button is for the day the suspension is lifted.
+    // A suspended account. The page has let go of the account's data by now. Signing out keeps
+    // the explanation: the sign-in page says that the account is suspended.
     return (
-      <ErrorState
-        title="This account cannot use the portal at the moment."
-        description={failure.message}
-        action={<Button onClick={() => restartApplication()}>Try again</Button>}
-      />
+      <SuspendedState action={<Button onClick={() => void signOut("suspended").catch(() => {})}>Sign out</Button>} />
     );
   }
   if (failure.code === "unauthenticated") {
@@ -129,6 +131,22 @@ export function AccountPanel() {
   );
 }
 
+/** What the panel says about an account that is not linked, from the state of its claim. */
+function NotLinked({ uid }: { uid: string }) {
+  const claim = useLiveDocument("accountClaims", [uid]);
+  const waiting = claim.status === "ready" && claim.data?.status === "pendingReview";
+  return (
+    <>
+      <Badge tone="neutral">{waiting ? "Waiting for an administrator" : "Not linked yet"}</Badge>
+      <p className="mt-1.5 text-fg-secondary">
+        {waiting
+          ? "An administrator will link this account to your member profile, or tell you why not."
+          : "You are signed in, but this account has not been linked to a person in the programme's records."}
+      </p>
+    </>
+  );
+}
+
 function AccountDetails({ records }: { records: AccountRecords }) {
   return (
     <dl className="-my-3" data-testid="account-details">
@@ -143,19 +161,15 @@ function AccountDetails({ records }: { records: AccountRecords }) {
       <Row term="Account status">{records.user.status === "active" ? "Active" : "Suspended"}</Row>
       <Row term="Member profile">
         {records.access.personId === null ? (
-          <>
-            <Badge tone="neutral">Not linked yet</Badge>
-            <p className="mt-1.5 text-fg-secondary">
-              You are signed in, but this account has not been matched to a person in the programme's records.
-            </p>
-          </>
+          <NotLinked uid={records.user.id} />
         ) : (
           <Badge tone="accent">Linked to a member profile</Badge>
         )}
       </Row>
-      <Row term="Last sign-in recorded">
+      {/* Recorded at most every 15 minutes, so the day is what can be relied on. */}
+      <Row term="Last seen">
         <time dateTime={records.user.lastSeenAt.toDate().toISOString()}>
-          {dateTime.format(records.user.lastSeenAt.toDate())}
+          {formatDate(records.user.lastSeenAt.toDate())}
         </time>
       </Row>
     </dl>

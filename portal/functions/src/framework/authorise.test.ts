@@ -3,7 +3,13 @@ import type { CallableContract } from "@eegml/shared";
 import { emptyAccess, publicErrorReason, resolveAccess, z } from "@eegml/shared";
 import type { Firestore } from "firebase-admin/firestore";
 import { describe, expect, it } from "vitest";
-import { requireCapability, requireSecondFactor, requireVerifiedEmail, secondFactorSatisfied } from "./authorise";
+import {
+  requireCapability,
+  requireProgrammeAdministrator,
+  requireSecondFactor,
+  requireVerifiedEmail,
+  secondFactorSatisfied,
+} from "./authorise";
 import { type IncomingCall, runCallable, secondFactorVerifiedIn } from "./callable";
 import type { AuthenticatedContext } from "./context";
 import { AppError } from "./errors";
@@ -186,6 +192,17 @@ describe("a capability in a call", () => {
     expect(
       thrownBy(() => requireCapability({ secondFactorVerified: true }, suspended, "roles.manage", "programme")).code,
     ).toBe("permission-denied");
+  });
+});
+
+describe("a programme administrator in a call", () => {
+  it("is recognised from the programme roles of the access document alone", () => {
+    expect(() => requireProgrammeAdministrator(administratorAccess)).not.toThrow();
+    const coreTeam = { programmeRoles: ["core_team" as const] };
+    expect(thrownBy(() => requireProgrammeAdministrator(coreTeam)).code).toBe("permission-denied");
+    expect(
+      thrownBy(() => requireProgrammeAdministrator(coordinatorAccess, "Ask an administrator.")).publicMessage,
+    ).toBe("Ask an administrator.");
   });
 });
 

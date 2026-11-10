@@ -3,16 +3,21 @@
 import {
   signOut as firebaseSignOut,
   GoogleAuthProvider,
+  getMultiFactorResolver,
+  type IdTokenResult,
   isSignInWithEmailLink,
-  onAuthStateChanged,
+  type MultiFactorError,
+  onIdTokenChanged,
   sendSignInLinkToEmail,
   signInWithEmailLink,
   signInWithPopup,
+  TotpMultiFactorGenerator,
   type User,
 } from "firebase/auth";
 import { config } from "@/app/config";
 import { auth } from "./firebase";
 import { closeLiveData } from "./live";
+import { type EnrolledFactor, factorOf, SecondFactorError, secondFactorFailureOf } from "./second-factor-model";
 
 export interface SessionUser {
   readonly uid: string;
@@ -24,6 +29,11 @@ export interface SessionUser {
    * functions compare with `sessionsValidAfter` of the access document.
    */
   readonly signedInAt: number | null;
+  /**
+   * Whether this session presented a second factor when it began: the sign-in token names one
+   * in `firebase.sign_in_second_factor`, which is what the security rules and the functions read.
+   */
+  readonly secondFactor: boolean;
 }
 
 /**
@@ -38,6 +48,7 @@ export interface SessionUser {
  * | `account-disabled`    | The account has been disabled                                        |
  * | `cancelled`           | The person closed the pop-up window                                  |
  * | `popup-blocked`       | The browser stopped the pop-up window from opening                   |
+ * | `second-factor`       | The account has a second factor, and the sign-in waits for it (see `SecondFactorChallengeError`) |
  * | `unknown`             | Anything else                                                        |
  */
 export type SignInFailure =
@@ -50,6 +61,7 @@ export type SignInFailure =
   | "account-disabled"
   | "cancelled"
   | "popup-blocked"
+  | "second-factor"
   | "unknown";
 
 export class SignInError extends Error {
@@ -57,6 +69,24 @@ export class SignInError extends Error {
 
   constructor(readonly reason: SignInFailure) {
     super(`Sign-in failed: ${reason}`);
+  }
+}
+
+/**
+ * The second step of a sign-in, for an account that has enrolled a second factor. The first
+ * step has succeeded, and the session begins once one of the factors is answered.
+ */
+export interface SecondFactorChallenge {
+  /** The factors the account has enrolled. Only those whose `factorId` is `totp` can be answered here. */
+  readonly factors: readonly EnrolledFactor[];
+  /** Answers the challenge with a code from the authenticator app of the factor. */
+  answer(factorUid: string, code: string): Promise<SessionUser>;
+}
+
+/** Raised by a sign-in that needs the second factor. It carries the challenge to answer. */
+export class SecondFactorChallengeError extends SignInError {
+  constructor(readonly challenge: SecondFactorChallenge) {
+    super("second-factor");
   }
 }
 
@@ -109,20 +139,64 @@ function toSignInError(error: unknown, failures: FailureMap): SignInError {
   return new SignInError(reason);
 }
 
-function toSessionUser(user: User): SessionUser {
+function toSessionUser(user: User, token: Pick<IdTokenResult, "signInSecondFactor"> | null): SessionUser {
   const signedInAt = user.metadata.lastSignInTime ? Date.parse(user.metadata.lastSignInTime) : Number.NaN;
   return {
     uid: user.uid,
     email: user.email,
     displayName: user.displayName,
     signedInAt: Number.isFinite(signedInAt) ? Math.floor(signedInAt / 1000) : null,
+    secondFactor: typeof token?.signInSecondFactor === "string" && token.signInSecondFactor !== "",
   };
 }
 
-/** Calls the listener now and whenever the signed-in account changes. Returns the unsubscriber. */
-export function observeSession(listener: (user: SessionUser | null) => void): () => void {
-  return onAuthStateChanged(auth, (user) => listener(user ? toSessionUser(user) : null));
+async function sessionUserOf(user: User): Promise<SessionUser> {
+  try {
+    return toSessionUser(user, await user.getIdTokenResult());
+  } catch {
+    // Without its token the session is taken to have no second factor, which shows less.
+    return toSessionUser(user, null);
+  }
 }
+
+/**
+ * Calls the listener now and whenever the signed-in account or its sign-in token changes, for
+ * example once a second factor has been enrolled. Returns the unsubscriber.
+ */
+export function observeSession(listener: (user: SessionUser | null) => void): () => void {
+  // Reading a token takes a moment. Only the latest change may reach the listener.
+  let latest = 0;
+  return onIdTokenChanged(auth, (user) => {
+    latest += 1;
+    const change = latest;
+    if (user === null) {
+      listener(null);
+      return;
+    }
+    void sessionUserOf(user).then((session) => {
+      if (change === latest) listener(session);
+    });
+  });
+}
+
+/** The challenge of an account that has to answer its second factor to finish signing in. */
+function challengeOf(error: MultiFactorError): SecondFactorChallenge {
+  const resolver = getMultiFactorResolver(auth, error);
+  return {
+    factors: resolver.hints.map(factorOf),
+    async answer(factorUid, code) {
+      try {
+        const assertion = TotpMultiFactorGenerator.assertionForSignIn(factorUid, code.trim());
+        return await sessionUserOf((await resolver.resolveSignIn(assertion)).user);
+      } catch (failure) {
+        throw new SecondFactorError(secondFactorFailureOf(failure));
+      }
+    },
+  };
+}
+
+const needsSecondFactor = (error: unknown): error is MultiFactorError =>
+  (error as { code?: unknown }).code === "auth/multi-factor-auth-required";
 
 /**
  * Asks Firebase to email a single-use sign-in link. `returnUrl` is where the link brings the
@@ -148,8 +222,9 @@ export function isSignInLink(href: string): boolean {
 /** Completes a sign-in link for the address it was sent to. */
 export async function completeSignInLink(email: string, href: string): Promise<SessionUser> {
   try {
-    return toSessionUser((await signInWithEmailLink(auth, email, href)).user);
+    return await sessionUserOf((await signInWithEmailLink(auth, email, href)).user);
   } catch (error) {
+    if (needsSecondFactor(error)) throw new SecondFactorChallengeError(challengeOf(error));
     throw toSignInError(error, WHILE_COMPLETING);
   }
 }
@@ -163,8 +238,9 @@ export async function signInWithGoogle(): Promise<SessionUser> {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
   try {
-    return toSessionUser((await signInWithPopup(auth, provider)).user);
+    return await sessionUserOf((await signInWithPopup(auth, provider)).user);
   } catch (error) {
+    if (needsSecondFactor(error)) throw new SecondFactorChallengeError(challengeOf(error));
     throw toSignInError(error, FAILURES);
   }
 }

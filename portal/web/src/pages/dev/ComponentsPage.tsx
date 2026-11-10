@@ -18,9 +18,14 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FormField } from "@/components/ui/form-field";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
+import { Pagination } from "@/components/ui/pagination";
+import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { type SortDirection, SortHeader } from "@/components/ui/sort-header";
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 
 // SYNTHETIC DATA. The rows are invented and describe nothing that exists.
@@ -45,6 +50,9 @@ export function ComponentsPage() {
   const toast = useToast();
   const [presses, setPresses] = useState(0);
   const [note, setNote] = useState("");
+  const [sort, setSort] = useState<SortDirection>("asc");
+  const [offset, setOffset] = useState(0);
+  const rows = [...SAMPLE_ROWS].sort((a, b) => (sort === "asc" ? 1 : -1) * a.name.localeCompare(b.name));
   const press = () => setPresses((count) => count + 1);
 
   return (
@@ -120,13 +128,15 @@ export function ComponentsPage() {
         <Table caption="Sample laboratories">
           <TableHead>
             <TableRow>
-              <TableHeaderCell>Name</TableHeaderCell>
+              <SortHeader direction={sort} onSort={() => setSort(sort === "asc" ? "desc" : "asc")}>
+                Name
+              </SortHeader>
               <TableHeaderCell>Country</TableHeaderCell>
               <TableHeaderCell>Status</TableHeaderCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {SAMPLE_ROWS.map((row) => (
+            {rows.map((row) => (
               <TableRow key={row.name}>
                 <TableCell>{row.name}</TableCell>
                 <TableCell>{row.country}</TableCell>
@@ -137,6 +147,40 @@ export function ComponentsPage() {
             ))}
           </TableBody>
         </Table>
+        <Pagination offset={offset} pageSize={2} total={5} label="sample rows" onChange={setOffset} />
+      </Section>
+
+      {/* Kept below the sections that the first test uses, so that they stay where they were on the page. */}
+      <Section title="More form fields">
+        <div className="grid max-w-form gap-4">
+          <FormField label="Longer text" hint="Several lines.">
+            {(control) => <Textarea {...control} defaultValue="" />}
+          </FormField>
+          <FormField label="Choice">
+            {(control) => (
+              <Select {...control} defaultValue="second">
+                <option value="first">First option</option>
+                <option value="second">Second option</option>
+              </Select>
+            )}
+          </FormField>
+        </div>
+      </Section>
+
+      <Section title="Popover">
+        <div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button>Open the panel</Button>
+            </PopoverTrigger>
+            <PopoverContent aria-label="Sample panel">
+              <p className="p-2">A panel holds controls of its own.</p>
+              <PopoverClose asChild>
+                <Button size="sm">Close the panel</Button>
+              </PopoverClose>
+            </PopoverContent>
+          </Popover>
+        </div>
       </Section>
 
       <Section title="Dialog">

@@ -173,7 +173,7 @@ describe("what the functions leave behind", () => {
     for (const caller of [claimant, twin, newcomer]) await run(caller, sessionStartContract, {});
     await run({ ...newcomer, emailVerified: false }, sessionStartContract, {});
     expect(await run(claimant, claimProfileContract, {})).toEqual({ status: "linked", personId: "person-1" });
-    expect(await run(twin, claimProfileContract, {})).toEqual({ status: "pendingReview" });
+    expect(await run(twin, claimProfileContract, {})).toEqual({ status: "pendingReview", statementGiven: false });
     expect(await run(newcomer, claimProfileContract, {})).toEqual({ status: "noMatch" });
     await run(newcomer, claimProfileContract, { email: "claimant.one@example.org" });
     await run(null, claimProfileContract, {});

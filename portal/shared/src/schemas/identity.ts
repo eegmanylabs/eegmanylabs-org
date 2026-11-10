@@ -454,6 +454,23 @@ export const correctableFieldSchema = z
     error: "A correction request never names a special-category field",
   });
 
+/**
+ * The fields of a person that the resolution of a correction request may set to the value the
+ * member proposed, in the same transaction: the directory fields that programme staff edit
+ * directly. Every other correctable detail is derived from other records (affiliations,
+ * member entries, memberships) or is an identity key (the ORCID iD), and is corrected there.
+ */
+export const PERSON_CORRECTION_APPLICABLE_FIELDS = ["displayName", "givenName", "familyName", "countryCode"] as const;
+export type PersonCorrectionApplicableField = (typeof PERSON_CORRECTION_APPLICABLE_FIELDS)[number];
+
+/** Whether accepting a correction request can set the proposed value on the record itself. */
+export function correctionCanBeApplied(request: { entityType: string; field: string }): boolean {
+  return (
+    request.entityType === "person" &&
+    (PERSON_CORRECTION_APPLICABLE_FIELDS as readonly string[]).includes(request.field)
+  );
+}
+
 /** `correctionRequests/{id}`: a member's request to correct an imported record. */
 export const correctionRequestDocSchema = documentBaseSchema.extend({
   uid: uidSchema,

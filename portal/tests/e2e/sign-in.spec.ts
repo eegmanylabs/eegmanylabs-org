@@ -36,12 +36,13 @@ test("a member signs in with an emailed link, sees their account, and signs out"
   // The link is read from the Authentication emulator, which stands in for the mailbox.
   await page.goto(await latestSignInLink(email));
 
-  // Home, with the single-use code gone from the address.
-  await expect(page).toHaveURL(`${baseURL}#/`);
-  await expect(page.getByRole("heading", { level: 1, name: "Home" })).toBeVisible();
-  await expect(page).toHaveTitle("Home | EEGManyLabs members' portal");
+  // The address matches no member profile, so Home sends the account on to the page that links
+  // a profile, with the single-use code gone from the address.
+  await expect(page).toHaveURL(`${baseURL}#/claim`);
+  await expect(page.getByRole("heading", { level: 1, name: "Your member profile" })).toBeVisible();
+  await expect(page).toHaveTitle("Your member profile | EEGManyLabs members' portal");
   await expect(
-    page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Home", exact: true }),
+    page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Your member profile", exact: true }),
   ).toHaveAttribute("aria-current", "page");
 
   // The account state comes from users/{uid} and access/{uid}, which sessionStart has just created.
@@ -57,8 +58,10 @@ test("a member signs in with an emailed link, sees their account, and signs out"
   // The local copy of the documents exists while the account is signed in.
   expect(await firestoreDatabases(page)).toHaveLength(1);
 
-  // Two documents are watched. The access document is used in two places and has one listener.
-  expect(await liveListenerCount(page)).toBe(2);
+  // Four reads are watched: the profile, the access document, the account's claim and its unread
+  // notifications. The access document is used in several places and has one listener.
+  await expect(page.getByRole("heading", { name: "We could not find a profile for this address" })).toBeVisible();
+  expect(await liveListenerCount(page)).toBe(4);
 
   // A change made by trusted code shows up without a reload.
   const { uid } = await adminAuth.getUserByEmail(email);
@@ -97,12 +100,12 @@ test("a member signs in with an emailed link, sees their account, and signs out"
 
 test("after signing in, the visitor is returned to the page they asked for", async ({ page, baseURL }) => {
   const email = uniqueEmail("deep.link");
-  await page.goto("./#/?from=bookmark");
-  await expect(page).toHaveURL(`${baseURL}#/login?next=%2F%3Ffrom%3Dbookmark`);
+  await page.goto("./#/account?from=bookmark");
+  await expect(page).toHaveURL(`${baseURL}#/login?next=%2Faccount%3Ffrom%3Dbookmark`);
   await requestSignInLink(page, email);
   await page.goto(await latestSignInLink(email));
-  await expect(page).toHaveURL(`${baseURL}#/?from=bookmark`);
-  await expect(page.getByRole("heading", { level: 1, name: "Home" })).toBeVisible();
+  await expect(page).toHaveURL(`${baseURL}#/account?from=bookmark`);
+  await expect(page.getByRole("heading", { level: 1, name: "Account and security" })).toBeVisible();
 });
 
 test("the confirmation is the same for every address, and a link really is sent to each", async ({ page, context }) => {
@@ -223,7 +226,7 @@ test("a link opened in another browser asks for the address again", async ({ pag
 
     await other.getByLabel("Email address").fill(email);
     await other.getByRole("button", { name: "Finish signing in" }).click();
-    await expect(other.getByRole("heading", { level: 1, name: "Home" })).toBeVisible();
+    await expect(other.getByRole("heading", { level: 1, name: "Your member profile" })).toBeVisible();
     await expect(other.getByTestId("account-details")).toContainText(email);
   } finally {
     await elsewhere.close();
@@ -240,7 +243,7 @@ test("a link that has already been used is refused and a new one can be requeste
   await requestSignInLink(page, email);
   const usedLink = await latestSignInLink(email);
   await page.goto(usedLink);
-  await expect(page.getByRole("heading", { level: 1, name: "Home" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Your member profile" })).toBeVisible();
 
   const elsewhere = await browser.newContext({ baseURL: baseURL as string });
   try {
@@ -280,7 +283,9 @@ test("a link is still good after the sign-in service could not be reached, and o
   await expect(page.getByTestId("account-details")).toContainText(email);
 });
 
-test("a disabled account is told so, and is not sent round for new links", async ({ page }) => {
+test("a disabled account is told it is suspended and where to ask, and is not sent round for new links", async ({
+  page,
+}) => {
   const email = uniqueEmail("disabled.account");
   const { uid } = await adminAuth.createUser({ email, emailVerified: true });
   await page.goto("./#/login");
@@ -291,8 +296,11 @@ test("a disabled account is told so, and is not sent round for new links", async
   await page.goto(link);
 
   const alert = page.getByRole("alert");
-  await expect(alert).toContainText("This account has been disabled.");
-  await expect(alert).toContainText("Contact a programme administrator.");
+  await expect(alert).toContainText("This account has been suspended.");
+  await expect(alert.getByRole("link", { name: /Contact the programme/ })).toHaveAttribute(
+    "href",
+    "https://eegmanylabs.org/contact/",
+  );
   await expect(page.getByText("That sign-in link no longer works.")).toHaveCount(0);
   await expect(alert.getByRole("button")).toHaveCount(0);
 });

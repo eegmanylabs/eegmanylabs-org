@@ -7,8 +7,10 @@ test.describe("on a wide screen", () => {
   test("the sidebar collapses to an icon rail and stays that way after a reload", async ({ page }) => {
     await signIn(page, uniqueEmail("sidebar"));
     const sidebar = page.getByRole("complementary", { name: "Sidebar" });
-    const home = sidebar.getByRole("link", { name: "Home", exact: true });
+    // An account that is not linked is offered its member profile in place of Home.
+    const home = sidebar.getByRole("link", { name: "Your member profile", exact: true });
     await expect(home).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Home", exact: true })).toHaveCount(0);
     const expandedWidth = (await sidebar.boundingBox())?.width ?? 0;
 
     const collapse = page.getByRole("button", { name: "Collapse sidebar" });
@@ -31,7 +33,7 @@ test.describe("on a wide screen", () => {
   test("the skip link is the first stop and moves focus to the page content", async ({ page }) => {
     await signIn(page, uniqueEmail("skip.link"));
     await page.reload();
-    await expect(page.getByRole("heading", { level: 1, name: "Home" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Your member profile" })).toBeVisible();
 
     await page.keyboard.press("Tab");
     const skip = page.getByRole("link", { name: "Skip to content" });
@@ -40,7 +42,7 @@ test.describe("on a wide screen", () => {
 
     await page.keyboard.press("Enter");
     await expect(page.getByRole("main")).toBeFocused();
-    await expect(page).toHaveURL(/#\/$/);
+    await expect(page).toHaveURL(/#\/claim$/);
   });
 
   test("the account menu is reached, opened, closed and used with the keyboard alone", async ({ page }) => {
@@ -99,7 +101,7 @@ test.describe("on a wide screen", () => {
     await expect(page.getByRole("banner")).toBeVisible();
     await expect(page.getByRole("main")).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
-    await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Home");
+    await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Your member profile");
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
   });
 });
@@ -115,7 +117,10 @@ test.describe("on a narrow screen", () => {
     await open.click();
     const panel = page.getByRole("dialog", { name: "Navigation" });
     await expect(panel).toBeVisible();
-    await expect(panel.getByRole("link", { name: "Home", exact: true })).toHaveAttribute("aria-current", "page");
+    await expect(panel.getByRole("link", { name: "Your member profile", exact: true })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
 
     // Focus stays inside the panel however far Tab is pressed.
     for (let press = 0; press < 6; press += 1) {
@@ -129,7 +134,10 @@ test.describe("on a narrow screen", () => {
 
     // Choosing a destination closes the panel.
     await open.click();
-    await page.getByRole("dialog", { name: "Navigation" }).getByRole("link", { name: "Home", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "Navigation" })
+      .getByRole("link", { name: "Account and security", exact: true })
+      .click();
     await expect(page.getByRole("dialog", { name: "Navigation" })).toBeHidden();
   });
 
@@ -218,7 +226,7 @@ test.describe("on a touch screen", () => {
     await expect(panel).toBeVisible();
     for (const [role, name] of [
       ["button", "Close"],
-      ["link", "Home"],
+      ["link", "Your member profile"],
     ] as const) {
       const box = await panel.getByRole(role, { name, exact: true }).boundingBox();
       expect(box?.height, name).toBeGreaterThanOrEqual(44);

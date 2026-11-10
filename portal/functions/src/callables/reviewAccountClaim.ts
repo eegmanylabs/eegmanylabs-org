@@ -7,12 +7,16 @@ import {
   defineCallable,
   readAccessDocument,
   requireCapability,
+  requireProgrammeAdministrator,
   withheldChanges,
   writeAudit,
 } from "../framework";
 import { holdersOf, notifyAll, writeNotification } from "../notifications/notify";
 
 const NOT_PENDING_MESSAGE = "This claim is not waiting for review any more. Reload the review queue.";
+const OWN_CLAIM_MESSAGE = "You cannot decide the claim of your own account. Ask another reviewer.";
+const NO_EVIDENCE_MESSAGE =
+  "This account's address is not on this person's record, so only a programme administrator can link them. Ask a programme administrator.";
 
 /**
  * Decides a claim that awaits review (docs/SECURITY.md, section 4). Capability:
@@ -24,6 +28,13 @@ const NOT_PENDING_MESSAGE = "This claim is not waiting for review any more. Relo
  * access document. It is refused for a person whom another account has claimed, and for a
  * person who is missing or archived. A rejection needs a note, which only reviewers read.
  *
+ * Two rules hold whatever the capability matrix says. Nobody decides the claim of their own
+ * account. And a link to a person who is not among the claim's candidates, whose records do
+ * not carry the account's verified address, rests on the reviewer's judgement alone: it makes
+ * the account the person concerned, with sight of the person's contact and special-category
+ * data, so it is for programme administrators only. `evidence.candidate` records which kind
+ * of link an approval made.
+ *
  * The claimant is notified of the decision and never of the note. A decision that has been
  * recorded already is answered again without a second change.
  */
@@ -34,7 +45,9 @@ export const reviewAccountClaim = defineCallable(reviewAccountClaimContract, {
     const at = context.clock.now();
 
     return db.runTransaction(async (transaction) => {
-      requireCapability(context, await readAccessDocument(db, reviewer, transaction), "claims.review", "programme");
+      const access = await readAccessDocument(db, reviewer, transaction);
+      requireCapability(context, access, "claims.review", "programme");
+      if (input.uid === reviewer) throw new AppError("permission-denied", OWN_CLAIM_MESSAGE);
       const records = await readClaim(db, transaction, input.uid);
       const { claim, review } = records;
       if (claim === null || review === null) throw new AppError("not-found", "This claim does not exist.");
@@ -90,6 +103,8 @@ export const reviewAccountClaim = defineCallable(reviewAccountClaimContract, {
         return { status: "approved" as const, personId: input.personId };
       }
       if (claim.status !== "pendingReview") throw new AppError("failed-precondition", NOT_PENDING_MESSAGE);
+      const candidate = review.candidatePersonIds.includes(input.personId);
+      if (!candidate) requireProgrammeAdministrator(access, NO_EVIDENCE_MESSAGE);
       const link = await readLink(db, transaction, input.uid, input.personId, at);
       const obstacle = linkObstacle(link);
       if (obstacle === "missing") throw new AppError("not-found", "This person does not exist.");
@@ -133,9 +148,14 @@ export const reviewAccountClaim = defineCallable(reviewAccountClaimContract, {
         {
           status: "approved",
           personId: input.personId,
-          candidatePersonIds: [...review.candidatePersonIds, input.personId],
+          candidatePersonIds: candidate ? review.candidatePersonIds : [...review.candidatePersonIds, input.personId],
           matchBasis: review.matchBasis,
-          evidence: { ...review.evidence, automatic: false, createdRoleAssignmentIds: linked.createdAssignmentIds },
+          evidence: {
+            ...review.evidence,
+            automatic: false,
+            candidate,
+            createdRoleAssignmentIds: linked.createdAssignmentIds,
+          },
           reviewedBy: reviewer,
           decisionNote: input.note,
         },

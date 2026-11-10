@@ -1,5 +1,6 @@
 import {
   COLLECTIONS,
+  isProgrammeRole,
   PROGRAMME_KEY,
   type RoleAssignmentDoc,
   type RoleScope,
@@ -8,13 +9,25 @@ import {
 } from "@eegml/shared";
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { commitAccess, draftAccess, withAssignment } from "../access/maintain";
-import { AppError, callerStamp, defineCallable, readAccessDocument, requireCapability, writeAudit } from "../framework";
+import {
+  AppError,
+  callerStamp,
+  defineCallable,
+  readAccessDocument,
+  requireCapability,
+  requireProgrammeAdministrator,
+  writeAudit,
+} from "../framework";
 import { writeNotification } from "../notifications/notify";
 import { LAST_ADMINISTRATOR_MESSAGE, otherAdministrators } from "../roles/administrators";
 import { assignmentIdOf, inForce, nextAssignment, readAssignments, revokedAssignment } from "../roles/assignments";
 
 const OWN_ADMINISTRATOR_ROLE_MESSAGE =
   "You cannot change your own programme administrator role. Ask another programme administrator.";
+const PROGRAMME_STAFF_MESSAGE =
+  "Only a programme administrator can grant, approve or revoke a programme administrator or core team role.";
+const ADMINISTRATOR_EXPIRY_MESSAGE =
+  "A programme administrator role cannot carry an expiry time. Grant it without one, and revoke it when it should end.";
 
 /** Whether the scope of a role exists: the programme itself, or the document that the scope names. */
 async function scopeExists(db: Firestore, transaction: Transaction, scope: RoleScope): Promise<boolean> {
@@ -32,9 +45,15 @@ async function scopeExists(db: Firestore, transaction: Transaction, scope: RoleS
  * factor wherever the caller's access document requires one.
  *
  * The assignment, the access document of the account and the audit entry are written in one
- * transaction, so a revoked role stops working on the account's next request. Two rules hold
- * whatever the caller may otherwise do: nobody changes an assignment of `programme_admin` to
- * their own account, and the last active programme administrator is never revoked.
+ * transaction, so a revoked role stops working on the account's next request. Four rules hold
+ * whatever the capability matrix gives the caller:
+ *
+ * | Rule                                                                                  | Why |
+ * |---------------------------------------------------------------------------------------|-----|
+ * | Only a programme administrator changes a programme role (`programme_admin`, `core_team`) | `roles.manage` can reach the core team through an override, and must not mint administrators |
+ * | Nobody changes an assignment of `programme_admin` to their own account                 | Four eyes on the most powerful role |
+ * | A `programme_admin` assignment never carries an expiry time                            | Expiry times set on each other would leave the programme with no administrator once they pass |
+ * | The last active programme administrator is never revoked                               | Recovery would need direct access to the database |
  *
  * A call that asks for what is already so changes nothing and answers with the stored status.
  */
@@ -49,8 +68,13 @@ export const setRoleAssignment = defineCallable(setRoleAssignmentContract, {
       throw new AppError("invalid-argument", "The expiry time has passed already. Choose a later one, or none.");
     }
 
+    if (input.action === "grant" && input.role === "programme_admin" && expiresAt != null) {
+      throw new AppError("invalid-argument", ADMINISTRATOR_EXPIRY_MESSAGE);
+    }
+
     return db.runTransaction(async (transaction) => {
-      requireCapability(context, await readAccessDocument(db, actor, transaction), "roles.manage", "programme");
+      const access = await readAccessDocument(db, actor, transaction);
+      requireCapability(context, access, "roles.manage", "programme");
       const id = input.action === "grant" ? assignmentIdOf(input.uid, input) : input.assignmentId;
       const stored = (await readAssignments(db, transaction, [id])).get(id);
       if (stored === undefined || (stored.data === null && input.action !== "grant")) {
@@ -58,6 +82,7 @@ export const setRoleAssignment = defineCallable(setRoleAssignmentContract, {
       }
       const target: Pick<RoleAssignmentDoc, "uid" | "role" | "scopeType" | "scopeId"> =
         input.action === "grant" ? input : (stored.data as RoleAssignmentDoc);
+      if (isProgrammeRole(target.role)) requireProgrammeAdministrator(access, PROGRAMME_STAFF_MESSAGE);
       if (target.uid === actor && target.role === "programme_admin") {
         throw new AppError("permission-denied", OWN_ADMINISTRATOR_ROLE_MESSAGE);
       }

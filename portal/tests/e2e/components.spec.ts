@@ -162,3 +162,44 @@ test("badges and states use the colours of the tokens", async ({ page }) => {
   await expect(page.getByRole("alert").filter({ hasText: "Something could not be loaded." })).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "Loading the sample" })).toBeVisible();
 });
+
+test("the panel, the sortable column and the pages work by keyboard and have no accessibility finding", async ({
+  page,
+}) => {
+  const findings = async () =>
+    (
+      await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze()
+    ).violations
+      .filter((violation) => violation.impact === "serious" || violation.impact === "critical")
+      .map((violation) => violation.id);
+
+  // A sortable column says how it is sorted, and turns round on a press of Enter.
+  const column = page.getByRole("columnheader", { name: "Name" });
+  await expect(column).toHaveAttribute("aria-sort", "ascending");
+  await column.getByRole("button").focus();
+  await page.keyboard.press("Enter");
+  await expect(column).toHaveAttribute("aria-sort", "descending");
+  await expect(page.getByRole("cell").first()).toHaveText("Sample laboratory two");
+
+  // Pages: the first has no previous page, and the next one says which rows it shows.
+  const pages = page.getByRole("navigation", { name: "Pages of sample rows" });
+  await expect(pages.getByRole("button", { name: "Previous" })).toBeDisabled();
+  await pages.getByRole("button", { name: "Next" }).click();
+  await expect(pages).toContainText("Showing 3 to 4 of 5 sample rows");
+
+  // The panel takes focus when it opens and gives it back when Escape closes it.
+  const trigger = page.getByRole("button", { name: "Open the panel" });
+  await trigger.focus();
+  await page.keyboard.press("Enter");
+  const panel = page.getByRole("dialog", { name: "Sample panel" });
+  await expect(panel).toBeVisible();
+  expect(await elementsWithBoxShadow(page)).toEqual([]);
+  expect(await findings()).toEqual([]);
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+
+  // The select and the longer text field are labelled.
+  await expect(page.getByLabel("Choice")).toHaveValue("second");
+  await expect(page.getByLabel("Longer text")).toBeEditable();
+});

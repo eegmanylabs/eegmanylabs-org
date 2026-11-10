@@ -21,6 +21,21 @@ describe("toCallableError", () => {
     expect(error.message).toBe("This account has been suspended. Contact a programme administrator.");
   });
 
+  it("keeps the reason a public error states, so that the interface can offer the next step", () => {
+    const error = toCallableError(
+      sdkError("functions/failed-precondition", "Sign in again with your second factor. [400]", {
+        public: true,
+        reason: "secondFactorRequired",
+      }),
+    );
+    expect(error.reason).toBe("secondFactorRequired");
+    // A reason the registry does not know, or one on an error that is not public, is dropped.
+    expect(
+      toCallableError(sdkError("functions/failed-precondition", "x", { public: true, reason: "other" })).reason,
+    ).toBe(null);
+    expect(toCallableError(sdkError("functions/failed-precondition", "x", { reason: "notLinked" })).reason).toBe(null);
+  });
+
   it.each([
     ["functions/permission-denied", "Forbidden", "permission-denied"],
     ["functions/not-found", "Not Found", "not-found"],

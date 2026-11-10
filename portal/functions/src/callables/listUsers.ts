@@ -115,11 +115,9 @@ export const listUsers = defineCallable(listUsersContract, {
       search === ""
         ? candidates
         : candidates.filter((candidate) =>
-            [
-              candidate.personName,
-              candidate.user.displayName,
-              addressesShown ? candidate.user.emailLower : null,
-            ].some((text) => text !== null && fold(text).includes(search)),
+            [candidate.personName, candidate.user.displayName, addressesShown ? candidate.user.emailLower : null].some(
+              (text) => text !== null && fold(text).includes(search),
+            ),
           );
     const sortKey = (candidate: Candidate) =>
       fold(candidate.personName ?? candidate.user.displayName ?? (addressesShown ? candidate.user.emailLower : "~"));

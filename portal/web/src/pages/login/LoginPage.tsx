@@ -6,15 +6,16 @@ import { type LinkState, useAuth } from "@/auth/AuthProvider";
 import { safeReturnPath } from "@/auth/return-path";
 import { ErrorState } from "@/components/feedback/error-state";
 import { LoadingState } from "@/components/feedback/loading-state";
+import { SuspendedState } from "@/components/feedback/suspended-state";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { googleSignInAvailable, SignInError, type SignInFailure } from "@/data";
+import { SecondFactorChallengeForm } from "./SecondFactorChallengeForm";
 
 const emailSchema = z.email();
 const EMAIL_FORMAT_MESSAGE = "Enter a full email address, for example name@example.org.";
 const UNREACHABLE_MESSAGE = "The portal could not reach the sign-in service. Check your connection and try again.";
-const DISABLED_MESSAGE = "Contact a programme administrator.";
 
 function Frame({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -236,7 +237,7 @@ function LinkFailure({ link }: { link: Extract<LinkState, { status: "failed" }> 
         />
       );
     case "account-disabled":
-      return <ErrorState title="This account has been disabled." description={DISABLED_MESSAGE} />;
+      return <SuspendedState />;
     case "network":
       return (
         <ErrorState
@@ -267,7 +268,8 @@ function LinkFailure({ link }: { link: Extract<LinkState, { status: "failed" }> 
 const GOOGLE_FAILURES: Partial<Record<SignInFailure, string>> = {
   "popup-blocked": "Your browser blocked the Google window. Allow pop-up windows for this site and try again.",
   network: UNREACHABLE_MESSAGE,
-  "account-disabled": `This account has been disabled. ${DISABLED_MESSAGE}`,
+  "account-disabled":
+    "This account has been suspended. Write to the programme through the contact page of eegmanylabs.org to ask why.",
 };
 
 /** Rendered only in builds that contain Google sign-in. */
@@ -295,7 +297,7 @@ function GoogleSignIn() {
 }
 
 export function LoginPage() {
-  const { session, link, forgetLinkRequest } = useAuth();
+  const { session, link, forgetLinkRequest, suspendedNotice } = useAuth();
   const [parameters] = useSearchParams();
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [cameBack, setCameBack] = useState(false);
@@ -305,6 +307,14 @@ export function LoginPage() {
     return <LoadingState label="Signing you in" size="page" />;
   }
   if (session.status === "signed-in") return <Navigate to={next} replace />;
+
+  if (link.status === "second-factor") {
+    return (
+      <Frame title="Enter your verification code">
+        <SecondFactorChallengeForm challenge={link.challenge} />
+      </Frame>
+    );
+  }
 
   if (link.status === "needs-email") {
     return (
@@ -329,6 +339,7 @@ export function LoginPage() {
       ) : (
         <>
           {link.status === "failed" ? <LinkFailure link={link} /> : null}
+          {suspendedNotice && link.status !== "failed" ? <SuspendedState /> : null}
           <p className="text-fg-secondary">
             Enter your email address and we will send you a link that signs you in. There is no password to remember.
           </p>

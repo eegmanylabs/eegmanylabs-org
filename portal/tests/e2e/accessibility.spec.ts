@@ -1,21 +1,7 @@
 // Automated accessibility checks with axe-core. A test fails on any serious or critical finding.
 // Fixtures are synthetic: every address is invented and uses the example.org domain.
-import AxeBuilder from "@axe-core/playwright";
-import type { Page } from "@playwright/test";
 import { latestSignInLink } from "../support/emulators";
-import { expect, requestSignInLink, signIn, test, uniqueEmail } from "./support";
-
-async function seriousFindings(page: Page): Promise<string[]> {
-  const results = await new AxeBuilder({ page })
-    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-    .analyze();
-  return results.violations
-    .filter((violation) => violation.impact === "serious" || violation.impact === "critical")
-    .map(
-      (violation) =>
-        `${violation.id}: ${violation.help} (${violation.nodes.map((node) => node.target.join(" ")).join(", ")})`,
-    );
-}
+import { expect, requestSignInLink, seriousFindings, signIn, test, uniqueEmail } from "./support";
 
 test("the sign-in page has no serious accessibility findings", async ({ page }) => {
   await page.goto("./#/login");
@@ -51,7 +37,7 @@ test("the page that asks for the address again has no serious accessibility find
   }
 });
 
-test("Home has no serious accessibility findings", async ({ page }) => {
+test("the first page after sign-in has no serious accessibility findings", async ({ page }) => {
   const email = uniqueEmail("axe.home");
   await signIn(page, email);
   await expect(page.getByTestId("account-details")).toContainText(email);
@@ -68,7 +54,7 @@ test("Home has no serious accessibility findings", async ({ page }) => {
   expect(await seriousFindings(page)).toEqual([]);
 });
 
-test("Home on a narrow screen has no serious accessibility findings", async ({ page }) => {
+test("the first page after sign-in on a narrow screen has no serious accessibility findings", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
   await signIn(page, uniqueEmail("axe.narrow"));
   await expect(page.getByTestId("account-details")).toBeVisible();

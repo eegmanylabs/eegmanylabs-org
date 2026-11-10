@@ -2,11 +2,13 @@
 //
 // EXTENSION POINT. A feature that belongs on Home adds its panel here and nowhere else: the
 // page renders whatever this list contains, in order, for accounts that hold the panel's
-// capability. The claim flow, for example, adds the panel that lets an unlinked account claim
-// its member profile.
+// capability. A panel that has nothing to show for an account renders nothing.
 import type { Capability } from "@eegml/shared";
 import type { ComponentType } from "react";
 import { AccountPanel } from "./AccountPanel";
+import { AdminQueuesPanel } from "./AdminQueuesPanel";
+import { PendingRolesPanel } from "./PendingRolesPanel";
+import { ProfilePanel } from "./ProfilePanel";
 
 export interface HomePanel {
   /** Stable identifier, unique in the registry. */
@@ -20,5 +22,8 @@ export interface HomePanel {
 }
 
 export const HOME_PANELS: readonly HomePanel[] = [
+  { id: "queues", order: 40, requires: "portal.use", Component: AdminQueuesPanel },
+  { id: "profile", order: 50, requires: "portal.use", Component: ProfilePanel },
+  { id: "pending-roles", order: 60, requires: "portal.use", Component: PendingRolesPanel },
   { id: "account", order: 100, requires: "portal.use", Component: AccountPanel },
 ];

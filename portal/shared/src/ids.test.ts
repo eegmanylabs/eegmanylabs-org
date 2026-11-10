@@ -45,6 +45,7 @@ import {
   PROGRAMME_SCOPE_KEY,
   pageContentChunkId,
   pagePermissionId,
+  parseScopeKey,
   participationId,
   personEmailIndexId,
   personEvidenceKey,
@@ -566,6 +567,16 @@ describe("scope keys", () => {
     expect(roleScopeKey("core_team")).toBe("role:core_team");
     expect(() => replicationScopeKey("")).toThrow(RangeError);
     expect(() => laboratoryScopeKey("a/b")).toThrow(RangeError);
+  });
+
+  it("are read back into the unit they name, and anything else reads as nothing", () => {
+    expect(parseScopeKey(laboratoryScopeKey("lab__0f3a"))).toEqual({ kind: "laboratory", id: "lab__0f3a" });
+    expect(parseScopeKey(replicationScopeKey("AmodioJost2007"))).toEqual({ kind: "replication", id: "AmodioJost2007" });
+    expect(parseScopeKey(roleScopeKey("core_team"))).toEqual({ kind: "role", id: "core_team" });
+    expect(parseScopeKey("lab:with:colon")).toEqual({ kind: "laboratory", id: "with:colon" });
+    for (const key of [PROGRAMME_SCOPE_KEY, MEMBERS_SCOPE_KEY, "lab:", ":x", "toString:x", "lab:a/b", ""]) {
+      expect(parseScopeKey(key)).toBeNull();
+    }
   });
 
   it("list the replication before the laboratory, as the rules rebuild them", () => {

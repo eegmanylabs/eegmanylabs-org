@@ -77,3 +77,17 @@ export function requireCapability(
   requireSecondFactor(context, access);
   if (!can(access, capability, scope)) throw new AppError("permission-denied", NOT_ALLOWED_MESSAGE);
 }
+
+/**
+ * Refuses a caller who is not a programme administrator. Some operations stay with
+ * administrators whatever the capability matrix gives the core team: making or removing
+ * programme staff, granting a sensitive capability, acting on the account of programme staff
+ * and linking an account to a person on no evidence. Call it after `requireCapability`, which
+ * has checked the second factor already.
+ */
+export function requireProgrammeAdministrator(
+  access: Pick<ResolvedAccess, "programmeRoles">,
+  message: string = NOT_ALLOWED_MESSAGE,
+): void {
+  if (!access.programmeRoles.includes("programme_admin")) throw new AppError("permission-denied", message);
+}

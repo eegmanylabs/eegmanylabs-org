@@ -3,11 +3,22 @@
 // makes imports and retried operations idempotent.
 
 /**
+ * A text with the ASCII letters A to Z in lower case and every other character as it is.
+ * Unicode case mapping would fold characters outside ASCII onto ASCII ones: KELVIN SIGN
+ * (U+212A) lower-cases to `k`, so `\u212Aim@example.org` would become another person's address.
+ */
+export function asciiLowerCase(text: string): string {
+  return text.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
+}
+
+/**
  * The canonical form of an email address used for matching and storage: surrounding white space
- * removed and lower case. The local part is left otherwise untouched.
+ * removed and ASCII letters in lower case. Characters outside ASCII are kept exactly, so an
+ * address that only looks like another, or only folds to it, never matches it. Bootstrap
+ * records, the email index, claims and the importers all hash this form.
  */
 export function normaliseEmail(email: string): string {
-  return email.trim().toLowerCase();
+  return asciiLowerCase(email.trim());
 }
 
 /** The longest display name the portal stores, in UTF-16 code units. */

@@ -7,10 +7,12 @@ import {
   defineCallable,
   readAccessDocument,
   requireCapability,
+  requireProgrammeAdministrator,
   touchedFields,
   writeAudit,
 } from "../framework";
 import { writeNotification } from "../notifications/notify";
+import { holdsProgrammeRole, PROGRAMME_STAFF_ACCOUNT_MESSAGE } from "../roles/administrators";
 import { readAssignments, revokedAssignment } from "../roles/assignments";
 
 /**
@@ -19,7 +21,8 @@ import { readAssignments, revokedAssignment } from "../roles/assignments";
  *
  * One transaction clears the link on both sides, revokes the role assignments that the claim
  * created, which its review document lists, and writes the access document. A role that an
- * administrator granted apart from the claim stays as it is. The claim ends as `rejected`
+ * administrator granted apart from the claim stays as it is. The account of programme staff is
+ * unlinked by a programme administrator only, as in `setUserStatus`. The claim ends as `rejected`
  * with the reason as its note, so the next sign-in does not link the account to the same
  * person again: the account asks for access, and a reviewer chooses the right person.
  */
@@ -30,7 +33,8 @@ export const unlinkAccountClaim = defineCallable(unlinkAccountClaimContract, {
     const at = context.clock.now();
 
     return db.runTransaction(async (transaction) => {
-      requireCapability(context, await readAccessDocument(db, actor, transaction), "roles.manage", "programme");
+      const access = await readAccessDocument(db, actor, transaction);
+      requireCapability(context, access, "roles.manage", "programme");
       const records = await readClaim(db, transaction, input.uid);
       const { claim, review } = records;
       const personId = claim?.personId ?? null;
@@ -45,6 +49,9 @@ export const unlinkAccountClaim = defineCallable(unlinkAccountClaimContract, {
         draftAccess(db, transaction, input.uid, at),
       ]);
       if (draft === null) throw new AppError("failed-precondition", "This account has no profile.");
+      if (holdsProgrammeRole(draft.inputs.roleAssignments, at)) {
+        requireProgrammeAdministrator(access, PROGRAMME_STAFF_ACCOUNT_MESSAGE);
+      }
 
       const auditEventId = writeAudit(
         transaction,

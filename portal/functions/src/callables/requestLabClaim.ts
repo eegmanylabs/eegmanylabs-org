@@ -1,4 +1,5 @@
 import {
+  asciiLowerCase,
   COLLECTIONS,
   LIMITS,
   labClaimDocSchema,
@@ -30,7 +31,7 @@ export function addressInDomains(emailLower: string, domains: readonly unknown[]
     (candidate) =>
       typeof candidate === "string" &&
       candidate !== "" &&
-      (domain === candidate.toLowerCase() || domain.endsWith(`.${candidate.toLowerCase()}`)),
+      (domain === asciiLowerCase(candidate) || domain.endsWith(`.${asciiLowerCase(candidate)}`)),
   );
 }
 

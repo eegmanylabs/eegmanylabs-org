@@ -3,6 +3,7 @@ export { type AuditActor, type AuditEntry, auditEventId, withheldChanges, writeA
 export {
   readAccessDocument,
   requireCapability,
+  requireProgrammeAdministrator,
   requireSecondFactor,
   requireVerifiedEmail,
   secondFactorSatisfied,

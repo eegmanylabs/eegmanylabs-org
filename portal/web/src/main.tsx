@@ -25,6 +25,8 @@ if (!document.documentElement.hasAttribute("data-framed")) {
 
   const root = document.getElementById("root");
   if (!root) throw new Error("index.html has no #root element.");
+  // The static notice of index.html has done its job once the application starts.
+  document.getElementById("boot-status")?.remove();
   createRoot(root).render(
     <StrictMode>
       <RouterProvider router={router} />

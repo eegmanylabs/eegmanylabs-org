@@ -208,6 +208,10 @@
   h3 {
     font-weight: 500;
   }
+  /* Native radio buttons and checkboxes in the deep coral, never the browser's own blue. */
+  :root {
+    accent-color: var(--color-accent-strong);
+  }
   /* One focus treatment for everything: an outline, never a shadow. */
   :where(a, button, input, textarea, select, summary, [tabindex]):focus-visible {
     outline: 3px solid var(--focus-ring);

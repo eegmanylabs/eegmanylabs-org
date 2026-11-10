@@ -24,6 +24,7 @@ import {
   call,
   callRaw,
   codeOf,
+  coreTeamMember,
   dataOf,
   emailIndexPath,
   grantRole,
@@ -215,7 +216,7 @@ describe("claimProfile", () => {
     await person("person-twin-2", [{ email: "shared.address@example.org" }]);
     const caller = await account("uid-twin", { email: "shared.address@example.org" });
 
-    expect(await call(caller, claimProfileContract, {})).toEqual({ status: "pendingReview" });
+    expect(await call(caller, claimProfileContract, {})).toEqual({ status: "pendingReview", statementGiven: false });
 
     expect(await claimOf("uid-twin")).toMatchObject({ status: "pendingReview", personId: null });
     expect(await reviewOf("uid-twin")).toMatchObject({
@@ -232,7 +233,7 @@ describe("claimProfile", () => {
     ]);
 
     // A repeated call opens no second review record and sends no second notification.
-    expect(await call(caller, claimProfileContract, {})).toEqual({ status: "pendingReview" });
+    expect(await call(caller, claimProfileContract, {})).toEqual({ status: "pendingReview", statementGiven: false });
     expect(await auditOf("claim.sentToReview", "uid-twin")).toHaveLength(1);
     expect(await notificationsOf(reviewer.uid)).toHaveLength(1);
   });
@@ -247,7 +248,7 @@ describe("claimProfile", () => {
     const claimed = await call(late, claimProfileContract, {});
     const ambiguous = await call(twin, claimProfileContract, {});
 
-    expect(claimed).toEqual({ status: "pendingReview" });
+    expect(claimed).toEqual({ status: "pendingReview", statementGiven: false });
     expect(claimed).toEqual(ambiguous);
     expect((await dataOf("persons/person-taken"))?.userId).toBe("uid-holder");
     expect(await reviewOf("uid-late")).toMatchObject({
@@ -263,7 +264,7 @@ describe("claimProfile", () => {
     await person("person-1", [{ email: "doubtful.match@example.org", ...email }], fields);
     const caller = await account("uid-doubtful", { email: "doubtful.match@example.org" });
 
-    expect(await call(caller, claimProfileContract, {})).toEqual({ status: "pendingReview" });
+    expect(await call(caller, claimProfileContract, {})).toEqual({ status: "pendingReview", statementGiven: false });
     expect((await reviewOf("uid-doubtful")).evidence).toEqual({ reason });
     expect((await dataOf("persons/person-1"))?.userId).toBeNull();
   });
@@ -273,7 +274,7 @@ describe("claimProfile", () => {
     await adminDb.doc("persons/person-1/private/contact").update({ emails: [] });
     const caller = await account("uid-stale", { email: "stale.entry@example.org" });
 
-    expect(await call(caller, claimProfileContract, {})).toEqual({ status: "pendingReview" });
+    expect(await call(caller, claimProfileContract, {})).toEqual({ status: "pendingReview", statementGiven: false });
     expect((await reviewOf("uid-stale")).evidence).toEqual({ reason: "addressNotOnRecord" });
   });
 
@@ -392,6 +393,33 @@ describe("requestAccess", () => {
   });
 });
 
+describe("requestAccess on a claim that a match sent to review", () => {
+  it("adds what the claimant says to the review once, and changes nothing else", async () => {
+    const reviewer = await administrator("uid-admin");
+    await person("person-twin-1", [{ email: "shared.address@example.org" }]);
+    await person("person-twin-2", [{ email: "shared.address@example.org" }]);
+    const caller = await account("uid-twin", { email: "shared.address@example.org" });
+    await call(caller, claimProfileContract, {});
+    const before = await reviewOf("uid-twin");
+
+    expect(await call(caller, requestAccessContract, REQUEST)).toEqual({ status: "pendingReview" });
+    const after = await reviewOf("uid-twin");
+    expect(after).toMatchObject({
+      matchBasis: before.matchBasis,
+      candidatePersonIds: before.candidatePersonIds,
+      evidence: { reason: "severalCandidates", ...REQUEST },
+    });
+    const [listed] = (await call(reviewer, listAccountClaimsContract, {})).claims;
+    expect(listed).toMatchObject({ reviewReason: "severalCandidates", request: REQUEST });
+
+    // Once said, it is not rewritten.
+    expect(await codeOf(call(caller, requestAccessContract, { ...REQUEST, message: "Something else." }))).toBe(
+      "resource-exhausted",
+    );
+    expect((await reviewOf("uid-twin")).evidence.message).toBe(REQUEST.message);
+  });
+});
+
 describe("listAccountClaims", () => {
   it("refuses everybody but a reviewer whose second factor is satisfied", async () => {
     const member = await account("uid-member");
@@ -433,7 +461,14 @@ describe("listAccountClaims", () => {
         { personId: "person-twin-2", displayName: "Synthetic person-twin-2", affiliationSummary: null, claimed: true },
       ],
     });
-    expect(claims[1]).toMatchObject({ matchBasis: "manual", candidates: [], request: REQUEST });
+    expect(claims[0]?.reviewReason).toBe("severalCandidates");
+    expect(claims[0]?.candidates[0]).toMatchObject({ addressKind: "primary", laboratoryIds: [], replicationIds: [] });
+    expect(claims[1]).toMatchObject({
+      matchBasis: "manual",
+      reviewReason: "requestedAccess",
+      candidates: [],
+      request: REQUEST,
+    });
     expect((await call(reviewer, listAccountClaimsContract, { status: "approved" })).claims).toEqual([]);
     expect((await call(reviewer, listAccountClaimsContract, { limit: 1 })).claims).toHaveLength(1);
   });
@@ -532,6 +567,47 @@ describe("reviewAccountClaim", () => {
     expect((await accessOf("uid-twin")).member).toBe(false);
   });
 
+  it("leaves a link on no evidence to an administrator, and no reviewer decides their own claim", async () => {
+    await pendingClaim();
+    const core = await coreTeamMember("uid-core");
+    await person("person-unrelated", [{ email: "unrelated@example.org" }]);
+
+    // The core team reviews claims by default, among the candidates that the address found.
+    const unrelated = await refusal(
+      call(core, reviewAccountClaimContract, { ...approval, personId: "person-unrelated" }),
+    );
+    expect(unrelated.code).toBe("permission-denied");
+    expect(unrelated.message).toContain("only a programme administrator can link them");
+    expect((await dataOf("persons/person-unrelated"))?.userId).toBeNull();
+    expect(await call(core, reviewAccountClaimContract, approval)).toEqual({
+      status: "approved",
+      personId: "person-twin-1",
+    });
+    expect((await reviewOf("uid-twin")).evidence).toMatchObject({ automatic: false, candidate: true });
+
+    // An administrator may link a request that matched nobody, and the review records that it rested on no address.
+    const admin = await administrator("uid-admin");
+    await call(await account("uid-newcomer"), requestAccessContract, REQUEST);
+    await call(admin, reviewAccountClaimContract, {
+      uid: "uid-newcomer",
+      decision: "approve",
+      personId: "person-unrelated",
+    });
+    expect(await reviewOf("uid-newcomer")).toMatchObject({
+      candidatePersonIds: ["person-unrelated"],
+      evidence: { automatic: false, candidate: false },
+    });
+
+    // A reviewer's own claim waits for somebody else.
+    await call(core, requestAccessContract, REQUEST);
+    const own = await refusal(
+      call(core, reviewAccountClaimContract, { uid: "uid-core", decision: "reject", note: "Mine." }),
+    );
+    expect(own.code).toBe("permission-denied");
+    expect(own.message).toContain("your own account");
+    expect(await claimOf("uid-core")).toMatchObject({ status: "pendingReview" });
+  });
+
   it("rejects a claim with a note, which the claimant never sees", async () => {
     const claimant = await pendingClaim();
     const reviewer = await administrator("uid-admin");
@@ -556,7 +632,11 @@ describe("reviewAccountClaim", () => {
     const notifications = await notificationsOf(claimant.uid);
     expect(notifications).toMatchObject([{ payload: { kind: "accountClaimRejected" } }]);
     expect(JSON.stringify(notifications)).not.toContain("Neither");
+    expect(notifications[0]?.readAt).toBeNull();
+    // The claim page shows the outcome, so the claim function marks its notification as read:
+    // an account that is not linked may not write even its own documents.
     expect(await call(claimant, claimProfileContract, {})).toEqual({ status: "rejected" });
+    expect((await notificationsOf(claimant.uid))[0]?.readAt).not.toBeNull();
     expect(
       await codeOf(call(reviewer, reviewAccountClaimContract, { uid: "uid-nobody", decision: "reject", note: "No." })),
     ).toBe("not-found");

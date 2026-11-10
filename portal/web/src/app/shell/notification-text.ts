@@ -1,0 +1,79 @@
+// What a notification says, and where it leads, from its type and its payload. A notification
+// leads only to a page that exists. Pure, so that it is tested by itself.
+import type { Role } from "@eegml/shared";
+import { ROLE_LABELS } from "@/app/labels";
+
+export interface NotificationText {
+  readonly title: string;
+  readonly detail: string | null;
+  /** The route of the page the notification is about, or null where no such page exists. */
+  readonly to: string | null;
+}
+
+type Payload = Readonly<Record<string, unknown>>;
+
+const text = (value: unknown): string | null => (typeof value === "string" && value !== "" ? value : null);
+const roleLabel = (value: unknown): string =>
+  typeof value === "string" && value in ROLE_LABELS ? ROLE_LABELS[value as Role] : "a role";
+
+export function describeNotification(payload: Payload): NotificationText {
+  switch (payload.kind) {
+    case "accountClaimAwaitsReview":
+      return { title: "An account claim waits for review", detail: null, to: "/admin/claims" };
+    case "accessRequestAwaitsReview":
+      return { title: "A request for access waits for review", detail: null, to: "/admin/claims" };
+    case "rolesAwaitApproval": {
+      const count = typeof payload.count === "number" ? payload.count : 0;
+      return {
+        title: count === 1 ? "A role waits for confirmation" : `${count} roles wait for confirmation`,
+        detail: "A member has claimed a profile that the records give a management role.",
+        to: "/admin/roles",
+      };
+    }
+    case "labClaimAwaitsReview":
+      return { title: "A request to represent a laboratory waits for review", detail: null, to: "/admin/lab-claims" };
+    case "accountClaimApproved":
+      return { title: "Your account is linked to your profile", detail: null, to: "/" };
+    case "accountClaimRejected":
+      return {
+        title: "Your account was not linked to a profile",
+        detail: "You can ask for access again.",
+        to: "/claim",
+      };
+    case "accountUnlinked":
+      return {
+        title: "Your account is no longer linked to a profile",
+        detail: "An administrator removed the link.",
+        to: "/claim",
+      };
+    case "labClaimApproved":
+      return { title: "Your request to represent a laboratory was approved", detail: null, to: "/account" };
+    case "labClaimRejected":
+      return { title: "Your request to represent a laboratory was not approved", detail: null, to: null };
+    case "roleGranted":
+      return { title: `You now hold the role ${roleLabel(payload.role)}`, detail: null, to: "/account" };
+    case "roleRevoked":
+      return { title: `You no longer hold the role ${roleLabel(payload.role)}`, detail: null, to: "/account" };
+    case "capabilityGranted":
+      return {
+        title: "You have been given an additional permission",
+        detail: text(payload.capability),
+        to: "/account",
+      };
+    case "capabilityRevoked":
+      return { title: "A permission of yours has ended", detail: text(payload.capability), to: "/account" };
+    case "correctionResolved":
+      return {
+        title:
+          payload.outcome !== "accepted"
+            ? "Your report of a wrong detail was not accepted"
+            : payload.applied === true
+              ? "Your report of a wrong detail was accepted and your record corrected"
+              : "Your report of a wrong detail was accepted. The record will be corrected where the detail comes from",
+        detail: text(payload.message),
+        to: "/",
+      };
+    default:
+      return { title: "Something changed that concerns you", detail: null, to: null };
+  }
+}

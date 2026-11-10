@@ -1,5 +1,11 @@
 // The rule that the programme never loses its last administrator.
-import { COLLECTIONS, parseStoredDocument, roleAssignmentDocSchema } from "@eegml/shared";
+import {
+  COLLECTIONS,
+  isProgrammeRole,
+  parseStoredDocument,
+  type RoleAssignmentDoc,
+  roleAssignmentDocSchema,
+} from "@eegml/shared";
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { inForce } from "./assignments";
 
@@ -34,3 +40,14 @@ export async function otherAdministrators(
 
 export const LAST_ADMINISTRATOR_MESSAGE =
   "This account is the last active programme administrator. Make another account a programme administrator first.";
+
+/** Whether any of an account's role assignments makes it programme staff at an instant. */
+export function holdsProgrammeRole(
+  assignments: readonly Pick<RoleAssignmentDoc, "role" | "status" | "expiresAt">[],
+  at: Date,
+): boolean {
+  return assignments.some((assignment) => isProgrammeRole(assignment.role) && inForce(assignment, at));
+}
+
+export const PROGRAMME_STAFF_ACCOUNT_MESSAGE =
+  "This account belongs to a programme administrator or a member of the core team. Only a programme administrator can change it.";

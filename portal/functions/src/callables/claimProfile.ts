@@ -2,18 +2,21 @@ import {
   type ClaimProfileOutput,
   COLLECTIONS,
   claimProfileContract,
+  LIMITS,
   normaliseEmail,
   personEmailIndexId,
 } from "@eegml/shared";
-import type { Firestore, Transaction } from "firebase-admin/firestore";
+import { type Firestore, Timestamp, type Transaction } from "firebase-admin/firestore";
 import { type LinkReads, linkObstacle, readLink, writeLink } from "../claims/link";
 import { type ClaimRecords, readClaim, writeClaim } from "../claims/records";
 import {
   AppError,
+  type AuthenticatedContext,
   callerStamp,
   defineCallable,
   identityHashKey,
   requireVerifiedEmail,
+  touchedFields,
   withheldChanges,
   writeAudit,
 } from "../framework";
@@ -88,148 +91,178 @@ type ReviewReason =
 export const claimProfile = defineCallable(claimProfileContract, {
   usesIdentityHashKey: true,
   handler: async (_input, context): Promise<ClaimProfileOutput> => {
-    const { uid, db } = context;
-    const emailLower = requireVerifiedEmail(context);
-    const indexReference = db.doc(
-      COLLECTIONS.personEmailIndex.docPath(personEmailIndexId(emailLower, identityHashKey())),
-    );
-    const userReference = db.doc(COLLECTIONS.users.docPath(uid));
-    const at = context.clock.now();
+    const answer = await claimAnswer(context);
+    if (answer.status !== "noMatch") await markClaimNotificationsRead(context.db, context.uid, context.clock.now());
+    return answer;
+  },
+});
 
-    return db.runTransaction(async (transaction) => {
-      const records = await readClaim(db, transaction, uid);
-      const answered = answerOf(records);
-      if (answered !== null) return answered;
+/**
+ * Marks as read the caller's notifications about their own claim. The claim page, which calls
+ * this function, shows the outcome they announce, so they have been seen. An account that is
+ * not linked may not write even its own documents (docs/SECURITY.md, section 5), so without
+ * this its unread count would never go down.
+ */
+async function markClaimNotificationsRead(db: Firestore, uid: string, at: Date): Promise<void> {
+  const unread = await db
+    .collection(COLLECTIONS.userNotifications.collectionPath(uid))
+    .where("type", "==", "claimDecision")
+    .where("readAt", "==", null)
+    .limit(LIMITS.list)
+    .get();
+  if (unread.empty) return;
+  const stamp = callerStamp(uid, at, null);
+  const batch = db.batch();
+  for (const notification of unread.docs) {
+    batch.update(notification.ref, { readAt: Timestamp.fromDate(at), ...touchedFields(stamp) });
+  }
+  await batch.commit();
+}
 
-      const [profile, indexSnapshot] = await transaction.getAll(userReference, indexReference);
-      if (profile?.exists !== true) {
-        throw new AppError("failed-precondition", "Start the portal before you claim a profile.");
-      }
-      const index = indexSnapshot?.data() ?? null;
-      const candidates = [...new Set(texts(index?.personIds))].sort();
-      if (candidates.length === 0) return { status: "noMatch" };
+/** Looks the caller's address up and links, sends to review or answers from the stored claim. */
+async function claimAnswer(context: AuthenticatedContext): Promise<ClaimProfileOutput> {
+  const { uid, db } = context;
+  const emailLower = requireVerifiedEmail(context);
+  const indexReference = db.doc(
+    COLLECTIONS.personEmailIndex.docPath(personEmailIndexId(emailLower, identityHashKey())),
+  );
+  const userReference = db.doc(COLLECTIONS.users.docPath(uid));
+  const at = context.clock.now();
 
-      const contacts = await contactsOf(db, transaction, candidates);
-      const holdings = candidates.map((id) => heldAs(contacts.get(id) ?? null, emailLower));
-      const matchBasis = holdings.some((held) => held?.kind === "primary") ? "primaryEmail" : "secondaryEmail";
-      const [only] = candidates;
-      let reason: ReviewReason | null = null;
-      let link: LinkReads | null = null;
-      if (candidates.length > 1 || only === undefined) reason = "severalCandidates";
+  return db.runTransaction(async (transaction) => {
+    const records = await readClaim(db, transaction, uid);
+    const answered = answerOf(records);
+    if (answered !== null) return answered;
+
+    const [profile, indexSnapshot] = await transaction.getAll(userReference, indexReference);
+    if (profile?.exists !== true) {
+      throw new AppError("failed-precondition", "Start the portal before you claim a profile.");
+    }
+    const index = indexSnapshot?.data() ?? null;
+    const candidates = [...new Set(texts(index?.personIds))].sort();
+    if (candidates.length === 0) return { status: "noMatch" };
+
+    const contacts = await contactsOf(db, transaction, candidates);
+    const holdings = candidates.map((id) => heldAs(contacts.get(id) ?? null, emailLower));
+    const matchBasis = holdings.some((held) => held?.kind === "primary") ? "primaryEmail" : "secondaryEmail";
+    const [only] = candidates;
+    let reason: ReviewReason | null = null;
+    let link: LinkReads | null = null;
+    if (candidates.length > 1 || only === undefined) reason = "severalCandidates";
+    else {
+      const [held] = holdings;
+      if (held == null) reason = "addressNotOnRecord";
+      else if (!held.claimEligible || !texts(index?.claimEligiblePersonIds).includes(only)) reason = "notClaimEligible";
       else {
-        const [held] = holdings;
-        if (held == null) reason = "addressNotOnRecord";
-        else if (!held.claimEligible || !texts(index?.claimEligiblePersonIds).includes(only))
-          reason = "notClaimEligible";
-        else {
-          link = await readLink(db, transaction, uid, only, at);
-          const obstacle = linkObstacle(link);
-          if (obstacle === "claimed") reason = "alreadyClaimed";
-          else if (obstacle !== null) reason = "personUnavailable";
-        }
+        link = await readLink(db, transaction, uid, only, at);
+        const obstacle = linkObstacle(link);
+        if (obstacle === "claimed") reason = "alreadyClaimed";
+        else if (obstacle !== null) reason = "personUnavailable";
       }
-      if (reason !== null || link === null || only === undefined) {
-        const reviewers = await holdersOf(db, transaction, "claims.review");
-        const auditEventId = writeAudit(
-          transaction,
-          {
-            action: "claim.sentToReview",
-            actor: { kind: "user", uid },
-            entityType: "user",
-            entityId: uid,
-            changes: withheldChanges(["status", "candidatePersonIds", "matchBasis"]),
-            at,
-          },
-          db,
-        );
-        const stamp = callerStamp(uid, at, auditEventId);
-        writeClaim(
-          transaction,
-          records,
-          "attempt",
-          {
-            status: "pendingReview",
-            personId: null,
-            candidatePersonIds: candidates,
-            matchBasis,
-            evidence: { reason: reason ?? "personUnavailable" },
-            reviewedBy: null,
-          },
-          stamp,
-        );
-        notifyAll(
-          db,
-          transaction,
-          reviewers.filter((reviewer) => reviewer !== uid),
-          {
-            type: "claimDecision",
-            entityType: "user",
-            entityId: uid,
-            eventId: auditEventId,
-            payload: { kind: "accountClaimAwaitsReview" },
-          },
-          stamp,
-        );
-        return { status: "pendingReview" };
-      }
-
-      const roleManagers = link.implied.some((role) => role.status === "pendingApproval")
-        ? await holdersOf(db, transaction, "roles.manage")
-        : [];
+    }
+    if (reason !== null || link === null || only === undefined) {
+      const reviewers = await holdersOf(db, transaction, "claims.review");
       const auditEventId = writeAudit(
         transaction,
         {
-          action: "claim.approved",
+          action: "claim.sentToReview",
           actor: { kind: "user", uid },
-          entityType: "person",
-          entityId: only,
-          changes: [{ field: "userId", before: null, after: uid }],
+          entityType: "user",
+          entityId: uid,
+          changes: withheldChanges(["status", "candidatePersonIds", "matchBasis"]),
           at,
         },
         db,
       );
       const stamp = callerStamp(uid, at, auditEventId);
-      const linked = writeLink(db, transaction, link, stamp);
       writeClaim(
         transaction,
         records,
         "attempt",
         {
-          status: "approved",
-          personId: only,
-          candidatePersonIds: [only],
+          status: "pendingReview",
+          personId: null,
+          candidatePersonIds: candidates,
           matchBasis,
-          evidence: { automatic: true, createdRoleAssignmentIds: linked.createdAssignmentIds },
+          evidence: { reason: reason ?? "personUnavailable" },
           reviewedBy: null,
         },
         stamp,
       );
-      if (linked.pendingRoles.length > 0) {
-        notifyAll(
-          db,
-          transaction,
-          roleManagers.filter((manager) => manager !== uid),
-          {
-            type: "roleDecision",
-            entityType: "user",
-            entityId: uid,
-            eventId: auditEventId,
-            payload: { kind: "rolesAwaitApproval", count: linked.pendingRoles.length },
-          },
-          stamp,
-        );
-      }
-      return { status: "linked", personId: only };
-    });
-  },
-});
+      notifyAll(
+        db,
+        transaction,
+        reviewers.filter((reviewer) => reviewer !== uid),
+        {
+          type: "claimDecision",
+          entityType: "user",
+          entityId: uid,
+          eventId: auditEventId,
+          payload: { kind: "accountClaimAwaitsReview" },
+        },
+        stamp,
+      );
+      return { status: "pendingReview", statementGiven: false };
+    }
+
+    const roleManagers = link.implied.some((role) => role.status === "pendingApproval")
+      ? await holdersOf(db, transaction, "roles.manage")
+      : [];
+    const auditEventId = writeAudit(
+      transaction,
+      {
+        action: "claim.approved",
+        actor: { kind: "user", uid },
+        entityType: "person",
+        entityId: only,
+        changes: [{ field: "userId", before: null, after: uid }],
+        at,
+      },
+      db,
+    );
+    const stamp = callerStamp(uid, at, auditEventId);
+    const linked = writeLink(db, transaction, link, stamp);
+    writeClaim(
+      transaction,
+      records,
+      "attempt",
+      {
+        status: "approved",
+        personId: only,
+        candidatePersonIds: [only],
+        matchBasis,
+        evidence: { automatic: true, createdRoleAssignmentIds: linked.createdAssignmentIds },
+        reviewedBy: null,
+      },
+      stamp,
+    );
+    if (linked.pendingRoles.length > 0) {
+      notifyAll(
+        db,
+        transaction,
+        roleManagers.filter((manager) => manager !== uid),
+        {
+          type: "roleDecision",
+          entityType: "user",
+          entityId: uid,
+          eventId: auditEventId,
+          payload: { kind: "rolesAwaitApproval", count: linked.pendingRoles.length },
+        },
+        stamp,
+      );
+    }
+    return { status: "linked", personId: only };
+  });
+}
 
 /** The answer that a stored claim gives by itself, or null where the address has to be looked up. */
 function answerOf(records: ClaimRecords): ClaimProfileOutput | null {
   const { claim } = records;
   if (claim === null) return null;
   if (claim.status === "approved" && claim.personId !== null) return { status: "linked", personId: claim.personId };
-  if (claim.status === "pendingReview") return { status: "pendingReview" };
+  if (claim.status === "pendingReview") {
+    return { status: "pendingReview", statementGiven: records.review?.evidence.statedName !== undefined };
+  }
   if (claim.status === "rejected") return { status: "rejected" };
   return null;
 }

@@ -97,7 +97,7 @@ describe("the demonstration world with the functions running", () => {
 
     // Two persons hold one address: the claim goes to the queue, and the administrator decides it.
     await call(twin, sessionStartContract, {});
-    expect(await call(twin, claimProfileContract, {})).toEqual({ status: "pendingReview" });
+    expect(await call(twin, claimProfileContract, {})).toEqual({ status: "pendingReview", statementGiven: false });
     const { claims } = await call(admin, listAccountClaimsContract, {});
     expect(claims).toMatchObject([
       { uid: twin.uid, candidates: [{ personId: "demo-person-hana" }, { personId: "demo-person-hugo" }] },
