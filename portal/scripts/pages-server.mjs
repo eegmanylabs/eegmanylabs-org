@@ -15,11 +15,11 @@
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
-import { webOutputDirectory } from "./paths.mjs";
+import { PREVIEW_MOUNT, webOutputDirectory } from "./paths.mjs";
 import { LOCAL_HOST, portsFor, resolvePortBase } from "./ports.mjs";
 
 /** Path prefix the preview and the end-to-end tests serve the portal under. */
-export const DEFAULT_MOUNT = "/portal/";
+export const DEFAULT_MOUNT = PREVIEW_MOUNT;
 
 const CONTENT_TYPES = /** @type {Record<string, string>} */ ({
   ".html": "text/html; charset=utf-8",

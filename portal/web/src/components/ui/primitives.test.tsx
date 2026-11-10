@@ -73,6 +73,27 @@ describe("FormField", () => {
     expect(error?.getAttribute("aria-live")).toBe("polite");
     expect(input.getAttribute("aria-describedby")).toBe(`${hint.id} ${error?.id}`);
   });
+
+  it("keeps the live region for the error in the document while there is no error, so a later message is announced", () => {
+    const view = render(
+      <FormField label="Email address">{(control) => <Input {...control} type="email" />}</FormField>,
+    );
+    const region = view.container.querySelector('[aria-live="polite"]');
+    expect(region).not.toBeNull();
+    expect(region?.textContent).toBe("");
+    // display: none would take the region out of the accessibility tree.
+    expect(region?.className.split(" ")).not.toContain("hidden");
+    expect(region?.hasAttribute("hidden")).toBe(false);
+
+    view.rerender(
+      <FormField label="Email address" error="Enter a full email address.">
+        {(control) => <Input {...control} type="email" />}
+      </FormField>,
+    );
+    // The same element receives the text: it is not replaced by a new one.
+    expect(view.container.querySelector('[aria-live="polite"]')).toBe(region);
+    expect(region?.textContent).toBe("Enter a full email address.");
+  });
 });
 
 describe("Dialog", () => {

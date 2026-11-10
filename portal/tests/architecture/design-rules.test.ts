@@ -47,9 +47,31 @@ describe("the visual system", () => {
   });
 
   it("takes every colour from the token file", () => {
-    const elsewhere = web.filter((file) => file.path !== TOKENS_FILE);
+    // The application's source, the page template and the files that are published as they are.
+    const everywhere = [
+      ...web,
+      ...sourceFiles("web/public"),
+      ...sourceFiles("web").filter((file) => file.path === "web/index.html"),
+    ];
+    expect(everywhere.map((file) => file.path)).toEqual(
+      expect.arrayContaining(["web/index.html", "web/public/frame-guard.js", TOKENS_FILE]),
+    );
+    const elsewhere = everywhere.filter((file) => file.path !== TOKENS_FILE);
     // A raw colour value: hexadecimal, or a colour function.
     expect(matches(elsewhere, /#[0-9a-fA-F]{3,8}\b|\b(?:rgb|rgba|hsl|hsla|oklch)\(/g)).toEqual([]);
+  });
+
+  it("sets all text in DM Sans, the one typeface of the portal (decision D-018)", () => {
+    const manifest = JSON.parse(sourceFiles("web").find((file) => file.path === "web/package.json")?.text ?? "{}");
+    const fontPackages = Object.keys(manifest.dependencies ?? {}).filter((name) => name.startsWith("@fontsource"));
+    expect(fontPackages).toEqual(["@fontsource-variable/dm-sans"]);
+
+    const styles = web.filter((file) => file.path.endsWith(".css"));
+    expect(matches(styles, /@import\s+["']@fontsource[^"']*["']/g)).toEqual([
+      'web/src/styles/app.css: @import "@fontsource-variable/dm-sans/opsz.css"',
+    ]);
+    // No second family, and no utility or token that would select one.
+    expect(matches(web, /\bfraunces\b|\bfont-serif\b|--(?:font-)?serif\b|\bGeorgia\b/gi)).toEqual([]);
   });
 
   it("loads fonts from the installed packages, never from a font service or a content delivery network", () => {

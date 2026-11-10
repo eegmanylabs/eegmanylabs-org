@@ -52,12 +52,13 @@ describe("normaliseDisplayName", () => {
     expect([...cut].every((character) => character === "a" || character === "\u{1F600}")).toBe(true);
   });
 
-  it.each([["an empty string", ""], ["white space only", " \n\t "], ["control characters only", "\u0000\u0001"]])(
-    "gives null for %s",
-    (_label, value) => {
-      expect(normaliseDisplayName(value)).toBeNull();
-    },
-  );
+  it.each([
+    ["an empty string", ""],
+    ["white space only", " \n\t "],
+    ["control characters only", "\u0000\u0001"],
+  ])("gives null for %s", (_label, value) => {
+    expect(normaliseDisplayName(value)).toBeNull();
+  });
 
   it.each([undefined, null, 42, { name: "x" }, ["x"]])("gives null for %j, which is not text", (value) => {
     expect(normaliseDisplayName(value)).toBeNull();

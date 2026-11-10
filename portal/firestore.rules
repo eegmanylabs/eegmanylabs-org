@@ -16,8 +16,31 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function callerAccessPath() {
+      return /databases/$(database)/documents/access/$(request.auth.uid);
+    }
+
+    // Whether an access document lets its account act: the account is not suspended, and the
+    // session began at or after the instant from which sessions are valid. A missing field
+    // counts as "not suspended" and "no such instant".
+    function standingAllows(access) {
+      return access.get('suspended', false) != true
+        && (access.get('sessionsValidAfter', null) == null
+          || request.auth.token.get('auth_time', -1) * 1000 >= access.sessionsValidAfter.toMillis());
+    }
+
+    // EVERY allow statement goes through this helper, directly or through another helper, so a
+    // suspended account and an ended session are refused everything on their next request.
+    // It is the decision `accountStanding` makes in portal/shared/src/schemas/access.ts, which
+    // callable functions apply, and the two change together. An account that has no access
+    // document yet is active: it has been granted nothing. Cost: one document read.
+    function isActive() {
+      return signedIn()
+        && (!exists(callerAccessPath()) || standingAllows(get(callerAccessPath()).data));
+    }
+
     function isOwner(uid) {
-      return signedIn() && request.auth.uid == uid;
+      return isActive() && request.auth.uid == uid;
     }
 
     // One document per account, maintained by the sessionStart function.

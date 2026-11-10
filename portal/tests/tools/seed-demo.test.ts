@@ -1,5 +1,7 @@
 // Integration tests for the seed:demo tool, run against the emulators.
+// Fixtures are synthetic: the demonstration accounts are fictitious and use the example.org domain.
 import { spawnSync } from "node:child_process";
+import { createServer } from "node:net";
 import path from "node:path";
 import { accessDocSchema, userDocSchema } from "@eegml/shared";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -23,6 +25,20 @@ function runCli(args: string[], environment: Record<string, string | undefined>)
 
 const withEmulators = emulatorEnvironment(PORTS, PROJECT_ID);
 
+/** A loopback port that nothing listens on: taken from the system, then given back. */
+function unusedPort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const probe = createServer();
+    probe.once("error", reject);
+    probe.listen(0, "127.0.0.1", () => {
+      const address = probe.address();
+      probe.close(() =>
+        typeof address === "object" && address ? resolve(address.port) : reject(new Error("no port")),
+      );
+    });
+  });
+}
+
 beforeEach(async () => {
   await Promise.all([clearFirestore(), clearAuth()]);
 });
@@ -42,6 +58,21 @@ describe("seed:demo", () => {
     expect(result.stderr).toContain("not a demonstration project");
   });
 
+  it("refuses, and says how to start them, when the emulators it was pointed at are not running", async () => {
+    const port = await unusedPort();
+    const result = runCli(["seed:demo"], {
+      ...withEmulators,
+      FIRESTORE_EMULATOR_HOST: `127.0.0.1:${port}`,
+      FIREBASE_AUTH_EMULATOR_HOST: `127.0.0.1:${port}`,
+    });
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain(`the emulators of PORTAL_PORT_BASE=${PORTS.base} are not running`);
+    expect(result.stderr).toContain("npm run emulators");
+    // One short message, and no dump of an Admin SDK error.
+    expect(result.stderr.trim().split("\n")).toHaveLength(1);
+    expect((await adminDb.collection("users").get()).size).toBe(0);
+  });
+
   it("writes two fictitious accounts with their documents, all labelled as demonstration data", async () => {
     const result = runCli(["seed:demo"], withEmulators);
     expect(result.stderr).toBe("");
@@ -54,11 +85,34 @@ describe("seed:demo", () => {
       const record = await adminAuth.getUser(account.uid);
       expect(record).toMatchObject({ email: account.email, emailVerified: true, displayName: account.displayName });
 
+      // Every document names the command as its author, as trusted code acting by itself.
+      const standard = {
+        schemaVersion: 1,
+        createdBy: "system:seedDemo",
+        updatedBy: "system:seedDemo",
+        archivedAt: null,
+        writeContext: { origin: "system", depth: 0, correlationId: null, causationId: null, auditEventId: null },
+      };
+
       const user = userDocSchema.parse((await adminDb.doc(`users/${account.uid}`).get()).data());
-      expect(user).toMatchObject({ emailLower: account.email, status: "active", dataOrigin: "demo" });
+      expect(user).toMatchObject({
+        ...standard,
+        emailLower: account.email,
+        displayName: account.displayName,
+        personId: null,
+        status: "active",
+        mfaEnrolled: false,
+        dataOrigin: "demo",
+      });
 
       const access = accessDocSchema.parse((await adminDb.doc(`access/${account.uid}`).get()).data());
-      expect(access).toMatchObject({ member: false, personId: null, dataOrigin: "demo" });
+      expect(access).toMatchObject({
+        ...standard,
+        member: false,
+        personId: null,
+        suspended: false,
+        sessionsValidAfter: null,
+      });
     }
     expect((await adminDb.collection("users").get()).size).toBe(2);
     expect((await adminDb.collection("access").get()).size).toBe(2);

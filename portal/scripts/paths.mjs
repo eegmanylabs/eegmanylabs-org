@@ -11,6 +11,13 @@ export const PORTAL_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.u
 export const DEMO_PROJECT_ID = "demo-eegml";
 
 /**
+ * Path prefix the preview server and the end-to-end tests serve the portal under, the way a
+ * project site is served under https://<owner>.github.io/<repository>/. Emulator builds are
+ * made for this prefix.
+ */
+export const PREVIEW_MOUNT = "/portal/";
+
+/**
  * Directory for everything one run generates: emulator logs, test output. Keyed by the port
  * base, so two runs never write to the same place.
  * @param {number} base

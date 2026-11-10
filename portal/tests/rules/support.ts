@@ -10,10 +10,27 @@ import { HOST, PORTAL_ROOT, PORTS } from "../support/emulators";
 /** A project of its own, so these tests never see data written by the other suites. */
 const RULES_PROJECT_ID = "demo-eegml-rules";
 
-/** The signed-in accounts the tests act as. */
+/** The instant from which the sessions of the `ended` account are valid, in seconds since the epoch. */
+export const SESSIONS_VALID_AFTER_SECONDS = 1_800_000_000;
+
+/**
+ * The signed-in accounts the tests act as. `signedInAt` is the time of sign-in that the
+ * account's token states, in seconds since the epoch.
+ *
+ * | Account     | Standing                                                             |
+ * |-------------|----------------------------------------------------------------------|
+ * | `owner`     | Active                                                               |
+ * | `other`     | Active                                                               |
+ * | `suspended` | Its access document says it is suspended                             |
+ * | `ended`     | Signed in one second before the instant its sessions are valid from |
+ * | `renewed`   | Same account as `ended`, signed in again at that instant            |
+ */
 export const ACCOUNTS = {
-  owner: { uid: "uid-owner", email: "owner.account@example.org" },
-  other: { uid: "uid-other", email: "other.account@example.org" },
+  owner: { uid: "uid-owner", email: "owner.account@example.org", signedInAt: 1_700_000_000 },
+  other: { uid: "uid-other", email: "other.account@example.org", signedInAt: 1_700_000_000 },
+  suspended: { uid: "uid-suspended", email: "suspended.account@example.org", signedInAt: 1_700_000_000 },
+  ended: { uid: "uid-ended", email: "ended.account@example.org", signedInAt: SESSIONS_VALID_AFTER_SECONDS - 1 },
+  renewed: { uid: "uid-ended", email: "ended.account@example.org", signedInAt: SESSIONS_VALID_AFTER_SECONDS },
 } as const;
 export type AccountName = keyof typeof ACCOUNTS;
 export type Caller = AccountName | "signedOut";
@@ -30,7 +47,11 @@ export function createRulesEnvironment(): Promise<RulesTestEnvironment> {
 function contextFor(environment: RulesTestEnvironment, caller: Caller) {
   if (caller === "signedOut") return environment.unauthenticatedContext();
   const account = ACCOUNTS[caller];
-  return environment.authenticatedContext(account.uid, { email: account.email, email_verified: true });
+  return environment.authenticatedContext(account.uid, {
+    email: account.email,
+    email_verified: true,
+    auth_time: account.signedInAt,
+  });
 }
 
 /** Firestore as seen by a caller, with the security rules applied. */

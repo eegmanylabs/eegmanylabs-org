@@ -1,11 +1,9 @@
-// Live documents and live queries. Both hooks read from one shared subscription cache.
-import {
-  type DocumentReference,
-  type FirestoreError,
-  onSnapshot,
-  type Query,
-  type SnapshotMetadata,
-} from "firebase/firestore";
+// Live documents. Every hook here reads from one shared subscription cache.
+//
+// A hook for live queries belongs in this file as well, on the same cache, with a key that
+// describes the query completely. It is added together with the first collection that the
+// security rules let a browser list, so that it can be tested against those rules.
+import { type DocumentReference, type FirestoreError, onSnapshot, type SnapshotMetadata } from "firebase/firestore";
 import { DataShapeError } from "./converter";
 import { type Live, type LiveError, type Publish, SubscriptionCache } from "./subscription-cache";
 import { useSubscription } from "./use-subscription";
@@ -30,7 +28,8 @@ function publishSnapshot<T>(publish: Publish<T>, metadata: SnapshotMetadata, rea
       hasPendingWrites: metadata.hasPendingWrites,
     });
   } catch (error) {
-    // The converter rejects documents that do not match their schema.
+    // The converter rejects documents that do not match their schema. The listener goes on,
+    // so a document that is put right shows up without anyone asking again.
     publish({ status: "error", error: toLiveError(error) });
   }
 }
@@ -38,56 +37,34 @@ function publishSnapshot<T>(publish: Publish<T>, metadata: SnapshotMetadata, rea
 /**
  * A document that stays up to date. `data` is null when the document does not exist.
  * Pass null to watch nothing. Every component that watches the same document shares one listener.
+ *
+ * When the server ends the listener, for example because it refused the read, the cache opens
+ * a new one a few times before it reports the failure (see subscription-cache.ts).
  */
 export function useLiveDoc<T>(reference: DocumentReference<T> | null): Live<T | null> {
-  return useSubscription<T | null>(cache, reference ? `doc:${reference.path}` : null, (publish) => {
+  return useSubscription<T | null>(cache, reference ? `doc:${reference.path}` : null, (publish, fail) => {
     if (!reference) return () => {};
     return onSnapshot(
       reference,
       { includeMetadataChanges: true },
       (snapshot) => publishSnapshot(publish, snapshot.metadata, () => (snapshot.exists() ? snapshot.data() : null)),
-      (error) => publish({ status: "error", error: toLiveError(error) }),
+      // Firestore has removed the listener by the time it reports an error.
+      (error) => fail(toLiveError(error)),
     );
   });
 }
 
-/** A query with the key under which its result is shared. Create one with `namedQuery`. */
-export interface NamedQuery<T> {
-  readonly key: string;
-  readonly query: Query<T>;
+/** Opens anew every listener that has given up after repeated failures. For "Try again" buttons. */
+export function retryFailedLiveData(): void {
+  cache.retryFailed();
 }
 
-/**
- * Gives a query the key that identifies it in the subscription cache. Firestore queries have
- * no stable identity of their own, so the key must describe the query completely: the same
- * key must always mean the same collection, filters and order.
- */
-export function namedQuery<T>(key: string, query: Query<T>): NamedQuery<T> {
-  return { key, query };
+/** Stops every listener for good and forgets every cached value. See `discardLocalData`. */
+export function closeLiveData(): void {
+  cache.close();
 }
 
-/**
- * The result of a query that stays up to date. Pass null to watch nothing.
- * Every component that uses a query with the same key shares one listener.
- */
-export function useLiveQuery<T>(named: NamedQuery<T> | null): Live<readonly T[]> {
-  return useSubscription<readonly T[]>(cache, named ? `query:${named.key}` : null, (publish) => {
-    if (!named) return () => {};
-    return onSnapshot(
-      named.query,
-      { includeMetadataChanges: true },
-      (snapshot) => publishSnapshot(publish, snapshot.metadata, () => snapshot.docs.map((document) => document.data())),
-      (error) => publish({ status: "error", error: toLiveError(error) }),
-    );
-  });
-}
-
-/** Stops every listener and forgets every cached value. Called on sign-out. */
-export function resetLiveData(): void {
-  cache.reset();
-}
-
-/** Number of open Firestore listeners. Exposed for tests. */
+/** Number of Firestore listeners the cache holds. Exposed for tests. */
 export function liveListenerCount(): number {
   return cache.size;
 }

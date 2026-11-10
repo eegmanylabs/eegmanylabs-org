@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { portsFor } from "../../scripts/ports.mjs";
-import { REQUIRED_VARIABLES, resolveBuildConfig } from "./build-config.ts";
+import { REQUIRED_VARIABLES, resolveBuildConfig, resolvePublicPath } from "./build-config.ts";
 import { buildContentSecurityPolicy } from "./csp.ts";
 
 const ports = portsFor(9300);
@@ -71,6 +71,32 @@ describe("resolveBuildConfig", () => {
       /"true" or "false"/,
     );
   });
+});
+
+describe("resolvePublicPath", () => {
+  it("is the path of the preview server for emulator builds, which the tests and the preview use", () => {
+    expect(resolvePublicPath("emulator", {})).toBe("/portal/");
+  });
+
+  it.each(["staging", "production"])(
+    "is the root of a domain of its own for a %s build unless told otherwise",
+    (mode) => {
+      expect(resolvePublicPath(mode, {})).toBe("/");
+      expect(resolvePublicPath(mode, { PORTAL_PUBLIC_PATH: "  " })).toBe("/");
+      expect(resolvePublicPath(mode, { PORTAL_PUBLIC_PATH: "/eegmanylabs-org/" })).toBe("/eegmanylabs-org/");
+    },
+  );
+
+  it("can be set for an emulator build as well", () => {
+    expect(resolvePublicPath("emulator", { PORTAL_PUBLIC_PATH: "/" })).toBe("/");
+  });
+
+  it.each(["portal/", "/portal", "//example.org/", "https://example.org/", "/a b/", '/"/', "/../"])(
+    "refuses %j, which is no path with a slash at both ends",
+    (value) => {
+      expect(() => resolvePublicPath("production", { PORTAL_PUBLIC_PATH: value })).toThrow(/PORTAL_PUBLIC_PATH/);
+    },
+  );
 });
 
 describe("buildContentSecurityPolicy", () => {

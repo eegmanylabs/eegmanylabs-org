@@ -1,12 +1,12 @@
-/* Entry stylesheet. Tokens first, then the two self-hosted variable fonts. */
+/* Entry stylesheet. Tokens first, then the self-hosted variable font. */
 @import "./tokens.css";
 
 /*
- * Upright faces with the optical-size and weight axes, which is what the public site requests.
- * The font files are emitted into the build, so nothing is fetched from a font service.
+ * DM Sans is the only typeface of the portal, as it is of the public site (decision D-018).
+ * This is the upright face with the optical-size and weight axes. The font files are emitted
+ * into the build, so nothing is fetched from a font service.
  */
 @import "@fontsource-variable/dm-sans/opsz.css";
-@import "@fontsource-variable/fraunces/opsz.css";
 
 /* Set by public/frame-guard.js when the page is shown inside a frame on another site. */
 html[data-framed] body {

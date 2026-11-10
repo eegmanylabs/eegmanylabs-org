@@ -11,11 +11,21 @@ test("the pages load nothing from a font service or a content delivery network",
   await expect(page.getByTestId("account-details")).toContainText(email);
   await page.evaluate(() => document.fonts.ready);
 
-  // Both families are in use and both came from the portal's own address.
+  // DM Sans is the one typeface (decision D-018). It is in use and came from the portal's own address.
   const loaded = await page.evaluate(() =>
     [...document.fonts].filter((face) => face.status === "loaded").map((face) => face.family.replaceAll('"', "")),
   );
-  expect(new Set(loaded)).toEqual(new Set(["DM Sans Variable", "Fraunces Variable"]));
+  expect(new Set(loaded)).toEqual(new Set(["DM Sans Variable"]));
+  const declared = await page.evaluate(() => [...document.fonts].map((face) => face.family.replaceAll('"', "")));
+  expect(new Set(declared)).toEqual(new Set(["DM Sans Variable"]));
+  // Page titles are set in it as well, like all other text.
+  const families = await page.evaluate(() =>
+    ["h1", "h2", "body", "button"].map((selector) => {
+      const element = document.querySelector(selector);
+      return element ? getComputedStyle(element).fontFamily.split(",")[0]?.replaceAll('"', "").trim() : null;
+    }),
+  );
+  expect(families).toEqual(["DM Sans Variable", "DM Sans Variable", "DM Sans Variable", "DM Sans Variable"]);
   const fontRequests = monitor.requests.filter((url) => url.endsWith(".woff2"));
   expect(fontRequests.length).toBeGreaterThan(0);
   for (const url of fontRequests) expect(new URL(url).host).toBe(`${HOST}:${PORTS.preview}`);
@@ -62,24 +72,39 @@ test("no element has a box shadow in the navigation panel of narrow screens", as
   expect(await elementsWithBoxShadow(page)).toEqual([]);
 });
 
-test("the policy is the first element of the document head and the other meta elements are present", async ({
+test("the policy follows the character-set declaration directly and precedes everything that loads", async ({
   page,
 }) => {
   await page.goto("./#/login");
-  const head = await page.evaluate(() => ({
-    first: document.head.firstElementChild?.getAttribute("http-equiv"),
-    policy: document.head.firstElementChild?.getAttribute("content") ?? "",
-    robots: document.querySelector('meta[name="robots"]')?.getAttribute("content"),
-    referrer: document.querySelector('meta[name="referrer"]')?.getAttribute("content"),
-    inlineScripts: [...document.scripts].filter((script) => !script.src).length,
-  }));
-  expect(head.first).toBe("Content-Security-Policy");
+  const head = await page.evaluate(() => {
+    const elements = [...document.head.children];
+    const policyAt = elements.findIndex((element) => element.getAttribute("http-equiv") === "Content-Security-Policy");
+    return {
+      first: elements[0]?.outerHTML,
+      policyAt,
+      policy: elements[policyAt]?.getAttribute("content") ?? "",
+      // Elements that fetch or run something, by their position in the head.
+      loadersAt: elements.flatMap((element, index) => (/^(SCRIPT|LINK|STYLE)$/.test(element.tagName) ? [index] : [])),
+      robots: document.querySelector('meta[name="robots"]')?.getAttribute("content"),
+      referrer: document.querySelector('meta[name="referrer"]')?.getAttribute("content"),
+      themeColour: document.querySelector('meta[name="theme-color"]')?.getAttribute("content"),
+      inkToken: getComputedStyle(document.documentElement).getPropertyValue("--ink-950").trim(),
+      inlineScripts: [...document.scripts].filter((script) => !script.src).length,
+    };
+  });
+  expect(head.first).toBe('<meta charset="utf-8">');
+  expect(head.policyAt).toBe(1);
+  expect(head.loadersAt.length).toBeGreaterThan(0);
+  for (const position of head.loadersAt) expect(position).toBeGreaterThan(head.policyAt);
   expect(head.policy).toContain("default-src 'none'");
   expect(head.policy).toContain("script-src 'self';");
   expect(head.policy).not.toContain("unsafe-eval");
   expect(head.policy).toContain("font-src 'self'");
   expect(head.robots).toBe("noindex, nofollow");
   expect(head.referrer).toBe("strict-origin-when-cross-origin");
+  // The colour of the browser's interface is the graphite of the design tokens.
+  expect(head.themeColour).toBe(head.inkToken);
+  expect(head.themeColour).toMatch(/^#[0-9a-f]{6}$/);
   expect(head.inlineScripts).toBe(0);
 });
 
@@ -140,13 +165,89 @@ test("the application does not start inside a frame on another site", async ({ p
   }
 });
 
-test("an unknown path gets the 404 page, which is a copy of the application", async ({ request, baseURL }) => {
+test("the server sends files and nothing else, as GitHub Pages does", async ({ request, baseURL }) => {
   const index = await request.get(`${baseURL}`);
   expect(index.status()).toBe(200);
-  const missing = await request.get(`${baseURL}no-such-file`);
-  expect(missing.status()).toBe(404);
-  expect(await missing.text()).toBe(await index.text());
-  // No header carries a policy: like GitHub Pages, the server sends only the files.
+  // No header carries a policy: what protects the page has to be in the page.
   expect(index.headers()["content-security-policy"]).toBeUndefined();
   expect(index.headers()["x-frame-options"]).toBeUndefined();
+  const missing = await request.get(`${baseURL}no-such-file`);
+  expect(missing.status()).toBe(404);
+  expect(await missing.text()).toContain("<h1>Page not found</h1>");
+});
+
+// GitHub Pages answers every unknown address with 404.html, however deep the address is.
+for (const unknown of ["no-such-page", "replications/AmodioJost2007", "a/b/c"]) {
+  test(`an unknown address ${unknown} shows a page that says so and leads back to the portal`, async ({
+    page,
+    baseURL,
+  }) => {
+    const failed: string[] = [];
+    page.on("response", (response) => {
+      if (response.status() >= 400 && response.url() !== `${baseURL}${unknown}`) failed.push(response.url());
+    });
+    page.on("requestfailed", (request) => failed.push(request.url()));
+
+    const response = await page.goto(`${baseURL}${unknown}`);
+    expect(response?.status()).toBe(404);
+    await expect(page.getByRole("heading", { level: 1, name: "Page not found" })).toBeVisible();
+    await expect(page).toHaveTitle("Page not found | EEGManyLabs members' portal");
+
+    // The page is complete at any depth: its font arrives and nothing it asks for is missing.
+    await page.evaluate(() => document.fonts.ready);
+    const fonts = await page.evaluate(() =>
+      [...document.fonts].map((face) => `${face.family.replaceAll('"', "")}: ${face.status}`),
+    );
+    expect(fonts).toEqual(["DM Sans Variable: loaded"]);
+    expect(failed).toEqual([]);
+    expect(await page.evaluate(() => document.scripts.length)).toBe(0);
+    expect(await elementsWithBoxShadow(page)).toEqual([]);
+
+    // Its one link works from the keyboard and ends at the portal, which asks a visitor to sign in.
+    await page.keyboard.press("Tab");
+    const link = page.getByRole("link", { name: "Go to the members' portal" });
+    await expect(link).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(`${baseURL}#/login`);
+    await expect(page.getByRole("button", { name: "Email me a sign-in link" })).toBeVisible();
+  });
+}
+
+test("the primary button is deep coral with a white label, as the tokens define them", async ({ page }) => {
+  await page.goto("./#/login");
+  const colours = await page.getByRole("button", { name: "Email me a sign-in link" }).evaluate((button) => {
+    // The browser reports computed colours as rgb(). A probe gives the tokens in the same notation.
+    const probe = document.createElement("span");
+    document.body.append(probe);
+    const resolved = (token: string) => {
+      probe.style.color = `var(${token})`;
+      return getComputedStyle(probe).color;
+    };
+    const style = getComputedStyle(button);
+    const result = {
+      background: style.backgroundColor,
+      label: style.color,
+      border: style.borderTopColor,
+      deepCoral: resolved("--aqua-deep"),
+      coral: resolved("--aqua"),
+      white: resolved("--paper-strong"),
+    };
+    probe.remove();
+    return result;
+  });
+  expect(colours.deepCoral).toBe("rgb(169, 53, 58)");
+  expect(colours.white).toBe("rgb(255, 255, 255)");
+  expect(colours.background).toBe(colours.deepCoral);
+  expect(colours.border).toBe(colours.deepCoral);
+  expect(colours.label).toBe(colours.white);
+  // Coral itself is for focus and indicators, never the fill behind a small white label.
+  expect(colours.background).not.toBe(colours.coral);
+
+  // Focus is drawn in coral, as an outline.
+  await page.getByLabel("Email address").focus();
+  const focus = await page.getByLabel("Email address").evaluate((field) => {
+    const style = getComputedStyle(field);
+    return { colour: style.outlineColor, style: style.outlineStyle, width: style.outlineWidth };
+  });
+  expect(focus).toEqual({ colour: colours.coral, style: "solid", width: "3px" });
 });

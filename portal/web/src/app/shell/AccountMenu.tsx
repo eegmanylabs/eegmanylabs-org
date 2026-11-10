@@ -27,7 +27,7 @@ export function AccountMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" aria-label={`Account: ${name}`} className="max-w-64">
+        <Button variant="ghost" size="sm" aria-label={`Account: ${name}`} className="max-w-64 lg:max-w-96">
           <UserRound aria-hidden="true" strokeWidth={1.8} />
           <span className="hidden truncate sm:inline">{name}</span>
         </Button>
@@ -35,7 +35,7 @@ export function AccountMenu() {
       <DropdownMenuContent align="end">
         <DropdownMenuLabel>
           Signed in as
-          <span className="block truncate text-sm text-fg">{user.email ?? name}</span>
+          <span className="block text-sm break-all text-fg">{user.email ?? name}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={handleSignOut}>

@@ -22,9 +22,11 @@
   --paper-muted: #f5efec;
   --aqua: #d84b4d;
   --aqua-deep: #a9353a;
-  /* The self-hosted variable fonts register under names that end in "Variable". */
+  /*
+   * The one typeface, for all text including page titles (decision D-018). The self-hosted
+   * variable font registers under a name that ends in "Variable".
+   */
   --sans: "DM Sans Variable", "DM Sans", Arial, sans-serif;
-  --serif: "Fraunces Variable", "Fraunces", Georgia, serif;
 
   /* Literal values the public stylesheet uses without a custom property. */
   --coral-hover: #e16468;
@@ -62,7 +64,12 @@
   --fg-inverse-muted: rgb(255 255 255 / 0.76);
   --fg-on-accent: var(--paper-strong);
 
-  /* Coral marks the current location and focus. Small white labels need the deeper coral. */
+  /*
+   * Coral marks the current location and focus. White on coral is 4.17 to 1, which is enough
+   * for an indicator and too little for a small label, so every control with a white label
+   * uses the deeper coral, on which white is 6.45 to 1 (decision D-018). The pairs in use are
+   * checked in portal/tests/architecture/contrast.test.ts.
+   */
   --accent: var(--aqua);
   --accent-hover: var(--coral-hover);
   --accent-strong: var(--aqua-deep);
@@ -118,7 +125,6 @@
 
   --font-*: initial;
   --font-sans: var(--sans);
-  --font-serif: var(--serif);
 }
 
 @theme {
@@ -180,9 +186,6 @@
 }
 
 @layer base {
-  html {
-    scrollbar-gutter: stable;
-  }
   body {
     min-width: 320px;
     background: var(--background);

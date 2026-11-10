@@ -6,11 +6,13 @@
 //   - the Firebase emulators (Authentication, Firestore, Functions, Storage)
 //   - the Vite development server
 //
-// All ports derive from PORTAL_PORT_BASE. Stop with Ctrl-C.
+// All ports derive from PORTAL_PORT_BASE. Stop with Ctrl-C. Each of the three runs in a process
+// group of its own, and stopping means stopping every group as a whole.
 import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
 import { PORTAL_ROOT } from "./paths.mjs";
 import { LOCAL_HOST, portsFor, resolvePortBase } from "./ports.mjs";
+import { LONGEST_STOP_MS, stopGroup } from "./process-group.mjs";
 
 const ports = portsFor(resolvePortBase());
 const env = { ...process.env, PORTAL_PORT_BASE: String(ports.base) };
@@ -28,17 +30,12 @@ let stopping = false;
 function stopAll(code) {
   if (stopping) return;
   stopping = true;
-  for (const { child } of running) child.kill("SIGINT");
-  // Give the emulators time to shut down cleanly, then leave with the first exit status.
-  const waitUntil = Date.now() + 20_000;
-  const timer = setInterval(() => {
-    const alive = running.filter(({ child }) => child.exitCode === null && child.signalCode === null);
-    if (alive.length === 0 || Date.now() > waitUntil) {
-      for (const { child } of alive) child.kill("SIGKILL");
-      clearInterval(timer);
-      process.exit(code);
-    }
-  }, 100);
+  // The emulators are started through emulators.mjs, which stops its own group in at most
+  // LONGEST_STOP_MS. Waiting that long before insisting lets it finish and clean up.
+  const stops = running.flatMap(({ child }) =>
+    child.pid === undefined ? [] : [stopGroup(child.pid, { graceMs: LONGEST_STOP_MS })],
+  );
+  void Promise.all(stops).then(() => process.exit(code));
 }
 
 /**

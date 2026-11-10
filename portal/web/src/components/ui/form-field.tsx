@@ -41,11 +41,15 @@ export function FormField({ label, hint, error, className, children }: FormField
           {hint}
         </p>
       ) : null}
-      {/* Always in the document, so that a message that appears later is announced. */}
+      {/*
+       * Always in the document and never hidden with display: none, which would take the live
+       * region out of the accessibility tree: a message that appears later is then announced.
+       * While it is empty it has no height, and the negative margin takes back the grid gap.
+       */}
       <p
         id={errorId}
         aria-live="polite"
-        className={cn("flex items-start gap-1.5 text-xs text-fg-accent", !error && "hidden")}
+        className={cn("text-xs text-fg-accent", error ? "flex items-start gap-1.5" : "-mt-1.5")}
       >
         {error ? (
           <>

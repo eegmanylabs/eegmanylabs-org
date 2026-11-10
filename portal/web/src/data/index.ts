@@ -13,8 +13,10 @@ export {
   signInWithGoogle,
   signOut,
 } from "./auth";
-export { CallableError, type CallableErrorCode, callFunction } from "./callable";
+export { callFunction } from "./callable";
+export { CallableError, type CallableErrorCode } from "./callable-error";
 export { DataShapeError, type WithId } from "./converter";
-export { liveListenerCount, type NamedQuery, namedQuery, resetLiveData, useLiveDoc, useLiveQuery } from "./live";
+export { liveListenerCount, retryFailedLiveData, useLiveDoc } from "./live";
+export { discardLocalData } from "./local-data";
 export { type AccessRecord, refs, type UserRecord } from "./refs";
 export type { Live, LiveError } from "./subscription-cache";

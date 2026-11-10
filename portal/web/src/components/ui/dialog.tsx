@@ -31,7 +31,7 @@ export function DialogContent({
   className,
   children,
 }: DialogContentProps) {
-  const heading = <RadixDialog.Title className="font-serif text-xl tracking-title text-fg">{title}</RadixDialog.Title>;
+  const heading = <RadixDialog.Title className="text-xl tracking-title text-fg">{title}</RadixDialog.Title>;
   return (
     <RadixDialog.Portal>
       <RadixDialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
@@ -41,8 +41,8 @@ export function DialogContent({
         className={cn(
           "fixed z-50 border-border bg-surface text-fg",
           placement === "center" &&
-            "top-1/2 left-1/2 max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-form -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-card border p-7",
-          placement === "left" && "inset-y-0 left-0 w-[min(20rem,calc(100vw-3rem))] overflow-y-auto border-r p-4",
+            "top-1/2 left-1/2 max-h-[calc(100%-2rem)] w-[calc(100%-2rem)] max-w-form -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-card border p-7",
+          placement === "left" && "inset-y-0 left-0 w-80 max-w-[calc(100%-3rem)] overflow-y-auto border-r p-4",
           className,
         )}
       >
@@ -50,7 +50,7 @@ export function DialogContent({
           {hideTitle ? <VisuallyHidden.Root asChild>{heading}</VisuallyHidden.Root> : heading}
           {/* No tooltip here: an open tooltip would take the first press of Escape for itself. */}
           <RadixDialog.Close asChild>
-            <Button aria-label="Close" variant="ghost" size="sm" className="ml-auto w-8.5 px-0">
+            <Button aria-label="Close" variant="ghost" size="sm" className="ml-auto w-8.5 px-0 pointer-coarse:w-11">
               <X aria-hidden="true" strokeWidth={1.8} />
             </Button>
           </RadixDialog.Close>

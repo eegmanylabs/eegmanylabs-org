@@ -61,7 +61,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             </div>
             <RadixToast.Close
               aria-label="Dismiss"
-              className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-control text-fg-secondary hover:bg-surface-muted hover:text-fg"
+              // On a touch screen the target grows to 44px. The negative margin keeps the toast's layout.
+              className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-control text-fg-secondary hover:bg-surface-muted hover:text-fg pointer-coarse:-m-2.5 pointer-coarse:size-11"
             >
               <X aria-hidden="true" className="size-4" strokeWidth={1.8} />
             </RadixToast.Close>
@@ -69,7 +70,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         ))}
         <RadixToast.Viewport
           label="Notifications ({hotkey})"
-          className="fixed right-4 bottom-4 z-50 grid w-[min(24rem,calc(100vw-2rem))] gap-2 outline-none"
+          // Page margin on both sides on a narrow screen, a fixed width in the corner from `sm` up.
+          className="fixed inset-x-4 bottom-4 z-50 grid gap-2 outline-none sm:left-auto sm:w-96"
         />
       </RadixToast.Provider>
     </ToastContext.Provider>

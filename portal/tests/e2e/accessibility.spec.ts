@@ -1,4 +1,5 @@
 // Automated accessibility checks with axe-core. A test fails on any serious or critical finding.
+// Fixtures are synthetic: every address is invented and uses the example.org domain.
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { latestSignInLink } from "../support/emulators";
@@ -82,4 +83,12 @@ test("the not-found page has no serious accessibility findings", async ({ page }
   await page.goto("./#/no/such/page");
   await expect(page.getByRole("heading", { level: 1, name: "Page not found" })).toBeVisible();
   expect(await seriousFindings(page)).toEqual([]);
+});
+
+test("the page for an unknown address has no serious accessibility findings", async ({ page, baseURL }) => {
+  await page.goto(`${baseURL}replications/AmodioJost2007`);
+  await expect(page.getByRole("heading", { level: 1, name: "Page not found" })).toBeVisible();
+  expect(await seriousFindings(page)).toEqual([]);
+  await expect(page.getByRole("main")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.lang)).toBe("en-GB");
 });

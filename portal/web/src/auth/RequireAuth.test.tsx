@@ -1,3 +1,4 @@
+// Addresses are synthetic and use the example.org domain.
 import { render, screen } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider, useLocation } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -46,7 +47,7 @@ describe("RequireAuth", () => {
   it("shows the page to a signed-in account", () => {
     auth.value.session = {
       status: "signed-in",
-      user: { uid: "uid-1", email: "member@example.org", displayName: null },
+      user: { uid: "uid-1", email: "member@example.org", displayName: null, signedInAt: 1_700_000_000 },
     };
     renderAt("/labs/lab-1");
     expect(screen.getByText("Protected page")).toBeTruthy();

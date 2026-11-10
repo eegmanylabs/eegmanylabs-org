@@ -54,7 +54,9 @@ const signedIn: IncomingCall["auth"] = {
   token: { email: "Caller.Account@example.org", email_verified: true, auth_time: SIGNED_IN_AT },
 };
 
-const echo = { handler: async (input: { text: string }, context: { uid: string | null }) => ({ text: input.text, uid: context.uid }) };
+const echo = {
+  handler: async (input: { text: string }, context: { uid: string | null }) => ({ text: input.text, uid: context.uid }),
+};
 
 /** A stand-in with the part of a Firestore timestamp the pipeline reads. */
 function boundary(iso: string): NonNullable<CallerAccess["sessionsValidAfter"]> {
@@ -261,7 +263,10 @@ describe("the caller's standing", () => {
   const call = { data: { text: "hello" }, auth: signedIn };
 
   it("lets an account through that has no access document yet", async () => {
-    expect(await runCallable(echoContract, echo, call, dependencies(null))).toEqual({ text: "hello", uid: "uid-caller" });
+    expect(await runCallable(echoContract, echo, call, dependencies(null))).toEqual({
+      text: "hello",
+      uid: "uid-caller",
+    });
   });
 
   it("lets an account through that is not suspended and has no session boundary", async () => {

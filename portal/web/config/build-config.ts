@@ -8,6 +8,7 @@
 //
 // The result is compiled into the bundle as `__PORTAL_BUILD_CONFIG__` and read through
 // src/app/config.ts.
+import { PREVIEW_MOUNT } from "../../scripts/paths.mjs";
 import { LOCAL_HOST, type PortalPorts } from "../../scripts/ports.mjs";
 // Relative imports with file extensions on purpose: Vite loads its configuration with Node,
 // which resolves neither the workspace package's TypeScript entry point nor an import without
@@ -31,6 +32,29 @@ function flag(env: Environment, name: string): boolean {
   if (value === "" || value === "false") return false;
   if (value === "true") return true;
   throw new Error(`${name} must be "true" or "false", but it is "${value}".`);
+}
+
+/**
+ * The path the built files are published under, which the page for unknown addresses needs for
+ * its link back to the portal. The application itself uses relative addresses and works at any
+ * path.
+ *
+ * | Published at                                    | PORTAL_PUBLIC_PATH        |
+ * |-------------------------------------------------|---------------------------|
+ * | A domain of its own                             | `/`, which is the default |
+ * | `https://<owner>.github.io/<repository>/`       | `/<repository>/`          |
+ * | The preview server and the tests (emulator mode) | `/portal/`, set for you   |
+ */
+export function resolvePublicPath(mode: string, env: Environment): string {
+  const given = env.PORTAL_PUBLIC_PATH?.trim() ?? "";
+  const publicPath = given === "" ? (mode === "emulator" ? PREVIEW_MOUNT : "/") : given;
+  // Segments of letters, digits, dots, hyphens and underscores, none of them "." or "..".
+  if (!/^\/(?:(?!\.{1,2}\/)[\w.-]+\/)*$/.test(publicPath)) {
+    throw new Error(
+      `PORTAL_PUBLIC_PATH must start and end with a slash, for example "/" or "/portal/", but it is "${given}".`,
+    );
+  }
+  return publicPath;
 }
 
 export function resolveBuildConfig(mode: string, env: Environment, ports: PortalPorts): PortalBuildConfig {

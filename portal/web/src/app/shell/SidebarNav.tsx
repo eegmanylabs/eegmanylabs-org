@@ -24,7 +24,7 @@ export function SidebarNav({ collapsed = false, onNavigate }: SidebarNavProps) {
               end
               {...(onNavigate ? { onClick: onNavigate } : {})}
               className={cn(
-                "relative flex h-9 items-center gap-3 rounded-control text-fg-secondary transition-colors hover:bg-surface hover:text-fg",
+                "relative flex h-9 items-center gap-3 rounded-control text-fg-secondary transition-colors hover:bg-surface hover:text-fg pointer-coarse:h-11",
                 // The current page: darker text on white, with a coral bar on the left edge.
                 "aria-[current=page]:bg-surface aria-[current=page]:font-medium aria-[current=page]:text-fg",
                 "before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-pill aria-[current=page]:before:bg-accent",

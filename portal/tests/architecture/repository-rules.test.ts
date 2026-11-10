@@ -15,6 +15,17 @@ describe("the public repository", () => {
     expect(found).toEqual([]);
   });
 
+  it("says in the header of every test and fixture file with an address that the data is synthetic", () => {
+    const isTestOrFixture = (path: string) =>
+      /\.(test|spec)\.(ts|tsx|mjs)$/.test(path) || /(^|\/)(tests|fixtures|test-support)\//.test(path);
+    const silent = sourceFiles()
+      .filter((file) => isTestOrFixture(file.path) && !file.path.startsWith("tests/architecture/"))
+      .filter((file) => /@example\.org\b/.test(file.text))
+      .filter((file) => !/synthetic|fictitious|invented/i.test(file.text.split("\n").slice(0, 12).join("\n")))
+      .map((file) => file.path);
+    expect(silent).toEqual([]);
+  });
+
   it("contains nothing that looks like a credential", () => {
     const patterns = [
       /AIza[0-9A-Za-z_-]{35}/g, // Google API key

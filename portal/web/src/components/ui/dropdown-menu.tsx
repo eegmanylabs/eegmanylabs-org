@@ -11,14 +11,22 @@ export function DropdownMenu(props: ComponentProps<typeof RadixMenu.Root>) {
 }
 export const DropdownMenuTrigger = RadixMenu.Trigger;
 
-export function DropdownMenuContent({ className, sideOffset = 6, ...props }: ComponentProps<typeof RadixMenu.Content>) {
+export function DropdownMenuContent({
+  className,
+  sideOffset = 6,
+  collisionPadding = 16,
+  ...props
+}: ComponentProps<typeof RadixMenu.Content>) {
   return (
     <RadixMenu.Portal>
       <RadixMenu.Content
         sideOffset={sideOffset}
+        // Keeps the menu the page margin away from the edge of the window.
+        collisionPadding={collisionPadding}
         // With no shadow to lift the menu off the page, a strong border separates the layers.
+        // The width is capped by the window, so long content wraps and nothing is cut off.
         className={cn(
-          "z-50 min-w-48 rounded-tile border border-border-strong bg-surface p-1 text-sm text-fg",
+          "z-50 max-w-[min(22rem,calc(100vw-2rem))] min-w-48 rounded-tile border border-border-strong bg-surface p-1 text-sm text-fg",
           className,
         )}
         {...props}
@@ -31,7 +39,7 @@ export function DropdownMenuItem({ className, ...props }: ComponentProps<typeof 
   return (
     <RadixMenu.Item
       className={cn(
-        "flex h-9 cursor-pointer items-center gap-2 rounded-control px-2.5 text-fg-secondary select-none",
+        "flex h-9 cursor-pointer items-center gap-2 rounded-control px-2.5 text-fg-secondary select-none pointer-coarse:h-11",
         // The focused item is the highlighted one. The outline sits inside so the menu's edge does not clip it.
         "outline-focus data-highlighted:bg-surface-muted data-highlighted:text-fg data-highlighted:outline-2 data-highlighted:-outline-offset-2",
         "data-disabled:cursor-not-allowed data-disabled:text-fg-muted [&_svg]:size-4 [&_svg]:shrink-0",

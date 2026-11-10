@@ -196,7 +196,8 @@ function describeError(error: unknown): Record<string, unknown> {
  */
 export const PORTAL_ORIGINS = defineList("PORTAL_ORIGINS", {
   default: [],
-  description: "Origins of the portal's web application that may call the functions, for example https://portal.example.org",
+  description:
+    "Origins of the portal's web application that may call the functions, for example https://portal.example.org",
 });
 
 export function defineCallable<C extends CallableContract>(

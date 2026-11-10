@@ -15,7 +15,13 @@ export interface IconButtonProps extends Omit<ButtonProps, "children" | "aria-la
 export function IconButton({ label, children, className, variant = "ghost", tooltipSide, ...props }: IconButtonProps) {
   return (
     <Tooltip content={label} {...(tooltipSide ? { side: tooltipSide } : {})}>
-      <Button aria-label={label} variant={variant} size="sm" className={cn("w-8.5 px-0", className)} {...props}>
+      <Button
+        aria-label={label}
+        variant={variant}
+        size="sm"
+        className={cn("w-8.5 px-0 pointer-coarse:w-11", className)}
+        {...props}
+      >
         {children}
       </Button>
     </Tooltip>

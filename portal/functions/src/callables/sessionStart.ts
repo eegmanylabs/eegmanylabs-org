@@ -18,7 +18,14 @@ export const LAST_SEEN_RESOLUTION_MS = 15 * 60 * 1000;
 
 /** The fields of `users/{uid}` that a later call may change. */
 const returningUserChangesSchema = userDocSchema
-  .pick({ emailLower: true, displayName: true, lastSeenAt: true, updatedAt: true, updatedBy: true })
+  .pick({
+    emailLower: true,
+    displayName: true,
+    lastSeenAt: true,
+    updatedAt: true,
+    updatedBy: true,
+    writeContext: true,
+  })
   .partial();
 
 /**
@@ -85,12 +92,20 @@ export const sessionStart = defineCallable(sessionStartContract, {
         if (userSnapshot.get("emailLower") !== emailLower) changes.emailLower = emailLower;
         if (displayName !== null && userSnapshot.get("displayName") !== displayName) changes.displayName = displayName;
         const lastSeenAt: unknown = userSnapshot.get("lastSeenAt");
-        const stale = !(lastSeenAt instanceof Timestamp) || at.getTime() - lastSeenAt.toMillis() >= LAST_SEEN_RESOLUTION_MS;
+        const stale =
+          !(lastSeenAt instanceof Timestamp) || at.getTime() - lastSeenAt.toMillis() >= LAST_SEEN_RESOLUTION_MS;
         if (stale || Object.keys(changes).length > 0) {
-          // Status is left alone: starting the portal does not undo a suspension.
+          // Validated like a new profile, so a later call can never store what a first call
+          // would have refused. Status is left alone: only trusted code changes a suspension.
           transaction.update(
             userReference,
-            returningUserChangesSchema.parse({ ...changes, lastSeenAt: now, updatedAt: now, updatedBy: uid }),
+            returningUserChangesSchema.parse({
+              ...changes,
+              lastSeenAt: now,
+              updatedAt: now,
+              updatedBy: uid,
+              writeContext: userWriteContext(auditEventId),
+            }),
           );
         }
       } else {

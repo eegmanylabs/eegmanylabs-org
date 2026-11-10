@@ -15,7 +15,11 @@ export function useAccessRecord(uid: string | null): Live<AccessRecord | null> {
   return useLiveDoc(uid === null ? null : refs.access(uid));
 }
 
-/** Registers the signed-in account with the server. Called once after each sign-in. */
+/**
+ * Tells the server that the portal has started with this account signed in. The first call for
+ * an account registers it. The application calls this once each time it starts, so once for
+ * every page load and in every tab, and the server writes only when something has changed.
+ */
 export function startSession(): Promise<SessionStartOutput> {
   return callFunction(sessionStartContract, {});
 }

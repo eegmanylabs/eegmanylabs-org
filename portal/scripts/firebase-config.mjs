@@ -9,8 +9,19 @@ import { firebaseConfigPath, PORTAL_ROOT } from "./paths.mjs";
 import { LOCAL_HOST, portsFor } from "./ports.mjs";
 
 /**
+ * @typedef {{ host: string, port: number }} EmulatorAddress
+ * @typedef {"auth" | "functions" | "storage" | "hub" | "logging" | "eventarc" | "tasks"} PlainEmulator
+ * @typedef {{
+ *   [key: string]: unknown,
+ *   emulators: { [key: string]: unknown, ui: { enabled: false } }
+ *     & { [K in PlainEmulator]: EmulatorAddress }
+ *     & { firestore: EmulatorAddress & { websocketPort: number } },
+ * }} FirebaseRunConfig
+ */
+
+/**
  * @param {import("./ports.mjs").PortalPorts} ports
- * @returns {Record<string, unknown>}
+ * @returns {FirebaseRunConfig}
  */
 export function buildFirebaseConfig(ports) {
   const template = JSON.parse(readFileSync(path.join(PORTAL_ROOT, "firebase.template.json"), "utf8"));

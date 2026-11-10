@@ -2,7 +2,6 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router/dom";
 import "./styles/app.css";
-import { config } from "@/app/config";
 import { createPortalRouter } from "@/app/router";
 import { captureSignInLink } from "@/auth/pending-sign-in";
 import { liveListenerCount } from "@/data";
@@ -21,7 +20,8 @@ if (!document.documentElement.hasAttribute("data-framed")) {
   const signInLink = captureSignInLink();
   const router = createPortalRouter(signInLink);
 
-  if (config.emulators) window.__portalTest = { liveListenerCount };
+  // Vite replaces the mode's name when it builds, so staging and production do not contain this.
+  if (import.meta.env.MODE === "emulator") window.__portalTest = { liveListenerCount };
 
   const root = document.getElementById("root");
   if (!root) throw new Error("index.html has no #root element.");

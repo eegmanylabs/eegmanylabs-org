@@ -113,3 +113,20 @@ export async function liveListenerCount(page: Page): Promise<number | undefined>
     (window as unknown as { __portalTest?: { liveListenerCount: () => number } }).__portalTest?.liveListenerCount(),
   );
 }
+
+/** Names of the IndexedDB databases in which Firestore keeps its local copy of documents. */
+export async function firestoreDatabases(page: Page): Promise<string[]> {
+  return page.evaluate(async () =>
+    (await indexedDB.databases())
+      .map((database) => database.name ?? "")
+      .filter((name) => name.startsWith("firestore/")),
+  );
+}
+
+/** Signs out through the account menu and waits for the fresh sign-in page. */
+export async function signOutThroughMenu(page: Page): Promise<void> {
+  await page.getByRole("button", { name: /^Account:/ }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
+  await expect(page).toHaveURL(/#\/login$/);
+  await expect(page.getByRole("heading", { level: 1, name: SIGN_IN_HEADING })).toBeVisible();
+}

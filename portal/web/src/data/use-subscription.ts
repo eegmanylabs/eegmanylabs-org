@@ -8,14 +8,15 @@ const unsubscribed = () => {};
  * subscription. Pass a null key to watch nothing.
  */
 export function useSubscription<T>(cache: SubscriptionCache, key: string | null, start: StartSubscription<T>): Live<T> {
-  // The cache calls `start` only when it opens a subscription, so the latest one is enough.
+  // The cache calls `start` when it opens a subscription, and again when it opens it anew after
+  // a failure. The latest one is enough for both.
   const latestStart = useRef(start);
   latestStart.current = start;
 
   const subscribe = useCallback(
     (notify: () => void) => {
       if (key === null) return unsubscribed;
-      return cache.subscribe<T>(key, (publish) => latestStart.current(publish), notify);
+      return cache.subscribe<T>(key, (publish, fail) => latestStart.current(publish, fail), notify);
     },
     [cache, key],
   );

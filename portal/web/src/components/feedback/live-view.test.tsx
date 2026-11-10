@@ -1,7 +1,8 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Live } from "@/data";
-import { LiveView } from "./live-view";
+import { LiveView, SLOW_AFTER_MS } from "./live-view";
 
 // The data layer starts Firebase when it is imported. This component only needs its types.
 vi.mock("@/data", () => ({}));
@@ -51,5 +52,90 @@ describe("LiveView", () => {
       </LiveView>,
     );
     expect(screen.getByText("Skeleton")).toBeTruthy();
+  });
+
+  it("still says what is loading when the custom loading state is only decoration", () => {
+    render(
+      <LiveView
+        live={{ status: "loading" }}
+        loadingLabel="Loading your account"
+        loading={<span aria-hidden="true" data-testid="skeleton" />}
+        errorTitle="Failed"
+      >
+        {() => null}
+      </LiveView>,
+    );
+    expect(screen.getByTestId("skeleton")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe("Loading your account");
+  });
+
+  it("offers no way to try again unless the view gives one", () => {
+    view({ status: "error", error: { code: "unavailable", message: "detail" } });
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("offers to try again when the view gives a way, and uses it", async () => {
+    const user = userEvent.setup();
+    const onRetry = vi.fn();
+    render(
+      <LiveView
+        live={{ status: "error", error: { code: "permission-denied", message: "detail" } }}
+        loadingLabel="Loading"
+        errorTitle="The record could not be loaded."
+        onRetry={onRetry}
+      >
+        {() => null}
+      </LiveView>,
+    );
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
+});
+
+describe("LiveView while loading takes long", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const SLOW = "This is taking longer than usual. Check your connection.";
+
+  it.each([
+    ["the standard loading state", undefined],
+    ["a custom loading state", <span key="skeleton" aria-hidden="true" />],
+  ])("says so after a while, with %s", (_label, loading) => {
+    vi.useFakeTimers();
+    render(
+      <LiveView live={{ status: "loading" }} loadingLabel="Loading the record" loading={loading} errorTitle="Failed">
+        {() => null}
+      </LiveView>,
+    );
+    act(() => vi.advanceTimersByTime(SLOW_AFTER_MS - 1));
+    expect(screen.queryByText(SLOW)).toBeNull();
+
+    act(() => vi.advanceTimersByTime(1));
+    const statuses = screen.getAllByRole("status").map((status) => status.textContent);
+    expect(statuses).toEqual(["Loading the record", SLOW]);
+  });
+
+  it("says nothing of the kind once the value has arrived", () => {
+    vi.useFakeTimers();
+    const loadingView = (
+      <LiveView live={{ status: "loading" } as Live<string>} loadingLabel="Loading" errorTitle="Failed">
+        {(data) => <p>{data}</p>}
+      </LiveView>
+    );
+    const rendered = render(loadingView);
+    rendered.rerender(
+      <LiveView
+        live={{ status: "ready", data: "A record", fromCache: false, hasPendingWrites: false }}
+        loadingLabel="Loading"
+        errorTitle="Failed"
+      >
+        {(data) => <p>{data}</p>}
+      </LiveView>,
+    );
+    act(() => vi.advanceTimersByTime(SLOW_AFTER_MS * 2));
+    expect(screen.queryByText(SLOW)).toBeNull();
+    expect(screen.getByText("A record")).toBeTruthy();
   });
 });

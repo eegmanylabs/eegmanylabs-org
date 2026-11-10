@@ -24,9 +24,10 @@ export const buttonVariants = cva(
         outline: "border-border-emphasis bg-transparent text-fg-strong hover:border-accent-strong hover:text-fg-accent",
         ghost: "border-transparent bg-transparent text-fg-secondary hover:bg-surface-muted hover:text-fg",
       },
+      // A finger needs a larger target than a mouse pointer: 44px wherever the pointer is coarse.
       size: {
-        sm: "h-8.5 px-3 text-sm",
-        md: "h-10 px-4 text-sm",
+        sm: "h-8.5 px-3 text-sm pointer-coarse:h-11 pointer-coarse:min-w-11",
+        md: "h-10 px-4 text-sm pointer-coarse:h-11 pointer-coarse:min-w-11",
       },
     },
     defaultVariants: { variant: "outline", size: "md" },

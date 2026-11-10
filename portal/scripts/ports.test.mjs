@@ -2,7 +2,14 @@
 import { describe, expect, it } from "vitest";
 import { buildFirebaseConfig } from "./firebase-config.mjs";
 import { firebaseConfigPath, runDirectory, runTemporaryDirectory, webOutputDirectory } from "./paths.mjs";
-import { DEFAULT_PORT_BASE, emulatorEnvironment, portsFor, resolvePortBase } from "./ports.mjs";
+import {
+  DEFAULT_PORT_BASE,
+  emulatorEnvironment,
+  nearestPortBases,
+  PORT_BASE_STEP,
+  portsFor,
+  resolvePortBase,
+} from "./ports.mjs";
 
 describe("resolvePortBase", () => {
   it("defaults to 9100", () => {
@@ -15,8 +22,32 @@ describe("resolvePortBase", () => {
     expect(resolvePortBase({ PORTAL_PORT_BASE: "9300" })).toBe(9300);
   });
 
-  it.each(["abc", "9100.5", "80", "65500", "-1"])("refuses the value %j", (value) => {
+  it.each(["abc", "9100.5", "80", "1000", "65500", "65400", "-1"])("refuses the value %j", (value) => {
     expect(() => resolvePortBase({ PORTAL_PORT_BASE: value })).toThrow(/PORTAL_PORT_BASE/);
+  });
+
+  it.each([
+    ["9150", "9100 and 9200"],
+    ["9101", "9100 and 9200"],
+    ["9299", "9200 and 9300"],
+  ])("refuses the value %j, which is no multiple of 100, and names the nearest values: %s", (value, nearest) => {
+    expect(() => resolvePortBase({ PORTAL_PORT_BASE: value })).toThrow(
+      `must be a multiple of 100, but it is "${value}". The nearest valid values are ${nearest}.`,
+    );
+  });
+
+  it.each(["1100", "9200", "9300", "65300"])("accepts the multiple of 100 %j", (value) => {
+    expect(resolvePortBase({ PORTAL_PORT_BASE: value })).toBe(Number(value));
+  });
+});
+
+describe("nearestPortBases", () => {
+  it("gives the base at or below a number and the one above it, inside the valid range", () => {
+    expect(PORT_BASE_STEP).toBe(100);
+    expect(nearestPortBases(9150)).toEqual([9100, 9200]);
+    expect(nearestPortBases(9200)).toEqual([9200, 9300]);
+    expect(nearestPortBases(5)).toEqual([1100, 1200]);
+    expect(nearestPortBases(70_000)).toEqual([65200, 65300]);
   });
 });
 
@@ -43,9 +74,23 @@ describe("portsFor", () => {
     expect(new Set(all).size).toBe(all.length);
   });
 
-  it("gives two bases that are 200 apart no port in common", () => {
-    const first = new Set(Object.values(portsFor(9100)));
-    for (const port of Object.values(portsFor(9300))) expect(first.has(port)).toBe(false);
+  it.each([
+    [9100, 9200],
+    [9100, 9300],
+    [9200, 9300],
+    [9100, 9000],
+  ])("gives the bases %i and %i no port in common", (one, another) => {
+    const first = new Set(Object.values(portsFor(one)));
+    for (const port of Object.values(portsFor(another))) expect(first.has(port)).toBe(false);
+  });
+
+  it("keeps the offsets of the web servers, taken modulo 100, away from every emulator offset", () => {
+    // This is what makes neighbouring bases safe: base+150 is offset 50 of the next base.
+    const { base, preview, dev, secondOrigin, ...emulators } = portsFor(9100);
+    const emulatorOffsets = new Set(Object.values(emulators).map((port) => port - base));
+    for (const port of [preview, dev, secondOrigin]) {
+      expect(emulatorOffsets.has((port - base) % PORT_BASE_STEP)).toBe(false);
+    }
   });
 });
 
@@ -62,23 +107,31 @@ describe("emulatorEnvironment", () => {
 });
 
 describe("buildFirebaseConfig", () => {
-  /** @type {any} */
   const config = buildFirebaseConfig(portsFor(9300));
 
   it("keeps the rules, indexes and functions source of the template", () => {
     expect(config.firestore).toEqual({ rules: "firestore.rules", indexes: "firestore.indexes.json" });
     expect(config.storage).toEqual({ rules: "storage.rules" });
-    expect(config.functions[0].source).toBe("functions");
+    expect(config.functions).toMatchObject([{ source: "functions" }]);
   });
 
   it("binds every emulator to the loopback address on a port derived from the base", () => {
     const { ui, singleProjectMode, ...emulators } = config.emulators;
     expect(ui).toEqual({ enabled: false });
     expect(singleProjectMode).toBe(false);
-    expect(Object.keys(emulators).sort()).toEqual(
-      ["auth", "eventarc", "firestore", "functions", "hub", "logging", "storage", "tasks"].sort(),
-    );
-    for (const emulator of Object.values(emulators)) {
+    const names = /** @type {const} */ ([
+      "auth",
+      "eventarc",
+      "firestore",
+      "functions",
+      "hub",
+      "logging",
+      "storage",
+      "tasks",
+    ]);
+    expect(Object.keys(emulators).sort()).toEqual([...names].sort());
+    for (const name of names) {
+      const emulator = config.emulators[name];
       expect(emulator.host).toBe("127.0.0.1");
       expect(emulator.port).toBeGreaterThanOrEqual(9300);
       expect(emulator.port).toBeLessThanOrEqual(9399);

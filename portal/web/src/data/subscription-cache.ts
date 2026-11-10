@@ -3,6 +3,10 @@
 //
 // Everything that asks for the same key shares one subscription and one value. Two components
 // that show the same document therefore use one listener and always render the same data.
+//
+// A subscription can fail, for example when the server refuses it. A failed subscription has
+// stopped for good, so the cache starts a new one after a short wait, a few times. Only when
+// that keeps failing do the consumers see an error, and `retryFailed` lets them ask again.
 
 export interface LiveError {
   /** A short machine-readable reason, for example "permission-denied" or "data/invalid-shape". */
@@ -27,30 +31,49 @@ export type Live<T> =
 export const IDLE: Live<never> = { status: "idle" };
 export const LOADING: Live<never> = { status: "loading" };
 
+/** Hands the cache a new value. A value may be an error about the data: the subscription goes on. */
 export type Publish<T> = (state: Live<T>) => void;
+/** Tells the cache that the subscription itself has ended with a failure and will publish nothing more. */
+export type Fail = (error: LiveError) => void;
 /** Starts a subscription and returns the function that stops it. */
-export type StartSubscription<T> = (publish: Publish<T>) => () => void;
+export type StartSubscription<T> = (publish: Publish<T>, fail: Fail) => () => void;
+
+/** How long the cache waits before each new start of a subscription that failed. */
+export const DEFAULT_RETRY_DELAYS_MS: readonly number[] = [500, 1_000, 2_000, 4_000];
 
 interface Entry {
   state: Live<unknown>;
   readonly listeners: Set<() => void>;
+  readonly start: StartSubscription<unknown>;
   stop: () => void;
+  /** Counts the starts, so that a subscription that was replaced can no longer publish. */
+  generation: number;
+  /** Automatic new starts since the last value arrived. */
+  failures: number;
   teardown: ReturnType<typeof setTimeout> | undefined;
+  retry: ReturnType<typeof setTimeout> | undefined;
 }
+
+const stopped = () => {};
 
 export class SubscriptionCache {
   readonly #entries = new Map<string, Entry>();
   readonly #keepAliveMs: number;
+  readonly #retryDelaysMs: readonly number[];
+  #closed = false;
 
   /**
    * @param keepAliveMs How long a subscription outlives its last listener. A short delay lets a
    * route change or a re-mount pick the subscription up again instead of restarting it.
+   * @param retryDelaysMs One wait for each automatic new start of a subscription that failed.
+   * When they are used up, the consumers see the error.
    */
-  constructor(keepAliveMs = 5_000) {
+  constructor(keepAliveMs = 5_000, retryDelaysMs: readonly number[] = DEFAULT_RETRY_DELAYS_MS) {
     this.#keepAliveMs = keepAliveMs;
+    this.#retryDelaysMs = retryDelaysMs;
   }
 
-  /** Number of open subscriptions. */
+  /** Number of subscriptions the cache holds, running or waiting to start again. */
   get size(): number {
     return this.#entries.size;
   }
@@ -65,42 +88,147 @@ export class SubscriptionCache {
    * Returns the function that removes the listener.
    */
   subscribe<T>(key: string, start: StartSubscription<T>, listener: () => void): () => void {
-    let entry = this.#entries.get(key);
-    if (!entry) {
-      const created: Entry = { state: LOADING, listeners: new Set(), stop: () => {}, teardown: undefined };
-      this.#entries.set(key, created);
-      created.stop = start((state) => {
-        created.state = state;
-        for (const notify of created.listeners) notify();
-      });
-      entry = created;
+    if (this.#closed) return stopped;
+    const existing = this.#entries.get(key);
+    const entry: Entry = existing ?? {
+      state: LOADING,
+      listeners: new Set(),
+      start: start as StartSubscription<unknown>,
+      stop: stopped,
+      generation: 0,
+      failures: 0,
+      teardown: undefined,
+      retry: undefined,
+    };
+    clearTimeout(entry.teardown);
+    entry.teardown = undefined;
+    // The listener is registered before anything is started: a subscription that fails at once
+    // must find it, or the cache would take the subscription for one that nobody wants.
+    entry.listeners.add(listener);
+    if (!existing) {
+      this.#entries.set(key, entry);
+      this.#open(entry);
+    } else if (entry.state.status === "error" && entry.stop === stopped && entry.retry === undefined) {
+      // The subscription gave up earlier. A new consumer is a reason to try again.
+      entry.failures = 0;
+      entry.state = LOADING;
+      this.#open(entry);
+      this.#notify(entry);
     }
-    const current = entry;
-    clearTimeout(current.teardown);
-    current.teardown = undefined;
-    current.listeners.add(listener);
 
     return () => {
-      current.listeners.delete(listener);
-      if (current.listeners.size > 0 || this.#entries.get(key) !== current) return;
-      current.teardown = setTimeout(() => {
-        current.stop();
-        this.#entries.delete(key);
-      }, this.#keepAliveMs);
+      entry.listeners.delete(listener);
+      if (entry.listeners.size > 0 || this.#entries.get(key) !== entry) return;
+      // A subscription that is failing is not worth keeping for a consumer that may come back.
+      if (entry.stop === stopped) {
+        this.#drop(key, entry);
+        return;
+      }
+      entry.teardown = setTimeout(() => this.#drop(key, entry), this.#keepAliveMs);
     };
   }
 
+  /** Starts every subscription again that has given up after repeated failures. */
+  retryFailed(): void {
+    for (const entry of this.#entries.values()) {
+      if (entry.state.status !== "error" || entry.stop !== stopped || entry.retry !== undefined) continue;
+      entry.failures = 0;
+      entry.state = LOADING;
+      this.#open(entry);
+      this.#notify(entry);
+    }
+  }
+
   /**
-   * Stops every subscription and forgets every value. Called on sign-out, so that nothing read
-   * by one account is shown to the next. Listeners that are still registered see `loading`.
+   * Stops every subscription for good and forgets every value. Called when the account goes
+   * away, just before the page is loaded afresh, so that nothing one account read stays in
+   * memory for the next. Nothing starts after this: listeners that are still registered see
+   * `loading` until the page is replaced.
    */
-  reset(): void {
+  close(): void {
+    this.#closed = true;
     const entries = [...this.#entries.values()];
     this.#entries.clear();
     for (const entry of entries) {
-      clearTimeout(entry.teardown);
-      entry.stop();
-      for (const notify of entry.listeners) notify();
+      this.#halt(entry);
+      this.#notify(entry);
+    }
+  }
+
+  #open(entry: Entry): void {
+    entry.generation += 1;
+    const generation = entry.generation;
+    // A subscription may publish, or fail, while it is being started, before `stop` is known.
+    let starting = true;
+    let failedWhileStarting = false;
+    const accepts = () => starting || (entry.generation === generation && entry.stop !== stopped);
+    const publish: Publish<unknown> = (state) => {
+      if (!accepts()) return;
+      if (state.status === "ready" && state.fromCache && entry.failures > 0) {
+        // The subscription was started again after a failure, and this value is the local copy
+        // from before it. The server has not confirmed it and may be about to refuse again, so
+        // it is neither shown nor taken as a sign that the subscription works.
+        return;
+      }
+      entry.state = state;
+      if (state.status === "ready") entry.failures = 0;
+      this.#notify(entry);
+    };
+    const fail: Fail = (error) => {
+      if (!accepts()) return;
+      failedWhileStarting = starting;
+      this.#failed(entry, error);
+    };
+    const stop = entry.start(publish, fail);
+    starting = false;
+    if (failedWhileStarting || entry.generation !== generation) stop();
+    else entry.stop = stop;
+  }
+
+  #failed(entry: Entry, error: LiveError): void {
+    const stop = entry.stop;
+    entry.stop = stopped;
+    stop();
+    const delay = this.#retryDelaysMs[entry.failures];
+    if (delay === undefined || entry.listeners.size === 0) {
+      entry.state = { status: "error", error };
+      this.#notify(entry);
+      if (entry.listeners.size === 0) this.#forget(entry);
+      return;
+    }
+    entry.failures += 1;
+    // The value that was shown may no longer be allowed, so it is not shown while waiting.
+    entry.state = LOADING;
+    this.#notify(entry);
+    entry.retry = setTimeout(() => {
+      entry.retry = undefined;
+      this.#open(entry);
+    }, delay);
+  }
+
+  #notify(entry: Entry): void {
+    for (const notify of entry.listeners) notify();
+  }
+
+  #halt(entry: Entry): void {
+    clearTimeout(entry.teardown);
+    clearTimeout(entry.retry);
+    entry.teardown = undefined;
+    entry.retry = undefined;
+    entry.generation += 1;
+    const stop = entry.stop;
+    entry.stop = stopped;
+    stop();
+  }
+
+  #drop(key: string, entry: Entry): void {
+    this.#halt(entry);
+    if (this.#entries.get(key) === entry) this.#entries.delete(key);
+  }
+
+  #forget(entry: Entry): void {
+    for (const [key, candidate] of this.#entries) {
+      if (candidate === entry) this.#drop(key, entry);
     }
   }
 }
