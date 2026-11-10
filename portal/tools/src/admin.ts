@@ -11,6 +11,8 @@ export interface AdminHandles {
 
 /** Connects to the emulators named by the target. No credential is involved. */
 export function connectToEmulators(target: EmulatorTarget): AdminHandles {
+  // The emulators need no credential, so the SDK must not go looking for one on the network.
+  process.env.METADATA_SERVER_DETECTION ??= "none";
   if (getApps().length === 0) initializeApp({ projectId: target.projectId });
   return { db: getFirestore(), auth: getAuth() };
 }

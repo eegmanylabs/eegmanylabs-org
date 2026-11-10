@@ -91,18 +91,21 @@ test("the policy is enforced: inline scripts do not run and other hosts cannot b
   await page.goto("./#/login");
   await expect(page.getByRole("button", { name: "Email me a sign-in link" })).toBeVisible();
 
-  const outcome = await page.evaluate(async () => {
+  // The emulator hub is running and local, but it is not in connect-src. Even this request must
+  // be refused, which shows that the policy decides and not the network.
+  const outcome = await page.evaluate(async (hubUrl) => {
     const script = document.createElement("script");
     script.textContent = "window.__inlineScriptRan = true;";
     document.body.append(script);
-    // The emulator hub is local but is not in connect-src, so even this request must be refused.
-    const reachedOtherHost = await fetch("http://127.0.0.1:1/").then(
+    const reachedOtherHost = await fetch(hubUrl).then(
       () => true,
       () => false,
     );
     return { inlineScriptRan: "__inlineScriptRan" in window, reachedOtherHost };
-  });
+  }, `http://${HOST}:${PORTS.hub}/`);
   expect(outcome).toEqual({ inlineScriptRan: false, reachedOtherHost: false });
+  // Outside the page, the same address answers.
+  expect((await fetch(`http://${HOST}:${PORTS.hub}/`)).ok).toBe(true);
   expect(monitor.cspViolations.some((violation) => violation.startsWith("script-src"))).toBe(true);
   expect(monitor.cspViolations.some((violation) => violation.startsWith("connect-src"))).toBe(true);
 });

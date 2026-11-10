@@ -22,19 +22,19 @@ interface CommonDefinition {
 /** A function for signed-in callers. This is the default. */
 export interface AuthenticatedDefinition<C extends CallableContract> extends CommonDefinition {
   readonly auth?: "required";
-  handler(input: CallableOutputOfInput<C>, context: AuthenticatedContext): Promise<CallableOutput<C>>;
+  handler(input: ValidatedInput<C>, context: AuthenticatedContext): Promise<CallableOutput<C>>;
 }
 
 /** A function that signed-out callers may use. `context.uid` can be null. */
 export interface PublicDefinition<C extends CallableContract> extends CommonDefinition {
   readonly auth: "optional";
-  handler(input: CallableOutputOfInput<C>, context: CallableContext): Promise<CallableOutput<C>>;
+  handler(input: ValidatedInput<C>, context: CallableContext): Promise<CallableOutput<C>>;
 }
 
 export type CallableDefinition<C extends CallableContract> = AuthenticatedDefinition<C> | PublicDefinition<C>;
 
 /** The input as the handler sees it: after validation and any transformation in the schema. */
-type CallableOutputOfInput<C extends CallableContract> = ReturnType<C["input"]["parse"]>;
+type ValidatedInput<C extends CallableContract> = ReturnType<C["input"]["parse"]>;
 
 /** The parts of a callable request the pipeline reads. */
 export interface IncomingCall {
@@ -96,10 +96,7 @@ export async function runCallable<C extends CallableContract>(
   let result: unknown;
   try {
     // The check above guarantees a uid whenever the definition requires one.
-    result = await (definition.handler as PublicDefinition<C>["handler"])(
-      input.data as CallableOutputOfInput<C>,
-      context,
-    );
+    result = await (definition.handler as PublicDefinition<C>["handler"])(input.data as ValidatedInput<C>, context);
   } catch (error) {
     if (error instanceof HttpsError) throw error;
     if (error instanceof AppError) throw new HttpsError(error.code, error.publicMessage);

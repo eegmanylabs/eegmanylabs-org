@@ -1,0 +1,83 @@
+# Continuous integration for the members' portal (portal/).
+#
+# This workflow only checks: it type-checks, lints, builds and tests. It deploys nothing and
+# uses no secret. Everything runs against the Firebase Local Emulator Suite with the
+# demonstration project, so no Firebase project or credential is involved.
+name: Portal CI
+
+on:
+  pull_request:
+    paths:
+      - "portal/**"
+      - ".github/workflows/portal-ci.yml"
+  push:
+    paths:
+      - "portal/**"
+      - ".github/workflows/portal-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portal-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Type check, lint, build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: portal
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: portal/package-lock.json
+
+      - name: Set up Java for the Firebase emulators
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Cache the Firebase emulator binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-${{ hashFiles('portal/package-lock.json') }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install the browser for the end-to-end tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      - name: Keep the Playwright traces of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: portal-playwright-traces
+          path: portal/.run/*/playwright
+          if-no-files-found: ignore
+          retention-days: 7

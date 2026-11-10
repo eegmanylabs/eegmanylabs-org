@@ -182,3 +182,43 @@ portal/**/playwright-report/
 portal/.private/
 portal/.run/
 portal/firebase.run-*.json
+
+# ---------------------------------------------------------------------------
+# Members' portal (portal/)
+#
+# Note for anyone working in portal/: the patterns above come from a Python
+# template and ignore directories named lib, build, dist, env, venv, var,
+# parts, eggs, downloads, wheels, target and instance anywhere in the tree.
+# Do not give a source directory in portal/ one of those names.
+# ---------------------------------------------------------------------------
+
+# Installed packages
+portal/node_modules/
+portal/**/node_modules/
+
+# Build outputs: the web application and the bundled functions
+portal/web/out/
+portal/functions/out/
+portal/**/*.tsbuildinfo
+
+# Files of one local run: the generated Firebase configuration, emulator logs
+# and emulator data, and test output. Keyed by PORTAL_PORT_BASE.
+portal/.run/
+portal/firebase.run-*.json
+portal/**/*-debug.log
+portal/.firebase/
+portal/functions/.secret.local
+
+# Environment files. The examples are committed, nothing else is.
+portal/**/.env
+portal/**/.env.*
+!portal/**/.env.example
+
+# Playwright reports and results written outside portal/.run/
+portal/playwright-report/
+portal/test-results/
+portal/blob-report/
+
+# Private local material: source exports and configuration that must never be
+# committed to this public repository.
+portal/.private/

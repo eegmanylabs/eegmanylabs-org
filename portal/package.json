@@ -18,6 +18,8 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "build": "npm run build -w @eegml/shared && npm run build -w @eegml/functions && npm run build -w @eegml/web",
+    "build:staging": "npm run build -w @eegml/shared && npm run build -w @eegml/functions && npm run build:staging -w @eegml/web",
+    "build:production": "npm run build -w @eegml/shared && npm run build -w @eegml/functions && npm run build:production -w @eegml/web",
     "test": "npm run build && npm run test:unit && node scripts/emulators.mjs exec emulated:all",
     "test:unit": "vitest run --project unit --project web",
     "test:rules": "node scripts/emulators.mjs exec --only firestore,storage emulated:rules",

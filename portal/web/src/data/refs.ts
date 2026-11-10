@@ -1,6 +1,6 @@
 // Typed references to the documents the web application reads. Paths come from @eegml/shared,
 // shapes from its schemas, so this file contains no collection name and no field name.
-import { accessDocSchema, paths, userDocSchema } from "@eegml/shared";
+import { type AccessDoc, accessDocSchema, paths, type UserDoc, userDocSchema } from "@eegml/shared";
 import { doc } from "firebase/firestore";
 import { schemaConverter, type WithId } from "./converter";
 import { db } from "./firebase";
@@ -13,5 +13,5 @@ export const refs = {
   access: (uid: string) => doc(db, paths.access(uid)).withConverter(accessConverter),
 } as const;
 
-export type UserRecord = WithId<import("@eegml/shared").UserDoc>;
-export type AccessRecord = WithId<import("@eegml/shared").AccessDoc>;
+export type UserRecord = WithId<UserDoc>;
+export type AccessRecord = WithId<AccessDoc>;

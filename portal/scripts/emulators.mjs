@@ -83,7 +83,8 @@ async function assertPortsFree(ports, only) {
   }
   if (busy.length > 0) {
     fail(
-      `port ${busy.join(", ")} is already in use. Another portal run is probably using ` +
+      `${busy.length === 1 ? "port" : "ports"} ${busy.join(", ")} ${busy.length === 1 ? "is" : "are"} already in use. ` +
+        "Another portal run is probably using " +
         `PORTAL_PORT_BASE=${ports.base}. Stop it, or choose another base, for example ` +
         `PORTAL_PORT_BASE=${ports.base + 200}.`,
     );
