@@ -10,9 +10,11 @@
   },
   "dependencies": {
     "@eegml/shared": "0.0.0",
-    "firebase-admin": "14.5.0"
+    "firebase-admin": "14.5.0",
+    "saxes": "6.0.0"
   },
   "devDependencies": {
+    "exceljs": "4.4.0",
     "tsx": "4.23.15"
   }
 }

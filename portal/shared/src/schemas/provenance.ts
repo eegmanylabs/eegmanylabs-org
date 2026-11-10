@@ -81,6 +81,11 @@ export const sourceTabDocSchema = documentBaseSchema.extend({
 export type SourceTabDoc = z.output<typeof sourceTabDocSchema>;
 
 export const importModeSchema = z.enum(["preview", "apply"]);
+
+const sha256Schema = z
+  .string()
+  .max(64)
+  .regex(/^[0-9a-f]{64}$/, { error: "Expected a SHA-256 hash in hexadecimal" });
 export const importBatchStatusSchema = z.enum(["running", "previewed", "applied", "failed", "rolledBack"]);
 
 /** `importBatches/{batchId}`: one run of an importer. A preview and an apply of one file are different batches. */
@@ -88,14 +93,34 @@ export const importBatchDocSchema = documentBaseSchema.extend({
   sourceKey: sourceKeySchema,
   mode: importModeSchema,
   status: importBatchStatusSchema,
-  contentHash: z
-    .string()
-    .max(64)
-    .regex(/^[0-9a-f]{64}$/, { error: "Expected a SHA-256 hash in hexadecimal" }),
+  contentHash: sha256Schema,
   startedBy: actorSchema,
   startedAt: timestampSchema,
   finishedAt: timestampSchema.nullable(),
   stats: countMapSchema,
+  /** The date of the export, as the operator states it. */
+  observedOn: isoDateSchema.exactOptional(),
+  /** The files that were read, each with its SHA-256. `contentHash` covers them all. */
+  inputFiles: z
+    .array(z.strictObject({ name: z.string().min(1).max(LIMITS.shortText), sha256: sha256Schema }))
+    .max(100)
+    .exactOptional(),
+  /** The commit at which a source held in a repository was read. */
+  sourceCommit: z
+    .string()
+    .min(7)
+    .max(64)
+    .regex(/^[0-9a-f]+$/, { error: "Expected a commit hash" })
+    .exactOptional(),
+  /** A hash of the planned writes and items, by which an apply is matched to the preview it carries out. */
+  planHash: sha256Schema.exactOptional(),
+  /** The previewed batch that an apply carries out, where the operator named one. */
+  previewBatchId: idSchema.exactOptional(),
+  /**
+   * The batch whose `seenRecords` list what this batch saw: the batch itself, or an earlier
+   * batch of the same source when the set of records has not changed since.
+   */
+  manifestBatchId: idSchema.exactOptional(),
 });
 export type ImportBatchDoc = z.output<typeof importBatchDocSchema>;
 
@@ -240,7 +265,8 @@ export const reconciliationCandidateSchema = z.strictObject({
   /** The key that entered the fingerprint: the claim source and the hash of the normalised value. */
   key: z.string().min(1).max(LIMITS.shortText),
   valueSource: verbatimSchema.exactOptional(),
-  sourceRecordId: idSchema,
+  /** The source record behind the value. Absent for a value that was edited in the portal. */
+  sourceRecordId: idSchema.exactOptional(),
 });
 
 /**

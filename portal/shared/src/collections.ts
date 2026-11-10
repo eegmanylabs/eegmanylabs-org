@@ -9,6 +9,7 @@
 import type { GrantableCapability, Role } from "./capabilities";
 import type { EntityType } from "./entities";
 import { type IdBuilderName, splitNestedEntityId } from "./ids";
+import { PROVENANCE_FIELDS } from "./schemas/base";
 import * as datasets from "./schemas/datasets";
 import * as identity from "./schemas/identity";
 import * as outputs from "./schemas/outputs";
@@ -48,6 +49,15 @@ export interface ReadRule {
   readonly scopeFields: readonly string[];
   /** What narrows the tiers further, in words, for the rules to implement. */
   readonly condition: string | null;
+  /**
+   * The capability that decides the read, where the capability matrix does. With one, the tier
+   * `ADMIN` is whoever holds the capability for the programme as a whole: a programme
+   * administrator always, and the core team or the holder of a named grant where the matrix
+   * confers it. The tier `SCOPED` is then whoever holds the capability for a replication or a
+   * laboratory that the scope fields name, in place of every holder of a scope key. An entry
+   * whose rules are written names one wherever it uses the tier `ADMIN`.
+   */
+  readonly capability: GrantableCapability | null;
 }
 
 /**
@@ -84,6 +94,10 @@ export interface ClientWriteGrant {
  * callable functions, triggers, scheduled jobs and Admin SDK tools do. A client write is
  * validated by the rules, sets `updatedBy` and `updatedAt`, and never changes the fields that
  * `clientImmutableFields` lists or the `functionOnlyFields` of the entry.
+ *
+ * Every writer is an approved member, the writer `self` included. A signed-in account without
+ * a membership satisfies the tier `SELF` for reading only, which is what the claim flow needs,
+ * so that an account alone opens nothing to write to (docs/SECURITY.md, section 4).
  */
 export type WriteRule =
   | { readonly mode: "function" }
@@ -259,7 +273,11 @@ const read = (
   tiers: readonly AccessTier[],
   scopeFields: readonly string[] = [],
   condition: string | null = null,
-): ReadRule => ({ tiers, scopeFields, condition });
+  capability: GrantableCapability | null = null,
+): ReadRule => ({ tiers, scopeFields, condition, capability });
+
+/** A read of the tier `ADMIN` alone: whoever holds the capability for the programme as a whole. */
+const adminRead = (capability: GrantableCapability): ReadRule => read(["ADMIN"], [], null, capability);
 
 const FUNCTION_ONLY: WriteRule = { mode: "function" };
 
@@ -392,7 +410,7 @@ const DEFINITIONS = {
     path: "roleAssignments/{uid__role__scopeType__scopeId}",
     schema: identity.roleAssignmentDocSchema,
     id: built("roleAssignmentId", ["uid", "role", "scopeType", "scopeId"]),
-    read: read(["ADMIN"]),
+    read: adminRead("roles.manage"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     enforcement: ENFORCED,
@@ -401,7 +419,7 @@ const DEFINITIONS = {
     path: "roleCapabilities/{role}",
     schema: identity.roleCapabilitiesDocSchema,
     id: key("role key", "role"),
-    read: read(["ADMIN"]),
+    read: adminRead("roles.manage"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     enforcement: ENFORCED,
@@ -410,7 +428,7 @@ const DEFINITIONS = {
     path: "capabilityGrants/{uid__capability}",
     schema: identity.capabilityGrantDocSchema,
     id: built("capabilityGrantId", ["uid", "capability"]),
-    read: read(["ADMIN"]),
+    read: adminRead("roles.manage"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     enforcement: ENFORCED,
@@ -419,7 +437,7 @@ const DEFINITIONS = {
     path: "recordGrants/{uid__entityType__entityId}",
     schema: identity.recordGrantDocSchema,
     id: built("recordGrantId", ["uid", "entityType", "entityId"]),
-    read: read(["ADMIN"]),
+    read: adminRead("roles.manage"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     enforcement: ENFORCED,
@@ -466,7 +484,7 @@ const DEFINITIONS = {
     path: "accountClaims/{uid}/private/review",
     schema: identity.accountClaimReviewDocSchema,
     id: fixed("review"),
-    read: read(["ADMIN"]),
+    read: adminRead("claims.review"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     enforcement: ENFORCED,
@@ -479,6 +497,7 @@ const DEFINITIONS = {
       ["SELF", "ADMIN", "SCOPED"],
       ["uid", "laboratoryId"],
       "The requesting user, administrators and the coordinators of that laboratory.",
+      "labs.claims.review",
     ),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
@@ -492,6 +511,7 @@ const DEFINITIONS = {
       ["ADMIN", "SCOPED"],
       ["parent.laboratoryId"],
       "Administrators and the authorised representatives of that laboratory.",
+      "labs.claims.review",
     ),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
@@ -501,7 +521,7 @@ const DEFINITIONS = {
     path: "correctionRequests/{id}",
     schema: identity.correctionRequestDocSchema,
     id: auto,
-    read: read(["SELF", "ADMIN"], ["uid"], "A member sees only the requests they created."),
+    read: read(["SELF", "ADMIN"], ["uid"], "A member sees only the requests they created.", "reconciliation.resolve"),
     write: client(
       [
         grant(["member"], ["create"], {
@@ -543,6 +563,7 @@ const DEFINITIONS = {
       ["SELF", "ADMIN", "SCOPED"],
       ["parent.userId", "parent.replicationIds", "parent.laboratoryIds"],
       "The person, administrators, and the leads and coordinators of the replications and laboratories that the directory document of the person names.",
+      "people.contact.read",
     ),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
@@ -553,7 +574,7 @@ const DEFINITIONS = {
     path: "persons/{personId}/private/address",
     schema: identity.personAddressDocSchema,
     id: fixed("address"),
-    read: read(["SELF", "ADMIN"], ["parent.userId"]),
+    read: read(["SELF", "ADMIN"], ["parent.userId"], null, "people.manage"),
     write: client([grant(["self"], WRITE), grant(STAFF, WRITE, { capability: "people.manage" })], ["parent.userId"]),
     dataClass: "restricted",
     enforcement: ENFORCED,
@@ -562,7 +583,7 @@ const DEFINITIONS = {
     path: "persons/{personId}/private/notes",
     schema: identity.personNotesDocSchema,
     id: fixed("notes"),
-    read: read(["ADMIN"]),
+    read: adminRead("people.manage"),
     write: client([grant(STAFF, WRITE, { capability: "people.manage" })]),
     dataClass: "restricted",
     enforcement: ENFORCED,
@@ -628,6 +649,16 @@ const DEFINITIONS = {
     dataClass: "member",
     flags: { importable: true, searchable: true },
     enforcement: ENFORCED,
+  }),
+  institutionCandidates: define({
+    path: "institutionCandidates/{id}",
+    schema: identity.institutionCandidateDocSchema,
+    id: built("institutionCandidateId", ["affiliationFolded"]),
+    read: read(["ADMIN"]),
+    write: FUNCTION_ONLY,
+    dataClass: "restricted",
+    flags: { importable: true },
+    enforcement: DENIED,
   }),
 
   // Programme, laboratories and equipment (section 4).
@@ -971,7 +1002,12 @@ const DEFINITIONS = {
     path: "outreachContacts/{id}",
     schema: participation.outreachContactDocSchema,
     id: auto,
-    read: read(["ADMIN", "SCOPED"], ["replicationId"], "Administrators and the leads of the replication."),
+    read: read(
+      ["ADMIN", "SCOPED"],
+      ["replicationId"],
+      "Administrators and the leads of the replication.",
+      "outreach.read",
+    ),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     flags: { importable: true },
@@ -1507,7 +1543,7 @@ const DEFINITIONS = {
     path: "sources/{key}",
     schema: provenance.sourceDocSchema,
     id: key("source key", "key"),
-    read: read(["ADMIN"]),
+    read: adminRead("imports.run"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     enforcement: ENFORCED,
@@ -1525,7 +1561,7 @@ const DEFINITIONS = {
     path: "sources/{key}/tabs/{tabKey}",
     schema: provenance.sourceTabDocSchema,
     id: built("sourceTabKey", ["name"], "A source with one tab uses a fixed key."),
-    read: read(["ADMIN"]),
+    read: adminRead("imports.run"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     enforcement: ENFORCED,
@@ -1533,8 +1569,8 @@ const DEFINITIONS = {
   importBatches: define({
     path: "importBatches/{batchId}",
     schema: provenance.importBatchDocSchema,
-    id: key("batch identifier"),
-    read: read(["ADMIN"]),
+    id: built("importBatchId", [], "From the instant the batch started and the hash of the file it read."),
+    read: adminRead("imports.run"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     enforcement: ENFORCED,
@@ -1543,7 +1579,7 @@ const DEFINITIONS = {
     path: "importBatches/{batchId}/changes/{n}",
     schema: provenance.importBatchChangeDocSchema,
     id: built("sequenceId"),
-    read: read(["ADMIN"]),
+    read: adminRead("imports.run"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     flags: { appendOnly: true, audited: false },
@@ -1563,7 +1599,7 @@ const DEFINITIONS = {
     path: "importBatches/{batchId}/seenRecords/{n}",
     schema: provenance.importBatchSeenRecordsDocSchema,
     id: built("sequenceId", ["index"]),
-    read: read(["ADMIN"]),
+    read: adminRead("imports.run"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     flags: { appendOnly: true, audited: false },
@@ -1573,7 +1609,7 @@ const DEFINITIONS = {
     path: "importBatches/{batchId}/log/{n}",
     schema: provenance.importBatchLogDocSchema,
     id: built("sequenceId"),
-    read: read(["ADMIN"]),
+    read: adminRead("imports.run"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     flags: { appendOnly: true, audited: false },
@@ -1583,7 +1619,7 @@ const DEFINITIONS = {
     path: "sourceRecords/{id}",
     schema: provenance.sourceRecordDocSchema,
     id: built("sourceRecordId", ["sourceKey", "tabKey", "rowKey", "rawHash"]),
-    read: read(["ADMIN"]),
+    read: adminRead("imports.run"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     flags: { audited: false },
@@ -1603,7 +1639,7 @@ const DEFINITIONS = {
     path: "sourceRecords/{id}/rawChunks/{n}",
     schema: provenance.sourceRecordRawChunkDocSchema,
     id: built("sequenceId", ["index"]),
-    read: read(["ADMIN"]),
+    read: adminRead("imports.run"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     flags: { appendOnly: true, audited: false },
@@ -1613,7 +1649,7 @@ const DEFINITIONS = {
     path: "reconciliationItems/{fingerprint}",
     schema: provenance.reconciliationItemDocSchema,
     id: built("reconciliationFingerprint"),
-    read: read(["ADMIN"]),
+    read: adminRead("reconciliation.resolve"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     enforcement: ENFORCED,
@@ -1622,7 +1658,7 @@ const DEFINITIONS = {
     path: "integrationMappings/{system__entityType__hashOfExternalId}",
     schema: provenance.integrationMappingDocSchema,
     id: built("integrationMappingId", ["system", "entityType", "externalId"]),
-    read: read(["ADMIN"]),
+    read: adminRead("integrations.manage"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     flags: { importable: true },
@@ -1786,7 +1822,7 @@ const DEFINITIONS = {
     path: "integrityReports/{runId}",
     schema: system.integrityReportDocSchema,
     id: key("run identifier"),
-    read: read(["ADMIN"]),
+    read: adminRead("audit.read"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     flags: { audited: false },
@@ -1796,7 +1832,7 @@ const DEFINITIONS = {
     path: "integrityReports/{runId}/findings/{n}",
     schema: system.integrityFindingDocSchema,
     id: built("sequenceId"),
-    read: read(["ADMIN"]),
+    read: adminRead("audit.read"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     flags: { appendOnly: true, audited: false },
@@ -1880,7 +1916,8 @@ export type CollectionPathIds<K extends CollectionKey> = Parameters<Registry[K][
 /**
  * The fields that no direct client write may change (docs/DATA_MODEL.md, section 14): the
  * record of creation, the parts of the identifier, the scope fields, the origin and the
- * provenance of the document, and whatever the entry reserves for trusted code.
+ * provenance of the document, and whatever the entry reserves for trusted code. A client that
+ * creates a document sets none of the provenance fields, which belong to the importers.
  */
 export function clientImmutableFields(entry: CollectionEntry): readonly string[] {
   const identifierFields =
@@ -1899,8 +1936,9 @@ export function clientImmutableFields(entry: CollectionEntry): readonly string[]
     "laboratoryId",
     "scopeKeys",
     "dataOrigin",
-    "sourceRecordIds",
-    "fieldSources",
+    ...PROVENANCE_FIELDS,
+    // The one source record that is part of an entity itself.
+    "sourceRecordId",
     ...reserved,
   ];
   const declared = new Set(Object.keys(entry.schema.shape));

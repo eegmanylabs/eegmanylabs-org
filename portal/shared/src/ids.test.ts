@@ -8,6 +8,7 @@ import {
   acknowledgementId,
   candidateStudyId,
   capabilityGrantId,
+  documentLinkSlotId,
   entityRefId,
   eventFailureId,
   fold,
@@ -18,6 +19,10 @@ import {
   ID_BUILDERS,
   type IdBuilderName,
   identityKeyId,
+  importBatchId,
+  importedAffiliationId,
+  importedPersonId,
+  institutionCandidateId,
   integrationMappingId,
   keyedShortHash,
   labClaimId,
@@ -32,6 +37,7 @@ import {
   pagePermissionId,
   participationId,
   personEmailIndexId,
+  personEvidenceKey,
   reconciliationFingerprint,
   recordGrantId,
   replicationMembershipId,
@@ -145,6 +151,9 @@ const GOLDEN: { readonly [Name in IdBuilderName]: readonly [actual: string | nul
   labClaimId: [labClaimId("uid-1", "lab__0f3a"), "uid-1__lab__0f3a"],
   personEmailIndexId: [personEmailIndexId("synthetic.person@example.org", SECRET), "2582f190c9c2f5731bad"],
   identityKeyId: [identityKeyId("person", "orcid", "0000-0002-1825-0097", SECRET), "9b44cbde2a75cbca2951"],
+  importedPersonId: [importedPersonId(personEvidenceKey.websitePeople("sperson"), SECRET), "p__5e2af6801cca31cdd33b"],
+  importedAffiliationId: [importedAffiliationId("h", "people", 1), "h__people__a1"],
+  institutionCandidateId: [institutionCandidateId("Example University, Sample City"), "instcand__359afef6134bad95183e"],
   studyAliasId: [studyAliasId("bids", "AmodioJost2007_"), "bids__cddb6bc0be97edc28b39"],
   studyAliasIndexId: [studyAliasIndexId("Amodio-Jost 2007_"), "amodiojost2007"],
   hypothesisId: [hypothesisId(3), "h03"],
@@ -164,6 +173,11 @@ const GOLDEN: { readonly [Name in IdBuilderName]: readonly [actual: string | nul
   pageContentChunkId: [pageContentChunkId(3, 12), "000003__000012"],
   sourceTabKey: [sourceTabKey("Sheet 1 "), "354e6b841741896a1abf"],
   sourceRecordId: [sourceRecordId("F", "tab-1", "row-1", "aabbccddeeff"), "d5353780f1be271d54e8"],
+  importBatchId: [
+    importBatchId(new Date("2026-11-10T03:15:00.123Z"), "ab".repeat(32)),
+    "run__20261110T031500123Z__abababababab",
+  ],
+  documentLinkSlotId: [documentLinkSlotId("AmodioJost2007", "signup"), "AmodioJost2007__signup"],
   reconciliationFingerprint: [
     reconciliationFingerprint({
       kind: "valueConflict",
@@ -202,6 +216,56 @@ describe("the identifier builders", () => {
     for (const [actual] of Object.values(GOLDEN)) {
       expect(actual).toMatch(/^(?!\.{1,2}$)(?!__.*__$)[^/]+$/);
     }
+  });
+});
+
+describe("the identifiers that importers derive", () => {
+  it("builds the evidence keys of a person in one spelling for importers and functions", () => {
+    expect(personEvidenceKey.websitePeople("sperson")).toBe("web_people:sperson");
+    expect(personEvidenceKey.websiteMembers("sample-person")).toBe("web_members:sample-person");
+    expect(personEvidenceKey.orcid(" 0000-0002-1825-009x ")).toBe("orcid:0000-0002-1825-009X");
+    expect(personEvidenceKey.email(" Synthetic.Person@Example.org ")).toBe("email:synthetic.person@example.org");
+    expect(personEvidenceKey.nameAffiliation("Sámple Person", "Example University")).toBe(
+      "name:sampleperson@exampleuniversity",
+    );
+  });
+
+  it("gives no name-and-affiliation key when either part folds to nothing", () => {
+    expect(personEvidenceKey.nameAffiliation("Sample Person", " / ")).toBeNull();
+    expect(personEvidenceKey.nameAffiliation("", "Example University")).toBeNull();
+  });
+
+  it("derives a different person from each evidence key and each secret", () => {
+    const people = importedPersonId(personEvidenceKey.websitePeople("sperson"), SECRET);
+    expect(importedPersonId(personEvidenceKey.websiteMembers("sperson"), SECRET)).not.toBe(people);
+    expect(importedPersonId(personEvidenceKey.websitePeople("sperson"), `${SECRET}-other`)).not.toBe(people);
+    expect(() => importedPersonId(" ", SECRET)).toThrow(RangeError);
+  });
+
+  it("meets one affiliation string from two sources in one candidate, however it is spelt", () => {
+    const candidate = institutionCandidateId("Example University, Sample City");
+    expect(institutionCandidateId("  example university ,sample  city ")).toBe(candidate);
+    expect(institutionCandidateId("Exámple University, Sample City")).toBe(candidate);
+    expect(institutionCandidateId("Example University, Other City")).not.toBe(candidate);
+    expect(institutionCandidateId(" , ")).toBeNull();
+  });
+
+  it("gives a preview and an apply of one file different batches, and refuses what is no hash or instant", () => {
+    const hash = "ab".repeat(32);
+    expect(importBatchId(new Date("2026-11-10T03:15:00.124Z"), hash)).not.toBe(
+      importBatchId(new Date("2026-11-10T03:15:00.123Z"), hash),
+    );
+    expect(() => importBatchId(new Date("not a date"), hash)).toThrow(RangeError);
+    expect(() => importBatchId(new Date("2026-11-10T03:15:00Z"), "abc")).toThrow(RangeError);
+  });
+
+  it("keeps the slots of one owner and the affiliations of one tab apart", () => {
+    expect(documentLinkSlotId("AmodioJost2007", "signupArchive")).not.toBe(
+      documentLinkSlotId("AmodioJost2007", "signup"),
+    );
+    expect(importedAffiliationId("h", "members", 1)).toBe("h__members__a1");
+    expect(importedAffiliationId("ctable__0f3a", "t0", 2)).toBe("ctable__0f3a__t0__a2");
+    expect(() => importedAffiliationId("h", "people", -1)).toThrow(RangeError);
   });
 });
 

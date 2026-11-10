@@ -5,6 +5,7 @@ import { timestampSchema } from "../timestamp";
 import { z } from "../zod";
 import {
   actorSchema,
+  boundedRecord,
   customValuesSchema,
   documentBaseSchema,
   doiSchema,
@@ -148,6 +149,12 @@ export type CreditRoleKey = z.output<typeof creditRoleKeySchema>;
 /** The value of a cell exactly as the source holds it: a text, a number or a stored boolean. */
 export const verbatimCellSchema = z.union([verbatimSchema, z.number(), z.boolean()]);
 
+/** The slot of an affiliation column of a contributor sheet: `1` to `9`, as text because it is a map key. */
+export const affiliationSlotSchema = z
+  .string()
+  .max(1)
+  .regex(/^[1-9]$/, { error: "Expected an affiliation slot from 1 to 9" });
+
 /**
  * `contributors/{id}`: one row of a contributor table. A person who appears in two tables has
  * two documents, because roles, order and affiliation differ per manuscript. A contributor row
@@ -158,7 +165,13 @@ export const contributorDocSchema = documentBaseSchema.extend({
   middleNameSource: verbatimSchema.exactOptional(),
   surnameSource: verbatimSchema.exactOptional(),
   orderInPublication: z.number().int().min(0).max(100_000).exactOptional(),
+  /** The first affiliation cell of the row. A reader that shows one affiliation shows this one. */
   affiliationSource: verbatimSchema.exactOptional(),
+  /**
+   * Every affiliation cell of the row by its slot, where `1` is the primary or first affiliation
+   * column of the sheet. Each cell is one verbatim string that is never split.
+   */
+  affiliationSlotsSource: boundedRecord(affiliationSlotSchema, verbatimSchema, 9).exactOptional(),
   /** As the source wrote it. An iD that fails its check goes to review and is never corrected here. */
   orcid: verbatimSchema.exactOptional(),
   /** Each CRediT role key to the verbatim value of its cell. A role whose cell is empty is absent. */

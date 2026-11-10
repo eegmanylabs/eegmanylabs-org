@@ -571,6 +571,27 @@ export const identityKeyDocSchema = documentBaseSchema.extend({
 });
 export type IdentityKeyDoc = z.output<typeof identityKeyDocSchema>;
 
+/**
+ * `institutionCandidates/{id}`: the review queue for affiliation strings
+ * (docs/MIGRATION_PLAN.md, section 3.5). Each distinct folded string that a source writes as an
+ * affiliation is one candidate. An institution exists only once a reviewer has confirmed it, and
+ * the mapping from a candidate to its institution is a stored decision that no import changes.
+ */
+export const institutionCandidateDocSchema = documentBaseSchema.extend({
+  /** The lookup fold of the affiliation string, from which the identifier is built. */
+  affiliationFolded: z
+    .string()
+    .min(1)
+    .max(LIMITS.longText)
+    .regex(/^[a-z0-9]+$/, { error: "Expected a folded affiliation" }),
+  /** Every raw spelling that folds to this candidate, exactly as the sources write it. */
+  affiliationsSource: z.array(verbatimSchema).max(LIMITS.list),
+  /** The institution a reviewer has mapped the candidate to, or null until one has. */
+  institutionId: idSchema.nullable(),
+  ...provenanceShape,
+});
+export type InstitutionCandidateDoc = z.output<typeof institutionCandidateDocSchema>;
+
 /** `institutions/{id}`: unique on normalised name and country through `identityKeys`. */
 export const institutionDocSchema = documentBaseSchema.extend({
   name: shortTextSchema,

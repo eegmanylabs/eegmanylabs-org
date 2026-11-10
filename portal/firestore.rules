@@ -7,61 +7,2037 @@ rules_version = '2';
 // span several documents, go through callable functions, which use the Admin SDK and are not
 // subject to these rules.
 //
-// Collection names match COLLECTIONS in portal/shared/src/collections.ts. Every allow statement has
-// a test in portal/tests/rules that proves the allow and proves the matching denials.
+// The rules implement the collection registry, portal/shared/src/collections.ts, which states
+// for every collection who may read and who may write. Only the collections whose registry
+// entry says `enforced` have rules here. Every other collection is closed to every client
+// until the phase that builds its feature writes and tests its rules.
+//
+// How to read this file
+//
+//  - Every allow statement starts with a gate: isActive(), isOwner() or isMember(). A suspended
+//    account and an ended session therefore pass none of them. The helpers that read the access
+//    document without checking the caller's standing are only ever called behind a gate.
+//  - Each match block states the most documents its rules read (the limit is 10 for a request).
+//    access/{uid} is read with one get() and never with exists(), because the two count apart.
+//  - A request may evaluate 1000 expressions at most, across every statement it touches, so a
+//    statement decides who the caller is before it validates what the caller sent.
+//  - The lists of fields named <entry>Fields, <entry>Required and <entry>Editable are compared
+//    with the registry and the schemas by portal/tests/rules/rules-source.test.ts.
+//
+// Where rule-level validation stops
+//
+//  - Every client write is checked for its writer, its standard fields (the caller's uid, the
+//    request time, a user write context), the keys it may hold, the keys it must hold, the
+//    fields it may change, the references that tie it to its parent and its scope fields.
+//  - Laboratories, participations, checklist items, hypotheses and correction requests are
+//    also checked field by field: types, enumerated values and bounded lengths. A rule cannot
+//    iterate, so the elements of an array and the values of a map are never checked here.
+//  - The zod schemas of the shared package are the exact shape of a document. The web
+//    application validates with them before it writes and after it reads, and the scheduled
+//    integrity checker follows the references that no rule can follow.
+//  - A document identifier that is a hash or a fold of its natural key (a candidate study, a
+//    vocabulary term) cannot be rebuilt here. The integrity checker rebuilds it.
+//
+// Every allow statement has a test in portal/tests/rules that proves the allow and proves the
+// matching denials, and the matrix test fails when a statement is never granted or never refused.
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ===== The caller =====
 
     function signedIn() {
       return request.auth != null;
     }
 
-    function callerAccessPath() {
-      return /databases/$(database)/documents/access/$(request.auth.uid);
+    // access/{uid} of the caller, or null while the account has none. One document read,
+    // however often a rule asks: a repeated get() of one path is served from the first.
+    function accessDocument() {
+      return get(/databases/$(database)/documents/access/$(request.auth.uid));
+    }
+
+    function access() {
+      return accessDocument().data;
     }
 
     // Whether an access document lets its account act: the account is not suspended, and the
     // session began at or after the instant from which sessions are valid. A missing field
     // counts as "not suspended" and "no such instant".
-    function standingAllows(access) {
-      return access.get('suspended', false) != true
-        && (access.get('sessionsValidAfter', null) == null
-          || request.auth.token.get('auth_time', -1) * 1000 >= access.sessionsValidAfter.toMillis());
+    function standingAllows(a) {
+      return a.get('suspended', false) != true
+        && (a.get('sessionsValidAfter', null) == null
+          || request.auth.token.get('auth_time', -1) * 1000 >= a.sessionsValidAfter.toMillis());
     }
 
-    // EVERY allow statement goes through this helper, directly or through another helper, so a
-    // suspended account and an ended session are refused everything on their next request.
-    // It is the decision `accountStanding` makes in portal/shared/src/access.ts, which
-    // callable functions apply, and the two change together. An account that has no access
-    // document yet is active: it has been granted nothing. Cost: one document read.
+    // EVERY allow statement goes through this helper, directly or through isOwner() or
+    // isMember(), so a suspended account and an ended session are refused everything on their
+    // next request. It is the decision `accountStanding` makes in portal/shared/src/access.ts,
+    // which callable functions apply, and the two change together. An account that has no
+    // access document yet is active: it has been granted nothing, and it reads only what is
+    // its own. Cost: one document read.
     function isActive() {
-      return signedIn()
-        && (!exists(callerAccessPath()) || standingAllows(get(callerAccessPath()).data));
+      return signedIn() && (accessDocument() == null || standingAllows(access()));
     }
 
+    // The tier SELF: the account that owns the document, whether or not it is a member yet.
     function isOwner(uid) {
       return isActive() && request.auth.uid == uid;
     }
 
+    // The tier MEMBER: an account in good standing whose access document says it is an
+    // approved member. Every direct write needs it, whoever the writer is.
+    function isMember() {
+      return isActive() && member();
+    }
+
+    // ===== What the access document grants =====
+    //
+    // The helpers of this section read the access document and do NOT check the caller's
+    // standing. They are only ever called behind isActive(), isOwner() or isMember().
+
+    function member() {
+      return accessDocument() != null && access().member == true;
+    }
+
+    // True when the account need not present a second factor, or when its sign-in token says
+    // that one was verified in this session. A missing field counts as "required".
+    function secondFactorSatisfied() {
+      return access().get('secondFactorRequired', true) == false
+        || request.auth.token.firebase.get('sign_in_second_factor', null) is string;
+    }
+
+    // Whether the powers of a programme role or of a named grant are in effect: a factor is
+    // enrolled (docs/DATA_MODEL.md, section 2) and this session satisfies it.
+    function programmePowers() {
+      return access().mfaEnrolled == true && secondFactorSatisfied();
+    }
+
+    function admin() {
+      return 'programme_admin' in access().programmeRoles && programmePowers();
+    }
+
+    // Programme administrators and the core team.
+    function core() {
+      return access().programmeRoles.hasAny(['programme_admin', 'core_team']) && programmePowers();
+    }
+
+    // The scope keys in which the account holds a capability. Capabilities are keyed in
+    // camelCase, as `capabilityField` of the shared package spells them.
+    function heldFor(capability) {
+      return access().capabilities.get(capability, []);
+    }
+
+    // The tier ADMIN: a programme administrator always, and the core team or the holder of a
+    // named grant where the capability matrix confers the capability for the programme.
+    function canForProgramme(capability) {
+      return admin() || ('programme' in heldFor(capability) && programmePowers());
+    }
+
+    function canForReplication(capability, replicationId) {
+      return ('rep:' + replicationId) in heldFor(capability) || canForProgramme(capability);
+    }
+
+    function canForLaboratory(capability, laboratoryId) {
+      return ('lab:' + laboratoryId) in heldFor(capability) || canForProgramme(capability);
+    }
+
+    function canForUnit(capability, replicationId, laboratoryId) {
+      return ('rep:' + replicationId) in heldFor(capability)
+        || ('lab:' + laboratoryId) in heldFor(capability)
+        || canForProgramme(capability);
+    }
+
+    // The right to manage the outputs of a replication, or of the programme where a record
+    // names no replication.
+    function canManageOutputsOf(replicationId) {
+      return replicationId == null
+        ? canForProgramme('replicationsManage')
+        : canForReplication('replicationsManage', replicationId);
+    }
+
+    function leads(replicationId) {
+      return replicationId in access().leadReplicationIds;
+    }
+
+    // The leads of a replication and its confirmed team: everyone who holds its scope key.
+    function onTeam(replicationId) {
+      return leads(replicationId) || replicationId in access().teamReplicationIds;
+    }
+
+    function coordinates(laboratoryId) {
+      return laboratoryId in access().coordinatorLaboratoryIds;
+    }
+
+    // The coordinators and the members of a laboratory: everyone who holds its scope key.
+    function inLaboratory(laboratoryId) {
+      return coordinates(laboratoryId) || laboratoryId in access().memberLaboratoryIds;
+    }
+
+    // The tier SCOPED for a document that carries the resolved audience in `scopeKeys`.
+    function holdsScopeOf(data) {
+      return data.scopeKeys.hasAny(access().scopeKeys);
+    }
+
+    // The tier SCOPED for a document whose scope is its own replication and laboratory. A list
+    // query satisfies it by constraining `scopeKeys` to keys the caller holds, or
+    // `replicationId` or `laboratoryId` to a unit the caller belongs to.
+    function withinUnit(data) {
+      return holdsScopeOf(data) || onTeam(data.replicationId) || inLaboratory(data.laboratoryId);
+    }
+
+    // ===== Requests =====
+
+    // One document, or a list that says how many documents it asks for. The bound is
+    // LIVE_QUERY_MAX_LIMIT of the web data layer.
+    function boundedRead() {
+      return request.method == 'get' || request.query.limit <= 1000;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function changed() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // The write context of a change that a person makes directly (docs/DATA_MODEL.md, section 13).
+    function userContext() {
+      return {'origin': 'user', 'depth': 0, 'correlationId': null, 'causationId': null, 'auditEventId': null};
+    }
+
+    function standardFields() {
+      return ['schemaVersion', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy', 'archivedAt', 'writeContext'];
+    }
+
+    function appendOnlyFields() {
+      return ['schemaVersion', 'createdAt', 'createdBy', 'writeContext'];
+    }
+
+    // What every update sets, and what an update may set to archive or restore a record.
+    function touchFields() {
+      return ['updatedAt', 'updatedBy', 'writeContext'];
+    }
+
+    function stampFields() {
+      return ['updatedAt', 'updatedBy', 'writeContext', 'archivedAt'];
+    }
+
+    // A document that a client creates: nothing but the standard fields and `fields`, every
+    // one of `required`, the caller as its author and the request time as its instant. A
+    // client sets none of the provenance fields, which belong to the importers.
+    function createdNow(d, fields, required) {
+      return d.keys().hasOnly(standardFields().concat(fields))
+        && d.keys().hasAll(required)
+        && d.schemaVersion == 1
+        && d.createdAt == request.time
+        && d.createdBy == request.auth.uid
+        && d.updatedAt == request.time
+        && d.updatedBy == request.auth.uid
+        && d.archivedAt == null
+        && d.writeContext == userContext();
+    }
+
+    // The same for a document of an append-only collection, which is never updated.
+    function appendedNow(d, fields, required) {
+      return d.keys().hasOnly(appendOnlyFields().concat(fields))
+        && d.keys().hasAll(required)
+        && d.schemaVersion == 1
+        && d.createdAt == request.time
+        && d.createdBy == request.auth.uid
+        && d.writeContext == userContext();
+    }
+
+    // A document that a client changes: only the keys in `mayChange` differ from what is
+    // stored, so the record of creation, the identifier, the scope fields, the origin, the
+    // provenance and everything reserved for trusted code stay as they are, and no key that
+    // the schema does not name can be added. The caller is its editor, the request time is the
+    // instant of the edit, and `archivedAt` is empty, unchanged or the request time.
+    function updatedNow(d, mayChange, required) {
+      return changed().hasOnly(mayChange)
+        && d.keys().hasAll(required)
+        && d.updatedAt == request.time
+        && d.updatedBy == request.auth.uid
+        && d.writeContext == userContext()
+        && (d.archivedAt == null || d.archivedAt == request.time || d.archivedAt == resource.data.archivedAt);
+    }
+
+    // ===== Values =====
+
+    // A name, a title or a label: 1 to 300 characters.
+    function shortText(v) {
+      return v.matches('(?s)^.{1,300}$');
+    }
+
+    // A description or a note: 1 to 10,000 characters.
+    function longText(v) {
+      return v is string && v.size() >= 1 && v.size() <= 10000;
+    }
+
+    // A value exactly as a source gave it, which may be empty.
+    function verbatim(v) {
+      return v is string && v.size() <= 10000;
+    }
+
+    // Rich text held in a field: 100 KiB at most.
+    function richText(v) {
+      return v is string && v.size() <= 102400;
+    }
+
+    function docId(v) {
+      return v.matches('^[^/]{1,500}$') && !(v in ['.', '..']) && !v.matches('^__.*__$');
+    }
+
+    // Only http and https, so that a stored address is safe to link to.
+    function webAddress(v) {
+      return v.matches('(?i)^https?:.+$') && v.size() <= 2048;
+    }
+
+    function count(v, maximum) {
+      return v is int && v >= 0 && v <= maximum;
+    }
+
+    // An actor and an instant that a client sets together: nobody, the stored pair, or the
+    // caller and the request time. A client never names another account or another time.
+    function namesCallerNow(actor, instant, storedActor, storedInstant) {
+      return (actor == null && instant == null)
+        || (actor == storedActor && instant == storedInstant)
+        || (actor == request.auth.uid && instant == request.time);
+    }
+
+    // ENTITY_TYPES of portal/shared/src/entities.ts.
+    function entityTypes() {
+      return [
+        'user', 'person', 'institution', 'group', 'programme', 'laboratory', 'equipmentConfiguration',
+        'replication', 'hypothesis', 'protocol', 'protocolVersion', 'candidateStudy', 'participation',
+        'recruitmentReport', 'taskList', 'task', 'page', 'thread', 'comment', 'attachment', 'database',
+        'databaseRow', 'view', 'dashboard', 'storageEndpoint', 'dataset', 'processingRun', 'manuscript',
+        'contributorTable', 'contributor', 'decision', 'risk', 'incident', 'meeting', 'progressReport',
+        'documentLink', 'source', 'importBatch'
+      ];
+    }
+
+    // SPECIAL_CATEGORY_FIELDS of portal/shared/src/schemas/identity.ts.
+    function specialCategoryFields() {
+      return [
+        'genderSource', 'genderCategory', 'genderSelfDescribed',
+        'ethnicitySource', 'ethnicityCategory', 'ethnicitySelfDescribed'
+      ];
+    }
+
+    // The notification types of portal/shared/src/schemas/identity.ts.
+    function notificationTypes() {
+      return [
+        'mention', 'assignment', 'comment', 'statusChange', 'dueSoon', 'overdue', 'reminder',
+        'claimDecision', 'roleDecision', 'protocolUpdate', 'milestone', 'integrationFailure'
+      ];
+    }
+
+    // ===== Documents that rules read to decide =====
+
+    function person(personId) {
+      return get(/databases/$(database)/documents/persons/$(personId)).data;
+    }
+
+    function participation(participationId) {
+      return get(/databases/$(database)/documents/participations/$(participationId)).data;
+    }
+
+    function manuscript(manuscriptId) {
+      return get(/databases/$(database)/documents/manuscripts/$(manuscriptId)).data;
+    }
+
+    function contributor(contributorId) {
+      return get(/databases/$(database)/documents/contributors/$(contributorId)).data;
+    }
+
+    function replicationExists(replicationId) {
+      return exists(/databases/$(database)/documents/replications/$(replicationId));
+    }
+
+    function laboratoryExists(laboratoryId) {
+      return exists(/databases/$(database)/documents/laboratories/$(laboratoryId));
+    }
+
+    function personExists(personId) {
+      return exists(/databases/$(database)/documents/persons/$(personId));
+    }
+
+    // ===== Identity and access (docs/DATA_MODEL.md, section 3) =====
+
+    // A favourite, a recent and a subscription name a record by its type and identifier, and
+    // the identifier of the document is the two joined together.
+    function validEntityReference(d, uid, referenceId) {
+      return d.uid == uid
+        && d.entityType in entityTypes()
+        && docId(d.entityId)
+        && referenceId == d.entityType + '__' + d.entityId;
+    }
+
     // One document per account, maintained by the sessionStart function.
+    // Reads: 1 (access).
     match /users/{uid} {
       allow get: if isOwner(uid);
-      allow list, create, update, delete: if false;
+
+      // Reads: 1 (access), in every block beneath a user.
+      match /favourites/{referenceId} {
+        function userFavouritesFields() { return ['uid', 'entityType', 'entityId']; }
+        function userFavouritesRequired() { return ['uid', 'entityType', 'entityId']; }
+        function userFavouritesEditable() { return ['uid']; }
+
+        allow read: if isOwner(uid) && boundedRead();
+        allow create: if isMember() && request.auth.uid == uid
+          && createdNow(incoming(), userFavouritesFields(), userFavouritesRequired())
+          && validEntityReference(incoming(), uid, referenceId);
+        allow update: if isMember() && request.auth.uid == uid
+          && updatedNow(incoming(), stampFields().concat(userFavouritesEditable()), userFavouritesRequired())
+          && incoming().uid == uid;
+        allow delete: if isMember() && request.auth.uid == uid;
+      }
+
+      // `updatedAt` of a recent is the time of the latest visit.
+      match /recents/{referenceId} {
+        function userRecentsFields() { return ['uid', 'entityType', 'entityId']; }
+        function userRecentsRequired() { return ['uid', 'entityType', 'entityId']; }
+        function userRecentsEditable() { return ['uid']; }
+
+        allow read: if isOwner(uid) && boundedRead();
+        allow create: if isMember() && request.auth.uid == uid
+          && createdNow(incoming(), userRecentsFields(), userRecentsRequired())
+          && validEntityReference(incoming(), uid, referenceId);
+        allow update: if isMember() && request.auth.uid == uid
+          && updatedNow(incoming(), stampFields().concat(userRecentsEditable()), userRecentsRequired())
+          && incoming().uid == uid;
+        allow delete: if isMember() && request.auth.uid == uid;
+      }
+
+      // Written by functions. The owner may mark a notification as read or as unread, and
+      // nothing else.
+      match /notifications/{notificationId} {
+        function userNotificationsEditableBySelf() { return ['readAt']; }
+
+        allow read: if isOwner(uid) && boundedRead();
+        allow update: if isMember() && request.auth.uid == uid
+          && updatedNow(incoming(), touchFields().concat(userNotificationsEditableBySelf()), [])
+          && (incoming().readAt == null || incoming().readAt == request.time);
+      }
+
+      match /subscriptions/{referenceId} {
+        function userSubscriptionsFields() { return ['uid', 'entityType', 'entityId', 'level']; }
+        function userSubscriptionsRequired() { return ['uid', 'entityType', 'entityId', 'level']; }
+        function userSubscriptionsEditable() { return ['uid', 'level']; }
+
+        allow read: if isOwner(uid) && boundedRead();
+        allow create: if isMember() && request.auth.uid == uid
+          && createdNow(incoming(), userSubscriptionsFields(), userSubscriptionsRequired())
+          && validEntityReference(incoming(), uid, referenceId)
+          && incoming().level in ['all', 'mentions', 'none'];
+        allow update: if isMember() && request.auth.uid == uid
+          && updatedNow(incoming(), stampFields().concat(userSubscriptionsEditable()), userSubscriptionsRequired())
+          && incoming().uid == uid
+          && incoming().level in ['all', 'mentions', 'none'];
+        allow delete: if isMember() && request.auth.uid == uid;
+      }
+
+      match /settings/preferences {
+        function userPreferencesFields() { return ['channels', 'digestFrequency', 'quietHours', 'typeSwitches']; }
+        function userPreferencesRequired() { return ['channels', 'digestFrequency', 'quietHours', 'typeSwitches']; }
+        function userPreferencesEditable() { return ['channels', 'digestFrequency', 'quietHours', 'typeSwitches']; }
+
+        // The values of `typeSwitches` are left to the schema: a rule cannot iterate a map.
+        function validPreferences(d) {
+          return d.channels.keys().hasOnly(['inApp', 'email'])
+            && d.channels.inApp is bool
+            && d.channels.email is bool
+            && d.digestFrequency in ['off', 'daily', 'weekly']
+            && (d.quietHours == null
+              || (d.quietHours.keys().hasOnly(['start', 'end', 'timeZone'])
+                && d.quietHours.start.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')
+                && d.quietHours.end.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')
+                && d.quietHours.timeZone.matches('^.{1,64}$')))
+            && d.typeSwitches is map
+            && d.typeSwitches.keys().hasOnly(notificationTypes());
+        }
+
+        allow get: if isOwner(uid);
+        allow create: if isMember() && request.auth.uid == uid
+          && createdNow(incoming(), userPreferencesFields(), userPreferencesRequired())
+          && validPreferences(incoming());
+        allow update: if isMember() && request.auth.uid == uid
+          && updatedNow(incoming(), stampFields().concat(userPreferencesEditable()), userPreferencesRequired())
+          && validPreferences(incoming());
+      }
     }
 
     // What an account may do. Written by functions only, so an account cannot grant itself
     // anything.
+    // Reads: 1 (access).
     match /access/{uid} {
       allow get: if isOwner(uid);
-      allow list, create, update, delete: if false;
     }
 
-    // The audit trail is written by trusted code and is not readable from a browser.
-    match /auditEvents/{eventId} {
-      allow read, write: if false;
+    // Roles, the overrides of the capability matrix, named grants and record grants are read
+    // by whoever manages roles, and written by functions only.
+    // Reads: 1 (access), in each of the four blocks.
+    match /roleAssignments/{assignmentId} {
+      allow read: if isMember() && canForProgramme('rolesManage') && boundedRead();
     }
 
-    // Everything else, including collections that do not exist yet, is denied.
+    match /roleCapabilities/{role} {
+      allow read: if isMember() && canForProgramme('rolesManage') && boundedRead();
+    }
+
+    match /capabilityGrants/{grantId} {
+      allow read: if isMember() && canForProgramme('rolesManage') && boundedRead();
+    }
+
+    match /recordGrants/{grantId} {
+      allow read: if isMember() && canForProgramme('rolesManage') && boundedRead();
+    }
+
+    // Reads: 1 (access).
+    match /groups/{groupKey} {
+      allow read: if isMember() && boundedRead();
+    }
+
+    // An account name in an external system, read within the scope of its owner.
+    // Reads: 3 (access, the owner, and the person for an account that a person owns).
+    match /externalAccounts/{accountId} {
+      function externalAccountsFields() { return ['ownerType', 'ownerId', 'system', 'accountName', 'notes', 'scopeKeys']; }
+      function externalAccountsRequired() { return ['ownerType', 'ownerId', 'system', 'accountName', 'scopeKeys']; }
+      function externalAccountsEditable() { return ['ownerType', 'ownerId', 'system', 'accountName', 'notes']; }
+
+      // The audience of an account is its owner: the scope keys are rebuilt from the owner,
+      // the owner exists, and the caller manages the owner. Only programme administrators and
+      // the core team record the account of a group or of a person.
+      function ownedAndManaged(d) {
+        return (d.ownerType == 'replication'
+            && d.scopeKeys == ['rep:' + d.ownerId]
+            && (core() || leads(d.ownerId))
+            && replicationExists(d.ownerId))
+          || (d.ownerType == 'laboratory'
+            && d.scopeKeys == ['lab:' + d.ownerId]
+            && (core() || coordinates(d.ownerId))
+            && laboratoryExists(d.ownerId))
+          || (d.ownerType == 'group'
+            && d.scopeKeys == ['group:' + d.ownerId]
+            && core()
+            && exists(/databases/$(database)/documents/groups/$(d.ownerId)))
+          || (d.ownerType == 'person'
+            && core()
+            && d.scopeKeys == (person(d.ownerId).userId == null ? [] : ['user:' + person(d.ownerId).userId]));
+      }
+
+      allow read: if isMember() && (core() || holdsScopeOf(resource.data)) && boundedRead();
+      allow create: if isMember()
+        && docId(incoming().ownerId)
+        && ownedAndManaged(incoming())
+        && createdNow(incoming(), externalAccountsFields(), externalAccountsRequired());
+      allow update: if isMember()
+        && (core() || resource.data.scopeKeys.hasAny(access().manageScopeKeys))
+        && updatedNow(incoming(), stampFields().concat(externalAccountsEditable()), externalAccountsRequired())
+        && incoming().ownerType == resource.data.ownerType
+        && incoming().ownerId == resource.data.ownerId;
+    }
+
+    // What a user may know of their own claim. The evidence and the decision are for reviewers.
+    // Reads: 1 (access).
+    match /accountClaims/{uid} {
+      allow get: if isOwner(uid);
+
+      match /private/review {
+        allow get: if isMember() && canForProgramme('claimsReview');
+      }
+    }
+
+    // A request to represent a laboratory: for the requesting user and for whoever decides
+    // such requests for that laboratory.
+    // Reads: 1 (access), and 2 for the review (access, the claim).
+    match /labClaims/{claimId} {
+      allow read: if isActive()
+        && (resource.data.uid == request.auth.uid
+          || (member() && canForLaboratory('labsClaimsReview', resource.data.laboratoryId)))
+        && boundedRead();
+
+      match /private/review {
+        allow get: if isMember()
+          && canForLaboratory(
+            'labsClaimsReview',
+            get(/databases/$(database)/documents/labClaims/$(claimId)).data.laboratoryId
+          );
+      }
+    }
+
+    // A member's request to correct an imported record. A member sees only their own, and
+    // whoever resolves the review queue sees them all. A resolution is a callable function.
+    // Reads: 1 (access).
+    match /correctionRequests/{requestId} {
+      function correctionRequestsFields() {
+        return ['uid', 'entityType', 'entityId', 'field', 'proposedValue', 'message', 'status', 'resolvedBy', 'resolvedAt'];
+      }
+      function correctionRequestsRequired() {
+        return ['uid', 'entityType', 'entityId', 'field', 'proposedValue', 'status', 'resolvedBy', 'resolvedAt'];
+      }
+      function correctionRequestsEditableBySelf() { return ['status']; }
+
+      // Whether the record exists is left to the function that resolves the request: a rule
+      // cannot turn every entity type into a path.
+      function validCorrectionRequest(d) {
+        return d.uid == request.auth.uid
+          && d.entityType in entityTypes()
+          && docId(d.entityId)
+          && d.field.matches('^[^./]{1,300}$')
+          && !(d.field in specialCategoryFields())
+          && (d.proposedValue is bool || d.proposedValue is number || verbatim(d.proposedValue))
+          && longText(d.get('message', 'x'))
+          && d.status == 'open'
+          && d.resolvedBy == null
+          && d.resolvedAt == null;
+      }
+
+      allow read: if isActive()
+        && (resource.data.uid == request.auth.uid || (member() && canForProgramme('reconciliationResolve')))
+        && boundedRead();
+      allow create: if isMember()
+        && createdNow(incoming(), correctionRequestsFields(), correctionRequestsRequired())
+        && validCorrectionRequest(incoming());
+      // The creator may withdraw a request that is still open.
+      allow update: if isMember() && resource.data.uid == request.auth.uid
+        && updatedNow(incoming(), touchFields().concat(correctionRequestsEditableBySelf()), correctionRequestsRequired())
+        && resource.data.status == 'open'
+        && incoming().status == 'withdrawn';
+    }
+
+    // The directory document of a person. A person is created by an import or by a callable
+    // function, which reserves the identity keys in the same transaction.
+    // Reads: 1 (access).
+    match /persons/{personId} {
+      function personsRequired() {
+        return [
+          'slug', 'displayName', 'laboratoryIds', 'replicationIds', 'isCoreTeam', 'publicListing', 'coreRoles',
+          'userId', 'claimedAt', 'custom', 'dataOrigin'
+        ];
+      }
+      function personsEditable() {
+        return [
+          'givenName', 'middleName', 'familyName', 'displayName', 'orcid', 'countryCode', 'countrySource',
+          'isCoreTeam', 'publicListing', 'websitePersonId', 'coreRoles', 'headshotFilename', 'scholarUrl',
+          'universityUrl', 'labUrl', 'custom'
+        ];
+      }
+      // The whitelist of a person who edits their own directory record.
+      function personsEditableBySelf() { return ['orcid', 'scholarUrl', 'universityUrl', 'labUrl']; }
+
+      function validPersonLinks(d) {
+        return d.get('orcid', '0000-0000-0000-0000').matches('^[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{3}[0-9X]$')
+          && webAddress(d.get('scholarUrl', 'https://example.org'))
+          && webAddress(d.get('universityUrl', 'https://example.org'))
+          && webAddress(d.get('labUrl', 'https://example.org'));
+      }
+
+      allow read: if isMember() && boundedRead();
+      allow update: if isMember()
+        && ((resource.data.userId == request.auth.uid
+            && updatedNow(incoming(), touchFields().concat(personsEditableBySelf()), personsRequired()))
+          || (canForProgramme('peopleManage')
+            && updatedNow(incoming(), stampFields().concat(personsEditable()), personsRequired())))
+        && validPersonLinks(incoming());
+
+      // The email addresses of the person, which the claim flow trusts. Functions alone write
+      // them. A scoped role reads through `people.contact.read`: the leads and coordinators of
+      // the replications and laboratories that the directory document names. A rule cannot turn
+      // those identifiers into scope keys, so it compares them with the units the caller leads
+      // or coordinates and asks that the capability is held for some unit.
+      // Reads: 2 (access, the person).
+      match /private/contact {
+        allow get: if isActive()
+          && (person(personId).userId == request.auth.uid
+            || (member()
+              && (canForProgramme('peopleContactRead')
+                || (heldFor('peopleContactRead').size() > 0
+                  && (access().leadReplicationIds.hasAny(person(personId).replicationIds)
+                    || access().coordinatorLaboratoryIds.hasAny(person(personId).laboratoryIds))))));
+      }
+
+      // Reads: 2 (access, the person).
+      match /private/address {
+        function personAddressFields() { return ['postalAddress']; }
+        function personAddressRequired() { return ['postalAddress']; }
+        function personAddressEditable() { return ['postalAddress']; }
+
+        function validAddress(d) {
+          return d.postalAddress is string && d.postalAddress.size() <= 2000;
+        }
+
+        allow get: if isActive()
+          && (person(personId).userId == request.auth.uid || (member() && canForProgramme('peopleManage')));
+        allow create: if isMember()
+          && (person(personId).userId == request.auth.uid || canForProgramme('peopleManage'))
+          && createdNow(incoming(), personAddressFields(), personAddressRequired())
+          && validAddress(incoming());
+        allow update: if isMember()
+          && (person(personId).userId == request.auth.uid || canForProgramme('peopleManage'))
+          && updatedNow(incoming(), stampFields().concat(personAddressEditable()), personAddressRequired())
+          && validAddress(incoming());
+      }
+
+      // Reads: 2 (access, the person).
+      match /private/notes {
+        function personNotesFields() { return ['privateNotes']; }
+        function personNotesRequired() { return ['privateNotes']; }
+        function personNotesEditable() { return ['privateNotes']; }
+
+        allow get: if isMember() && canForProgramme('peopleManage');
+        allow create: if isMember() && canForProgramme('peopleManage')
+          && personExists(personId)
+          && createdNow(incoming(), personNotesFields(), personNotesRequired())
+          && verbatim(incoming().privateNotes);
+        allow update: if isMember() && canForProgramme('peopleManage')
+          && updatedNow(incoming(), stampFields().concat(personNotesEditable()), personNotesRequired())
+          && verbatim(incoming().privateNotes);
+      }
+
+      // special/demographics has no rule: special-category data is never readable or writable
+      // by a client, whatever its role. A callable function serves it.
+
+      // Reads: 2 (access, the person).
+      match /affiliations/{affiliationId} {
+        function personAffiliationsFields() {
+          return ['personId', 'institutionId', 'laboratoryId', 'affiliationSource', 'roleTitle', 'isPrimary', 'startDate', 'endDate'];
+        }
+        function personAffiliationsRequired() { return ['personId', 'isPrimary']; }
+        function personAffiliationsEditable() {
+          return ['personId', 'institutionId', 'affiliationSource', 'roleTitle', 'isPrimary', 'startDate', 'endDate'];
+        }
+
+        allow create: if isMember()
+          && (person(personId).userId == request.auth.uid || canForProgramme('peopleManage'))
+          && createdNow(incoming(), personAffiliationsFields(), personAffiliationsRequired())
+          && incoming().personId == personId
+          && incoming().isPrimary is bool;
+        allow update: if isMember()
+          && (person(personId).userId == request.auth.uid || canForProgramme('peopleManage'))
+          && updatedNow(incoming(), stampFields().concat(personAffiliationsEditable()), personAffiliationsRequired())
+          && incoming().personId == personId
+          && incoming().isPrimary is bool;
+      }
+    }
+
+    // Subcollections that members read are read beneath one parent or beneath every parent at
+    // once, so their read rules match the collection wherever it sits.
+    // Reads: 1 (access).
+    match /{path=**}/affiliations/{affiliationId} {
+      allow read: if isMember() && boundedRead();
+    }
+
+    // An institution is created by an import or by a callable function, which reserves its keys.
+    // Reads: 1 (access).
+    match /institutions/{institutionId} {
+      function institutionsRequired() { return ['name', 'emailDomains']; }
+      function institutionsEditable() {
+        return ['name', 'shortName', 'countryCode', 'city', 'rorId', 'website', 'emailDomains'];
+      }
+
+      allow read: if isMember() && boundedRead();
+      allow update: if isMember() && canForProgramme('lookupsManage')
+        && updatedNow(incoming(), stampFields().concat(institutionsEditable()), institutionsRequired())
+        && shortText(incoming().name);
+    }
+
+    // ===== Programme, laboratories and equipment (section 4) =====
+
+    // Reads: 2 (access, the parent programme).
+    match /programmes/{programmeKey} {
+      function programmesFields() { return ['key', 'name', 'description', 'parentId', 'kind']; }
+      function programmesRequired() { return ['key', 'name', 'parentId', 'kind']; }
+      function programmesEditable() { return ['name', 'description', 'parentId', 'kind']; }
+
+      function validProgramme(d) {
+        return shortText(d.name)
+          && d.kind in ['programme', 'subproject']
+          && (d.parentId == null || exists(/databases/$(database)/documents/programmes/$(d.parentId)));
+      }
+
+      allow read: if isMember() && boundedRead();
+      allow create: if isMember() && canForProgramme('lookupsManage')
+        && createdNow(incoming(), programmesFields(), programmesRequired())
+        && incoming().key == programmeKey
+        && validProgramme(incoming());
+      allow update: if isMember() && canForProgramme('lookupsManage')
+        && updatedNow(incoming(), stampFields().concat(programmesEditable()), programmesRequired())
+        && validProgramme(incoming());
+    }
+
+    // The one authoritative profile of a laboratory. It is created by an import or by a
+    // callable function. Its coordinators maintain it.
+    // Reads: 3 (access, and the institution and the person where an update names a new one).
+    match /laboratories/{laboratoryId} {
+      function laboratoriesRequired() { return ['slug', 'name', 'status', 'custom', 'dataOrigin']; }
+      function laboratoriesEditable() {
+        return [
+          'name', 'institutionId', 'department', 'countryCode', 'city', 'website', 'piPersonId', 'status',
+          'description', 'custom'
+        ];
+      }
+
+      function validLaboratory(d) {
+        return shortText(d.name)
+          && docId(d.get('institutionId', 'x'))
+          && shortText(d.get('department', 'x'))
+          && d.get('countryCode', 'GB').matches('^[A-Z]{2}$')
+          && shortText(d.get('city', 'x'))
+          && webAddress(d.get('website', 'https://example.org'))
+          && docId(d.get('piPersonId', 'x'))
+          && d.status in ['unverified', 'active', 'inactive']
+          && longText(d.get('description', 'x'))
+          && d.custom is map
+          && d.custom.size() <= 500;
+      }
+
+      // A reference that an update introduces points at a document that exists.
+      function laboratoryReferencesExist(d, stored) {
+        return (!('institutionId' in d)
+            || d.institutionId == stored.get('institutionId', null)
+            || exists(/databases/$(database)/documents/institutions/$(d.institutionId)))
+          && (!('piPersonId' in d)
+            || d.piPersonId == stored.get('piPersonId', null)
+            || personExists(d.piPersonId));
+      }
+
+      allow read: if isMember() && boundedRead();
+      allow update: if isMember() && canForLaboratory('labsManage', laboratoryId)
+        && updatedNow(incoming(), stampFields().concat(laboratoriesEditable()), laboratoriesRequired())
+        && validLaboratory(incoming())
+        && laboratoryReferencesExist(incoming(), resource.data);
+
+      // The postal address and the internal notes of the laboratory.
+      // Reads: 2 (access, the laboratory).
+      match /private/detail {
+        function laboratoryDetailFields() { return ['address', 'internalNotes']; }
+        function laboratoryDetailRequired() { return []; }
+        function laboratoryDetailEditable() { return ['address', 'internalNotes']; }
+
+        function validLaboratoryDetail(d) {
+          return d.get('address', '') is string
+            && d.get('address', '').size() <= 2000
+            && verbatim(d.get('internalNotes', ''));
+        }
+
+        allow get: if isMember() && (core() || inLaboratory(laboratoryId));
+        allow create: if isMember() && canForLaboratory('labsManage', laboratoryId)
+          && laboratoryExists(laboratoryId)
+          && createdNow(incoming(), laboratoryDetailFields(), laboratoryDetailRequired())
+          && validLaboratoryDetail(incoming());
+        allow update: if isMember() && canForLaboratory('labsManage', laboratoryId)
+          && updatedNow(incoming(), stampFields().concat(laboratoryDetailEditable()), laboratoryDetailRequired())
+          && validLaboratoryDetail(incoming());
+      }
+
+      // A directory fact about a person. An entry starts as proposed, and no client confirms
+      // one: the person concerned or an administrator does, through a callable function,
+      // because a confirmed entry lets the coordinators read the person's contact details.
+      // Reads: 3 (access, the laboratory, the person).
+      match /members/{personId} {
+        function laboratoryMembersFields() {
+          return ['laboratoryId', 'personId', 'role', 'isAuthorisedRepresentative', 'startDate', 'endDate', 'earlierPeriods', 'status'];
+        }
+        function laboratoryMembersRequired() {
+          return ['laboratoryId', 'personId', 'role', 'isAuthorisedRepresentative', 'earlierPeriods', 'status'];
+        }
+        function laboratoryMembersEditable() {
+          return ['role', 'isAuthorisedRepresentative', 'startDate', 'endDate', 'earlierPeriods', 'status'];
+        }
+
+        function validLaboratoryMember(d) {
+          return d.role in ['pi', 'coordinator', 'representative', 'member']
+            && d.isAuthorisedRepresentative is bool
+            && d.earlierPeriods is list
+            && d.earlierPeriods.size() <= 50;
+        }
+
+        allow create: if isMember() && canForLaboratory('labsManage', laboratoryId)
+          && createdNow(incoming(), laboratoryMembersFields(), laboratoryMembersRequired())
+          && incoming().laboratoryId == laboratoryId
+          && incoming().personId == personId
+          && incoming().status == 'proposed'
+          && validLaboratoryMember(incoming())
+          && laboratoryExists(laboratoryId)
+          && personExists(personId);
+        allow update: if isMember() && canForLaboratory('labsManage', laboratoryId)
+          && updatedNow(incoming(), stampFields().concat(laboratoryMembersEditable()), laboratoryMembersRequired())
+          && (incoming().status == resource.data.status || incoming().status in ['proposed', 'ended'])
+          && validLaboratoryMember(incoming());
+      }
+
+      // equipment has no write rule: a callable function replaces a configuration, so that
+      // each chain keeps exactly one current member.
+    }
+
+    // Reads: 1 (access), in each of the two blocks.
+    match /{path=**}/members/{personId} {
+      allow read: if isMember() && boundedRead();
+    }
+
+    match /{path=**}/equipment/{configurationId} {
+      allow read: if isMember() && boundedRead();
+    }
+
+    // ===== Replications and scientific definition (section 5) =====
+
+    // Reads: 2 (access, the programme).
+    match /replications/{studyKey} {
+      function replicationsFields() {
+        return [
+          'programmeId', 'studyKey', 'shortTitle', 'originalAuthors', 'originalYear', 'originalTitle',
+          'originalReference', 'originalDoi', 'citationStatus', 'citationCheckedAt', 'citationSource',
+          'citationMetadata', 'abstract', 'rationale', 'effectOfInterest', 'plainLanguageDescription', 'originalN',
+          'originalNSource', 'originalStatistics', 'originalEffectSizeSource', 'originalEffectSizeValue',
+          'originalEffectSizeMetric', 'originalBayesFactorSource', 'powerAssumptions', 'powerBasedN',
+          'powerBasedNSource', 'targetN', 'durationSource', 'sampleType', 'minEegChannels', 'minEegChannelsSource',
+          'extraEquipment', 'studyType', 'outcome', 'psychConstruct', 'theme', 'statusKey', 'statusHistoryId',
+          'publicStageNumber', 'publicStageName', 'publicStageText', 'signupUrl', 'signupActive', 'selectionStatus',
+          'leadPersonIds', 'vocabulary', 'custom', 'dataOrigin'
+        ];
+      }
+      function replicationsRequired() {
+        return [
+          'programmeId', 'studyKey', 'citationStatus', 'statusKey', 'statusHistoryId', 'selectionStatus',
+          'leadPersonIds', 'vocabulary', 'custom', 'dataOrigin'
+        ];
+      }
+      function replicationsEditable() {
+        return [
+          'programmeId', 'shortTitle', 'originalAuthors', 'originalYear', 'originalTitle', 'originalReference',
+          'originalDoi', 'citationStatus', 'citationCheckedAt', 'citationSource', 'citationMetadata', 'abstract',
+          'rationale', 'effectOfInterest', 'plainLanguageDescription', 'originalN', 'originalNSource',
+          'originalStatistics', 'originalEffectSizeSource', 'originalEffectSizeValue', 'originalEffectSizeMetric',
+          'originalBayesFactorSource', 'powerAssumptions', 'powerBasedN', 'powerBasedNSource', 'targetN',
+          'durationSource', 'sampleType', 'minEegChannels', 'minEegChannelsSource', 'extraEquipment', 'studyType',
+          'outcome', 'psychConstruct', 'theme', 'publicStageNumber', 'publicStageName', 'publicStageText',
+          'signupUrl', 'signupActive', 'selectionStatus', 'vocabulary', 'custom'
+        ];
+      }
+
+      function validReplication(d) {
+        return d.citationStatus in ['unverified', 'verified', 'mismatch', 'notFound']
+          && d.selectionStatus in ['selected', 'withdrawn']
+          && webAddress(d.get('signupUrl', 'https://example.org'))
+          && d.vocabulary is list
+          && d.vocabulary.size() <= 500
+          && d.custom is map
+          && d.custom.size() <= 500;
+      }
+
+      allow read: if isMember() && boundedRead();
+      // A replication is created by programme administrators and the core team. Its status,
+      // its status history and its leads start empty, and only trusted code fills them.
+      allow create: if isMember() && canForProgramme('replicationsManage')
+        && createdNow(incoming(), replicationsFields(), replicationsRequired())
+        && incoming().studyKey == studyKey
+        && studyKey.matches('^[A-Za-z][A-Za-z0-9]{0,99}$')
+        && incoming().statusKey == null
+        && incoming().statusHistoryId == null
+        && incoming().leadPersonIds == []
+        && incoming().dataOrigin == 'live'
+        && validReplication(incoming())
+        && exists(/databases/$(database)/documents/programmes/$(incoming().programmeId));
+      allow update: if isMember() && canForReplication('replicationsManage', studyKey)
+        && updatedNow(incoming(), stampFields().concat(replicationsEditable()), replicationsRequired())
+        && validReplication(incoming())
+        && (incoming().programmeId == resource.data.programmeId
+          || exists(/databases/$(database)/documents/programmes/$(incoming().programmeId)));
+
+      // Restricted notes. A client writes `internalNotes` alone: the verbatim notes of a
+      // source and the unverified outcome labels belong to the importers.
+      // Reads: 2 (access, the replication).
+      match /private/detail {
+        function replicationDetailRequired() { return []; }
+        function replicationDetailEditableByReplicationLead() { return ['internalNotes']; }
+
+        allow get: if isMember() && (core() || onTeam(studyKey));
+        allow create: if isMember() && canForReplication('replicationsManage', studyKey)
+          && replicationExists(studyKey)
+          && createdNow(incoming(), replicationDetailEditableByReplicationLead(), replicationDetailRequired())
+          && verbatim(incoming().get('internalNotes', ''));
+        allow update: if isMember() && canForReplication('replicationsManage', studyKey)
+          && updatedNow(
+            incoming(),
+            stampFields().concat(replicationDetailEditableByReplicationLead()),
+            replicationDetailRequired()
+          )
+          && verbatim(incoming().get('internalNotes', ''));
+      }
+
+      // A record about a person, which grants nothing by itself. A confirmed membership gives
+      // read scope and sight of contact details, so only programme administrators and the
+      // core team write the roles lead and coLead or set `reviewStatus`. A lead proposes any
+      // other membership, which starts as needsReview.
+      // Reads: 3 (access, the replication, the person).
+      match /memberships/{membershipId} {
+        function replicationMembershipsFields() {
+          return ['replicationId', 'personId', 'role', 'isCurrent', 'startDate', 'endDate', 'earlierPeriods', 'reviewStatus'];
+        }
+        function replicationMembershipsRequired() {
+          return ['replicationId', 'personId', 'role', 'isCurrent', 'earlierPeriods', 'reviewStatus'];
+        }
+        function replicationMembershipsEditable() {
+          return ['isCurrent', 'startDate', 'endDate', 'earlierPeriods', 'reviewStatus'];
+        }
+
+        function leadsWithTheCapability() {
+          return ('rep:' + studyKey) in heldFor('replicationsManage');
+        }
+
+        function validMembership(d) {
+          return d.role in ['lead', 'coLead', 'formerLead', 'coordinator', 'analyst', 'member', 'advisor']
+            && d.reviewStatus in ['confirmed', 'needsReview']
+            && d.isCurrent is bool
+            && d.earlierPeriods is list
+            && d.earlierPeriods.size() <= 50;
+        }
+
+        allow create: if isMember()
+          && (canForProgramme('replicationsManage')
+            || (leadsWithTheCapability()
+              && !(incoming().role in ['lead', 'coLead'])
+              && incoming().reviewStatus == 'needsReview'))
+          && createdNow(incoming(), replicationMembershipsFields(), replicationMembershipsRequired())
+          && incoming().replicationId == studyKey
+          && membershipId == incoming().personId + '__' + incoming().role
+          && validMembership(incoming())
+          && replicationExists(studyKey)
+          && personExists(incoming().personId);
+        allow update: if isMember()
+          && (canForProgramme('replicationsManage')
+            || (leadsWithTheCapability()
+              && !(resource.data.role in ['lead', 'coLead'])
+              && incoming().reviewStatus == resource.data.reviewStatus))
+          && updatedNow(
+            incoming(),
+            stampFields().concat(replicationMembershipsEditable()),
+            replicationMembershipsRequired()
+          )
+          && validMembership(incoming());
+      }
+
+      // Reads: 2 (access, the replication).
+      match /hypotheses/{hypothesisId} {
+        function replicationHypothesesFields() {
+          return [
+            'replicationId', 'hypothesisNumber', 'text', 'expectedEffect', 'outcomeMeasure', 'analysisSpecification',
+            'preregistrationUrl', 'originalStatistics', 'nullSigSource', 'scientificReviewStatus', 'analysisStatus',
+            'resultSummary', 'resultReviewedBy', 'resultReviewedAt', 'studyDescriptionUrl', 'infosheetUrl'
+          ];
+        }
+        function replicationHypothesesRequired() {
+          return [
+            'replicationId', 'hypothesisNumber', 'text', 'scientificReviewStatus', 'analysisStatus',
+            'resultReviewedBy', 'resultReviewedAt'
+          ];
+        }
+        function replicationHypothesesEditable() {
+          return [
+            'text', 'expectedEffect', 'outcomeMeasure', 'analysisSpecification', 'preregistrationUrl',
+            'originalStatistics', 'nullSigSource', 'scientificReviewStatus', 'analysisStatus', 'resultSummary',
+            'resultReviewedBy', 'resultReviewedAt', 'studyDescriptionUrl', 'infosheetUrl'
+          ];
+        }
+
+        function validHypothesis(d, stored) {
+          return richText(d.text)
+            && longText(d.get('expectedEffect', 'x'))
+            && longText(d.get('outcomeMeasure', 'x'))
+            && richText(d.get('analysisSpecification', ''))
+            && webAddress(d.get('preregistrationUrl', 'https://example.org'))
+            && longText(d.get('originalStatistics', 'x'))
+            && verbatim(d.get('nullSigSource', ''))
+            && d.scientificReviewStatus in ['unverified', 'underReview', 'verified']
+            && d.analysisStatus in ['notStarted', 'inProgress', 'completed']
+            && richText(d.get('resultSummary', ''))
+            && namesCallerNow(
+              d.resultReviewedBy,
+              d.resultReviewedAt,
+              stored.get('resultReviewedBy', null),
+              stored.get('resultReviewedAt', null)
+            )
+            && webAddress(d.get('studyDescriptionUrl', 'https://example.org'))
+            && webAddress(d.get('infosheetUrl', 'https://example.org'));
+        }
+
+        // The identifier is `h` and the two-digit number of the hypothesis, as `hypothesisId`
+        // of the shared package builds it, and `hypothesisNumber` is that number as written.
+        allow create: if isMember() && canForReplication('replicationsManage', studyKey)
+          && createdNow(incoming(), replicationHypothesesFields(), replicationHypothesesRequired())
+          && incoming().replicationId == studyKey
+          && hypothesisId.matches('^h(0[1-9]|[1-9][0-9])$')
+          && incoming().hypothesisNumber == (hypothesisId[1:2] == '0' ? hypothesisId[2:3] : hypothesisId[1:3])
+          && validHypothesis(incoming(), {})
+          && replicationExists(studyKey);
+        allow update: if isMember() && canForReplication('replicationsManage', studyKey)
+          && updatedNow(
+            incoming(),
+            stampFields().concat(replicationHypothesesEditable()),
+            replicationHypothesesRequired()
+          )
+          && validHypothesis(incoming(), resource.data);
+      }
+
+      // Reads: 2 (access, the replication).
+      match /protocols/{protocolId} {
+        function replicationProtocolsFields() { return ['replicationId', 'title', 'description', 'currentVersionId']; }
+        function replicationProtocolsRequired() { return ['replicationId', 'title', 'currentVersionId']; }
+        function replicationProtocolsEditable() { return ['title', 'description', 'currentVersionId']; }
+
+        allow create: if isMember() && canForReplication('replicationsManage', studyKey)
+          && createdNow(incoming(), replicationProtocolsFields(), replicationProtocolsRequired())
+          && incoming().replicationId == studyKey
+          && shortText(incoming().title)
+          && replicationExists(studyKey);
+        allow update: if isMember() && canForReplication('replicationsManage', studyKey)
+          && updatedNow(incoming(), stampFields().concat(replicationProtocolsEditable()), replicationProtocolsRequired())
+          && shortText(incoming().title);
+      }
+
+      // Reads: 2 (access, the protocol).
+      match /protocolVersions/{versionId} {
+        function replicationProtocolVersionsFields() {
+          return [
+            'replicationId', 'protocolId', 'versionLabel', 'effectiveDate', 'status', 'changeSummary',
+            'documentLinkId', 'approvedBy', 'approvedAt'
+          ];
+        }
+        function replicationProtocolVersionsRequired() {
+          return ['replicationId', 'protocolId', 'versionLabel', 'status', 'approvedBy', 'approvedAt'];
+        }
+        function replicationProtocolVersionsEditable() {
+          return [
+            'protocolId', 'versionLabel', 'effectiveDate', 'status', 'changeSummary', 'documentLinkId',
+            'approvedBy', 'approvedAt'
+          ];
+        }
+
+        function validProtocolVersion(d, stored) {
+          return shortText(d.versionLabel)
+            && d.status in ['draft', 'approved', 'superseded']
+            && namesCallerNow(d.approvedBy, d.approvedAt, stored.get('approvedBy', null), stored.get('approvedAt', null));
+        }
+
+        allow create: if isMember() && canForReplication('replicationsManage', studyKey)
+          && createdNow(incoming(), replicationProtocolVersionsFields(), replicationProtocolVersionsRequired())
+          && incoming().replicationId == studyKey
+          && validProtocolVersion(incoming(), {})
+          && exists(/databases/$(database)/documents/replications/$(studyKey)/protocols/$(incoming().protocolId));
+        // A version stays with its protocol.
+        allow update: if isMember() && canForReplication('replicationsManage', studyKey)
+          && updatedNow(
+            incoming(),
+            stampFields().concat(replicationProtocolVersionsEditable()),
+            replicationProtocolVersionsRequired()
+          )
+          && incoming().protocolId == resource.data.protocolId
+          && validProtocolVersion(incoming(), resource.data);
+      }
+
+      // Reads: 2 (access, the replication).
+      match /equipmentRequirements/{requirementKey} {
+        function replicationEquipmentRequirementsFields() {
+          return ['replicationId', 'requirementKey', 'operator', 'value', 'isMandatory', 'note'];
+        }
+        function replicationEquipmentRequirementsRequired() {
+          return ['replicationId', 'requirementKey', 'operator', 'isMandatory'];
+        }
+        function replicationEquipmentRequirementsEditable() { return ['operator', 'value', 'isMandatory', 'note']; }
+
+        function validRequirement(d) {
+          return d.operator in ['equals', 'atLeast', 'atMost', 'includes', 'present'] && d.isMandatory is bool;
+        }
+
+        allow create: if isMember() && canForReplication('replicationsManage', studyKey)
+          && createdNow(
+            incoming(),
+            replicationEquipmentRequirementsFields(),
+            replicationEquipmentRequirementsRequired()
+          )
+          && incoming().replicationId == studyKey
+          && incoming().requirementKey == requirementKey
+          && validRequirement(incoming())
+          && replicationExists(studyKey);
+        allow update: if isMember() && canForReplication('replicationsManage', studyKey)
+          && updatedNow(
+            incoming(),
+            stampFields().concat(replicationEquipmentRequirementsEditable()),
+            replicationEquipmentRequirementsRequired()
+          )
+          && validRequirement(incoming());
+      }
+
+      // aliases and summaries have no write rule: trusted code derives them.
+    }
+
+    // Every member reads a confirmed membership. The others are read within the scope of the
+    // replication, so a member's list query asks for the confirmed ones, or names a
+    // replication the caller belongs to.
+    // Reads: 1 (access).
+    match /{path=**}/memberships/{membershipId} {
+      allow read: if isMember()
+        && (resource.data.reviewStatus == 'confirmed' || core() || onTeam(resource.data.replicationId))
+        && boundedRead();
+    }
+
+    // Reads: 1 (access), in each of the six blocks.
+    match /{path=**}/aliases/{aliasId} {
+      allow read: if isMember() && boundedRead();
+    }
+
+    match /{path=**}/hypotheses/{hypothesisId} {
+      allow read: if isMember() && boundedRead();
+    }
+
+    match /{path=**}/protocols/{protocolId} {
+      allow read: if isMember() && boundedRead();
+    }
+
+    match /{path=**}/protocolVersions/{versionId} {
+      allow read: if isMember() && boundedRead();
+    }
+
+    match /{path=**}/equipmentRequirements/{requirementKey} {
+      allow read: if isMember() && boundedRead();
+    }
+
+    match /{path=**}/summaries/{kind} {
+      allow read: if isMember() && boundedRead();
+    }
+
+    // One change of status, read as the record whose status it records: its scope keys hold
+    // `members` where every member reads that record. Written by the callable function that
+    // changes the status, in the same transaction.
+    // Reads: 1 (access).
+    match /statusHistory/{entryId} {
+      allow read: if isMember() && (core() || holdsScopeOf(resource.data)) && boundedRead();
+    }
+
+    // Reads: 1 (access).
+    match /historicalAggregates/{aggregateId} {
+      allow read: if isMember() && boundedRead();
+    }
+
+    // Reads: 2 (access, the programme).
+    match /candidateStudies/{candidateId} {
+      function candidateStudiesFields() {
+        return [
+          'programmeId', 'originalAuthors', 'originalYear', 'originalTitle', 'originalReference', 'originalDoi',
+          'selectionStatus', 'replicationId', 'dataOrigin'
+        ];
+      }
+      function candidateStudiesRequired() { return ['programmeId', 'selectionStatus', 'replicationId', 'dataOrigin']; }
+      function candidateStudiesEditable() {
+        return ['programmeId', 'originalAuthors', 'originalYear', 'originalTitle', 'originalReference', 'selectionStatus'];
+      }
+
+      allow read: if isMember() && boundedRead();
+      // Trusted code links a candidate to the replication it has become.
+      allow create: if isMember() && canForProgramme('replicationsManage')
+        && createdNow(incoming(), candidateStudiesFields(), candidateStudiesRequired())
+        && docId(candidateId)
+        && incoming().selectionStatus in ['shortlisted', 'rankedCandidate', 'selected', 'withdrawn']
+        && incoming().replicationId == null
+        && incoming().dataOrigin == 'live'
+        && exists(/databases/$(database)/documents/programmes/$(incoming().programmeId));
+      allow update: if isMember() && canForProgramme('replicationsManage')
+        && updatedNow(incoming(), stampFields().concat(candidateStudiesEditable()), candidateStudiesRequired())
+        && incoming().selectionStatus in ['shortlisted', 'rankedCandidate', 'selected', 'withdrawn'];
+    }
+
+    // Reads: 1 (access).
+    match /studyAliasIndex/{foldedAlias} {
+      allow read: if isMember() && boundedRead();
+    }
+
+    // Reads: 1 (access).
+    match /statusDefinitions/{definitionId} {
+      function statusDefinitionsFields() { return ['entityType', 'key', 'label', 'category', 'position', 'isDefault']; }
+      function statusDefinitionsRequired() { return ['entityType', 'key', 'label', 'category', 'position', 'isDefault']; }
+      function statusDefinitionsEditable() { return ['label', 'category', 'position', 'isDefault']; }
+
+      function validStatusDefinition(d) {
+        return shortText(d.label)
+          && d.category in ['notStarted', 'active', 'done', 'paused', 'cancelled']
+          && d.position is int
+          && d.position >= 0
+          && d.isDefault is bool;
+      }
+
+      allow read: if isMember() && boundedRead();
+      allow create: if isMember() && canForProgramme('lookupsManage')
+        && createdNow(incoming(), statusDefinitionsFields(), statusDefinitionsRequired())
+        && incoming().entityType in ['replication', 'participation', 'dataset', 'task', 'manuscript']
+        && definitionId == incoming().entityType + '__' + incoming().key
+        && validStatusDefinition(incoming());
+      allow update: if isMember() && canForProgramme('lookupsManage')
+        && updatedNow(incoming(), stampFields().concat(statusDefinitionsEditable()), statusDefinitionsRequired())
+        && validStatusDefinition(incoming());
+    }
+
+    // Reads: 1 (access).
+    match /vocabularyTerms/{termId} {
+      function vocabularyTermsFields() {
+        return [
+          'sourceId', 'name', 'abbreviation', 'description', 'invalidReason', 'sameAsSource', 'labelsSource', 'kind',
+          'isDeprecated'
+        ];
+      }
+      function vocabularyTermsRequired() { return ['name', 'sameAsSource', 'labelsSource', 'kind', 'isDeprecated']; }
+      function vocabularyTermsEditable() {
+        return ['sourceId', 'abbreviation', 'description', 'invalidReason', 'sameAsSource', 'labelsSource', 'isDeprecated'];
+      }
+
+      allow read: if isMember() && boundedRead();
+      allow create: if isMember() && canForProgramme('lookupsManage')
+        && createdNow(incoming(), vocabularyTermsFields(), vocabularyTermsRequired())
+        && docId(termId)
+        && shortText(incoming().name)
+        && incoming().isDeprecated is bool;
+      allow update: if isMember() && canForProgramme('lookupsManage')
+        && updatedNow(incoming(), stampFields().concat(vocabularyTermsEditable()), vocabularyTermsRequired())
+        && incoming().isDeprecated is bool;
+    }
+
+    // Reads: 2 (access, the replication of a question about one).
+    match /predictionMarketItems/{itemId} {
+      function predictionMarketItemsFields() { return ['replicationId', 'hypothesisId', 'questionText', 'choices']; }
+      function predictionMarketItemsRequired() { return ['questionText', 'choices']; }
+      function predictionMarketItemsEditable() { return ['hypothesisId', 'questionText', 'choices']; }
+
+      function validQuestion(d) {
+        return longText(d.questionText) && d.choices is list && d.choices.size() <= 50;
+      }
+
+      allow read: if isMember() && boundedRead();
+      allow create: if isMember() && canForProgramme('replicationsManage')
+        && createdNow(incoming(), predictionMarketItemsFields(), predictionMarketItemsRequired())
+        && validQuestion(incoming())
+        && (!('replicationId' in incoming()) || replicationExists(incoming().replicationId));
+      allow update: if isMember() && canForProgramme('replicationsManage')
+        && updatedNow(incoming(), stampFields().concat(predictionMarketItemsEditable()), predictionMarketItemsRequired())
+        && validQuestion(incoming());
+    }
+
+    // ===== Participation (section 6) =====
+
+    // Everything specific to one laboratory in one replication. The leads of the replication
+    // and the coordinators of the laboratory manage it. `status` and `statusHistoryId` change
+    // through a callable function, which writes the history entry in the same transaction.
+    // Reads: 7 on creation (access, the replication, the laboratory, and the local lead, the
+    // protocol, the protocol version and the equipment configuration where it names them), and
+    // 5 on an update that introduces all four references.
+    match /participations/{participationId} {
+      function participationsFields() {
+        return [
+          'replicationId', 'laboratoryId', 'scopeKeys', 'localLeadPersonId', 'status', 'statusHistoryId',
+          'targetNMain', 'targetNRest', 'protocolId', 'protocolVersionId', 'equipmentConfigurationId', 'signedUpAt',
+          'readinessStatus', 'custom', 'dataOrigin'
+        ];
+      }
+      function participationsRequired() {
+        return [
+          'replicationId', 'laboratoryId', 'scopeKeys', 'status', 'statusHistoryId', 'readinessStatus', 'custom',
+          'dataOrigin'
+        ];
+      }
+      function participationsEditable() {
+        return [
+          'localLeadPersonId', 'targetNMain', 'targetNRest', 'protocolId', 'protocolVersionId',
+          'equipmentConfigurationId', 'signedUpAt', 'readinessStatus', 'custom'
+        ];
+      }
+
+      function validParticipation(d) {
+        return docId(d.get('localLeadPersonId', 'x'))
+          && count(d.get('targetNMain', 0), 1000000)
+          && count(d.get('targetNRest', 0), 1000000)
+          && docId(d.get('protocolId', 'x'))
+          && docId(d.get('protocolVersionId', 'x'))
+          && docId(d.get('equipmentConfigurationId', 'x'))
+          && d.get('signedUpAt', request.time) is timestamp
+          && d.readinessStatus in ['notStarted', 'inProgress', 'readyForReview', 'approved']
+          && d.custom is map
+          && d.custom.size() <= 500;
+      }
+
+      // A reference that a write introduces points at a document that exists: a person, a
+      // protocol and a version of the replication, and a configuration of the laboratory.
+      function participationReferencesExist(d, stored) {
+        return (!('localLeadPersonId' in d)
+            || d.localLeadPersonId == stored.get('localLeadPersonId', null)
+            || personExists(d.localLeadPersonId))
+          && (!('protocolId' in d)
+            || d.protocolId == stored.get('protocolId', null)
+            || exists(/databases/$(database)/documents/replications/$(d.replicationId)/protocols/$(d.protocolId)))
+          && (!('protocolVersionId' in d)
+            || d.protocolVersionId == stored.get('protocolVersionId', null)
+            || exists(/databases/$(database)/documents/replications/$(d.replicationId)/protocolVersions/$(d.protocolVersionId)))
+          && (!('equipmentConfigurationId' in d)
+            || d.equipmentConfigurationId == stored.get('equipmentConfigurationId', null)
+            || exists(/databases/$(database)/documents/laboratories/$(d.laboratoryId)/equipment/$(d.equipmentConfigurationId)));
+      }
+
+      allow read: if isMember() && boundedRead();
+      // The identifier joins the replication and the laboratory, so the pair exists once. A
+      // study identifier holds letters and digits only, which keeps the join unambiguous. A
+      // participation starts as invited or interested, with no status history.
+      allow create: if isMember()
+        && canForUnit('participationsManage', incoming().replicationId, incoming().laboratoryId)
+        && createdNow(incoming(), participationsFields(), participationsRequired())
+        && incoming().replicationId.matches('^[A-Za-z][A-Za-z0-9]{0,99}$')
+        && docId(incoming().laboratoryId)
+        && participationId == incoming().replicationId + '__' + incoming().laboratoryId
+        && incoming().scopeKeys == ['rep:' + incoming().replicationId, 'lab:' + incoming().laboratoryId]
+        && incoming().status in ['invited', 'interested']
+        && incoming().statusHistoryId == null
+        && incoming().dataOrigin == 'live'
+        && validParticipation(incoming())
+        && replicationExists(incoming().replicationId)
+        && laboratoryExists(incoming().laboratoryId)
+        && participationReferencesExist(incoming(), {});
+      allow update: if isMember()
+        && canForUnit('participationsManage', resource.data.replicationId, resource.data.laboratoryId)
+        && updatedNow(incoming(), stampFields().concat(participationsEditable()), participationsRequired())
+        && validParticipation(incoming())
+        && participationReferencesExist(incoming(), resource.data);
+
+      // Ethics, training, readiness approval and notes.
+      // Reads: 2 (access, the participation).
+      match /private/detail {
+        function participationDetailFields() {
+          return [
+            'ethicsStatus', 'ethicsReference', 'ethicsApprovedAt', 'trainingStatus', 'readinessApprovedBy',
+            'readinessApprovedAt', 'equipmentOverrideJustification', 'notes'
+          ];
+        }
+        function participationDetailRequired() {
+          return ['ethicsStatus', 'trainingStatus', 'readinessApprovedBy', 'readinessApprovedAt'];
+        }
+        function participationDetailEditable() {
+          return [
+            'ethicsStatus', 'ethicsReference', 'ethicsApprovedAt', 'trainingStatus', 'readinessApprovedBy',
+            'readinessApprovedAt', 'equipmentOverrideJustification', 'notes'
+          ];
+        }
+
+        function validParticipationDetail(d, stored) {
+          return d.ethicsStatus in ['unknown', 'notStarted', 'submitted', 'approved', 'notRequired']
+            && d.trainingStatus in ['unknown', 'notStarted', 'inProgress', 'completed', 'notRequired']
+            && namesCallerNow(
+              d.readinessApprovedBy,
+              d.readinessApprovedAt,
+              stored.get('readinessApprovedBy', null),
+              stored.get('readinessApprovedAt', null)
+            )
+            && verbatim(d.get('notes', ''));
+        }
+
+        allow get: if isMember() && (core() || withinUnit(participation(participationId)));
+        allow create: if isMember()
+          && canForUnit(
+            'participationsManage',
+            participation(participationId).replicationId,
+            participation(participationId).laboratoryId
+          )
+          && createdNow(incoming(), participationDetailFields(), participationDetailRequired())
+          && validParticipationDetail(incoming(), {});
+        allow update: if isMember()
+          && canForUnit(
+            'participationsManage',
+            participation(participationId).replicationId,
+            participation(participationId).laboratoryId
+          )
+          && updatedNow(incoming(), stampFields().concat(participationDetailEditable()), participationDetailRequired())
+          && validParticipationDetail(incoming(), resource.data);
+      }
+
+      // The scope fields of a document beneath a participation are those of the participation.
+      function inheritsScope(d) {
+        return d.participationId == participationId
+          && d.replicationId == participation(participationId).replicationId
+          && d.laboratoryId == participation(participationId).laboratoryId
+          && d.scopeKeys == ['rep:' + d.replicationId, 'lab:' + d.laboratoryId];
+      }
+
+      // An item of the onboarding checklist. A function creates the items from the template.
+      // Those who manage the participation update an item, and the members of its laboratory
+      // update its status, its evidence and its note.
+      // Reads: 1 (access).
+      match /checklist/{itemKey} {
+        function participationChecklistRequired() {
+          return [
+            'participationId', 'templateKey', 'templateItemKey', 'label', 'status', 'completedBy', 'completedAt',
+            'position', 'replicationId', 'laboratoryId', 'scopeKeys'
+          ];
+        }
+        function participationChecklistEditable() {
+          return ['participationId', 'status', 'completedBy', 'completedAt', 'evidenceUrl', 'note'];
+        }
+        function participationChecklistEditableByLabMember() {
+          return ['status', 'completedBy', 'completedAt', 'evidenceUrl', 'note'];
+        }
+
+        function validChecklistItem(d, stored) {
+          return d.status in ['notStarted', 'inProgress', 'done', 'notApplicable', 'blocked']
+            && namesCallerNow(d.completedBy, d.completedAt, stored.completedBy, stored.completedAt)
+            && webAddress(d.get('evidenceUrl', 'https://example.org'))
+            && longText(d.get('note', 'x'));
+        }
+
+        allow update: if isMember()
+          && ((canForUnit('participationsManage', resource.data.replicationId, resource.data.laboratoryId)
+              && updatedNow(
+                incoming(),
+                stampFields().concat(participationChecklistEditable()),
+                participationChecklistRequired()
+              ))
+            || (resource.data.laboratoryId in access().memberLaboratoryIds
+              && updatedNow(
+                incoming(),
+                touchFields().concat(participationChecklistEditableByLabMember()),
+                participationChecklistRequired()
+              )))
+          && incoming().participationId == participationId
+          && validChecklistItem(incoming(), resource.data);
+      }
+
+      // Reads: 3 (access, the participation, the person).
+      match /teamMembers/{personId} {
+        function participationTeamMembersFields() {
+          return ['participationId', 'personId', 'role', 'replicationId', 'laboratoryId', 'scopeKeys'];
+        }
+        function participationTeamMembersRequired() {
+          return ['participationId', 'personId', 'role', 'replicationId', 'laboratoryId', 'scopeKeys'];
+        }
+        function participationTeamMembersEditable() { return ['participationId', 'role']; }
+
+        allow create: if isMember()
+          && canForUnit('participationsManage', incoming().replicationId, incoming().laboratoryId)
+          && createdNow(incoming(), participationTeamMembersFields(), participationTeamMembersRequired())
+          && inheritsScope(incoming())
+          && incoming().personId == personId
+          && incoming().role in ['localLead', 'experimenter', 'analyst', 'dataManager', 'member']
+          && personExists(personId);
+        allow update: if isMember()
+          && canForUnit('participationsManage', resource.data.replicationId, resource.data.laboratoryId)
+          && updatedNow(
+            incoming(),
+            stampFields().concat(participationTeamMembersEditable()),
+            participationTeamMembersRequired()
+          )
+          && incoming().participationId == participationId
+          && incoming().role in ['localLead', 'experimenter', 'analyst', 'dataManager', 'member'];
+      }
+
+      // The acknowledgement of a protocol version by a person: created once, never changed.
+      // Reads: 4 (access, the participation, the protocol version, the person).
+      match /acknowledgements/{acknowledgementId} {
+        function participationAcknowledgementsFields() {
+          return [
+            'participationId', 'protocolId', 'protocolVersionId', 'personId', 'acknowledgedAt', 'replicationId',
+            'laboratoryId', 'scopeKeys'
+          ];
+        }
+        function participationAcknowledgementsRequired() {
+          return [
+            'participationId', 'protocolId', 'protocolVersionId', 'personId', 'acknowledgedAt', 'replicationId',
+            'laboratoryId', 'scopeKeys'
+          ];
+        }
+
+        allow create: if isMember()
+          && canForUnit('participationsManage', incoming().replicationId, incoming().laboratoryId)
+          && appendedNow(incoming(), participationAcknowledgementsFields(), participationAcknowledgementsRequired())
+          && inheritsScope(incoming())
+          && acknowledgementId == incoming().personId + '__' + incoming().protocolVersionId
+          && incoming().acknowledgedAt is timestamp
+          && incoming().acknowledgedAt <= request.time
+          && get(/databases/$(database)/documents/replications/$(incoming().replicationId)/protocolVersions/$(incoming().protocolVersionId)).data.protocolId == incoming().protocolId
+          && personExists(incoming().personId);
+      }
+
+      // Reads: 2 (access, the participation).
+      match /deviations/{deviationId} {
+        function participationDeviationsFields() {
+          return [
+            'participationId', 'description', 'severity', 'occurredAt', 'reportedBy', 'correctiveAction', 'status',
+            'replicationId', 'laboratoryId', 'scopeKeys'
+          ];
+        }
+        function participationDeviationsRequired() {
+          return [
+            'participationId', 'description', 'severity', 'occurredAt', 'reportedBy', 'status', 'replicationId',
+            'laboratoryId', 'scopeKeys'
+          ];
+        }
+        function participationDeviationsEditable() {
+          return ['participationId', 'description', 'severity', 'occurredAt', 'reportedBy', 'correctiveAction', 'status'];
+        }
+
+        function validDeviation(d) {
+          return longText(d.description)
+            && d.severity in ['minor', 'major', 'critical']
+            && d.occurredAt is timestamp
+            && d.status in ['open', 'underReview', 'resolved'];
+        }
+
+        // A deviation names the account that reported it, which never changes.
+        allow create: if isMember()
+          && canForUnit('participationsManage', incoming().replicationId, incoming().laboratoryId)
+          && createdNow(incoming(), participationDeviationsFields(), participationDeviationsRequired())
+          && inheritsScope(incoming())
+          && incoming().reportedBy == request.auth.uid
+          && validDeviation(incoming());
+        allow update: if isMember()
+          && canForUnit('participationsManage', resource.data.replicationId, resource.data.laboratoryId)
+          && updatedNow(
+            incoming(),
+            stampFields().concat(participationDeviationsEditable()),
+            participationDeviationsRequired()
+          )
+          && incoming().participationId == participationId
+          && incoming().reportedBy == resource.data.reportedBy
+          && validDeviation(incoming());
+      }
+    }
+
+    // What sits beneath a participation is read within its scope, beneath one participation or
+    // across the participations of a unit the caller belongs to.
+    // Reads: 1 (access), in each of the four blocks.
+    match /{path=**}/checklist/{itemKey} {
+      allow read: if isMember() && (core() || withinUnit(resource.data)) && boundedRead();
+    }
+
+    match /{path=**}/teamMembers/{personId} {
+      allow read: if isMember() && (core() || withinUnit(resource.data)) && boundedRead();
+    }
+
+    match /{path=**}/acknowledgements/{acknowledgementId} {
+      allow read: if isMember() && (core() || withinUnit(resource.data)) && boundedRead();
+    }
+
+    match /{path=**}/deviations/{deviationId} {
+      allow read: if isMember() && (core() || withinUnit(resource.data)) && boundedRead();
+    }
+
+    // Reads: 1 (access).
+    match /checklistTemplates/{templateKey} {
+      function checklistTemplatesFields() { return ['key', 'items']; }
+      function checklistTemplatesRequired() { return ['key', 'items']; }
+      function checklistTemplatesEditable() { return ['items']; }
+
+      // The items themselves are left to the schema: a rule cannot iterate a list.
+      function validTemplate(d) {
+        return d.items is list && d.items.size() >= 1 && d.items.size() <= 100;
+      }
+
+      allow read: if isMember() && boundedRead();
+      allow create: if isMember() && canForProgramme('lookupsManage')
+        && createdNow(incoming(), checklistTemplatesFields(), checklistTemplatesRequired())
+        && incoming().key == templateKey
+        && validTemplate(incoming());
+      allow update: if isMember() && canForProgramme('lookupsManage')
+        && updatedNow(incoming(), stampFields().concat(checklistTemplatesEditable()), checklistTemplatesRequired())
+        && validTemplate(incoming());
+    }
+
+    // The historical recruitment correspondence, for whoever holds `outreach.read`: the leads
+    // of the replication and the programme. A row whose tab has not been resolved to a
+    // replication is for the programme alone. Written by the importers.
+    // Reads: 1 (access).
+    match /outreachContacts/{contactId} {
+      allow read: if isMember() && canForReplication('outreachRead', resource.data.replicationId) && boundedRead();
+    }
+
+    // ===== Recruitment (section 7) =====
+
+    // Reads: 2 (access, the replication of a category that extends one).
+    match /countCategories/{categoryKey} {
+      function countCategoriesFields() { return ['key', 'label', 'definition', 'position', 'isCore', 'replicationId']; }
+      function countCategoriesRequired() { return ['key', 'label', 'definition', 'position', 'isCore']; }
+      function countCategoriesEditable() { return ['label', 'definition', 'position', 'isCore']; }
+
+      function validCategory(d) {
+        return shortText(d.label) && longText(d.definition) && d.position is int && d.position >= 0 && d.isCore is bool;
+      }
+
+      allow read: if isMember() && boundedRead();
+      allow create: if isMember() && canForProgramme('lookupsManage')
+        && createdNow(incoming(), countCategoriesFields(), countCategoriesRequired())
+        && incoming().key == categoryKey
+        && validCategory(incoming())
+        && (!('replicationId' in incoming()) || replicationExists(incoming().replicationId));
+      allow update: if isMember() && canForProgramme('lookupsManage')
+        && updatedNow(incoming(), stampFields().concat(countCategoriesEditable()), countCategoriesRequired())
+        && validCategory(incoming());
+    }
+
+    // ===== Scientific outputs and governance (section 11) =====
+
+    // The scope fields of an output that names a replication are that replication's key, and
+    // the replication exists. An output of the programme as a whole carries none.
+    function outputOfReplication(d) {
+      return d.scopeKeys == ['rep:' + d.replicationId] && replicationExists(d.replicationId);
+    }
+
+    // `status` and `statusHistoryId` change through a callable function. A manuscript starts
+    // as planned.
+    // Reads: 2 (access, the replication).
+    match /manuscripts/{manuscriptId} {
+      function manuscriptsFields() {
+        return [
+          'replicationId', 'websitePublicationId', 'title', 'kind', 'status', 'statusHistoryId', 'journal', 'doi',
+          'preprintDoi', 'osfUrl', 'authorsShort', 'submittedAt', 'acceptedAt', 'publishedAt', 'citationStatus',
+          'citationMetadata', 'custom', 'scopeKeys'
+        ];
+      }
+      function manuscriptsRequired() { return ['title', 'kind', 'status', 'statusHistoryId', 'custom', 'scopeKeys']; }
+      function manuscriptsEditable() {
+        return [
+          'websitePublicationId', 'title', 'kind', 'journal', 'doi', 'preprintDoi', 'osfUrl', 'authorsShort',
+          'submittedAt', 'acceptedAt', 'publishedAt', 'citationStatus', 'citationMetadata', 'custom'
+        ];
+      }
+
+      function validManuscript(d) {
+        return d.title.matches('(?s)^.{1,1000}$')
+          && d.kind in ['stage1Rr', 'stage2Rr', 'preprint', 'article', 'dataPaper', 'software', 'other']
+          && webAddress(d.get('osfUrl', 'https://example.org'))
+          && d.custom is map
+          && d.custom.size() <= 500;
+      }
+
+      allow read: if isMember() && boundedRead();
+      allow create: if isMember()
+        && canManageOutputsOf(incoming().get('replicationId', null))
+        && ('replicationId' in incoming() ? outputOfReplication(incoming()) : incoming().scopeKeys == [])
+        && createdNow(incoming(), manuscriptsFields(), manuscriptsRequired())
+        && incoming().status == 'planned'
+        && incoming().statusHistoryId == null
+        && validManuscript(incoming());
+      allow update: if isMember()
+        && canManageOutputsOf(resource.data.get('replicationId', null))
+        && updatedNow(incoming(), stampFields().concat(manuscriptsEditable()), manuscriptsRequired())
+        && validManuscript(incoming());
+
+      // A review round, a decision, a revision or a submission. Its scope fields are those of
+      // the manuscript.
+      // Reads: 2 (access, the manuscript).
+      match /events/{eventId} {
+        function manuscriptEventsFields() {
+          return [
+            'manuscriptId', 'kind', 'round', 'occurredAt', 'dueAt', 'outcome', 'summary', 'documentLinkIds',
+            'replicationId', 'laboratoryId', 'scopeKeys'
+          ];
+        }
+        function manuscriptEventsRequired() {
+          return ['manuscriptId', 'kind', 'occurredAt', 'documentLinkIds', 'replicationId', 'laboratoryId', 'scopeKeys'];
+        }
+        function manuscriptEventsEditable() {
+          return ['manuscriptId', 'kind', 'round', 'occurredAt', 'dueAt', 'outcome', 'summary', 'documentLinkIds'];
+        }
+
+        function validEvent(d) {
+          return d.manuscriptId == manuscriptId
+            && d.kind in ['submission', 'reviewRound', 'decision', 'revision', 'acceptance', 'publication', 'other']
+            && d.occurredAt is timestamp
+            && d.documentLinkIds is list
+            && d.documentLinkIds.size() <= 500;
+        }
+
+        allow create: if isMember()
+          && canManageOutputsOf(manuscript(manuscriptId).get('replicationId', null))
+          && createdNow(incoming(), manuscriptEventsFields(), manuscriptEventsRequired())
+          && incoming().replicationId == manuscript(manuscriptId).get('replicationId', null)
+          && incoming().laboratoryId == null
+          && incoming().scopeKeys == manuscript(manuscriptId).scopeKeys
+          && validEvent(incoming());
+        allow update: if isMember()
+          && canManageOutputsOf(resource.data.replicationId)
+          && updatedNow(incoming(), stampFields().concat(manuscriptEventsEditable()), manuscriptEventsRequired())
+          && validEvent(incoming());
+      }
+    }
+
+    // Reads: 1 (access).
+    match /{path=**}/events/{eventId} {
+      allow read: if isMember() && boundedRead();
+    }
+
+    // Reads: 2 (access, the replication).
+    match /contributorTables/{tableId} {
+      function contributorTablesFields() {
+        return ['replicationId', 'sourceKey', 'isOnlySignupTable', 'isPublished', 'publicationUrl', 'pdfUrl', 'scopeKeys'];
+      }
+      function contributorTablesRequired() { return ['replicationId', 'sourceKey', 'scopeKeys']; }
+      function contributorTablesEditable() {
+        return ['sourceKey', 'isOnlySignupTable', 'isPublished', 'publicationUrl', 'pdfUrl'];
+      }
+
+      function validTable(d) {
+        return webAddress(d.get('publicationUrl', 'https://example.org'))
+          && webAddress(d.get('pdfUrl', 'https://example.org'));
+      }
+
+      allow read: if isMember()
+        && (core() || holdsScopeOf(resource.data) || onTeam(resource.data.replicationId))
+        && boundedRead();
+      allow create: if isMember()
+        && canManageOutputsOf(incoming().replicationId)
+        && (incoming().replicationId == null ? incoming().scopeKeys == [] : outputOfReplication(incoming()))
+        && createdNow(incoming(), contributorTablesFields(), contributorTablesRequired())
+        && validTable(incoming());
+      allow update: if isMember()
+        && canManageOutputsOf(resource.data.replicationId)
+        && updatedNow(incoming(), stampFields().concat(contributorTablesEditable()), contributorTablesRequired())
+        && validTable(incoming());
+    }
+
+    // One row of a contributor table. It grants no role and no access.
+    // Reads: 3 (access, the replication, the contributor table).
+    match /contributors/{contributorId} {
+      function contributorsFields() {
+        return [
+          'firstNameSource', 'middleNameSource', 'surnameSource', 'orderInPublication', 'affiliationSource',
+          'affiliationSlotsSource', 'orcid', 'creditRoles', 'agreementSource', 'reviewStatus', 'replicationId',
+          'manuscriptId', 'contributorTableId', 'personId', 'scopeKeys'
+        ];
+      }
+      function contributorsRequired() {
+        return ['creditRoles', 'reviewStatus', 'replicationId', 'manuscriptId', 'contributorTableId', 'personId', 'scopeKeys'];
+      }
+      function contributorsEditable() {
+        return [
+          'firstNameSource', 'middleNameSource', 'surnameSource', 'orderInPublication', 'affiliationSource',
+          'affiliationSlotsSource', 'orcid', 'creditRoles', 'agreementSource', 'reviewStatus', 'manuscriptId',
+          'contributorTableId', 'personId'
+        ];
+      }
+
+      function validContributor(d) {
+        return d.reviewStatus in ['confirmed', 'needsReview'] && d.creditRoles is map && d.creditRoles.size() <= 14;
+      }
+
+      allow read: if isMember() && boundedRead();
+      allow create: if isMember()
+        && canManageOutputsOf(incoming().replicationId)
+        && (incoming().replicationId == null ? incoming().scopeKeys == [] : outputOfReplication(incoming()))
+        && createdNow(incoming(), contributorsFields(), contributorsRequired())
+        && validContributor(incoming())
+        && exists(/databases/$(database)/documents/contributorTables/$(incoming().contributorTableId));
+      allow update: if isMember()
+        && canManageOutputsOf(resource.data.replicationId)
+        && updatedNow(incoming(), stampFields().concat(contributorsEditable()), contributorsRequired())
+        && validContributor(incoming());
+
+      // The email address and the funding statement of a contributor.
+      // Reads: 2 (access, the contributor).
+      match /private/contact {
+        function contributorContactFields() { return ['email', 'fundingStatement']; }
+        function contributorContactRequired() { return []; }
+        function contributorContactEditable() { return ['email', 'fundingStatement']; }
+
+        function validContact(d) {
+          return verbatim(d.get('email', '')) && verbatim(d.get('fundingStatement', ''));
+        }
+
+        allow get: if isMember()
+          && (core()
+            || holdsScopeOf(contributor(contributorId))
+            || onTeam(contributor(contributorId).replicationId));
+        allow create: if isMember()
+          && canManageOutputsOf(contributor(contributorId).replicationId)
+          && createdNow(incoming(), contributorContactFields(), contributorContactRequired())
+          && validContact(incoming());
+        allow update: if isMember()
+          && canManageOutputsOf(contributor(contributorId).replicationId)
+          && updatedNow(incoming(), stampFields().concat(contributorContactEditable()), contributorContactRequired())
+          && validContact(incoming());
+      }
+    }
+
+    // An external document attached to a record. It carries the audience of its target as
+    // scope fields: the keys of the target, with `members` beside them unless the link is
+    // marked restricted. The rules check the copy against the target when a client creates a
+    // link, for the targets below. A link to any other kind of record is written by trusted
+    // code, which also rewrites the copy when the audience of a target changes.
+    // Reads: 2 (access, the target).
+    match /documentLinks/{linkId} {
+      function documentLinksFields() {
+        return [
+          'entityType', 'entityId', 'kind', 'url', 'externalId', 'title', 'accessStatus', 'httpStatus',
+          'lastCheckedAt', 'ownerName', 'modifiedAt', 'restricted', 'replicationId', 'laboratoryId', 'scopeKeys'
+        ];
+      }
+      function documentLinksRequired() {
+        return [
+          'entityType', 'entityId', 'kind', 'url', 'accessStatus', 'lastCheckedAt', 'restricted', 'replicationId',
+          'laboratoryId', 'scopeKeys'
+        ];
+      }
+      function documentLinksEditable() {
+        return [
+          'entityType', 'entityId', 'kind', 'url', 'externalId', 'title', 'accessStatus', 'httpStatus',
+          'lastCheckedAt', 'ownerName', 'modifiedAt', 'restricted'
+        ];
+      }
+
+      // Where the records of a replication live that a link can be attached to.
+      function replicationCollections() {
+        return {'hypothesis': 'hypotheses', 'protocol': 'protocols', 'protocolVersion': 'protocolVersions'};
+      }
+
+      // The target exists, the scope fields name its replication and its laboratory, and the
+      // caller manages one of them. The result is the scope keys of the target.
+      function targetIsReplication(d) {
+        return d.entityType == 'replication'
+          && d.entityId == d.replicationId
+          && d.laboratoryId == null
+          && (core() || leads(d.replicationId))
+          && replicationExists(d.replicationId);
+      }
+
+      function targetIsLaboratory(d) {
+        return d.entityType == 'laboratory'
+          && d.entityId == d.laboratoryId
+          && d.replicationId == null
+          && (core() || coordinates(d.laboratoryId))
+          && laboratoryExists(d.laboratoryId);
+      }
+
+      function targetIsParticipation(d) {
+        return d.entityType == 'participation'
+          && participation(d.entityId).replicationId == d.replicationId
+          && participation(d.entityId).laboratoryId == d.laboratoryId
+          && (core() || leads(d.replicationId) || coordinates(d.laboratoryId));
+      }
+
+      // A hypothesis, a protocol or a protocol version: the identifier of the entity is the
+      // study identifier joined to the identifier of the document beneath it.
+      function targetIsBeneathReplication(d) {
+        return d.entityType in replicationCollections()
+          && d.laboratoryId == null
+          && d.entityId.size() > d.replicationId.size() + 2
+          && d.entityId[0:d.replicationId.size() + 2] == d.replicationId + '__'
+          && (core() || leads(d.replicationId))
+          && exists(/databases/$(database)/documents/replications/$(d.replicationId)/$(replicationCollections()[d.entityType])/$(d.entityId[d.replicationId.size() + 2:d.entityId.size()]));
+      }
+
+      function targetIsManuscript(d) {
+        return d.entityType == 'manuscript'
+          && d.laboratoryId == null
+          && d.replicationId == manuscript(d.entityId).get('replicationId', null)
+          && (core() || leads(d.replicationId));
+      }
+
+      function unitKeys(d) {
+        return d.replicationId == null
+          ? (d.laboratoryId == null ? [] : ['lab:' + d.laboratoryId])
+          : (d.laboratoryId == null
+            ? ['rep:' + d.replicationId]
+            : ['rep:' + d.replicationId, 'lab:' + d.laboratoryId]);
+      }
+
+      function validLink(d) {
+        return d.kind in ['googleDoc', 'googleSheet', 'driveFolder', 'osf', 'github', 'pdf', 'form', 'url']
+          && webAddress(d.url)
+          && d.accessStatus in ['unknown', 'public', 'restricted', 'unreachable']
+          && d.restricted is bool;
+      }
+
+      allow read: if isMember() && (core() || holdsScopeOf(resource.data)) && boundedRead();
+      allow create: if isMember()
+        && docId(incoming().entityId)
+        && (targetIsReplication(incoming())
+          || targetIsLaboratory(incoming())
+          || targetIsParticipation(incoming())
+          || targetIsBeneathReplication(incoming())
+          || targetIsManuscript(incoming()))
+        && incoming().scopeKeys == (incoming().restricted ? unitKeys(incoming()) : unitKeys(incoming()).concat(['members']))
+        && createdNow(incoming(), documentLinksFields(), documentLinksRequired())
+        && incoming().lastCheckedAt == null
+        && validLink(incoming());
+      // The target and the audience of a link never change through a client.
+      allow update: if isMember()
+        && (core() || leads(resource.data.replicationId) || coordinates(resource.data.laboratoryId))
+        && updatedNow(incoming(), stampFields().concat(documentLinksEditable()), documentLinksRequired())
+        && incoming().entityType == resource.data.entityType
+        && incoming().entityId == resource.data.entityId
+        && incoming().restricted == resource.data.restricted
+        && validLink(incoming());
+    }
+
+    // ===== Provenance, migration and integrations (section 12) =====
+    //
+    // Importers write all of this with the Admin SDK. Whoever runs imports reads the source
+    // registry, the batches and the raw rows. The address of a source document and every
+    // special-category cell sit in documents that have no rule, so no client reads them.
+    // Reads: 1 (access), in every block of this section.
+
+    match /sources/{sourceKey} {
+      allow read: if isMember() && canForProgramme('importsRun') && boundedRead();
+    }
+
+    match /{path=**}/tabs/{tabKey} {
+      allow read: if isMember() && canForProgramme('importsRun') && boundedRead();
+    }
+
+    match /importBatches/{batchId} {
+      allow read: if isMember() && canForProgramme('importsRun') && boundedRead();
+    }
+
+    match /{path=**}/changes/{changeId} {
+      allow read: if isMember() && canForProgramme('importsRun') && boundedRead();
+    }
+
+    match /{path=**}/seenRecords/{chunkId} {
+      allow read: if isMember() && canForProgramme('importsRun') && boundedRead();
+    }
+
+    match /{path=**}/log/{entryId} {
+      allow read: if isMember() && canForProgramme('importsRun') && boundedRead();
+    }
+
+    match /sourceRecords/{recordId} {
+      allow read: if isMember() && canForProgramme('importsRun') && boundedRead();
+    }
+
+    match /{path=**}/rawChunks/{chunkId} {
+      allow read: if isMember() && canForProgramme('importsRun') && boundedRead();
+    }
+
+    match /reconciliationItems/{fingerprint} {
+      allow read: if isMember() && canForProgramme('reconciliationResolve') && boundedRead();
+    }
+
+    match /integrationMappings/{mappingId} {
+      allow read: if isMember() && canForProgramme('integrationsManage') && boundedRead();
+    }
+
+    // ===== Events, audit, automation, notifications and search (section 13) =====
+
+    // The audit trail and the outbound mail are written by trusted code and have no rule: no
+    // client reads or writes them. An administrator consults the trail through a function.
+
+    // Reads: 1 (access), in each of the three blocks.
+    match /integrityReports/{runId} {
+      allow read: if isMember() && canForProgramme('auditRead') && boundedRead();
+    }
+
+    match /{path=**}/findings/{findingId} {
+      allow read: if isMember() && canForProgramme('auditRead') && boundedRead();
+    }
+
+    match /system/settings {
+      allow get: if isMember();
+    }
+
+    // Everything else is denied: the collections that only functions read and write, the
+    // collections whose features are not built yet, and any path that does not exist.
     match /{document=**} {
       allow read, write: if false;
     }

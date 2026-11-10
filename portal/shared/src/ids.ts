@@ -221,6 +221,60 @@ export function identityKeyId(entityType: EntityType, keyKind: string, normalise
   return keyedShortHash(lines([entityType, keyKind, normalisedKey]), secret);
 }
 
+/**
+ * The key strings by which an import finds a person again (docs/MIGRATION_PLAN.md, section 3.3).
+ * Each is the normalised key of an identity key, and the first one that a source row carries is
+ * the evidence from which the identifier of a new person is derived. The importers and the claim
+ * function share these, so that both hash the same text.
+ */
+export const personEvidenceKey = {
+  /** A `PersonId` of the Core Team file of the public website. */
+  websitePeople: (websitePersonId: string): string => `web_people:${websitePersonId}`,
+  /** A `PersonId` of the Members file of the public website. */
+  websiteMembers: (websitePersonId: string): string => `web_members:${websitePersonId}`,
+  /** A bare ORCID iD, in upper case. */
+  orcid: (orcid: string): string => `orcid:${orcid.trim().toUpperCase()}`,
+  /** An email address in canonical form. */
+  email: (email: string): string => `email:${normaliseEmail(email)}`,
+  /**
+   * A name with its affiliation, both folded for lookups. It links a row to an existing person
+   * and never creates one. Null when nothing is left of either part.
+   */
+  nameAffiliation: (name: string, affiliation: string): string | null => {
+    const foldedName = lookupFold(name);
+    const foldedAffiliation = lookupFold(affiliation);
+    return foldedName === "" || foldedAffiliation === "" ? null : `name:${foldedName}@${foldedAffiliation}`;
+  },
+} as const;
+
+/**
+ * `p__hash`: the identifier of a person that an importer creates, from the keyed hash of the
+ * first evidence key of the row that created the person. It is assigned once and never changes,
+ * and later imports find the person through `identityKeys`.
+ */
+export function importedPersonId(firstEvidenceKey: string, secret: string): string {
+  if (firstEvidenceKey.trim() === "") throw new RangeError("An evidence key is not empty.");
+  return compose(["p", keyedShortHash(firstEvidenceKey, secret)]);
+}
+
+/**
+ * `sourceKey__tabKey__aN`: the identifier of an affiliation that an importer writes beneath a
+ * person, from the source, the tab and the affiliation slot of the row. The source key may
+ * contain the separator.
+ */
+export function importedAffiliationId(sourceKey: string, tabKey: string, slot: number): string {
+  return compose([sourceKey, tabKey, `a${wholeNumber(slot, "An affiliation slot", 99)}`], 0);
+}
+
+/**
+ * `instcand__hash` of the lookup fold of an affiliation string, so that one string from two
+ * sources meets in one candidate. Null when nothing is left of the string.
+ */
+export function institutionCandidateId(affiliation: string): string | null {
+  const folded = lookupFold(affiliation);
+  return folded === "" ? null : compose(["instcand", shortHash(folded)]);
+}
+
 // Replications and scientific definition.
 
 /** `scheme__hash`, where the hash is taken over the alias as written. An alias lives beneath its replication. */
@@ -350,6 +404,27 @@ export function sourceRecordId(sourceKey: string, tabKey: string, rowKey: string
   return shortHash(lines([sourceKey, tabKey, rowKey, rawHash]));
 }
 
+/**
+ * `run__time__hash`: the identifier of an import batch, from the instant it started, in UTC to
+ * the millisecond, and the first 12 hexadecimal characters of the SHA-256 of the file it read.
+ * A preview and an apply of one file start at different instants and are different batches.
+ */
+export function importBatchId(startedAt: Date, contentHash: string): string {
+  if (Number.isNaN(startedAt.getTime())) throw new RangeError("The start of a batch is a valid instant.");
+  if (!/^[0-9a-f]{64}$/.test(contentHash)) throw new RangeError("A content hash is a SHA-256 in hexadecimal.");
+  const instant = startedAt.toISOString().replace(/[-:.]/g, "");
+  return compose(["run", instant, contentHash.slice(0, 12)]);
+}
+
+/**
+ * `ownerId__slot`: the identifier of a document link that a source gives a named place, such as
+ * `signup` or `osf`, so that a corrected address updates the same document. The owner identifier
+ * may contain the separator.
+ */
+export function documentLinkSlotId(ownerId: string, slot: string): string {
+  return compose([ownerId, slot], 0);
+}
+
 export interface ReconciliationSubject {
   readonly kind: string;
   /** The entity identifier or folded source key that the conflict is about, with the field where one applies. */
@@ -433,6 +508,9 @@ export const ID_BUILDERS = {
   labClaimId,
   personEmailIndexId,
   identityKeyId,
+  importedPersonId,
+  importedAffiliationId,
+  institutionCandidateId,
   studyAliasId,
   studyAliasIndexId,
   hypothesisId,
@@ -449,6 +527,8 @@ export const ID_BUILDERS = {
   pageContentChunkId,
   sourceTabKey,
   sourceRecordId,
+  importBatchId,
+  documentLinkSlotId,
   reconciliationFingerprint,
   integrationMappingId,
   syncMappingId,

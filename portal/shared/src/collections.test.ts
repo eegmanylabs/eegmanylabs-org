@@ -2,7 +2,13 @@
 // schema is strict and capped, and the path builders give the paths of the data model.
 // tests/architecture/data-model.test.ts compares the registry with docs/DATA_MODEL.md.
 import { describe, expect, it } from "vitest";
-import { DEFAULT_ROLE_CAPABILITIES, GRANTABLE_CAPABILITIES, ROLES, type Role } from "./capabilities";
+import {
+  CAPABILITY_DEFINITIONS,
+  DEFAULT_ROLE_CAPABILITIES,
+  GRANTABLE_CAPABILITIES,
+  ROLES,
+  type Role,
+} from "./capabilities";
 import {
   ACCESS_TIERS,
   COLLECTION_ENTRIES,
@@ -60,7 +66,7 @@ const parameterNames = (path: string) => [...path.matchAll(/\{([^{}]+)\}/g)].map
 
 describe("the registry", () => {
   it("has one entry for every collection, subcollection and fixed-name document of the data model", () => {
-    expect(COLLECTION_KEYS).toHaveLength(142);
+    expect(COLLECTION_KEYS).toHaveLength(143);
     expect(COLLECTION_ENTRIES.map((entry) => entry.key)).toEqual(COLLECTION_KEYS);
   });
 
@@ -139,6 +145,8 @@ describe("the enforcement of an entry", () => {
     );
     expect(denied.sort()).toEqual(
       [
+        // The review queue for affiliation strings, which waits for the reconciliation pages.
+        "institutionCandidates",
         // Restricted custom values, which wait for custom properties.
         "personCustom",
         "laboratoryCustom",
@@ -245,9 +253,14 @@ describe("the identifier rule of an entry", () => {
     const used = new Set(
       COLLECTION_ENTRIES.flatMap((entry) => (entry.identifier.kind === "builder" ? [entry.identifier.builder] : [])),
     );
-    // nestedEntityId builds the entityId of a reference, which is no document identifier.
+    // nestedEntityId builds the entityId of a reference, which is no document identifier. The other
+    // three derive the identifier that an importer gives a record of a collection whose identifiers
+    // the data model calls opaque: a person, an affiliation and a document link.
     expect(Object.keys(ID_BUILDERS).filter((name) => !used.has(name as keyof typeof ID_BUILDERS))).toEqual([
       "nestedEntityId",
+      "importedPersonId",
+      "importedAffiliationId",
+      "documentLinkSlotId",
     ]);
   });
 });
@@ -277,6 +290,39 @@ describe("the access rules of an entry", () => {
       const scoped = entry.read.tiers.some((tier) => tier === "SCOPED" || tier === "SELF");
       if (scoped) expect(entry.read.scopeFields.length, entry.key).toBeGreaterThan(0);
     }
+  });
+
+  it("name, for every read of the tier ADMIN whose rules are written, the capability that decides it", () => {
+    for (const entry of COLLECTION_ENTRIES) {
+      const { tiers, capability } = entry.read;
+      if (capability !== null) {
+        expect(GRANTABLE_CAPABILITIES, entry.key).toContain(capability);
+        // A capability decides the tiers ADMIN and SCOPED, and no other.
+        expect(
+          tiers.some((tier) => tier === "ADMIN" || tier === "SCOPED"),
+          entry.key,
+        ).toBe(true);
+      }
+      if (entry.enforcement === "enforced" && tiers.includes("ADMIN")) {
+        expect(capability, entry.key).not.toBeNull();
+      }
+    }
+  });
+
+  it("give a scoped role the right to read through a capability only where it can hold that capability", () => {
+    for (const entry of COLLECTION_ENTRIES) {
+      const { tiers, capability } = entry.read;
+      if (capability === null || !tiers.includes("SCOPED")) continue;
+      // A capability of the level `programme` is never held for one replication or laboratory.
+      expect(CAPABILITY_DEFINITIONS[capability].level, entry.key).toBe("unit");
+    }
+  });
+
+  it("decide who reads the records of roles and grants by the sensitive capability that manages them", () => {
+    for (const key of ["roleAssignments", "roleCapabilities", "capabilityGrants", "recordGrants"] as const) {
+      expect(COLLECTIONS[key].read).toMatchObject({ tiers: ["ADMIN"], capability: "roles.manage" });
+    }
+    expect(DEFAULT_ROLE_CAPABILITIES.core_team).not.toContain("roles.manage");
   });
 
   it("name fields that exist wherever a client write is limited to some fields or kept from others", () => {
@@ -345,6 +391,7 @@ describe("the access rules of an entry", () => {
       "personDemographics",
       "personEmailIndex",
       "identityKeys",
+      "institutionCandidates",
       "laboratoryEquipment",
       "replicationAliases",
       "replicationSummaries",
@@ -441,6 +488,10 @@ describe("clientImmutableFields", () => {
       "dataOrigin",
       "sourceRecordIds",
       "fieldSources",
+      "importedValues",
+      "sourceCreatedAt",
+      "sourceUpdatedAt",
+      "sourceAuthor",
       "status",
       "statusHistoryId",
     ]);
@@ -452,6 +503,10 @@ describe("clientImmutableFields", () => {
       "dataOrigin",
       "sourceRecordIds",
       "fieldSources",
+      "importedValues",
+      "sourceCreatedAt",
+      "sourceUpdatedAt",
+      "sourceAuthor",
       "statusKey",
       "statusHistoryId",
       "leadPersonIds",
@@ -470,6 +525,19 @@ describe("clientImmutableFields", () => {
       for (const field of clientImmutableFields(entry))
         expect(fieldsOf(entry), `${entry.key}.${field}`).toContain(field);
     }
+  });
+
+  it("keeps every provenance field of an imported record from a client", () => {
+    for (const entry of COLLECTION_ENTRIES) {
+      const provenance = fieldsOf(entry).filter(
+        (field) => PROVENANCE_FIELDS.includes(field) || field === "sourceRecordId",
+      );
+      expect(clientImmutableFields(entry), entry.key).toEqual(expect.arrayContaining(provenance));
+    }
+    expect(clientImmutableFields(COLLECTIONS.contributors)).toContain("sourceRecordId");
+    expect(clientImmutableFields(COLLECTIONS.laboratories)).toEqual(
+      expect.arrayContaining(["sourceRecordIds", "fieldSources", "importedValues", "sourceAuthor"]),
+    );
   });
 });
 

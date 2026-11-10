@@ -131,6 +131,19 @@ export const replicationDetailDocSchema = documentBaseSchema.extend({
 });
 export type ReplicationDetailDoc = z.output<typeof replicationDetailDocSchema>;
 
+/**
+ * | Scheme           | What it holds                                                                |
+ * |------------------|------------------------------------------------------------------------------|
+ * | `programme`      | The programme identifier, and any other spelling written in an identifier column |
+ * | `website`        | The `StudyId` of the public website data                                     |
+ * | `cloudAccount`   | The cloud-account name of the naming conventions                             |
+ * | `bids`           | The BIDS name of the naming conventions                                      |
+ * | `eegnet`         | The EEGNet name of the naming conventions                                    |
+ * | `sourceTab`      | A tab title that names a study                                               |
+ * | `sourceLabel`    | The display text of a link that names a study                                |
+ * | `dataRepository` | A repository name on a data host that embeds the study identifier            |
+ * | `other`          | Any other spelling                                                           |
+ */
 export const aliasSchemeSchema = z.enum([
   "programme",
   "website",
@@ -138,6 +151,8 @@ export const aliasSchemeSchema = z.enum([
   "bids",
   "eegnet",
   "sourceTab",
+  "sourceLabel",
+  "dataRepository",
   "other",
 ]);
 export type AliasScheme = z.output<typeof aliasSchemeSchema>;
