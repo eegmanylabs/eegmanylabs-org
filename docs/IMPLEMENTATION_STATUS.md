@@ -11,8 +11,8 @@ The portal is being built as a static application for GitHub Pages with Firebase
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Discovery, architecture assessment, source inventory, data model, security design, migration plan, integrations design | Complete, with sources A and G and Quire uninspected because access was not available |
-| 1 | Portal foundation: application shell, sign-in, Firebase configuration, functions framework, test harness, design continuity, public-site entry | Scaffold complete and reviewed. Data model in code and security rules under way |
-| 2 | Migration tooling, registry of members, laboratories and replications, profile and laboratory claiming, administration console | Designed. Work begins when the phase 1 rules are in place |
+| 1 | Portal foundation: application shell, sign-in, Firebase configuration, functions framework, test harness, design continuity, public-site entry, data model in code, security rules | Complete on the emulators. The security rules for the first slice were attacked by two red teams and hardened |
+| 2 | Migration tooling, registry of members, laboratories and replications, profile and laboratory claiming, administration console | Under way. Importers are written and their first real run is in progress. Claiming and the administration console are being built |
 | 3 to 9 | Workspace pages and databases, tasks, recruitment, Google Workspace, research data, scientific workflows, reporting and automation | Designed in the data model and integrations documents. Not started |
 | 10 | Hardening, restore rehearsal, deployment readiness | Not started. Needs a staging Firebase project |
 
@@ -61,8 +61,7 @@ Three actions always need explicit approval from a programme administrator: a pr
 
 ## Next steps, in order
 
-1. Finish the data model in code and the security rules for the first slice, with the red-team pass and the fixes it leads to.
-2. Build the import framework and the importers, run the accessible sources into the emulator, and verify counts and idempotency.
-3. Build profile claiming, laboratory claiming, the administration console and the audit trigger.
-4. Build the member, laboratory and replication registry pages and the personal dashboard, then run the first four acceptance scenarios end to end.
-5. Update the requirements checklist with statuses and evidence, and proceed to phase 3.
+1. Complete the first real import of the accessible sources into the emulator, with its privacy and fidelity reviews, and record the counts.
+2. Build profile claiming, laboratory claiming, the administration console and the audit trigger.
+3. Build the member, laboratory and replication registry pages, laboratory registration, the imports console and the personal dashboard, then run the first four acceptance scenarios end to end.
+4. Update the requirements checklist with statuses and evidence, and proceed to phase 3.
