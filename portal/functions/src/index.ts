@@ -8,6 +8,7 @@
 // | Audit trail         | `listAuditEvents`                                                          |
 // | Laboratory claims   | `requestLabClaim`, `reviewLabClaim`                                        |
 // | Records of people   | `resolveCorrectionRequest`, `getPersonDemographics`, `setPersonOrcid`, `confirmLaboratoryMembership`, `confirmReplicationMembership` |
+// | Replications        | `setReplicationStatus`                                                     |
 // | Audit trigger       | `auditDocumentWrites`                                                      |
 // | Access maintenance  | The triggers whose names begin with `accessOn`, and the scheduled `accessExpirySweep` |
 // | Derived directory   | The triggers whose names begin with `personUnitsOn`                        |
@@ -34,6 +35,7 @@ export { reviewLabClaim } from "./callables/reviewLabClaim";
 export { sessionStart } from "./callables/sessionStart";
 export { setCapabilityGrant } from "./callables/setCapabilityGrant";
 export { setPersonOrcid } from "./callables/setPersonOrcid";
+export { setReplicationStatus } from "./callables/setReplicationStatus";
 export { setRoleAssignment } from "./callables/setRoleAssignment";
 export { setRoleCapabilityOverride } from "./callables/setRoleCapabilityOverride";
 export { setUserStatus } from "./callables/setUserStatus";

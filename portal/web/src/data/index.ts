@@ -49,4 +49,13 @@ export {
 } from "./second-factor-model";
 export type { Live, LiveError } from "./subscription-cache";
 export { type CallResult, useCallResult } from "./use-call";
-export { type CorrectionRequestInput, createCorrectionRequest, markNotificationRead } from "./writes";
+export {
+  type CorrectionRequestInput,
+  createCorrectionRequest,
+  type FieldPatch,
+  markNotificationRead,
+  recordRecentVisit,
+  setFavourite,
+  updateOwnPersonLinks,
+  updateReplicationFields,
+} from "./writes";

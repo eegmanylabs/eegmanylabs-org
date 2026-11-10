@@ -5,6 +5,7 @@ import { createServer } from "node:net";
 import path from "node:path";
 import {
   accessDocSchema,
+  APPEND_ONLY_BASE_FIELDS,
   bootstrapAdminId,
   DEMO_IDENTITY_HASH_KEY,
   emptyAccess,
@@ -36,7 +37,7 @@ function runCli(args: string[], environment: Record<string, string | undefined>)
 const withEmulators = emulatorEnvironment(PORTS, PROJECT_ID);
 
 /** What a first run creates: every document of the world, and an account and an access document for each demonstration account. */
-const WORLD_SIZE = 94;
+const WORLD_SIZE = 120;
 
 /** Every document names the command as its author, as trusted code acting by itself. */
 const STANDARD = {
@@ -183,13 +184,24 @@ describe("seed:demo", () => {
 
     for (const { path } of documents) {
       const stored = (await adminDb.doc(path).get()).data();
-      expect(stored, path).toMatchObject(STANDARD);
       const matched = entryOfDocumentPath(path);
+      // A document of an append-only collection carries the shorter set of standard fields.
+      const appendOnly = matched?.entry.flags.appendOnly === true;
+      expect(stored, path).toMatchObject(
+        appendOnly
+          ? Object.fromEntries(Object.entries(STANDARD).filter(([field]) => APPEND_ONLY_BASE_FIELDS.includes(field)))
+          : STANDARD,
+      );
       if (matched === null) expect(path.startsWith("bootstrapAdmins/")).toBe(true);
       else {
         expect(matched.entry.schema.safeParse(stored).success, path).toBe(true);
-        // Every fact-like document is labelled as demonstration data.
-        if ("dataOrigin" in matched.entry.schema.shape) expect(stored?.dataOrigin, path).toBe("demo");
+        // Every fact-like document is labelled as demonstration data, apart from the historical
+        // aggregates, which the data model always labels as imported historical figures.
+        if ("dataOrigin" in matched.entry.schema.shape) {
+          expect(stored?.dataOrigin, path).toBe(
+            matched.entry.key === "historicalAggregates" ? "importedHistorical" : "demo",
+          );
+        }
       }
     }
 
@@ -197,14 +209,30 @@ describe("seed:demo", () => {
     expect(await sizeOf("persons")).toBe(12);
     expect(await sizeOf("laboratories")).toBe(4);
     expect(await sizeOf("institutions")).toBe(3);
-    expect(await sizeOf("replications")).toBe(3);
+    expect(await sizeOf("replications")).toBe(4);
     expect(await sizeOf("participations")).toBe(6);
     expect((await adminDb.collectionGroup("members").get()).size).toBe(7);
     expect((await adminDb.collectionGroup("memberships").get()).size).toBe(6);
+    expect((await adminDb.collectionGroup("aliases").get()).size).toBe(8);
+    expect((await adminDb.collectionGroup("hypotheses").get()).size).toBe(3);
+    expect(await sizeOf("manuscripts")).toBe(2);
+    expect(await sizeOf("contributors")).toBe(2);
+    expect(await sizeOf("historicalAggregates")).toBe(5);
+    expect(await sizeOf("documentLinks")).toBe(2);
+    expect(await sizeOf("statusHistory")).toBe(1);
     // The statuses that the replications name exist, because the lookup data is seeded with the world.
-    for (const replication of DEMO_REPLICATIONS) {
+    const withStatus = DEMO_REPLICATIONS.filter((replication) => replication.statusKey !== null);
+    expect(withStatus).toHaveLength(3);
+    for (const replication of withStatus) {
       expect((await adminDb.doc(`statusDefinitions/replication__${replication.statusKey}`).get()).exists).toBe(true);
     }
+    // The one replication without a status is the one the public website no longer lists.
+    expect((await adminDb.doc("replications/DemoDelta2015").get()).data()).toMatchObject({
+      statusKey: null,
+      selectionStatus: "withdrawn",
+    });
+    // The latest status of Alpha names its history entry.
+    expect((await adminDb.doc("replications/DemoAlpha2001").get()).get("statusHistoryId")).toBe("demo-history-alpha-1");
 
     // Every address is on the domain that is reserved for documentation.
     const contacts = await adminDb.collectionGroup("private").get();

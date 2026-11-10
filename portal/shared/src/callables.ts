@@ -8,7 +8,7 @@
 import { grantableCapabilitySchema, roleSchema, roleScopeTypeSchema } from "./capabilities";
 import { entityTypeSchema } from "./entities";
 import { hasValidOrcidCheckDigit } from "./identifiers";
-import { idListSchema, idSchema, orcidSchema, shortTextSchema, uidSchema } from "./schemas/base";
+import { idListSchema, idSchema, keySchema, orcidSchema, shortTextSchema, uidSchema } from "./schemas/base";
 import {
   claimMatchBasisSchema,
   claimStatusSchema,
@@ -19,7 +19,7 @@ import {
   userStatusSchema,
 } from "./schemas/identity";
 import { laboratoryMemberRoleSchema, laboratoryMemberStatusSchema } from "./schemas/programme";
-import { replicationMembershipRoleSchema, reviewStatusSchema } from "./schemas/replications";
+import { replicationMembershipRoleSchema, reviewStatusSchema, studyKeySchema } from "./schemas/replications";
 import { auditActionSchema, auditActorKindSchema } from "./schemas/system";
 import { z } from "./zod";
 
@@ -432,6 +432,32 @@ export const confirmReplicationMembershipContract = {
     personId: idSchema,
     role: replicationMembershipRoleSchema,
     reviewStatus: reviewStatusSchema.extract(["confirmed"]),
+  }),
+} as const satisfies CallableContract;
+
+/**
+ * Changes the status of a replication, which is the only way it changes (decision D-019). For
+ * holders of `replications.manage` for the replication: its leads, the core team and
+ * programme administrators, with the second factor wherever the access document requires one.
+ *
+ * The call states the status the caller saw in `fromStatusKey`, null where the replication had
+ * none, and is refused when the stored status says anything else, so a change never overrides
+ * one that its maker did not see. `toStatusKey` names a status of `statusDefinitions` for
+ * replications that is not archived. A reason is required. In one transaction the function
+ * sets the status, writes the entry of the status history and writes the audit entry.
+ */
+export const setReplicationStatusContract = {
+  name: "setReplicationStatus",
+  input: z.strictObject({
+    replicationId: studyKeySchema,
+    fromStatusKey: keySchema.nullable(),
+    toStatusKey: keySchema,
+    reason: reasonSchema,
+  }),
+  output: z.strictObject({
+    replicationId: studyKeySchema,
+    statusKey: keySchema,
+    statusHistoryId: idSchema,
   }),
 } as const satisfies CallableContract;
 

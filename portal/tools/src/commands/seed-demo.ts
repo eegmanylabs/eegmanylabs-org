@@ -4,6 +4,10 @@ import {
   bootstrapAdminPath,
   bootstrapAdminRecordSchema,
   COLLECTIONS,
+  historicalAggregateId,
+  hypothesisId,
+  lookupFold,
+  MEMBERS_SCOPE_KEY,
   type CollectionKey,
   distinctRoles,
   type ImpliedRole,
@@ -17,10 +21,12 @@ import {
   planAccessOf,
   readAccessSources,
   replicationMembershipId,
+  replicationScopeKey,
   roleAssignmentId,
   rolesOfMemberEntry,
   rolesOfMembership,
   rolesOfPerson,
+  studyAliasId,
   systemActor,
   systemWriteContext,
   unitScopeKeys,
@@ -33,13 +39,20 @@ import { requireEmulatorTarget, requireRunningEmulators } from "../environment";
 import { DEMO_ACCOUNTS } from "../fixtures/demo-accounts";
 import {
   DEMO_BOOTSTRAP_ADMIN_EMAIL,
+  DEMO_CONTRIBUTOR_TABLE,
+  DEMO_CONTRIBUTORS,
+  DEMO_DOCUMENT_LINKS,
+  DEMO_HISTORICAL_AGGREGATES,
+  DEMO_HYPOTHESES,
   DEMO_INSTITUTIONS,
   DEMO_LABORATORIES,
   DEMO_LABORATORY_MEMBERS,
+  DEMO_MANUSCRIPTS,
   DEMO_MEMBERSHIPS,
   DEMO_PARTICIPATIONS,
   DEMO_PERSONS,
   DEMO_REPLICATIONS,
+  DEMO_STATUS_HISTORY,
 } from "../fixtures/demo-world";
 import { emulatorHashKey } from "../hash-key";
 import { seedLookups } from "./seed-lookups";
@@ -113,6 +126,20 @@ export function demoDocuments(now: Date, hashKey: string): DemoDocument[] {
     documents.push({
       path,
       data: entry.schema.parse({ ...standard, schemaVersion: entry.schemaVersion, ...data }) as DocumentData,
+    });
+  };
+  /** A document of an append-only collection, which carries the shorter set of standard fields. */
+  const append = <K extends CollectionKey>(key: K, path: string, data: Record<string, unknown>) => {
+    const entry = COLLECTIONS[key];
+    documents.push({
+      path,
+      data: entry.schema.parse({
+        schemaVersion: entry.schemaVersion,
+        createdAt: standard.createdAt,
+        createdBy: standard.createdBy,
+        writeContext: standard.writeContext,
+        ...data,
+      }) as DocumentData,
     });
   };
   const claimedBy = new Map(
@@ -246,14 +273,15 @@ export function demoDocuments(now: Date, hashKey: string): DemoDocument[] {
   }
 
   for (const replication of DEMO_REPLICATIONS) {
+    const historyId = DEMO_STATUS_HISTORY.replicationId === replication.studyKey ? DEMO_STATUS_HISTORY.id : null;
     add("replications", COLLECTIONS.replications.docPath(replication.studyKey), {
       programmeId: PROGRAMME_KEY,
       studyKey: replication.studyKey,
       shortTitle: replication.shortTitle,
-      citationStatus: "unverified",
+      ...replication.details,
       statusKey: replication.statusKey,
-      statusHistoryId: null,
-      selectionStatus: "selected",
+      statusHistoryId: historyId,
+      selectionStatus: replication.selectionStatus,
       leadPersonIds: DEMO_MEMBERSHIPS.filter(
         (membership) =>
           membership.replicationId === replication.studyKey &&
@@ -265,6 +293,129 @@ export function demoDocuments(now: Date, hashKey: string): DemoDocument[] {
       vocabulary: [],
       custom: {},
       dataOrigin: "demo",
+    });
+    for (const { scheme, alias } of replication.aliases) {
+      add(
+        "replicationAliases",
+        COLLECTIONS.replicationAliases.docPath(replication.studyKey, studyAliasId(scheme, alias)),
+        {
+          replicationId: replication.studyKey,
+          alias,
+          aliasFolded: lookupFold(alias),
+          scheme,
+          isCanonical: scheme === "website",
+        },
+      );
+    }
+    const replicated = Object.fromEntries(
+      DEMO_HYPOTHESES.filter(
+        (hypothesis) => hypothesis.replicationId === replication.studyKey && hypothesis.replicatedSource !== undefined,
+      ).map((hypothesis) => [hypothesisId(hypothesis.number), hypothesis.replicatedSource]),
+    );
+    if (Object.keys(replicated).length > 0) {
+      add("replicationDetail", COLLECTIONS.replicationDetail.docPath(replication.studyKey), {
+        replicatedSource: replicated,
+      });
+    }
+  }
+  append("statusHistory", COLLECTIONS.statusHistory.docPath(DEMO_STATUS_HISTORY.id), {
+    entityType: "replication",
+    entityId: DEMO_STATUS_HISTORY.replicationId,
+    fromStatusKey: DEMO_STATUS_HISTORY.fromStatusKey,
+    toStatusKey: DEMO_STATUS_HISTORY.toStatusKey,
+    effectiveAt: timestamp,
+    recordedAt: timestamp,
+    changedBy: SEED_DEMO_ACTOR,
+    reason: DEMO_STATUS_HISTORY.reason,
+    source: "import",
+    replicationId: DEMO_STATUS_HISTORY.replicationId,
+    laboratoryId: null,
+    scopeKeys: [replicationScopeKey(DEMO_STATUS_HISTORY.replicationId), MEMBERS_SCOPE_KEY],
+  });
+  for (const hypothesis of DEMO_HYPOTHESES) {
+    add(
+      "replicationHypotheses",
+      COLLECTIONS.replicationHypotheses.docPath(hypothesis.replicationId, hypothesisId(hypothesis.number)),
+      {
+        replicationId: hypothesis.replicationId,
+        hypothesisNumber: String(hypothesis.number),
+        text: hypothesis.text,
+        ...(hypothesis.nullSigSource === undefined ? {} : { nullSigSource: hypothesis.nullSigSource }),
+        scientificReviewStatus: "unverified",
+        analysisStatus: "notStarted",
+        resultReviewedBy: null,
+        resultReviewedAt: null,
+      },
+    );
+  }
+  for (const manuscript of DEMO_MANUSCRIPTS) {
+    add("manuscripts", COLLECTIONS.manuscripts.docPath(manuscript.id), {
+      replicationId: manuscript.replicationId,
+      title: manuscript.title,
+      kind: manuscript.kind,
+      status: manuscript.status,
+      statusHistoryId: null,
+      ...(manuscript.journal === undefined ? {} : { journal: manuscript.journal }),
+      ...(manuscript.doi === undefined ? {} : { doi: manuscript.doi }),
+      ...(manuscript.acceptedYear === undefined
+        ? {}
+        : { acceptedAt: Timestamp.fromDate(new Date(Date.UTC(manuscript.acceptedYear, 5, 1))) }),
+      custom: {},
+      scopeKeys: [replicationScopeKey(manuscript.replicationId)],
+    });
+  }
+  add("contributorTables", COLLECTIONS.contributorTables.docPath(DEMO_CONTRIBUTOR_TABLE.id), {
+    replicationId: DEMO_CONTRIBUTOR_TABLE.replicationId,
+    sourceKey: DEMO_CONTRIBUTOR_TABLE.sourceKey,
+    isPublished: false,
+    scopeKeys: [replicationScopeKey(DEMO_CONTRIBUTOR_TABLE.replicationId)],
+  });
+  for (const contributor of DEMO_CONTRIBUTORS) {
+    add("contributors", COLLECTIONS.contributors.docPath(contributor.id), {
+      firstNameSource: contributor.firstNameSource,
+      surnameSource: contributor.surnameSource,
+      orderInPublication: contributor.orderInPublication,
+      affiliationSource: contributor.affiliationSource,
+      creditRoles: contributor.creditRoles,
+      reviewStatus: "confirmed",
+      replicationId: DEMO_CONTRIBUTOR_TABLE.replicationId,
+      manuscriptId: DEMO_CONTRIBUTOR_TABLE.manuscriptId,
+      contributorTableId: DEMO_CONTRIBUTOR_TABLE.id,
+      personId: contributor.personId,
+      scopeKeys: [replicationScopeKey(DEMO_CONTRIBUTOR_TABLE.replicationId)],
+    });
+  }
+  for (const aggregate of DEMO_HISTORICAL_AGGREGATES) {
+    const sourceRecordId = `demo-source-${aggregate.replicationIds.join("-").toLowerCase()}`;
+    add(
+      "historicalAggregates",
+      COLLECTIONS.historicalAggregates.docPath(historicalAggregateId(aggregate.metricKey, sourceRecordId)),
+      {
+        replicationIds: [...aggregate.replicationIds],
+        metricKey: aggregate.metricKey,
+        valueSource: aggregate.valueSource,
+        ...(aggregate.valueNumeric === undefined ? {} : { valueNumeric: aggregate.valueNumeric }),
+        sourceRecordId,
+        isCurrent: true,
+        dataOrigin: "importedHistorical",
+      },
+    );
+  }
+  for (const link of DEMO_DOCUMENT_LINKS) {
+    add("documentLinks", COLLECTIONS.documentLinks.docPath(link.id), {
+      entityType: "replication",
+      entityId: link.replicationId,
+      kind: link.kind,
+      url: link.url,
+      title: link.title,
+      accessStatus: link.accessStatus,
+      lastCheckedAt: null,
+      restricted: link.restricted,
+      replicationId: link.replicationId,
+      laboratoryId: null,
+      scopeKeys: link.restricted
+        ? [replicationScopeKey(link.replicationId)]
+        : [replicationScopeKey(link.replicationId), MEMBERS_SCOPE_KEY],
     });
   }
   for (const membership of DEMO_MEMBERSHIPS) {

@@ -53,6 +53,7 @@ import {
  * | `person.orcidChanged`           | The ORCID iD of a person is set, changed or removed                |
  * | `laboratoryMember.confirmed`    | A member entry of a laboratory is confirmed                        |
  * | `replicationMembership.confirmed` | A membership of a replication is confirmed                       |
+ * | `replication.statusChanged`     | The status of a replication is changed, with its history entry      |
  * | `document.created`              | The audit trigger saw a document created outside a callable function |
  * | `document.updated`              | The audit trigger saw a document changed outside a callable function |
  * | `document.deleted`              | The audit trigger saw a document deleted                           |
@@ -84,6 +85,7 @@ export const AUDIT_ACTIONS = [
   "person.orcidChanged",
   "laboratoryMember.confirmed",
   "replicationMembership.confirmed",
+  "replication.statusChanged",
   "document.created",
   "document.updated",
   "document.deleted",
