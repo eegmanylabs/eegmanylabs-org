@@ -189,16 +189,29 @@ function describeError(error: unknown): Record<string, unknown> {
   return { value: String(error) };
 }
 
+/** Name of the parameter that lists the web origins that may call the functions. */
+export const PORTAL_ORIGINS_PARAMETER = "PORTAL_ORIGINS";
+
+let portalOriginsParameter: ReturnType<typeof defineList> | undefined;
+
 /**
  * The web origins that may call the functions, for example the address of the portal on GitHub
- * Pages. Set per project when the functions are deployed. With no value, browsers on every
- * origin are refused, so a deployment that forgets it fails closed.
+ * Pages. Set per project when the functions are deployed. With no value the list is empty and
+ * firebase-functions then sends no cross-origin permission at all, so browsers on every origin
+ * are refused and a deployment that forgets the value fails closed.
+ *
+ * The parameter is declared on first use, and the emulator never uses it. The Firebase tools
+ * would otherwise write its default into an environment file in the functions directory on
+ * every machine that starts the emulator.
  */
-export const PORTAL_ORIGINS = defineList("PORTAL_ORIGINS", {
-  default: [],
-  description:
-    "Origins of the portal's web application that may call the functions, for example https://portal.example.org",
-});
+function portalOrigins(): ReturnType<typeof defineList> {
+  portalOriginsParameter ??= defineList(PORTAL_ORIGINS_PARAMETER, {
+    default: [],
+    description:
+      "Origins of the portal's web application that may call the functions, for example https://portal.example.org",
+  });
+  return portalOriginsParameter;
+}
 
 export function defineCallable<C extends CallableContract>(
   contract: C,
@@ -209,7 +222,7 @@ export function defineCallable<C extends CallableContract>(
     {
       region: FUNCTIONS_REGION,
       // The emulator serves builds on any local port (PORTAL_PORT_BASE), so it accepts every origin.
-      cors: emulated ? true : PORTAL_ORIGINS,
+      cors: emulated ? true : portalOrigins(),
       enforceAppCheck: definition.enforceAppCheck === true && !emulated,
     },
     (request) => {

@@ -9,7 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { PORTAL_ROOT } from "./paths.mjs";
-import { groupAlive, signalGroup, stopGraceFrom, stopGroup } from "./process-group.mjs";
+import { groupAlive, processAlive, signalGroup, stopGraceFrom, stopGroup, straysOf } from "./process-group.mjs";
 
 const LAUNCHER = path.join(PORTAL_ROOT, "scripts", "emulators.mjs");
 const TREE = path.join(PORTAL_ROOT, "scripts", "test-support", "process-tree.mjs");
@@ -125,6 +125,59 @@ describe("a run that is interrupted", () => {
     expect(alive(tree.parent)).toBe(false);
     expect(alive(tree.child)).toBe(false);
     expect(await listening(tree.port)).toBe(false);
+  });
+});
+
+describe("a run whose command started a process outside its group", () => {
+  it("stops that process too: it gets the later signals directly once the grace period is over", async () => {
+    const { launcher, exited, tree } = await launch({ STRAY: "1" });
+    const began = Date.now();
+
+    launcher.kill("SIGINT");
+
+    expect(await exited).toBe(130);
+    // The interrupt went to the group alone, so the process outside it lived for the grace period.
+    expect(Date.now() - began).toBeGreaterThanOrEqual(250);
+    expect(alive(tree.parent)).toBe(false);
+    expect(alive(tree.child)).toBe(false);
+    expect(await listening(tree.port)).toBe(false);
+  });
+
+  it("kills it when it ignores every polite signal", async () => {
+    const { launcher, exited, tree } = await launch({ STRAY: "1", STUBBORN: "1" });
+
+    launcher.kill("SIGTERM");
+
+    expect(await exited).toBe(143);
+    expect(alive(tree.parent)).toBe(false);
+    expect(alive(tree.child)).toBe(false);
+    expect(await listening(tree.port)).toBe(false);
+  });
+});
+
+describe("straysOf", () => {
+  it("finds the descendants of a group's first process that have a group of their own, and no others", async () => {
+    const { launcher, exited, tree } = await launch({ STRAY: "1" });
+    try {
+      // The launcher starts the tree in a group of its own, whose first process is the parent.
+      expect(straysOf(tree.parent)).toEqual([tree.child]);
+      expect(processAlive(tree.child)).toBe(true);
+    } finally {
+      launcher.kill("SIGTERM");
+      await exited;
+    }
+    expect(processAlive(tree.child)).toBe(false);
+    expect(straysOf(tree.parent)).toEqual([]);
+  });
+
+  it("finds none in a tree whose processes all stayed in the group", async () => {
+    const { launcher, exited, tree } = await launch();
+    try {
+      expect(straysOf(tree.parent)).toEqual([]);
+    } finally {
+      launcher.kill("SIGTERM");
+      await exited;
+    }
   });
 });
 

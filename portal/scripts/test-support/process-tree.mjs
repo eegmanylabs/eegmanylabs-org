@@ -5,6 +5,8 @@
 // written to the file named by the first argument.
 //
 //   STUBBORN=1       both processes ignore the interrupt and the termination signal
+//   STRAY=1          the child is started in a process group of its own, as the Firebase
+//                    tools start the Firestore emulator
 //   LEAVE_ORPHAN=7   this process ends with status 7 as soon as the file is written
 import { spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
@@ -27,6 +29,7 @@ if (role === "child") {
   if (!reportFile) throw new Error("process-tree.mjs needs the path of its report file.");
   const child = spawn(process.execPath, [import.meta.filename, reportFile, "child"], {
     stdio: ["ignore", "inherit", "inherit", "ipc"],
+    detached: process.env.STRAY === "1",
   });
   child.on("message", (message) => {
     const { port } = /** @type {{ port: number }} */ (message);

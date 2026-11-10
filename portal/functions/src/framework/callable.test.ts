@@ -350,3 +350,50 @@ describe("runningInEmulator", () => {
     expect(runningInEmulator({ FUNCTIONS_EMULATOR: "false" })).toBe(false);
   });
 });
+
+describe("defineCallable and the origins that may call", () => {
+  /** A fresh copy of the modules, as a newly started functions process has. */
+  async function defined(emulator: boolean) {
+    vi.resetModules();
+    vi.stubEnv("FUNCTIONS_EMULATOR", emulator ? "true" : "");
+    try {
+      const { defineCallable, PORTAL_ORIGINS_PARAMETER } = await import("./callable");
+      const { declaredParams } = await import("firebase-functions/params");
+      // The Firebase package is loaded once for the whole file, so its list outlives a test.
+      declaredParams.length = 0;
+      const callable = defineCallable(echoContract, { handler: async (input) => ({ text: input.text, uid: null }) });
+      const declared = declaredParams.map((parameter) => parameter.name);
+      return { callable, declared, PORTAL_ORIGINS_PARAMETER };
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  }
+
+  it("declares the parameter with the allowed origins for a deployment, in London", async () => {
+    const { callable, declared, PORTAL_ORIGINS_PARAMETER } = await defined(false);
+    expect(PORTAL_ORIGINS_PARAMETER).toBe("PORTAL_ORIGINS");
+    expect(declared).toEqual(["PORTAL_ORIGINS"]);
+    expect(callable.__endpoint.region).toEqual(["europe-west2"]);
+  });
+
+  it("declares it once, however many functions are defined", async () => {
+    vi.resetModules();
+    vi.stubEnv("FUNCTIONS_EMULATOR", "");
+    try {
+      const { defineCallable } = await import("./callable");
+      const { declaredParams } = await import("firebase-functions/params");
+      declaredParams.length = 0;
+      const handler = async () => ({ text: "", uid: null });
+      defineCallable(echoContract, { handler });
+      defineCallable({ ...echoContract, name: "echoAgain" }, { handler });
+      expect(declaredParams.map((parameter) => parameter.name)).toEqual(["PORTAL_ORIGINS"]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("declares no parameter in the emulator, which accepts every local origin", async () => {
+    const { declared } = await defined(true);
+    expect(declared).toEqual([]);
+  });
+});

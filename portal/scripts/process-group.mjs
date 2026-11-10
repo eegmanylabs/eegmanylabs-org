@@ -4,7 +4,8 @@
 // The commands the portal's scripts start have children of their own: the Firebase tools start
 // the emulators and the test script, which starts a test runner, a preview server and a
 // browser. A signal sent to the first process alone leaves the rest running, where they keep
-// ports busy for the next run. Everything here therefore signals the group.
+// ports busy for the next run. Everything here therefore signals the group, and follows up on
+// processes that were started outside it.
 import { spawn } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 
@@ -36,20 +37,17 @@ export function signalGroup(groupId, signal) {
 }
 
 /**
- * Whether any process of a group is still running.
- * @param {number} groupId
+ * State, parent and group of every process, read from /proc. Null where there is no /proc.
+ * @returns {Map<number, { state: string, parent: number, group: number }> | null}
  */
-export function groupAlive(groupId) {
-  if (!signalGroup(groupId, 0)) return false;
-  // A process that has ended and that its parent has not collected yet still accepts signals.
-  // It runs nothing and holds no port, so it does not count. Linux shows the difference in
-  // /proc. Where there is no /proc, the answer of the signal stands.
+function processTable() {
   let entries;
   try {
     entries = readdirSync("/proc");
   } catch {
-    return true;
+    return null;
   }
+  const table = new Map();
   for (const entry of entries) {
     if (!/^\d+$/.test(entry)) continue;
     let stat;
@@ -59,23 +57,79 @@ export function groupAlive(groupId) {
       continue;
     }
     // "pid (name) state parent group ...": the name may contain spaces and brackets.
-    const [state, , group] = stat.slice(stat.lastIndexOf(") ") + 2).split(" ");
-    if (Number(group) === groupId && state !== "Z") return true;
+    const [state = "", parent, group] = stat.slice(stat.lastIndexOf(") ") + 2).split(" ");
+    table.set(Number(entry), { state, parent: Number(parent), group: Number(group) });
+  }
+  return table;
+}
+
+// A process that has ended and that its parent has not collected yet still accepts signals.
+// It runs nothing and holds no port, so it does not count as running. Linux shows the
+// difference in /proc. Where there is no /proc, the answer of the signal stands.
+const ENDED = "Z";
+
+/**
+ * Whether any process of a group is still running.
+ * @param {number} groupId
+ */
+export function groupAlive(groupId) {
+  if (!signalGroup(groupId, 0)) return false;
+  const table = processTable();
+  if (table === null) return true;
+  for (const { state, group } of table.values()) {
+    if (group === groupId && state !== ENDED) return true;
   }
   return false;
 }
 
 /**
- * Resolves true as soon as the group is gone, or false when it is still there after the wait.
- * @param {number} groupId
- * @param {number} waitMs
- * @returns {Promise<boolean>}
+ * Whether one process is still running.
+ * @param {number} pid
  */
-function groupGoneWithin(groupId, waitMs) {
+export function processAlive(pid) {
+  try {
+    process.kill(pid, 0);
+  } catch {
+    return false;
+  }
+  const table = processTable();
+  return table === null || (table.has(pid) && table.get(pid)?.state !== ENDED);
+}
+
+/**
+ * The processes that descend from the first process of a group and have left the group. The
+ * Firestore emulator is one: the Firebase tools start it as the leader of a session of its
+ * own, so a signal to the group does not reach it. Empty where there is no /proc.
+ * @param {number} groupId
+ * @returns {number[]}
+ */
+export function straysOf(groupId) {
+  const table = processTable();
+  if (table === null) return [];
+  /** @type {Map<number, number[]>} */
+  const children = new Map();
+  for (const [pid, { parent }] of table) children.set(parent, [...(children.get(parent) ?? []), pid]);
+  const strays = [];
+  const queue = [groupId];
+  for (let pid = queue.shift(); pid !== undefined; pid = queue.shift()) {
+    for (const child of children.get(pid) ?? []) {
+      queue.push(child);
+      if (table.get(child)?.group !== groupId) strays.push(child);
+    }
+  }
+  return strays;
+}
+
+/**
+ * @param {() => boolean} condition
+ * @param {number} waitMs
+ * @returns {Promise<boolean>} True as soon as the condition holds, false when the wait is over.
+ */
+function holdsWithin(condition, waitMs) {
   const deadline = Date.now() + waitMs;
   return new Promise((resolve) => {
     const check = () => {
-      if (!groupAlive(groupId)) resolve(true);
+      if (condition()) resolve(true);
       else if (Date.now() >= deadline) resolve(false);
       else setTimeout(check, POLL_MS);
     };
@@ -84,22 +138,50 @@ function groupGoneWithin(groupId, waitMs) {
 }
 
 /**
- * Stops a whole process group: an interrupt first, so that every process can shut down
- * cleanly, then a termination signal, and finally a kill that cannot be ignored. Resolves when
- * no process of the group is left.
+ * Stops a whole process group, and the processes its members started outside the group: an
+ * interrupt first, so that every process can shut down cleanly, then a termination signal,
+ * and finally a kill that cannot be ignored. Resolves when none of them is left.
+ *
+ * The interrupt goes to the group alone. A process that started something outside the group
+ * is expected to stop it in its own way, as the Firebase tools stop their emulators. What is
+ * still there after the grace period gets the later signals directly.
  * @param {number} groupId
  * @param {{ graceMs?: number, terminateGraceMs?: number, first?: NodeJS.Signals }} [options]
  */
 export async function stopGroup(groupId, options = {}) {
   const { graceMs = STOP_GRACE_MS, terminateGraceMs = TERMINATE_GRACE_MS, first = "SIGINT" } = options;
-  if (!signalGroup(groupId, first)) return;
-  if (await groupGoneWithin(groupId, graceMs)) return;
+  // Noted before each signal, while the parents that lead to them are still alive.
+  /** @type {Set<number>} */
+  const strays = new Set();
+  const noteStrays = () => {
+    for (const pid of straysOf(groupId)) strays.add(pid);
+  };
+  /** @param {NodeJS.Signals} signal */
+  const signalStrays = (signal) => {
+    for (const pid of strays) {
+      try {
+        process.kill(pid, signal);
+      } catch {
+        // Already gone.
+      }
+    }
+  };
+  const gone = () => !groupAlive(groupId) && ![...strays].some(processAlive);
+
+  noteStrays();
+  if (!signalGroup(groupId, first) && strays.size === 0) return;
+  if (first !== "SIGINT") signalStrays(first);
+  if (await holdsWithin(gone, graceMs)) return;
   if (first !== "SIGTERM") {
+    noteStrays();
     signalGroup(groupId, "SIGTERM");
-    if (await groupGoneWithin(groupId, terminateGraceMs)) return;
+    signalStrays("SIGTERM");
+    if (await holdsWithin(gone, terminateGraceMs)) return;
   }
+  noteStrays();
   signalGroup(groupId, "SIGKILL");
-  await groupGoneWithin(groupId, 5_000);
+  signalStrays("SIGKILL");
+  await holdsWithin(gone, 5_000);
 }
 
 /**
