@@ -909,6 +909,17 @@ describe("the lead claims", () => {
     ];
     const raised = leads.map((item) => item.id);
     for (const item of expected) expect(raised, `${item.subject}`).toContain(item.fingerprint);
+    // A name of the workbook is shown in no lead item: each claim of the workbook names its source record instead.
+    // Only the leads held already, who are people of the public directory, are shown by name.
+    for (const item of leads) {
+      for (const candidate of candidatesOf(item).filter((claim) => claim.key.startsWith("f/"))) {
+        expect(candidate.valueSource, `${item.field} ${candidate.key}`).toBeUndefined();
+        expect(candidate.sourceRecordId).toBeDefined();
+      }
+    }
+    expect(
+      leads.flatMap((item) => candidatesOf(item).filter((claim) => claim.key.startsWith("held/lead:"))),
+    ).toContainEqual(expect.objectContaining({ valueSource: "Ada Example" }));
     // A trailing space in a name is no difference, so the six studies whose tabs agree raise nothing.
     expect(leads.filter((item) => item.field === "lead")).toHaveLength(4);
     expect(leads.filter((item) => item.field === "formerLead")).toHaveLength(3);
@@ -989,10 +1000,12 @@ describe("the lead claims", () => {
         "proposal/otherYear AmodioMaster2008",
       ]);
     }
-    expect(ofRow.filter((item) => item.kind === "conflictingLead").map((item) => item.field).sort()).toEqual([
-      "formerLead",
-      "lead",
-    ]);
+    expect(
+      ofRow
+        .filter((item) => item.kind === "conflictingLead")
+        .map((item) => item.field)
+        .sort(),
+    ).toEqual(["formerLead", "lead"]);
     // The leads that the website confirmed for the two studies stay confirmed: nothing is written on a proposal
     // or on a cell that names two studies.
     for (const studyId of ["AmodioJost2007", "AmodioMaster2008"]) {
@@ -1030,12 +1043,13 @@ describe("the lead claims", () => {
         ],
       }).fingerprint,
     );
-    // The names are shown to the reviewer. The address is named by its record and is not copied into the item.
+    // The names and the address of this restricted workbook are named by their record and are not copied into the item.
     expect(candidatesOf(candidates).map((candidate) => candidate.valueSource)).toEqual([
-      "Ada Example",
-      "Fay Sample",
+      undefined,
+      undefined,
       undefined,
     ]);
+    expect(candidatesOf(candidates).every((candidate) => candidate.sourceRecordId !== undefined)).toBe(true);
     expect(JSON.stringify(candidates)).not.toContain("@");
     // No co-lead is written, and the address is used for no matching.
     expect([...(await documentsOf("memberships", true)).values()].filter((entry) => entry.role === "coLead")).toEqual(
@@ -1511,9 +1525,9 @@ describe("the outreach tabs", () => {
     // neither a short status nor a long account of a person's conduct.
     const shown = results.flatMap((item) => candidatesOf(item).map((candidate) => candidate.valueSource));
     expect(shown).toEqual([undefined, undefined, undefined]);
-    expect(results.every((item) => candidatesOf(item).every((candidate) => candidate.sourceRecordId !== undefined))).toBe(
-      true,
-    );
+    expect(
+      results.every((item) => candidatesOf(item).every((candidate) => candidate.sourceRecordId !== undefined)),
+    ).toBe(true);
     expect(JSON.stringify(results)).not.toMatch(/busy with another invented project|a long invented account/);
     // The result itself is stored verbatim on the restricted contact, whatever it says.
     expect((await contact("BuschVanRullen2010", "Rui Staff")).resultSource).toMatch(/^a long invented account/);
@@ -1874,6 +1888,28 @@ describe("a later import of the recruitment and contact workbook", () => {
     expect(checks.filter((check) => !check.passed)).toEqual([]);
   });
 
+  it("records a hidden contact row as hidden, imports it, and asks what the hidden state means", async () => {
+    const plain = await run(recruitment, await workbookFile(), "apply");
+    await freshDatabase();
+    await applyWebsite();
+    const file = await workbookFile((fixture) => {
+      outreach(fixture, "Vidal2000").hiddenRows = [2];
+    });
+    const report = await run(recruitment, file, "apply");
+    // The row is data like any other: the hidden state changes what is asked, not what is imported.
+    expect(report.collections.outreachContacts?.created).toBe(plain.collections.outreachContacts?.created);
+    const hidden = await record("Vidal2000", contactKey("Dot Imagined"));
+    expect(Object.values(hidden.raw as Record<string, unknown>)).toContainEqual(
+      expect.objectContaining({ hiddenRow: true }),
+    );
+    const signals = (await itemsOf("formattingSignal")).filter((item) => item.field === "hiddenRow");
+    expect(signals).toHaveLength(1);
+    expect(candidatesOf(signals[0]).map((candidate) => candidate.sourceRecordId)).toEqual([hidden.id]);
+    // A visible row carries no such flag.
+    const visible = await record("Vidal2000", contactKey("Bea Contact"));
+    expect(JSON.stringify(visible.raw)).not.toContain("hiddenRow");
+  });
+
   it("follows a changed cell of a row, keeps the earlier record, and leaves what a reviewer set", async () => {
     await run(recruitment, await workbookFile(), "apply");
     const id = contactId("Vidal2000", "Dot Imagined");
@@ -2099,8 +2135,12 @@ describe("personal data of the recruitment and contact workbook", () => {
     const verified = cli(["verify", ...common]);
     expect(shown.status).toBe(0);
     expect(verified.status).toBe(0);
-    expect(verified.output).toMatch(/passed {2}rowBaseline: \d+ counts of 23 tabs compared with the stated baseline, all equal/);
-    expect(verified.output).toMatch(/passed {2}blankAndZero: \d+ blank cells are absent, 1 explicit zeros are stored as 0/);
+    expect(verified.output).toMatch(
+      /passed {2}rowBaseline: \d+ counts of 23 tabs compared with the stated baseline, all equal/,
+    );
+    expect(verified.output).toMatch(
+      /passed {2}blankAndZero: \d+ blank cells are absent, 1 explicit zeros are stored as 0/,
+    );
     const output = [preview, apply, shown, verified].map((result) => result.output).join("\n");
     expect(output).toMatch(/outreachContacts/);
     for (const value of restrictedValues(recruitmentFixture())) expect(output).not.toContain(value);

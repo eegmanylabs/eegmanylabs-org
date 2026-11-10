@@ -20,8 +20,8 @@ import {
 } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { type WebsiteFixture, websiteFixture, writeWebsiteFixture } from "../../tools/src/import/fixtures/website";
 import { createdFields } from "../../tools/src/import/context";
+import { type WebsiteFixture, websiteFixture, writeWebsiteFixture } from "../../tools/src/import/fixtures/website";
 import { importer as website } from "../../tools/src/import/sources/website-data";
 import { adminDb } from "../support/admin";
 import { PORTAL_ROOT } from "../support/emulators";

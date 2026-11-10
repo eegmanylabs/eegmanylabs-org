@@ -150,8 +150,10 @@ describe("an import batch", () => {
       false,
     );
     expect(
-      importBatchDocSchema.safeParse({ ...batch, verification: { ...verification, checks: [{ key: "a", passed: true }] } })
-        .success,
+      importBatchDocSchema.safeParse({
+        ...batch,
+        verification: { ...verification, checks: [{ key: "a", passed: true }] },
+      }).success,
     ).toBe(false);
   });
 
@@ -177,8 +179,8 @@ describe("the two states of a special-category document in the change log", () =
       }).error?.issues ?? [],
     ).toEqual([]);
     expect(importBatchChangeStateDocSchema.safeParse({ ...state, before: null, after: null }).success).toBe(true);
-    expect(importBatchChangeStateDocSchema.safeParse({ ...state, documentPath: "", before: null, after: null }).success).toBe(
-      false,
-    );
+    expect(
+      importBatchChangeStateDocSchema.safeParse({ ...state, documentPath: "", before: null, after: null }).success,
+    ).toBe(false);
   });
 });

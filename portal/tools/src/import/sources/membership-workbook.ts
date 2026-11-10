@@ -316,7 +316,8 @@ class WorkbookReader {
           rows.push({ rowClass: "data", rowNumber: row, rowKey, cells, labels });
         }
       }
-      const headers = headerRow === undefined ? [] : valuesOf(headerRow).map((value) => (value === null ? "" : String(value)));
+      const headers =
+        headerRow === undefined ? [] : valuesOf(headerRow).map((value) => (value === null ? "" : String(value)));
       while (headers.at(-1) === "") headers.pop();
       const refused = headers.filter((header) => REFUSED_STUDY_HEADERS.has(lookupFold(header)));
       const confirmed = this.#confirmedHeaders[TAB_TITLES.studies];
@@ -617,7 +618,8 @@ class MembershipPlan {
           this.#builder.rawOnly(row.recordId, "erasedPerson");
           continue;
         }
-        const proposed = link?.status === "existing" ? [link.personId] : link?.status === "ambiguous" ? link.personIds : [];
+        const proposed =
+          link?.status === "existing" ? [link.personId] : link?.status === "ambiguous" ? link.personIds : [];
         const others = namesakes.filter((id) => !proposed.includes(id));
         this.#builder.hold(
           row.recordId,
@@ -655,7 +657,8 @@ class MembershipPlan {
     }
 
     const rowsOfPerson = new Map<string, Resolved[]>();
-    for (const entry of resolved) rowsOfPerson.set(entry.personId, [...(rowsOfPerson.get(entry.personId) ?? []), entry]);
+    for (const entry of resolved)
+      rowsOfPerson.set(entry.personId, [...(rowsOfPerson.get(entry.personId) ?? []), entry]);
     for (const [personId, entries] of [...rowsOfPerson].sort(([a], [b]) => (a < b ? -1 : 1))) {
       if (entries.length > 1) {
         const item = items.duplicatePerson({

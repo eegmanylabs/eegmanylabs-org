@@ -530,7 +530,10 @@ describe("ownership of fields", () => {
     const [candidate] = [...(await documentsOf("institutionCandidates")).values()].filter(
       (document) => document.affiliationFolded === "imaginarycollegenowhereland",
     );
-    expect(candidate?.affiliationsSource).toEqual(["Imaginary College, Nowhereland", "imaginary  college, NOWHERELAND"]);
+    expect(candidate?.affiliationsSource).toEqual([
+      "Imaginary College, Nowhereland",
+      "imaginary  college, NOWHERELAND",
+    ]);
     // A batch that was rolled back added nothing that counts: a new apply adds the member again.
     await rollbackBatch(adminDb, second.batchId);
     const again = await run(website, more, "apply");
@@ -779,7 +782,9 @@ describe("rollback", () => {
     const result = await rollbackBatch(adminDb, changed.batchId);
     expect(result).toMatchObject({ status: "rolledBack", removed: created.length - 1 });
     for (const entry of created) {
-      expect((await adminDb.doc(String(entry.get("documentPath"))).get()).exists, entry.get("documentPath")).toBe(false);
+      expect((await adminDb.doc(String(entry.get("documentPath"))).get()).exists, entry.get("documentPath")).toBe(
+        false,
+      );
     }
     expect((await adminDb.doc("replications/Iota2004").get()).get("theme")).not.toBe("Memory");
     expect((await adminDb.doc(COLLECTIONS.importBatches.docPath(changed.batchId)).get()).get("status")).toBe(
@@ -964,7 +969,10 @@ describe("verification", () => {
     const [person] = [...(await documentsOf("persons")).keys()].sort();
     await adminDb.doc(`persons/${person}`).delete();
     await verify(website, data, { record: true });
-    const stored = (await batch(applied.batchId))?.verification as { passed: boolean; checks: { key: string; passed: boolean }[] };
+    const stored = (await batch(applied.batchId))?.verification as {
+      passed: boolean;
+      checks: { key: string; passed: boolean }[];
+    };
     expect(stored.passed).toBe(false);
     expect(stored.checks.filter((check) => !check.passed).map((check) => check.key)).toEqual(
       expect.arrayContaining(["secondRun", "noOrphans"]),
@@ -1072,7 +1080,7 @@ describe("a renamed natural key", () => {
     expect(second.collections.identityKeys?.created ?? 0).toBe(0);
     const [item] = await renameItems();
     // One item names both rows, and the records that the earlier row had produced.
-    expect((item?.candidates as { key: string }[]).map((candidate) => candidate.key.split(":")[0])).toEqual([
+    expect(((item?.candidates ?? []) as { key: string }[]).map((candidate) => candidate.key.split(":")[0])).toEqual([
       "h/members/gone",
       "h/members/renamedTo",
     ]);
@@ -1101,7 +1109,9 @@ describe("a renamed natural key", () => {
     const data = renamed("lu-mock-up");
     await run(website, data, "apply");
     const [item] = await renameItems();
-    await adminDb.doc(`reconciliationItems/${item?.id}`).update({ status: "dismissed", resolvedBy: "uid-of-a-reviewer" });
+    await adminDb
+      .doc(`reconciliationItems/${item?.id}`)
+      .update({ status: "dismissed", resolvedBy: "uid-of-a-reviewer" });
     const report = await run(website, data, "apply");
     expect(report.collections.persons?.created).toBe(1);
     expect(await people()).toBe(before + 1);

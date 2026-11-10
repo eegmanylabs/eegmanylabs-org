@@ -28,7 +28,9 @@ describe("the withheld outputs", () => {
   });
 
   it("refuse the apply of an importer whose output is withheld, and say which question it waits for", () => {
-    expect(() => requireReleased({ production: false, rehearse: ["contributorLists"] }, "contributorLists", "x")).not.toThrow();
+    expect(() =>
+      requireReleased({ production: false, rehearse: ["contributorLists"] }, "contributorLists", "x"),
+    ).not.toThrow();
     expect(() => requireReleased(DEFAULT_TARGET, "contributorLists", "ctable-0123")).toThrow(ToolRefusal);
     expect(() => requireReleased(DEFAULT_TARGET, "contributorLists", "ctable-0123")).toThrow(/question 10/);
     expect(() => requireReleased(DEFAULT_TARGET, "contributorLists", "ctable-0123")).toThrow(/"rehearse"/);

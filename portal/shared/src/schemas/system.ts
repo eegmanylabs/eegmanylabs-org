@@ -31,6 +31,7 @@ import {
  * | `account.secondFactorChanged`   | The profile of an account follows its enrolment of a second factor |
  * | `account.suspended`             | An administrator suspends an account                               |
  * | `account.reinstated`            | An administrator lifts the suspension of an account                |
+ * | `account.sessionsEnded`         | An account ends every one of its sessions                          |
  * | `admin.bootstrapped`            | A bootstrap record makes its account a programme administrator     |
  * | `claim.approved`                | An account is linked to a person, by a match or by a reviewer      |
  * | `claim.sentToReview`            | A claim found several candidates or a person who is already claimed |
@@ -61,6 +62,7 @@ export const AUDIT_ACTIONS = [
   "account.secondFactorChanged",
   "account.suspended",
   "account.reinstated",
+  "account.sessionsEnded",
   "admin.bootstrapped",
   "claim.approved",
   "claim.sentToReview",

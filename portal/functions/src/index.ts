@@ -2,9 +2,10 @@
 //
 // | Kind                | Functions                                                                  |
 // |---------------------|----------------------------------------------------------------------------|
-// | Sessions            | `sessionStart`                                                             |
+// | Sessions            | `sessionStart`, `endAllSessions`                                           |
 // | Account claims      | `claimProfile`, `requestAccess`, `listAccountClaims`, `reviewAccountClaim`, `unlinkAccountClaim` |
-// | Roles and accounts  | `setRoleAssignment`, `setCapabilityGrant`, `setRoleCapabilityOverride`, `setUserStatus` |
+// | Roles and accounts  | `setRoleAssignment`, `setCapabilityGrant`, `setRoleCapabilityOverride`, `setUserStatus`, `listUsers` |
+// | Audit trail         | `listAuditEvents`                                                          |
 // | Laboratory claims   | `requestLabClaim`, `reviewLabClaim`                                        |
 // | Records of people   | `resolveCorrectionRequest`, `getPersonDemographics`, `setPersonOrcid`, `confirmLaboratoryMembership`, `confirmReplicationMembership` |
 // | Audit trigger       | `auditDocumentWrites`                                                      |
@@ -20,8 +21,11 @@ setGlobalOptions({ region: FUNCTIONS_REGION, maxInstances: 10, memory: "256MiB" 
 export { claimProfile } from "./callables/claimProfile";
 export { confirmLaboratoryMembership } from "./callables/confirmLaboratoryMembership";
 export { confirmReplicationMembership } from "./callables/confirmReplicationMembership";
+export { endAllSessions } from "./callables/endAllSessions";
 export { getPersonDemographics } from "./callables/getPersonDemographics";
 export { listAccountClaims } from "./callables/listAccountClaims";
+export { listAuditEvents } from "./callables/listAuditEvents";
+export { listUsers } from "./callables/listUsers";
 export { requestAccess } from "./callables/requestAccess";
 export { requestLabClaim } from "./callables/requestLabClaim";
 export { resolveCorrectionRequest } from "./callables/resolveCorrectionRequest";

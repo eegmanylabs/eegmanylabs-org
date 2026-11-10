@@ -6,6 +6,7 @@
 // `can` for it, and it also asks for the caller's second factor wherever that access document
 // says one is required. A time crosses the wire as an ISO 8601 text with an offset.
 import { grantableCapabilitySchema, roleSchema, roleScopeTypeSchema } from "./capabilities";
+import { entityTypeSchema } from "./entities";
 import { hasValidOrcidCheckDigit } from "./identifiers";
 import { idSchema, orcidSchema, shortTextSchema, uidSchema } from "./schemas/base";
 import {
@@ -18,6 +19,7 @@ import {
 } from "./schemas/identity";
 import { laboratoryMemberRoleSchema, laboratoryMemberStatusSchema } from "./schemas/programme";
 import { replicationMembershipRoleSchema, reviewStatusSchema } from "./schemas/replications";
+import { auditActionSchema, auditActorKindSchema } from "./schemas/system";
 import { z } from "./zod";
 
 export interface CallableContract<Input extends z.ZodType = z.ZodType, Output extends z.ZodType = z.ZodType> {
@@ -384,6 +386,128 @@ export const confirmReplicationMembershipContract = {
     reviewStatus: reviewStatusSchema.extract(["confirmed"]),
   }),
 } as const satisfies CallableContract;
+
+/**
+ * Ends every session of the caller's own account, the one that makes the call included. Takes
+ * no arguments: it only ever concerns the caller. Every session that began before the instant
+ * it reports is refused from its next request, by the security rules and by the functions.
+ */
+export const endAllSessionsContract = {
+  name: "endAllSessions",
+  input: noArguments,
+  output: z.strictObject({ sessionsValidAfter: instantSchema }),
+} as const satisfies CallableContract;
+
+const listedRoleSchema = z.strictObject({
+  assignmentId: idSchema,
+  role: roleSchema,
+  scopeType: roleScopeTypeSchema,
+  scopeId: idSchema,
+  status: roleAssignmentStatusSchema,
+  expiresAt: instantSchema.nullable(),
+});
+
+/**
+ * Lists accounts for the administration console, sorted by name and then by address.
+ * Capability: `users.suspend` or `roles.manage`, for the programme.
+ *
+ * The verified address of an account is given, and searched, only for a caller who holds
+ * `people.contact.read` for the programme. For anyone else `emailLower` is null and the search
+ * looks at names alone, so the search cannot be used to find out whether an address has an
+ * account. `uids` asks for named accounts, for example to put names to the accounts of a list
+ * of role assignments.
+ */
+export const listUsersContract = {
+  name: "listUsers",
+  input: z.strictObject({
+    search: z.string().trim().max(200).default(""),
+    status: userStatusSchema.exactOptional(),
+    uids: z.array(uidSchema).min(1).max(100).exactOptional(),
+    offset: z.number().int().min(0).max(10_000).default(0),
+    limit: z.number().int().min(1).max(100).default(25),
+  }),
+  output: z.strictObject({
+    users: z
+      .array(
+        z.strictObject({
+          uid: uidSchema,
+          /** The name the account gives itself. It is self-asserted. */
+          displayName: z.string().nullable(),
+          /** Null unless the caller may see addresses. */
+          emailLower: z.string().max(320).nullable(),
+          status: userStatusSchema,
+          personId: idSchema.nullable(),
+          /** The name of the linked person, from the directory. */
+          personName: z.string().nullable(),
+          lastSeenAt: instantSchema,
+          /** Active and pending role assignments of the account. */
+          roles: z.array(listedRoleSchema).max(100),
+        }),
+      )
+      .max(100),
+    /** How many accounts match, of which `users` is the page that starts at `offset`. */
+    total: z.number().int().min(0),
+    /** Whether `emailLower` is given and searched. */
+    addressesShown: z.boolean(),
+  }),
+} as const satisfies CallableContract;
+export type ListUsersOutput = CallableOutput<typeof listUsersContract>;
+export type ListedUser = ListUsersOutput["users"][number];
+
+/** Where a page of the audit trail ends: the instant and the identifier of its last entry. */
+const auditCursorSchema = z.strictObject({ at: instantSchema, eventId: idSchema });
+
+/**
+ * Reads the audit trail, newest first. Capability: `audit.read`, for the programme. A page
+ * holds at most `limit` entries and ends with `next`, the cursor of the following page, or
+ * null at the start of the trail. `from` and `to` bound the instant of the entries, both
+ * inclusive. A value that the entry withholds stays withheld: the change names the field with
+ * `withheld` and carries no value.
+ */
+export const listAuditEventsContract = {
+  name: "listAuditEvents",
+  input: z.strictObject({
+    actorUid: uidSchema.exactOptional(),
+    entityType: entityTypeSchema.exactOptional(),
+    action: auditActionSchema.exactOptional(),
+    from: instantSchema.exactOptional(),
+    to: instantSchema.exactOptional(),
+    after: auditCursorSchema.exactOptional(),
+    limit: z.number().int().min(1).max(100).default(25),
+  }),
+  output: z.strictObject({
+    events: z
+      .array(
+        z.strictObject({
+          eventId: idSchema,
+          at: instantSchema,
+          actorUid: uidSchema.nullable(),
+          actorKind: auditActorKindSchema,
+          /** The name the acting account gives itself, where it has one. */
+          actorName: z.string().nullable(),
+          action: auditActionSchema,
+          entityType: entityTypeSchema.nullable(),
+          entityId: idSchema.nullable(),
+          documentPath: z.string(),
+          /** Values as JSON: an instant of the database is given as ISO 8601 text. */
+          changes: z
+            .array(
+              z.strictObject({
+                field: z.string(),
+                before: z.json().exactOptional(),
+                after: z.json().exactOptional(),
+                withheld: z.literal(true).exactOptional(),
+              }),
+            )
+            .max(1_000),
+        }),
+      )
+      .max(100),
+    next: auditCursorSchema.nullable(),
+  }),
+} as const satisfies CallableContract;
+export type ListAuditEventsOutput = CallableOutput<typeof listAuditEventsContract>;
+export type ListedAuditEvent = ListAuditEventsOutput["events"][number];
 
 /**
  * Registry of the reasons a function can give for a refusal, beside its message. The interface

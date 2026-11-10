@@ -105,7 +105,10 @@ describe("StudyResolver", () => {
   });
 
   it("resolves what the current plan has declared as an identifier, beside what is stored", async () => {
-    const { db, reads } = fakeFirestore({ ...index("alph2001", "AlphaBeta2001"), ...alias("AlphaBeta2001", "programme", "Alph2001") });
+    const { db, reads } = fakeFirestore({
+      ...index("alph2001", "AlphaBeta2001"),
+      ...alias("AlphaBeta2001", "programme", "Alph2001"),
+    });
     const resolver = new StudyResolver(db);
     resolver.declare("Delta1999", "Delta1999", "website");
     resolver.declare("Alph2001", "AlphaGamma2002", "programme");

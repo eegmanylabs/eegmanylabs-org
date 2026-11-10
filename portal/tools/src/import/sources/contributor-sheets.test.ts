@@ -29,6 +29,7 @@ const FILE_IDENTIFIER = "an-invented-file-identifier-of-a-sheet";
 const CONFIG: PrivateConfig = {
   hashKey: SECRET,
   sources: {},
+  rehearse: [],
   contributorSheets: {
     "alpha-beta": {
       externalId: FILE_IDENTIFIER,
@@ -84,9 +85,9 @@ describe("the selection of a contributor sheet", () => {
   it("refuses a sheet that the private configuration does not register, and a run that names none", async () => {
     expect(() => importer.select?.({ selector: "unregistered", config: CONFIG })).toThrow(ToolRefusal);
     expect(() => importer.select?.({ selector: undefined, config: CONFIG })).toThrow(/--sheet.*alpha-beta/);
-    expect(() => importer.select?.({ selector: "any", config: { hashKey: SECRET, sources: {} } })).toThrow(
-      /registers no contributor sheet/,
-    );
+    expect(() =>
+      importer.select?.({ selector: "any", config: { hashKey: SECRET, sources: {}, rehearse: [] } }),
+    ).toThrow(/registers no contributor sheet/);
     // The family itself reads nothing: a sheet has to be named.
     expect(() => importer.read({ path: "unused", observedOn: "2026-11-09" }, { secret: SECRET })).toThrow(ToolRefusal);
     expect(importer.sourceKey).toBe("ctable");

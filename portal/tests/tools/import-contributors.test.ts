@@ -1036,7 +1036,11 @@ describe("the command line with a contributor sheet", () => {
     expect(withheld.stderr).toContain("the contributor lists, which every member could read, are withheld");
     expect(withheld.stderr).toContain("question 10");
     expect((await documentsOf("contributors")).size).toBe(0);
-    const previewed = importCli([...base.map((argument) => (argument === "apply" ? "preview" : argument)), "--sheet", "alpha-beta"]);
+    const previewed = importCli([
+      ...base.map((argument) => (argument === "apply" ? "preview" : argument)),
+      "--sheet",
+      "alpha-beta",
+    ]);
     expect(previewed.status).toBe(0);
     expect(previewed.stdout).toContain("contributors: 6 to create");
     expect((await documentsOf("contributors")).size).toBe(0);
@@ -1092,7 +1096,9 @@ describe("the command line with a contributor sheet", () => {
     );
     const verified = verify();
     expect(verified.status).toBe(0);
-    expect(verified.stdout).toContain("passed  rowBaseline: 4 counts of 1 tabs compared with the stated baseline, all equal");
+    expect(verified.stdout).toContain(
+      "passed  rowBaseline: 4 counts of 1 tabs compared with the stated baseline, all equal",
+    );
     expect(verified.stdout).toContain("Every check passed.");
   });
 });

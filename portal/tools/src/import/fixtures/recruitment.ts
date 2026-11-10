@@ -51,6 +51,8 @@ export interface OutreachTabFixture {
   rows: (CellInput[] | null)[];
   /** Merged ranges, as addresses of the finished sheet. */
   merges: string[];
+  /** The rows below the header that the sheet hides, by their position in `rows`, from 0. */
+  hiddenRows?: number[];
 }
 
 export interface CountsRowFixture {
@@ -578,6 +580,7 @@ function outreachSheet(workbook: ExcelJS.Workbook, fixture: OutreachTabFixture):
     });
   });
   for (const range of fixture.merges) sheet.mergeCells(range);
+  for (const index of fixture.hiddenRows ?? []) sheet.getRow(headerRow + 1 + index).hidden = true;
 }
 
 function countsSheet(workbook: ExcelJS.Workbook, fixture: RecruitmentFixture["counts"]): void {

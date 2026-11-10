@@ -32,8 +32,8 @@ import {
   TABLE_FILE_IDENTIFIERS,
 } from "../../tools/src/import/fixtures/membership-workbook";
 import { websiteFixture, writeWebsiteFixture } from "../../tools/src/import/fixtures/website";
-import { itemBuilders } from "../../tools/src/import/reconcile";
 import { purgeSpecial } from "../../tools/src/import/purge";
+import { itemBuilders } from "../../tools/src/import/reconcile";
 import { rollbackBatch } from "../../tools/src/import/rollback";
 import { importer as contributorSheets } from "../../tools/src/import/sources/contributor-sheets";
 import { importer as membership } from "../../tools/src/import/sources/membership-workbook";
@@ -47,8 +47,8 @@ import {
   documentsOf,
   freshDatabase,
   OBSERVED_ON,
-  reconciliationItems,
   type RunExtra,
+  reconciliationItems,
   removeTemporaryDirectories,
   run,
   type StoredDocument,
@@ -69,10 +69,10 @@ async function workbookFile(options: MembershipWorkbookOptions = {}): Promise<st
 }
 
 /** What the private configuration says about the workbook: a maintainer has confirmed the header of the study descriptions. */
-const LOCATIONS = { g: { confirmedHeaders: CONFIRMED_STUDY_HEADERS } };
+const LOCATIONS = { g: { confirmedHeaders: { study_description: [...CONFIRMED_STUDY_HEADERS.study_description] } } };
 const runMembership = (file: string, mode: "preview" | "apply", extra: RunExtra = {}) =>
   run(membership, file, mode, { locations: LOCATIONS, ...extra });
-const verifyMembership = (file: string) => verify(membership, file, { confirmedHeaders: CONFIRMED_STUDY_HEADERS });
+const verifyMembership = (file: string) => verify(membership, file, { confirmedHeaders: LOCATIONS.g.confirmedHeaders });
 
 async function applyWebsite(): Promise<void> {
   await run(website, writeWebsiteFixture(temporaryDirectory(), websiteFixture()), "apply");
@@ -279,7 +279,11 @@ describe("the membership workbook importer", () => {
     const logged = changes.docs.filter((doc) => doc.get("documentPath") === "persons/{personId}/special/demographics");
     expect(logged).toHaveLength(4);
     for (const entry of logged) expect(entry.get("after")).toEqual({ specialCategory: true });
-    expect(changes.docs.filter((doc) => /\/special\//.test(doc.get("documentPath")) && !doc.get("documentPath").includes("{"))).toEqual([]);
+    expect(
+      changes.docs.filter(
+        (doc) => /\/special\//.test(doc.get("documentPath")) && !doc.get("documentPath").includes("{"),
+      ),
+    ).toEqual([]);
     const states = await Promise.all(logged.map((entry) => data(`${entry.ref.path}/special/state`)));
     expect(states.map((state) => state?.documentPath).sort()).toEqual(
       [ADA, UMA, WES, ZED].map((id) => `persons/${id}/special/demographics`).sort(),
@@ -562,7 +566,9 @@ describe("special-category cells before and after a person exists", () => {
     expect([...documents.keys()].filter((key) => key.includes("/special/"))).toEqual([]);
     // The rows are stored, each with a marker in the place of its special-category cells.
     const records = await adminDb.collection("sourceRecords").where("tabKey", "==", MEMBERS).get();
-    expect(records.docs.filter((doc) => doc.get("rowKey") !== "header" && !doc.get("rowKey").startsWith("banner"))).toHaveLength(7);
+    expect(
+      records.docs.filter((doc) => doc.get("rowKey") !== "header" && !doc.get("rowKey").startsWith("banner")),
+    ).toHaveLength(7);
     // What an apply would write is counted, special-category documents included.
     expect(preview.collections.personDemographics).toMatchObject({ created: 4 });
     expect(preview.collections.sourceRecordSpecial).toMatchObject({ created: 3 });
@@ -574,7 +580,8 @@ describe("special-category cells before and after a person exists", () => {
     for (const target of [DEFAULT_TARGET, { production: true, rehearse: WITHHELD_OUTPUT_KEYS }]) {
       await expect(runMembership(file, "apply", { target })).rejects.toThrow(/question 20/);
     }
-    expect((await documentsOf("sourceRecords")).size).toBe(0);
+    // A refused apply reads nothing: the website data wrote the only source records.
+    expect([...(await documentsOf("sourceRecords")).values()].filter((record) => record.sourceKey === "g")).toEqual([]);
     expect((await runMembership(file, "preview", { target: DEFAULT_TARGET })).status).toBe("previewed");
     expect(holding(await allDocuments(), TERMS)).toEqual([]);
   });
@@ -612,13 +619,20 @@ describe("special-category cells before and after a person exists", () => {
   it("gives two people with one term different keys in the queue, so that nobody can sort people by an equal value", async () => {
     await applyWebsite();
     const three: MemberRow[] = ["one", "two", "three"].map((name) => ({
-      cells: { name: `Member ${name}`, surname: "Invented", email: `member.${name}@example.org`, ethnicity: "an invented term" },
+      cells: {
+        name: `Member ${name}`,
+        surname: "Invented",
+        email: `member.${name}@example.org`,
+        ethnicity: "an invented term",
+      },
     }));
     await runMembership(await workbookFile({ members: three }), "apply");
     // A function records another term for each of the three. The workbook then states one new term for all of them.
     const people = three.map((member) => personOf(String(member.cells.email)));
     for (const id of people) {
-      await adminDb.doc(`persons/${id}/special/demographics`).update({ ethnicitySource: "a term recorded in the portal" });
+      await adminDb
+        .doc(`persons/${id}/special/demographics`)
+        .update({ ethnicitySource: "a term recorded in the portal" });
     }
     const changed = three.map((member) => ({ cells: { ...member.cells, ethnicity: "another invented term" } }));
     const report = await runMembership(await workbookFile({ members: changed }), "apply");
@@ -628,7 +642,11 @@ describe("special-category cells before and after a person exists", () => {
     const keys = conflicts.flatMap((item) => (item.candidates as { key: string }[]).map((candidate) => candidate.key));
     // Six candidates, three for the one term of the portal and three for the one term of the workbook: six keys.
     expect(new Set(keys).size).toBe(6);
-    expect(conflicts.every((item) => (item.candidates as { valueSource?: string }[]).every((c) => c.valueSource === undefined))).toBe(true);
+    expect(
+      conflicts.every((item) =>
+        (item.candidates as { valueSource?: string }[]).every((c) => c.valueSource === undefined),
+      ),
+    ).toBe(true);
     expect(JSON.stringify(await reconciliationItems())).not.toContain("invented term");
     // The report says that documents of the collection changed, and of no field which.
     expect(report.collections.personDemographics?.fields).toEqual({});
@@ -643,10 +661,9 @@ describe("special-category cells before and after a person exists", () => {
     expect(await data(`persons/${ADA}/special/demographics`)).not.toHaveProperty("genderSource");
     expect(second.conflicts).toBe(1);
     const [conflict] = (await openItems("valueConflict")).filter((item) => item.field === "genderSource");
-    expect((conflict?.candidates as { valueSource?: string }[]).map((candidate) => candidate.valueSource)).toEqual([
-      undefined,
-      undefined,
-    ]);
+    expect(
+      ((conflict?.candidates ?? []) as { valueSource?: string }[]).map((candidate) => candidate.valueSource),
+    ).toEqual([undefined, undefined]);
     expect((await runMembership(file, "apply")).documentsWritten).toBe(0);
   });
 
@@ -685,26 +702,37 @@ describe("a member row and the person it names", () => {
     const before = await allDocuments();
     // A second row of the same name and affiliation, without an address, with another term and another address elsewhere.
     const nameOnly: MemberRow = {
-      cells: { name: "Nell", surname: "Namesake", affiliation: "institute of  invention", gender: "another invented term" },
+      cells: {
+        name: "Nell",
+        surname: "Namesake",
+        affiliation: "institute of  invention",
+        gender: "another invented term",
+      },
     };
     const report = await runMembership(await workbookFile({ members: [known, nameOnly] }), "apply");
     expect(report.status).toBe("applied");
     expect(report.conflicts).toBe(0);
     expect(report.tabs.find((tab) => tab.tabKey === MEMBERS)).toMatchObject({ imported: 1, queued: 1 });
     // The person is as before: no term, no address and no name was written on the strength of a name.
-    for (const documentPath of [`persons/${nell}`, `persons/${nell}/special/demographics`, `persons/${nell}/private/contact`]) {
-      expect((await allDocuments()).get(documentPath)?.updateTime, documentPath).toBe(before.get(documentPath)?.updateTime);
+    for (const documentPath of [
+      `persons/${nell}`,
+      `persons/${nell}/special/demographics`,
+      `persons/${nell}/private/contact`,
+    ]) {
+      expect((await allDocuments()).get(documentPath)?.updateTime, documentPath).toBe(
+        before.get(documentPath)?.updateTime,
+      );
     }
     expect((await data(`persons/${nell}/special/demographics`))?.genderSource).toBe("an invented term");
     // The row waits with one item, which names the person and the basis of the proposal.
     const [item] = (await openItems("duplicatePerson")).filter((candidate) => candidate.batchId === report.batchId);
     expect(item?.entityRefs).toEqual([{ entityType: "person", entityId: nell }]);
-    expect((item?.candidates as { key: string }[]).map((candidate) => candidate.key.split(":")[0])).toEqual([
+    expect(((item?.candidates ?? []) as { key: string }[]).map((candidate) => candidate.key.split(":")[0])).toEqual([
       `g/${MEMBERS}`,
       "basis/nameAffiliation",
     ]);
     // Its special-category cell is kept beside its source record, where no client reads it.
-    const waiting = (item?.candidates as { sourceRecordId?: string }[])[0]?.sourceRecordId;
+    const waiting = ((item?.candidates ?? []) as { sourceRecordId?: string }[])[0]?.sourceRecordId;
     expect((await data(`sourceRecords/${waiting}/special/raw`))?.raw).toHaveProperty("H");
   });
 
@@ -789,8 +817,10 @@ describe("the structure check of the membership workbook", () => {
     const documents = await allDocuments();
     expect(holding(documents, ["strayed", "Strayed", "Quin"])).toEqual([]);
     expect([...documents.keys()].filter((key) => key.includes("/special/"))).toEqual([]);
+    // The item that explains the block was written at the preview, so the blocked apply writes nothing more.
+    expect((await reconciliationItems()).filter((item) => item.kind === "structureChange")).toHaveLength(1);
     const applied = await runMembership(await workbookFile({ aboveHeader: above }), "apply");
-    expect(applied).toMatchObject({ status: "failed", changesCommitted: 1 });
+    expect(applied).toMatchObject({ status: "failed", changesCommitted: 0 });
     expect((await documentsOf("persons")).size).toBe(0);
   });
 
@@ -801,7 +831,7 @@ describe("the structure check of the membership workbook", () => {
     const preview = await run(membership, file, "preview");
     expect(preview.blocking.map((check) => check.check)).toEqual(["unconfirmedHeaders"]);
     const [item] = await openItems("structureChange");
-    expect((item?.candidates as { valueSource?: string }[]).map((candidate) => candidate.valueSource)).toEqual([
+    expect(((item?.candidates ?? []) as { valueSource?: string }[]).map((candidate) => candidate.valueSource)).toEqual([
       "a confirmed header list",
       "StudyID | Description",
     ]);
@@ -813,9 +843,14 @@ describe("the structure check of the membership workbook", () => {
     expect(applied.items.clear).toEqual({ structureChange: 1 });
     expect(applied.tabs.find((tab) => tab.tabKey === STUDIES)).toMatchObject({ rawOnly: { fieldsNotStated: 2 } });
     // A further column, such as one of addresses, is refused whatever the configuration says.
-    const refused = await run(membership, await workbookFile({ studyHeaders: ["StudyID", "Description", "email"] }), "preview", {
-      locations: { g: { confirmedHeaders: { study_description: ["StudyID", "Description", "email"] } } },
-    });
+    const refused = await run(
+      membership,
+      await workbookFile({ studyHeaders: ["StudyID", "Description", "email"] }),
+      "preview",
+      {
+        locations: { g: { confirmedHeaders: { study_description: ["StudyID", "Description", "email"] } } },
+      },
+    );
     expect(refused.blocking.map((check) => check.check)).toEqual(["studyHeaders"]);
     expect(holding(await allDocuments(), ["an invented value of a further column"])).toEqual([]);
   });

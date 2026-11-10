@@ -223,3 +223,11 @@ portal/blob-report/
 # committed to this public repository.
 portal/.private/
 portal/.vitest/
+
+# Private programme data must never be committed anywhere in this public repository:
+# source workbook exports, private source configuration and saved emulator state.
+*.xlsx
+*.xls
+sources.json
+!portal/tools/sources.example.json
+emulator-data/

@@ -83,7 +83,12 @@ describe("PlanBuilder", () => {
 
   it("carries what the importer states about numeric cells and derived values", () => {
     const builder = new PlanBuilder();
-    builder.numericCell({ recordId: "r-1", path: "historicalAggregates/nLabsSigned__r-1", field: "valueNumeric", state: "blank" });
+    builder.numericCell({
+      recordId: "r-1",
+      path: "historicalAggregates/nLabsSigned__r-1",
+      field: "valueNumeric",
+      state: "blank",
+    });
     builder.numericCell({
       recordId: "r-1",
       path: "historicalAggregates/totalNRest__r-1",

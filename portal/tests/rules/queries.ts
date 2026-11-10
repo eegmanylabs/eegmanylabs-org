@@ -225,6 +225,13 @@ export const QUERY_CATALOGUE: readonly CataloguedQuery[] = [
       limit: LIMIT,
     },
   ),
+  catalogued("the requests to represent any laboratory that await a decision, oldest first", "admin", null, {
+    collection: "labClaims",
+    within: [],
+    where: [["status", "==", "pendingReview"]],
+    orderBy: [["submittedAt", "asc"]],
+    limit: LIMIT,
+  }),
   catalogued("a user's unread notifications, newest first", "owner", null, {
     collection: "userNotifications",
     within: [OWNER_UID],
@@ -240,6 +247,18 @@ export const QUERY_CATALOGUE: readonly CataloguedQuery[] = [
     where: [["sourceRecordIds", "array-contains-any", ["source-record-1"]]],
     limit: LIMIT,
   }),
+
+  // Made by listAuditEvents with the Admin SDK: the trail, newest first, by one of its filters.
+  // A range on the time of the entries uses the same index.
+  ...(["actorUid", "entityType", "action"] as const).map((field) =>
+    catalogued(`the audit trail by ${field}, newest first`, null, null, {
+      collection: "auditEvents",
+      within: [],
+      where: [[field, "==", "value-synthetic"]],
+      orderBy: [["createdAt", "desc"]],
+      limit: LIMIT,
+    }),
+  ),
 
   // Made by the claim functions with the Admin SDK, to find the roles that the records about a
   // person imply for the person's account.

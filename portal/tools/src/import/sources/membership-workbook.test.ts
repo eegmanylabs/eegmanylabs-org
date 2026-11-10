@@ -254,7 +254,10 @@ describe("the structure check of source G", () => {
     // The confirmed list is checked on every run: a column that appears later stops the import again.
     const grown = await reading({ studyHeaders: ["StudyID", "Description", "Contact"] });
     expect(grown.issues.map((issue) => issue.check)).toEqual(["unconfirmedHeaders"]);
-    expect(grown.issues[0]).toMatchObject({ expected: "StudyID | Description", found: "StudyID | Description | Contact" });
+    expect(grown.issues[0]).toMatchObject({
+      expected: "StudyID | Description",
+      found: "StudyID | Description | Contact",
+    });
     expect(JSON.stringify(grown.tabs)).not.toContain("an invented value of a further column");
   });
 
@@ -262,7 +265,10 @@ describe("the structure check of source G", () => {
     for (const header of ["Gender", "ethnicity", "E-mail", "secondary_email", "Name"]) {
       const studyHeaders = ["StudyID", "Description", header];
       const read = await reading({ studyHeaders }, READ_CONTEXT.secret, { study_description: studyHeaders });
-      expect(read.issues.map((issue) => issue.check), header).toEqual(["studyHeaders"]);
+      expect(
+        read.issues.map((issue) => issue.check),
+        header,
+      ).toEqual(["studyHeaders"]);
       expect(read.issues[0]?.found).toBe(header);
       expect(JSON.stringify(read.tabs)).not.toContain("an invented value of a further column");
     }

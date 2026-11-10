@@ -190,11 +190,12 @@ describe("mergeDocument", () => {
   });
 
   it("leaves a field cleared that another source had supplied, and does not take its place", () => {
-    const { theme: _cleared, ...cleared } = {
+    const supplied: Record<string, unknown> = {
       ...stored,
       fieldSources: { theme: "d-9", psychConstruct: "h-1" },
       importedValues: { theme: "Conflict", psychConstruct: "attention" },
     };
+    const { theme: _cleared, ...cleared } = supplied;
     const result = mergeDocument(planned({ theme: "Memory", psychConstruct: "attention" }), entry, cleared, context);
     expect(result.data).toBeNull();
     expect(result.conflicts).toMatchObject([{ field: "theme", liveState: "cleared", liveOrigin: "portal" }]);

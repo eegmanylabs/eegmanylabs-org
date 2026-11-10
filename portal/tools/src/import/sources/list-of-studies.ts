@@ -391,7 +391,12 @@ function readTab(tab: Tab, sheet: WorkbookSheet, issues: StructureIssue[]): Sour
       ...draft,
       // A row of a paper tab that names no paper is no record of the tab. It is kept for a reviewer to place.
       rowClass: keyless ? "annotation" : "data",
-      rowKey: natural === null ? contentRowKey(draft.cells, draft.rowNumber, unkeyed) : repeat > 1 ? `${natural}__${repeat}` : natural,
+      rowKey:
+        natural === null
+          ? contentRowKey(draft.cells, draft.rowNumber, unkeyed)
+          : repeat > 1
+            ? `${natural}__${repeat}`
+            : natural,
     });
   }
   if (repeatedKeys > 0) {

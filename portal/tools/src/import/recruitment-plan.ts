@@ -836,10 +836,10 @@ class RecruitmentPlan {
             field: "coLead",
             entityRefs: view.refs,
             claims: [
+              // A name of this workbook is restricted. The item names the cell, and a reviewer reads it in the source record.
               ...leaders.map((leader, index) => ({
                 source: `${tab.source}/leader/${index + 1}`,
                 value: leader.folded,
-                valueSource: leader.name,
                 sourceRecordId: row.recordId,
               })),
               ...additional.map((text, index) => ({
@@ -953,11 +953,12 @@ class RecruitmentPlan {
   /** Compares the lead claims of the workbook with one another and with the leads held already. */
   async #leadItems(): Promise<void> {
     const { items } = this.#context;
+    // A name of this workbook is restricted, so a claim names its cell and shows no name. The leads held already are
+    // people of the public directory, and their names are shown.
     const claimsOf = (cell: LeadCell, names: readonly Named[], part: string): ItemClaim[] =>
       names.map((entry) => ({
         source: `${cell.tab.source}/${part}`,
         value: entry.folded,
-        valueSource: entry.name.slice(0, LIMITS.shortText),
         sourceRecordId: cell.row.recordId,
       }));
     /** A cell that names nobody is a claim as well, where the other tab names somebody. */
@@ -1059,12 +1060,7 @@ class RecruitmentPlan {
           field: "leadLine",
           entityRefs: line.replicationId === null ? [] : [replication(line.replicationId)],
           claims: [
-            {
-              source: `${line.tab.source}/leadLine`,
-              value: line.lead.folded,
-              valueSource: line.lead.name.slice(0, LIMITS.shortText),
-              sourceRecordId: line.row.recordId,
-            },
+            { source: `${line.tab.source}/leadLine`, value: line.lead.folded, sourceRecordId: line.row.recordId },
             ...own.flatMap(({ cell }) => claimsOf(cell, cell.leaders, "leader")),
             ...formerOf.flatMap(({ cell }) => claimsOf(cell, cell.former, "oldLeader")),
           ],
@@ -1349,6 +1345,8 @@ class RecruitmentPlan {
         items.unparsedValue({
           ...base,
           field,
+          // The date of a contact is restricted, so its key is a keyed hash.
+          personal: true,
           claims: [{ source: at(`${part}/${reading.status}`), value: textOf(cell) ?? "", sourceRecordId: recordId }],
         }),
       );
@@ -1362,6 +1360,7 @@ class RecruitmentPlan {
         items.unparsedValue({
           ...base,
           field: "followUpOrder",
+          personal: true,
           claims: [
             { source: at("firstContact"), value: firstIso ?? "", sourceRecordId: recordId },
             { source: at("followUp"), value: followIso, sourceRecordId: recordId },

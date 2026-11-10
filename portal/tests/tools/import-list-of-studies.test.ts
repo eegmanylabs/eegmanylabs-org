@@ -930,3 +930,38 @@ describe("a list of studies that cannot be imported", () => {
     expect((await documentsOf("replications")).size).toBe(0);
   });
 });
+
+describe("the identifier column of the list of studies", () => {
+  /** Applies the website data and the list of studies with one study written in another spelling. */
+  async function applyWith(spelling: string | null): Promise<{ report: RunReport; counts: Record<string, number> }> {
+    await freshDatabase();
+    await applyWebsite();
+    const variant =
+      spelling === null
+        ? STUDIES
+        : STUDIES.map((study) => (study.studyId === "Delta1999" ? { ...study, studyId: spelling } : study));
+    const report = await run(studies, await workbookFile({ studies: variant }), "apply");
+    return { report, counts: await itemCounts() };
+  }
+
+  it("resolves an identifier with a lower-case initial or a diacritic to the study it folds to, and holds nothing", async () => {
+    const plain = await applyWith(null);
+    const replications = [...(await documentsOf("replications")).keys()].sort();
+    const listTab = (report: RunReport) => report.tabs.find((tab) => tab.tabKey === tabKey("list"));
+    for (const spelling of ["delta1999", "Déltá1999"]) {
+      const { report, counts } = await applyWith(spelling);
+      // The row is imported as the study it folds to: nothing waits, nothing is missing and no study is created.
+      expect(listTab(report), spelling).toMatchObject({ imported: listTab(plain.report)?.imported, queued: 0 });
+      expect(counts.unmatchedIdentifier ?? 0, spelling).toBe(plain.counts.unmatchedIdentifier ?? 0);
+      expect(counts.missingFromSource ?? 0, spelling).toBe(0);
+      expect([...(await documentsOf("replications")).keys()].sort(), spelling).toEqual(replications);
+      // The study carries the record of its row of this workbook.
+      const records = await documentsOf("sourceRecords");
+      const named = ((await replication("Delta1999"))?.sourceRecordIds ?? []) as string[];
+      expect(
+        named.some((id) => records.get(id)?.sourceKey === "d"),
+        spelling,
+      ).toBe(true);
+    }
+  });
+});

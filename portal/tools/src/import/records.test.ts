@@ -71,7 +71,12 @@ describe("aliasDocuments", () => {
     expect(documents.get("studyAliasIndex/delt")).toMatchObject({ union: { replicationIds: ["Delta1999"] } });
     // A name of another naming scheme is listed in the lookup and resolves no identifier.
     expect(await studies.resolve("DELT")).toEqual({ status: "unresolved" });
-    aliasDocuments(builder, studies, { replicationId: "Delta1999", scheme: "website", alias: "Delta1999", recordId: "r-1" });
+    aliasDocuments(builder, studies, {
+      replicationId: "Delta1999",
+      scheme: "website",
+      alias: "Delta1999",
+      recordId: "r-1",
+    });
     expect(await studies.resolve("delta1999")).toEqual({ status: "resolved", replicationId: "Delta1999" });
   });
 

@@ -126,7 +126,8 @@ function structureIssues(tabs: readonly TabOfReading[]): StructureIssue[] {
     const header = tab.rows.find((row) => row.rowClass === "header");
     const further = (header?.labels ?? []).flatMap((label, index) => {
       const value = storedValue(header?.cells[index]);
-      const text = typeof value === "string" ? value.trim() : value === null || value === undefined ? "" : String(value);
+      const text =
+        typeof value === "string" ? value.trim() : value === null || value === undefined ? "" : String(value);
       return text === "" || known.has(text) ? [] : [`${label}: ${text.slice(0, LIMITS.shortText)}`];
     });
     if (further.length > 0) {
@@ -255,7 +256,11 @@ async function plan(context: PlanContext, reviewedTabs: readonly ReviewedTab[]):
       : tabs.flatMap((tab) =>
           tab.kind === "unknown"
             ? []
-            : [tab.kind === "outreach" ? { title: tab.title, kind: tab.kind, studyId: null } : { title: tab.title, kind: tab.kind }],
+            : [
+                tab.kind === "outreach"
+                  ? { title: tab.title, kind: tab.kind, studyId: null }
+                  : { title: tab.title, kind: tab.kind },
+              ],
         );
   const drafted = await planRecruitmentWorkbook({ sourceKey: SOURCE_KEY, tabs: reviewed }, context);
   if (drafted.blocking.length > 0) return drafted;

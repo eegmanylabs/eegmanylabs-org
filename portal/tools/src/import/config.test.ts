@@ -95,11 +95,13 @@ describe("loadPrivateConfig", () => {
     });
     expect(config.contributorSheets?.["alpha-beta"]?.baseline).toEqual({ Sheet1: { data: 5 } });
     // An output that the plan does not withhold cannot be named, and a class of rows that does not exist neither.
-    expect(() => loadPrivateConfig(written("unknown-output.json", { hashKey: HASH_KEY, rehearse: ["everything"] }))).toThrow(
-      ToolRefusal,
-    );
     expect(() =>
-      loadPrivateConfig(written("unknown-class.json", { hashKey: HASH_KEY, sources: { g: { baseline: { t: { rows: 1 } } } } })),
+      loadPrivateConfig(written("unknown-output.json", { hashKey: HASH_KEY, rehearse: ["everything"] })),
+    ).toThrow(ToolRefusal);
+    expect(() =>
+      loadPrivateConfig(
+        written("unknown-class.json", { hashKey: HASH_KEY, sources: { g: { baseline: { t: { rows: 1 } } } } }),
+      ),
     ).toThrow(ToolRefusal);
   });
 
@@ -113,7 +115,10 @@ describe("loadPrivateConfig", () => {
         },
       }),
     );
-    expect(externalIdentifiers(config).sort()).toEqual(["an-invented-identifier-of-a-sheet", "an-invented-identifier-of-b"]);
+    expect(externalIdentifiers(config).sort()).toEqual([
+      "an-invented-identifier-of-a-sheet",
+      "an-invented-identifier-of-b",
+    ]);
     expect(namesSourceDocument("an-invented-identifier-of-b - Sheet1.xlsx", config)).toBe(true);
     expect(namesSourceDocument("export of an-invented-identifier-of-a-sheet.xlsx", config)).toBe(true);
     expect(namesSourceDocument("b.xlsx", config)).toBe(false);

@@ -1,0 +1,13 @@
+# A safety net for the import tools: exports of the source workbooks, a filled-in private
+# configuration and saved emulator state never belong in this public repository. Their place is
+# portal/.private/, which the repository's own ignore rules cover. The documented format of the
+# configuration is sources.example.json, which stays.
+*.xlsx
+*.xlsm
+*.xls
+*.ods
+*.csv
+*.tsv
+sources.json
+emulator-data/
+firebase-export-*/

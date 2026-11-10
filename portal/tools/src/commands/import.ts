@@ -162,7 +162,7 @@ function commitOf(directory: string): string | undefined {
 
 /**
  * Whether a file written to a directory could be committed: the directory lies in a git work
- * tree and git does not ignore it. A directory that does not exist yet is judged by its path.
+ * tree and git does not ignore the export or the record of the fetch there. A directory that does not exist yet is judged by its path.
  */
 function isCommittable(directory: string): boolean {
   let existing = directory;
@@ -174,13 +174,16 @@ function isCommittable(directory: string): boolean {
   } catch {
     return false;
   }
-  try {
-    // `check-ignore` ends with status 0 for an ignored path and with status 1 for one that is not.
-    git("check-ignore", "--quiet", path.join(directory, "export.xlsx"));
-    return false;
-  } catch {
-    return true;
-  }
+  // A fetch writes the export and a record of the fetch beside it. Either one that git would offer makes the place unsafe.
+  return ["export.xlsx", "export.json"].some((name) => {
+    try {
+      // `check-ignore` ends with status 0 for an ignored path and with status 1 for one that is not.
+      git("check-ignore", "--quiet", path.join(directory, name));
+      return false;
+    } catch {
+      return true;
+    }
+  });
 }
 
 /** The day on which a fetched export was retrieved, from the record that `import fetch` writes beside it. */

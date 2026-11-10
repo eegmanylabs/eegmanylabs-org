@@ -112,8 +112,7 @@ function conflictItem(
   // The key of a guarded value covers the document and the field, so that two people with one value never
   // share a key and nobody can sort people by an equal value that the queue does not show.
   const keyed = (value: string) => (guarded ? `${path}\n${conflict.field}\n${value}` : value);
-  const live =
-    conflict.liveState === "differs" ? canonicalJson(conflict.liveValue) : `(${conflict.liveState})`;
+  const live = conflict.liveState === "differs" ? canonicalJson(conflict.liveValue) : `(${conflict.liveState})`;
   return items.valueConflict({
     subject: path,
     field: conflict.field,
@@ -155,10 +154,9 @@ async function removedMembers(
   });
   if (missing.length === 0) return {};
   const entries = await context.db.collectionGroup("changes").where("documentPath", "==", path).get();
-  const batches = await readDocuments(
-    context.db,
-    [...new Set(entries.docs.map((entry) => COLLECTIONS.importBatches.docPath(String(entry.get("batchId")))))],
-  );
+  const batches = await readDocuments(context.db, [
+    ...new Set(entries.docs.map((entry) => COLLECTIONS.importBatches.docPath(String(entry.get("batchId"))))),
+  ]);
   const counted = entries.docs.filter(
     (entry) =>
       batches.get(COLLECTIONS.importBatches.docPath(String(entry.get("batchId"))))?.data.status !== "rolledBack",
@@ -386,7 +384,12 @@ async function specialCellChanges(
   for (const row of [...rows].sort((a, b) => (a.recordId < b.recordId ? -1 : 1))) {
     const path = entry.docPath(row.recordId);
     const current = stored.get(path) ?? null;
-    const base = { path, collection: "sourceRecordSpecial" as const, changedFields: [], sourceRecordIds: [row.recordId] };
+    const base = {
+      path,
+      collection: "sourceRecordSpecial" as const,
+      changedFields: [],
+      sourceRecordIds: [row.recordId],
+    };
     if (placed.has(row.recordId)) {
       if (current === null) continue;
       changes.push({

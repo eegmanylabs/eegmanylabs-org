@@ -190,7 +190,9 @@ describe("import list and import fetch", () => {
       expect(result.stderr, out).toContain("git does not ignore it, so the export could be committed");
     }
     expect(existsSync(path.join(PORTAL_ROOT, "tools", "exports"))).toBe(false);
-    expect(readdirSync(path.join(PORTAL_ROOT, "tests", "tools")).filter((name) => /\.(xlsx|json)$/.test(name))).toEqual([]);
+    expect(readdirSync(path.join(PORTAL_ROOT, "tests", "tools")).filter((name) => /\.(xlsx|json)$/.test(name))).toEqual(
+      [],
+    );
   });
 
   it("refuses an input whose file name holds the identifier of a source document, and repeats the identifier nowhere", async () => {
@@ -198,9 +200,11 @@ describe("import list and import fetch", () => {
     writeFileSync(named, workbook);
     const before = (await adminDb.collection("importBatches").count().get()).data().count;
     for (const command of ["run", "verify"]) {
-      const result = cli([command, "b", "--input", named, "--mode", "preview", "--config", config].filter(
-        (argument, index, all) => command === "run" || (argument !== "--mode" && all[index - 1] !== "--mode"),
-      ));
+      const result = cli(
+        [command, "b", "--input", named, "--mode", "preview", "--config", config].filter(
+          (argument, index, all) => command === "run" || (argument !== "--mode" && all[index - 1] !== "--mode"),
+        ),
+      );
       expect(result.status, command).toBe(2);
       expect(result.stderr, command).toContain("the name of the input file holds the identifier of a source document");
       expect(result.output, command).not.toContain("an-invented-file-identifier");
@@ -211,7 +215,18 @@ describe("import list and import fetch", () => {
   it("refuses a source whose earlier sources have not been applied, and says which", async () => {
     const file = path.join(temporaryDirectory(), "b.xlsx");
     writeFileSync(file, workbook);
-    const result = cli(["run", "b", "--input", file, "--mode", "preview", "--observed-on", OBSERVED_ON, "--config", config]);
+    const result = cli([
+      "run",
+      "b",
+      "--input",
+      file,
+      "--mode",
+      "preview",
+      "--observed-on",
+      OBSERVED_ON,
+      "--config",
+      config,
+    ]);
     expect(result.status).toBe(2);
     expect(result.stderr).toContain("source b is imported after source h (docs/MIGRATION_PLAN.md, section 5)");
     expect((await adminDb.collection("sourceRecords").count().get()).data().count).toBe(0);
@@ -300,8 +315,12 @@ describe("import run, show, verify and rollback", () => {
     expect(result.stdout).toContain(
       "passed  secondRun: a second run would write 0 source records, 0 documents and 0 items",
     );
-    expect(result.stdout).toContain("passed  rowBaseline: 9 counts of 5 tabs compared with the stated baseline, all equal");
-    expect(result.stdout).toContain("Every check passed. The report is stored on the latest applied batch of the source.");
+    expect(result.stdout).toContain(
+      "passed  rowBaseline: 9 counts of 5 tabs compared with the stated baseline, all equal",
+    );
+    expect(result.stdout).toContain(
+      "Every check passed. The report is stored on the latest applied batch of the source.",
+    );
     const stored = await verification();
     expect(stored?.passed).toBe(true);
     expect(stored?.checks.map((check) => check.key)).toHaveLength(11);
@@ -311,7 +330,9 @@ describe("import run, show, verify and rollback", () => {
     const failed = verify(other);
     expect(failed.status).toBe(3);
     expect(failed.stdout).toContain("FAILED  secondRun");
-    expect(failed.stdout).toContain("FAILED  rowBaseline: 9 counts of 5 tabs compared with the stated baseline; differences: members: 6 data rows where 7 are stated");
+    expect(failed.stdout).toContain(
+      "FAILED  rowBaseline: 9 counts of 5 tabs compared with the stated baseline; differences: members: 6 data rows where 7 are stated",
+    );
     expect((await verification())?.passed).toBe(false);
     // The batch counts as verified again once the input that was imported passes every check.
     expect(verify(data).status).toBe(0);
@@ -326,7 +347,9 @@ describe("import run, show, verify and rollback", () => {
       "Special-category copies of source h in demo-eegml (emulator): 0 documents of cells beneath source records removed, " +
         "0 kept states of the change log removed.",
     );
-    expect(cli(["purge-special", "--batch", applyBatch]).stdout).toContain(`Special-category copies of batch ${applyBatch}`);
+    expect(cli(["purge-special", "--batch", applyBatch]).stdout).toContain(
+      `Special-category copies of batch ${applyBatch}`,
+    );
     // The command names one source or one batch, and never everything.
     expect(cli(["purge-special"]).status).toBe(2);
     expect(cli(["purge-special", "--source", "h", "--batch", applyBatch]).status).toBe(2);

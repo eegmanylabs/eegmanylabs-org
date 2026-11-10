@@ -19,7 +19,6 @@ import type { ImportInput, RawCell, ReadContext, SourceReading, SourceRow, Sourc
 import { WorkbookFormatError } from "./ooxml";
 import { classifyNameCell, type NameCellClass, textOf } from "./recruitment-values";
 import { canonicalJson, positionFree, sha256OfBytes } from "./values";
-import { inputFileOf } from "./workbook-rows";
 import {
   cellsByRow,
   columnLetters,
@@ -29,6 +28,7 @@ import {
   type WorkbookCell,
   type WorkbookSheet,
 } from "./workbook";
+import { inputFileOf } from "./workbook-rows";
 
 export type RecruitmentTabKind = "counts" | "leads" | "outreach";
 export type DetectedTabKind = RecruitmentTabKind | "unknown";

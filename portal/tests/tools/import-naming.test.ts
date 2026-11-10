@@ -152,6 +152,32 @@ describe("the naming conventions importer", () => {
     expect(await schemaProblems()).toEqual([]);
   });
 
+  it("resolves a name with a lower-case initial or a diacritic to the study it folds to, and asks a reviewer to confirm it", async () => {
+    for (const spelling of ["delta1999", "Déltá1999"]) {
+      await freshDatabase();
+      await applyWebsite();
+      const report = await run(
+        naming,
+        await workbookFile({ rows: rowsWith("Delta1999", { name: spelling }) }),
+        "apply",
+      );
+      // The study keeps its four aliases. Only the two studies that the website does not hold wait.
+      expect(report.tabs[0], spelling).toMatchObject({ imported: 6, queued: 2, unaccounted: 0 });
+      expect(report.items.raise.unmatchedIdentifier, spelling).toBe(2);
+      expect(report.items.raise.aliasConfirmation, spelling).toBeGreaterThanOrEqual(1);
+      const confirmations = (await reconciliationItems()).filter(
+        (item) =>
+          item.kind === "aliasConfirmation" &&
+          item.field === "programme" &&
+          (item.entityRefs as { entityId: string }[]).some((ref) => ref.entityId === "Delta1999"),
+      );
+      expect(confirmations, spelling).toHaveLength(1);
+      expect(await alias("Delta1999", "programme", spelling), spelling).toMatchObject({ alias: spelling });
+      expect(await alias("Delta1999", "cloudAccount", "Delt1999"), spelling).toBeDefined();
+      expect((await documentsOf("replications")).size, spelling).toBe(6);
+    }
+  });
+
   it("stores an alias that two studies share beneath each of them, without its marker and with the footnote", async () => {
     await applyWebsite();
     await run(naming, await workbookFile(), "apply");

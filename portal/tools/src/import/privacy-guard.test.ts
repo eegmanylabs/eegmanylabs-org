@@ -93,7 +93,10 @@ describe("guardPlan", () => {
     // and an identifier of hashes holds no word, whatever letters the hash happens to contain.
     expect(guardPlan(named.build(), rowsOf(row("r-1")))).toEqual([]);
     const hashed = personPlan({ id: "p__abcdefabcdefabcdef12" });
-    const hexName = row("r-1", { personal: ["A"], cells: [{ v: "Abcdefabcdefabcdef12", t: "string" }, null, null, null] });
+    const hexName = row("r-1", {
+      personal: ["A"],
+      cells: [{ v: "Abcdefabcdefabcdef12", t: "string" }, null, null, null],
+    });
     expect(guardPlan(hashed.build(), rowsOf(hexName))).toEqual([]);
     // A study identifier that begins with the surname of a lead is public and is no word of the name.
     const membership = new PlanBuilder();
@@ -156,6 +159,8 @@ describe("withGuard", () => {
     expect(item?.candidates.map((candidate) => candidate.sourceRecordId).filter(Boolean)).toEqual(["r-1"]);
     expect(JSON.stringify(guarded.items) + JSON.stringify(guarded.blocking)).not.toContain("example.org");
     // The same finding gives the same item on every run, so it is raised once.
-    expect(withGuard(plan, guardPlan(plan, rowsOf(row("r-1"))), "g", items).items[0]?.fingerprint).toBe(item?.fingerprint);
+    expect(withGuard(plan, guardPlan(plan, rowsOf(row("r-1"))), "g", items).items[0]?.fingerprint).toBe(
+      item?.fingerprint,
+    );
   });
 });
