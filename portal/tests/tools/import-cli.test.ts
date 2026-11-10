@@ -182,6 +182,14 @@ describe("import run, show, verify and rollback", () => {
     for (const text of ["Ada", "Example", "Nowhere", "Invented", "@", "forms.example.org", "Nobody"]) {
       expect(result.output, text).not.toContain(text);
     }
+    // A second preview stores no row again. It still has everything to write, and does not say otherwise.
+    const again = cli(runArguments("preview"));
+    expect(again.status).toBe(0);
+    expect(again.stdout).toContain("persons: 15 to create, 0 to change");
+    expect(again.stdout).toContain(
+      "Nothing was written except the batch record. An apply would write the changes listed above.",
+    );
+    expect(again.stdout).not.toContain("already holds everything");
   });
 
   it("applies the previewed batch, and a second apply performs no write and says so", async () => {

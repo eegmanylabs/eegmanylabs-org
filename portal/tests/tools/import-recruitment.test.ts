@@ -795,12 +795,32 @@ describe("the lead claims", () => {
   it("queues former leads and conflicting leads, and writes no membership, no person and no address for them", async () => {
     const before = await allDocuments();
     await run(recruitment, await workbookFile(), "apply");
-    const { created, rewritten } = differences(before, await allDocuments());
+    const after = await allDocuments();
+    const { created, rewritten } = differences(before, after);
     for (const collection of ["persons/", "identityKeys/", "personEmailIndex/", "laboratories/", "participations/"]) {
       expect(created.filter((documentPath) => documentPath.startsWith(collection))).toEqual([]);
     }
     expect(created.filter((documentPath) => documentPath.includes("/memberships/"))).toEqual([]);
-    expect(rewritten.filter((documentPath) => documentPath.includes("/memberships/"))).toEqual([]);
+    // The leads that the website confirmed for the five studies in question are lowered, and nothing else of them changes.
+    const lowered = rewritten.filter((documentPath) => documentPath.includes("/memberships/"));
+    expect(lowered.map((documentPath) => documentPath.split("/")[1])).toEqual([
+      "AmodioJost2007",
+      "Boksem2006",
+      "Carretie2004",
+      "DelCul2007",
+      "Hajcak2003",
+    ]);
+    for (const documentPath of lowered) {
+      const was = before.get(documentPath)?.data ?? {};
+      const is = after.get(documentPath)?.data ?? {};
+      expect([was.reviewStatus, is.reviewStatus]).toEqual(["confirmed", "needsReview"]);
+      expect([is.personId, is.role, is.isCurrent, is.sourceRecordIds]).toEqual([
+        was.personId,
+        was.role,
+        was.isCurrent,
+        was.sourceRecordIds,
+      ]);
+    }
 
     const leads = await itemsOf("conflictingLead");
     expect(leads).toHaveLength(9);
@@ -883,11 +903,83 @@ describe("the lead claims", () => {
       { entityType: "replication", entityId: "Boksem2006" },
       { entityType: "person", entityId: await websitePerson("aexample") },
     ]);
-    // The membership that the website data wrote keeps its review status.
+    // The membership that the website data wrote stays, and its confirmation is lowered while the question is open.
     const membership = await adminDb
       .doc(`replications/Boksem2006/memberships/${replicationMembershipId(await websitePerson("aexample"), "lead")}`)
       .get();
-    expect(membership.data()).toMatchObject({ reviewStatus: "confirmed", isCurrent: true });
+    expect(membership.data()).toMatchObject({ reviewStatus: "needsReview", isCurrent: true });
+    const reason = await adminDb.doc(`sourceRecords/${membership.get("fieldSources").reviewStatus}`).get();
+    expect(reason.get("sourceKey")).toBe("f");
+    // A study about whose lead the workbook raises nothing keeps its confirmed lead.
+    const untouched = await adminDb
+      .doc(`replications/Luck1996/memberships/${replicationMembershipId(await websitePerson("aexample"), "lead")}`)
+      .get();
+    expect(untouched.data()).toMatchObject({ reviewStatus: "confirmed", isCurrent: true });
+  });
+
+  it("puts lead claims under an unresolved identifier beside the leads of the study proposed for it, and links nothing", async () => {
+    await freshDatabase();
+    const fixture = websiteFixture();
+    const [template] = fixture.replications;
+    for (const studyId of [...RECRUITMENT_STUDIES, "AmodioMaster2008"]) {
+      fixture.replications.push({ ...template, StudyId: studyId, PublicationId: "", Doi: recruitmentDoi(studyId) });
+    }
+    await run(website, writeWebsiteFixture(temporaryDirectory(), fixture), "apply");
+    const file = await workbookFile();
+    const memberships = (await documentsOf("memberships", true)).size;
+    await run(recruitment, file, "apply");
+    expect((await documentsOf("memberships", true)).size).toBe(memberships);
+
+    // The identifier differs from one study by its year alone. The question names that study as a proposal.
+    const unknown = (await itemsOf("unmatchedIdentifier")).find((item) =>
+      candidatesOf(item).some(
+        (candidate) => candidate.key.startsWith(`f/${COUNTS}/StudyID:`) && candidate.valueSource === "AmodioMaster2007",
+      ),
+    );
+    expect(unknown?.entityRefs).toEqual([{ entityType: "replication", entityId: "AmodioMaster2008" }]);
+    expect(candidatesOf(unknown).filter((candidate) => candidate.key.startsWith("proposal/otherYear:"))).toEqual([
+      expect.objectContaining({ valueSource: "AmodioMaster2008" }),
+    ]);
+    const tab = (await itemsOf("unmatchedIdentifier")).find((item) =>
+      candidatesOf(item).some((candidate) => candidate.valueSource === "AmodioMaster20072008"),
+    );
+    expect(tab?.entityRefs).toEqual([{ entityType: "replication", entityId: "AmodioMaster2008" }]);
+
+    // The leader and the former leader of the combined row and the lead line of the tab differ from the lead held.
+    const [question] = await itemsOf("conflictingLead", "leadByProposal");
+    expect(question?.status).toBe("open");
+    expect(question?.entityRefs).toEqual([
+      { entityType: "replication", entityId: "AmodioMaster2008" },
+      { entityType: "person", entityId: await websitePerson("aexample") },
+    ]);
+    const sources = candidatesOf(question).map((candidate) => candidate.key.split(":")[0]);
+    expect(sources).toEqual(
+      expect.arrayContaining([
+        `f/${LEADS}/leader`,
+        `f/${LEADS}/oldLeader`,
+        `f/${sourceTabKey("AmodioMaster20072008")}/leadLine`,
+        "held/lead",
+        "proposal/otherYear",
+      ]),
+    );
+    const lead = await adminDb
+      .doc(
+        `replications/AmodioMaster2008/memberships/${replicationMembershipId(await websitePerson("aexample"), "lead")}`,
+      )
+      .get();
+    expect(lead.data()).toMatchObject({ reviewStatus: "needsReview", isCurrent: true });
+
+    // A proposal is no match: the study gets no alias, no figure, no contact and no lead from the workbook.
+    const aliases = [...(await documentsOf("aliases", true)).entries()].filter(([documentPath]) =>
+      documentPath.startsWith("replications/AmodioMaster2008/"),
+    );
+    expect(aliases.map(([, alias]) => alias.alias)).toEqual(["AmodioMaster2008"]);
+    expect(
+      (await aggregates()).filter((entry) => (entry.replicationIds as string[]).includes("AmodioMaster2008")),
+    ).toEqual([]);
+    const contacts = [...(await documentsOf("outreachContacts")).values()];
+    expect(contacts.filter((entry) => entry.replicationId === "AmodioMaster2008")).toEqual([]);
+    expect((await run(recruitment, file, "apply")).documentsWritten).toBe(0);
   });
 
   it("offers two names in one cell as co-lead candidates, and pairs the second address as a suggestion only", async () => {
@@ -940,9 +1032,10 @@ describe("the lead claims", () => {
       reviewStatus: "needsReview",
       sourceRecordIds: [(await record("leadsEmails", "boksem2006")).id],
     });
-    // The lead whom the website already confirmed stays confirmed. This claim changes no decision.
+    // The lead whom the website confirmed is the person this claim names. The membership stays one document, and
+    // its confirmation is lowered in the same write, because the workbook records a former lead for the study.
     const confirmed = `replications/DelCul2007/memberships/${replicationMembershipId(ada, "lead")}`;
-    expect(after.get(confirmed)?.data).toMatchObject({ reviewStatus: "confirmed" });
+    expect(after.get(confirmed)?.data).toMatchObject({ reviewStatus: "needsReview", isCurrent: true });
     expect(((after.get(confirmed)?.data.sourceRecordIds ?? []) as string[]).length).toBe(2);
     // The combined row gives its lead to neither study, and two names in one cell link nobody.
     expect(created.filter((documentPath) => documentPath.includes("/memberships/"))).toEqual([membership]);

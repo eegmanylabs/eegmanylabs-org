@@ -8,13 +8,23 @@
 // trusted environment (an administrator's machine or a protected workflow), never from the
 // public site.
 import type { Command } from "./command";
+import { accessRebuildCommand } from "./commands/access-rebuild";
+import { adminBootstrapCommand } from "./commands/admin-bootstrap";
+import { citationsVerifyCommand } from "./commands/citations-verify";
 import { importCommand } from "./commands/import";
 import { seedDemoCommand } from "./commands/seed-demo";
 import { seedLookupsCommand } from "./commands/seed-lookups";
 import { ToolRefusal } from "./environment";
 
 /** Registry of commands. Add a new command here. */
-const COMMANDS: readonly Command[] = [seedDemoCommand, seedLookupsCommand, importCommand];
+const COMMANDS: readonly Command[] = [
+  seedDemoCommand,
+  seedLookupsCommand,
+  importCommand,
+  citationsVerifyCommand,
+  accessRebuildCommand,
+  adminBootstrapCommand,
+];
 
 // | Exit status | Meaning                                                                      |
 // |-------------|------------------------------------------------------------------------------|

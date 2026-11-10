@@ -728,13 +728,14 @@ describe("contributors of several sheets", () => {
     ]);
   });
 
-  it("raises one item for one question whichever sheet is read, and closes the item that a second sheet has outdated", async () => {
+  it("settles the questions of two sheets in one pass: the second sheet supersedes what the first stated alone", async () => {
     await applyWebsite();
     const betaFile = await workbookFile(ALPHA_BETA_SHEET);
     const gammaFile = await workbookFile(ALPHA_GAMMA_SHEET);
     await run(sheet("alpha-beta"), betaFile, "apply");
     const alone = items.duplicatePerson({
       subject: `contributorName/${nameHash("Bo", "Fictional")}`,
+      shared: true,
       claims: [
         { source: tableIdOf("alpha-beta"), value: idOf("alpha-beta", "Bo", "Fictional") },
         {
@@ -743,25 +744,74 @@ describe("contributors of several sheets", () => {
         },
       ],
     });
-    expect((await adminDb.doc(`reconciliationItems/${alone.fingerprint}`).get()).get("status")).toBe("open");
+    const stored = await adminDb.doc(`reconciliationItems/${alone.fingerprint}`).get();
+    expect(stored.get("status")).toBe("open");
+    // Every statement of the question carries the key of the question, whatever its candidates.
+    expect(stored.get("subjectKey")).toBe(alone.subjectKey);
 
-    await run(sheet("alpha-gamma"), gammaFile, "apply");
-    const openBefore = await itemCounts();
-    // The second run of the second sheet writes nothing.
+    // The second sheet states the question with the rows of both sheets, and the earlier statement gives way at once.
+    const second = await run(sheet("alpha-gamma"), gammaFile, "apply");
+    expect(second.items.supersede.duplicatePerson).toBeGreaterThan(0);
+    const outdated = await adminDb.doc(`reconciliationItems/${alone.fingerprint}`).get();
+    expect(outdated.get("status")).toBe("superseded");
+    expect(outdated.get("sourceKey")).toBe(sourceKeyOf("alpha-beta"));
+
+    // Neither sheet has anything left to write, and the verification of the first sheet holds without a second pass.
+    const database = await allDocuments();
     expect((await run(sheet("alpha-gamma"), gammaFile, "apply")).documentsWritten).toBe(0);
-
-    // The first sheet now sees its namesakes in the second. Its questions are those the second sheet raised.
-    const again = await run(sheet("alpha-beta"), betaFile, "apply");
-    expect(again.items.raise).toEqual({});
-    expect(again.collections.contributors).toMatchObject({ created: 0, changed: 0 });
-    // The item that named one row alone is outdated, and the importer closes it. Nothing else changes.
-    expect((await adminDb.doc(`reconciliationItems/${alone.fingerprint}`).get()).get("status")).toMatch(
-      /^(superseded|cleared)$/,
-    );
-    const openAfter = await itemCounts();
-    expect(openAfter.ambiguousEmail).toBe(openBefore.ambiguousEmail);
-    expect(openAfter.institutionMatch).toBe(openBefore.institutionMatch);
     expect((await run(sheet("alpha-beta"), betaFile, "apply")).documentsWritten).toBe(0);
+    // What differs afterwards is the record of each of the two runs, and nothing else.
+    const { created, removed, rewritten } = differences(database, await allDocuments());
+    expect([removed, rewritten]).toEqual([[], []]);
+    expect(created.every((documentPath) => /^importBatches\/[^/]+$/.test(documentPath))).toBe(true);
+    expect(created).toHaveLength(2);
+    const checks = await verify(sheet("alpha-beta"), betaFile);
+    expect(checks.filter((check) => !check.passed)).toEqual([]);
+  });
+
+  it("asks the same open questions whichever sheet is read first", async () => {
+    const openQuestions = async (order: readonly SheetName[]) => {
+      await freshDatabase();
+      await applyWebsite();
+      for (const name of order) await applySheet(name);
+      // An item names the sheet that raised it, so the questions are compared by what they ask.
+      return (await reconciliationItems())
+        .filter((item) => item.status === "open" && String(item.sourceKey).startsWith("ctable-"))
+        .filter((item) => ["duplicatePerson", "ambiguousEmail", "institutionMatch"].includes(item.kind))
+        .map((item) => item.id)
+        .sort();
+    };
+    const forwards = await openQuestions(["alpha-beta", "alpha-gamma"]);
+    const backwards = await openQuestions(["alpha-gamma", "alpha-beta"]);
+    expect(forwards.length).toBeGreaterThan(0);
+    expect(backwards).toEqual(forwards);
+  });
+
+  it("never lets two sheets close each other's statement where neither holds all candidates of the other", async () => {
+    await applyWebsite();
+    await applySheet("alpha-beta");
+    await applySheet("alpha-gamma");
+    const subject = `contributorName/${nameHash("Ada", "Example")}`;
+    const [open] = (await reconciliationItems()).filter(
+      (item) => item.status === "open" && item.kind === "duplicatePerson" && item.subjectKey !== undefined,
+    );
+    expect(open).toBeDefined();
+    // A statement of the same question with a candidate of its own, as another source of the family may have made it.
+    const other = items.duplicatePerson({
+      subject,
+      shared: true,
+      claims: [{ source: "ctable__0123456789abcdef0123", value: "a-row-that-neither-sheet-holds" }],
+    });
+    const { id: _id, ...statement } = open ?? { id: "" };
+    await adminDb.doc(`reconciliationItems/${other.fingerprint}`).set({
+      ...statement,
+      candidates: other.candidates,
+      subjectKey: other.subjectKey,
+      sourceKey: "ctable-0123456789abcdef0123",
+    });
+    const again = await applySheet("alpha-gamma");
+    expect(again.items.supersede).toEqual({});
+    expect((await adminDb.doc(`reconciliationItems/${other.fingerprint}`).get()).get("status")).toBe("open");
   });
 });
 

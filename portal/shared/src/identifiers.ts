@@ -36,3 +36,16 @@ export function normaliseDisplayName(value: unknown): string | null {
   cut = cut.trimEnd();
   return cut === "" ? null : cut;
 }
+
+/**
+ * Whether a bare ORCID iD, such as `0000-0002-1825-0097`, carries the check digit that
+ * ISO 7064 MOD 11-2 gives its first fifteen digits. A mistyped iD almost never does.
+ */
+export function hasValidOrcidCheckDigit(orcid: string): boolean {
+  const digits = orcid.replaceAll("-", "").toUpperCase();
+  if (!/^\d{15}[\dX]$/.test(digits)) return false;
+  let total = 0;
+  for (const digit of digits.slice(0, 15)) total = (total + Number(digit)) * 2;
+  const check = (12 - (total % 11)) % 11;
+  return (check === 10 ? "X" : String(check)) === digits[15];
+}

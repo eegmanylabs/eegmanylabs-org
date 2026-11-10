@@ -271,6 +271,8 @@ interface OtherContributor {
   readonly foldedFirst: string;
   readonly foldedSurname: string;
   readonly affiliation: string | null;
+  /** Every affiliation string of the row, whichever slot holds it. */
+  readonly affiliations: readonly string[];
   readonly sourceRecordId: string | undefined;
 }
 
@@ -613,7 +615,14 @@ class SheetPlan {
     const { db, secret } = this.#context;
     const stored = await db
       .collection(COLLECTIONS.contributors.collectionPath())
-      .select("contributorTableId", "firstNameSource", "surnameSource", "affiliationSource", "sourceRecordId")
+      .select(
+        "contributorTableId",
+        "firstNameSource",
+        "surnameSource",
+        "affiliationSource",
+        "affiliationSlotsSource",
+        "sourceRecordId",
+      )
       .get();
     return stored.docs
       .filter((doc) => doc.get("contributorTableId") !== this.#sheet.tableId)
@@ -621,6 +630,7 @@ class SheetPlan {
         const first = String(doc.get("firstNameSource") ?? "");
         const surname = String(doc.get("surnameSource") ?? "");
         const affiliation: unknown = doc.get("affiliationSource");
+        const slots = (doc.get("affiliationSlotsSource") as Record<string, unknown> | undefined) ?? {};
         const recordId: unknown = doc.get("sourceRecordId");
         return {
           id: doc.id,
@@ -629,6 +639,7 @@ class SheetPlan {
           foldedFirst: lookupFold(first),
           foldedSurname: lookupFold(surname),
           affiliation: typeof affiliation === "string" ? affiliation : null,
+          affiliations: Object.values(slots).filter((text): text is string => typeof text === "string"),
           sourceRecordId: typeof recordId === "string" ? recordId : undefined,
         };
       })
@@ -925,6 +936,7 @@ class SheetPlan {
         this.#builder.item(
           items.duplicatePerson({
             subject,
+            shared: true,
             entityRefs: [...refs, ...people.map(person)],
             claims: [
               this.#claim(entry.row, entry.contributorId, false, tableId),
@@ -944,6 +956,7 @@ class SheetPlan {
         this.#builder.item(
           items.ambiguousEmail({
             subject,
+            shared: true,
             field: "email",
             entityRefs: refs,
             claims: [
@@ -961,6 +974,7 @@ class SheetPlan {
         this.#builder.item(
           items.institutionMatch({
             subject,
+            shared: true,
             field: "affiliation",
             entityRefs: refs,
             claims: [
@@ -992,8 +1006,10 @@ class SheetPlan {
 
     // Affiliation strings that may name one institution, within the sheet and against the other sheets.
     const own = this.#affiliations;
+    // Every slot of the other sheets is compared, as every slot of this one is, so that a pair of strings is
+    // found whichever of its two sheets is read last.
     const foreign = new Map<string, OtherContributor>();
-    for (const other of others) if (other.affiliation !== null) foreign.set(other.affiliation, other);
+    for (const other of others) for (const text of other.affiliations) foreign.set(text, other);
     const ownTexts = [...own.keys()].sort();
     // One pair of strings is one question, whichever sheets hold them, so the claims name no sheet.
     const pairItem = (first: readonly [string, string | undefined], second: readonly [string, string | undefined]) => {

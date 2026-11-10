@@ -82,6 +82,12 @@ export interface ItemInput {
   /** Overrides whether the candidate values are personal, for a kind that is used both ways. */
   readonly personal?: boolean;
   readonly blocking?: boolean;
+  /**
+   * True for a question that every source of a family states as far as it knows it, such as
+   * whether the rows of one name in several contributor sheets are one person. The statement
+   * with the most candidates stands, and the statements it contains are superseded.
+   */
+  readonly shared?: boolean;
 }
 
 function buildItem(kind: ReconciliationKind, input: ItemInput, secret: string): PlannedItem {
@@ -109,6 +115,10 @@ function buildItem(kind: ReconciliationKind, input: ItemInput, secret: string): 
     ...(input.field === undefined ? {} : { field: input.field }),
     candidates,
     blocking: input.blocking ?? false,
+    // The fingerprint of the question without its candidates is the same in every statement of it.
+    ...(input.shared === true
+      ? { subjectKey: reconciliationFingerprint({ kind, subject, candidateKeys: [] }, personal ? secret : undefined) }
+      : {}),
   };
 }
 

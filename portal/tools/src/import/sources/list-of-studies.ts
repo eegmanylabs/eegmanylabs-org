@@ -1562,6 +1562,8 @@ class ListOfStudiesPlan {
         value !== undefined && tidied(value).length <= LIMITS.longText ? tidied(value) : undefined;
       const studyId = ListOfStudiesPlan.#studyOf(paper);
       const supplier = (first ?? cited[0])?.row.recordId ?? "";
+      // The citation stands in a row of its own tab, which is named as its source where it is not the first row.
+      const citedRow = cited[references.indexOf(reference ?? null)]?.row.recordId;
       this.#builder.document({
         collection: "candidateStudies",
         ids: [id],
@@ -1579,6 +1581,7 @@ class ListOfStudiesPlan {
         // What a reviewer decides about a candidate stands, and the open questions already ask for it.
         silent: ["selectionStatus", "replicationId"],
         sourceRecordIds: [supplier, ...archived.map((entry) => entry.row.recordId)],
+        ...(reference === undefined || citedRow === undefined ? {} : { fieldSources: { originalReference: citedRow } }),
       });
       if (doi !== undefined) doiLookupDocument(this.#builder, candidate(id), doi, supplier);
     }

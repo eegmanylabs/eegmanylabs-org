@@ -9,3 +9,13 @@ export const DEMO_PROJECT_ID = "demo-eegml";
 
 /** Prefix that marks a project identifier as emulator-only. */
 export const DEMO_PROJECT_PREFIX = "demo-";
+
+/**
+ * The key of the keyed hashes in the Local Emulator Suite. It protects nothing: the emulators
+ * hold synthetic data only, and this value is public. A real project reads its key from the
+ * secret store, and no tool or function accepts this one outside the emulators.
+ */
+export const DEMO_IDENTITY_HASH_KEY = "demo-eegml-emulator-hash-key-that-protects-nothing";
+
+/** Name of the secret, and of the environment variable, that holds the key of the keyed hashes. */
+export const IDENTITY_HASH_KEY_NAME = "IDENTITY_HASH_KEY";

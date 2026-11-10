@@ -25,11 +25,65 @@ import {
  * Registry of audit actions. Add a row here when a function starts recording a new kind of
  * change.
  *
- * | Action            | Recorded when                                                      |
- * |-------------------|--------------------------------------------------------------------|
- * | `account.created` | An account starts the portal for the first time and is registered |
+ * | Action                          | Recorded when                                                      |
+ * |---------------------------------|--------------------------------------------------------------------|
+ * | `account.created`               | An account starts the portal for the first time and is registered |
+ * | `account.secondFactorChanged`   | The profile of an account follows its enrolment of a second factor |
+ * | `account.suspended`             | An administrator suspends an account                               |
+ * | `account.reinstated`            | An administrator lifts the suspension of an account                |
+ * | `admin.bootstrapped`            | A bootstrap record makes its account a programme administrator     |
+ * | `claim.approved`                | An account is linked to a person, by a match or by a reviewer      |
+ * | `claim.sentToReview`            | A claim found several candidates or a person who is already claimed |
+ * | `claim.requested`               | An account without a match asks for access                         |
+ * | `claim.rejected`                | A reviewer rejects a claim                                         |
+ * | `claim.unlinked`                | An administrator reverses a wrong link                             |
+ * | `role.proposed`                 | A role implied by imported data is created and awaits approval     |
+ * | `role.granted`                  | A role assignment becomes active                                   |
+ * | `role.revoked`                  | A role assignment is revoked                                       |
+ * | `capability.granted`            | A named capability is granted to an account                        |
+ * | `capability.revoked`            | A named capability grant is revoked                                |
+ * | `roleCapabilities.changed`      | An override of the capability matrix is set or cleared             |
+ * | `labClaim.requested`            | A member asks to represent a laboratory                            |
+ * | `labClaim.approved`             | A reviewer approves such a request                                 |
+ * | `labClaim.rejected`             | A reviewer rejects such a request                                  |
+ * | `correction.resolved`           | A correction request is accepted or rejected                       |
+ * | `demographics.read`             | Special-category data of a person is served to a caller            |
+ * | `person.orcidChanged`           | The ORCID iD of a person is set, changed or removed                |
+ * | `laboratoryMember.confirmed`    | A member entry of a laboratory is confirmed                        |
+ * | `replicationMembership.confirmed` | A membership of a replication is confirmed                       |
+ * | `document.created`              | The audit trigger saw a document created outside a callable function |
+ * | `document.updated`              | The audit trigger saw a document changed outside a callable function |
+ * | `document.deleted`              | The audit trigger saw a document deleted                           |
  */
-export const AUDIT_ACTIONS = ["account.created"] as const;
+export const AUDIT_ACTIONS = [
+  "account.created",
+  "account.secondFactorChanged",
+  "account.suspended",
+  "account.reinstated",
+  "admin.bootstrapped",
+  "claim.approved",
+  "claim.sentToReview",
+  "claim.requested",
+  "claim.rejected",
+  "claim.unlinked",
+  "role.proposed",
+  "role.granted",
+  "role.revoked",
+  "capability.granted",
+  "capability.revoked",
+  "roleCapabilities.changed",
+  "labClaim.requested",
+  "labClaim.approved",
+  "labClaim.rejected",
+  "correction.resolved",
+  "demographics.read",
+  "person.orcidChanged",
+  "laboratoryMember.confirmed",
+  "replicationMembership.confirmed",
+  "document.created",
+  "document.updated",
+  "document.deleted",
+] as const;
 export const auditActionSchema = z.enum(AUDIT_ACTIONS);
 export type AuditAction = z.output<typeof auditActionSchema>;
 
@@ -45,6 +99,9 @@ export type AuditAction = z.output<typeof auditActionSchema>;
 export const AUDIT_ACTOR_KINDS = ["user", "system", "import", "sync", "automation"] as const;
 export const auditActorKindSchema = z.enum(AUDIT_ACTOR_KINDS);
 export type AuditActorKind = z.output<typeof auditActorKindSchema>;
+
+/** The text that stands in an audit entry where a value is withheld. */
+export const AUDIT_WITHHELD_MARKER = "[withheld]";
 
 /**
  * One changed field. `before` and `after` are present only for documents that members can
@@ -85,13 +142,23 @@ export const auditEventSchema = appendOnlyBaseSchema
     action: auditActionSchema,
     /** Path of the document the entry is about. */
     documentPath: z.string().min(1).max(1_500),
-    ...entityRefShape,
+    /**
+     * The record the entry is about. An entry of the audit trigger names the document itself
+     * where it is a record of the entity registry, and otherwise the nearest record above it.
+     * Both are null for a document that belongs to no such record, such as a lookup.
+     */
+    entityType: entityRefShape.entityType.nullable(),
+    entityId: entityRefShape.entityId.nullable(),
     changes: z.array(auditChangeSchema).max(LIMITS.list),
     context: auditContextSchema,
   })
   .refine((event) => (event.actorKind === "user") === (event.actorUid !== null), {
     error: "An entry names an account exactly when a person made the change",
     path: ["actorUid"],
+  })
+  .refine((event) => (event.entityType === null) === (event.entityId === null), {
+    error: "An entry names the type and the identifier of a record together",
+    path: ["entityId"],
   });
 export type AuditEvent = z.output<typeof auditEventSchema>;
 
@@ -250,5 +317,11 @@ export const systemSettingsDocSchema = documentBaseSchema.extend({
   listLimit: z.number().int().min(1).max(1_000),
   /** Collection to the number of days its documents are kept. */
   retention: boundedRecord(mapKeySchema, z.number().int().min(1), 200),
+  /**
+   * Whether holders of a programme role or of a named grant must enrol and present a second
+   * factor. Absent means true, and so does a missing settings document. `seed:demo` switches it
+   * off in the Local Emulator Suite, which cannot run a time-based one-time password.
+   */
+  requireSecondFactor: z.boolean().exactOptional(),
 });
 export type SystemSettingsDoc = z.output<typeof systemSettingsDocSchema>;

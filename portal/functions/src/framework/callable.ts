@@ -27,6 +27,7 @@ import {
   SESSION_ENDED_MESSAGE,
   SIGN_IN_REQUIRED_MESSAGE,
 } from "./errors";
+import { identityHashKeySecret } from "./hash-key";
 
 interface CommonDefinition {
   /**
@@ -40,6 +41,12 @@ interface CommonDefinition {
    * rare function that must serve them. Say why in a comment wherever `any` is used.
    */
   readonly callerStanding?: "active" | "any";
+  /**
+   * Set for a function that derives a keyed hash, such as the identifier of an entry of the
+   * email index. The secret that holds the key is then bound to the function. The emulator
+   * binds nothing and uses the demonstration key (see `identityHashKey`).
+   */
+  readonly usesIdentityHashKey?: boolean;
 }
 
 /** A function for signed-in callers. This is the default. */
@@ -70,6 +77,8 @@ export interface IncomingCall {
       readonly name?: unknown;
       /** When the caller signed in, in seconds since the epoch. */
       readonly auth_time?: unknown;
+      /** What Firebase Authentication says about the sign-in, the second factor included. */
+      readonly firebase?: { readonly sign_in_second_factor?: unknown } | undefined;
     };
   };
 }
@@ -161,6 +170,7 @@ export async function runCallable<C extends CallableContract>(
     uid,
     verifiedEmail: token?.email_verified === true && typeof token.email === "string" ? token.email : null,
     selfAssertedName: normaliseDisplayName(token?.name),
+    secondFactorVerified: secondFactorVerifiedIn(token),
     db: dependencies.db,
     clock: dependencies.clock,
     logger,
@@ -171,7 +181,7 @@ export async function runCallable<C extends CallableContract>(
     // The check above guarantees a uid whenever the definition requires one.
     result = await (definition.handler as PublicDefinition<C>["handler"])(input.data as ValidatedInput<C>, context);
   } catch (error) {
-    if (error instanceof AppError) throw publicError(error.code, error.publicMessage);
+    if (error instanceof AppError) throw publicError(error.code, error.publicMessage, error.reason);
     // Everything else is a fault, including an HttpsError that a library raised: its message
     // was not written for the person using the portal.
     logger.error("callable failed", { function: contract.name, uid, error: describeError(error) });
@@ -188,6 +198,16 @@ export async function runCallable<C extends CallableContract>(
     throw publicError("internal", INTERNAL_ERROR_MESSAGE);
   }
   return output.data as CallableOutput<C>;
+}
+
+/**
+ * Whether a sign-in token says that a second factor was verified in the session: Firebase
+ * Authentication then names the factor in `firebase.sign_in_second_factor`. The security rules
+ * read the same claim in `powersOf`.
+ */
+export function secondFactorVerifiedIn(token: NonNullable<IncomingCall["auth"]>["token"] | undefined): boolean {
+  const factor = token?.firebase?.sign_in_second_factor;
+  return typeof factor === "string" && factor !== "";
 }
 
 function describeError(error: unknown): Record<string, unknown> {
@@ -230,6 +250,7 @@ export function defineCallable<C extends CallableContract>(
       // The emulator serves builds on any local port (PORTAL_PORT_BASE), so it accepts every origin.
       cors: emulated ? true : portalOrigins(),
       enforceAppCheck: definition.enforceAppCheck === true && !emulated,
+      secrets: definition.usesIdentityHashKey === true && !emulated ? [identityHashKeySecret()] : [],
     },
     (request) => {
       const db = firestore();

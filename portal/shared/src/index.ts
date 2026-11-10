@@ -1,4 +1,6 @@
 export * from "./access";
+export * from "./access-store";
+export * from "./bootstrap";
 export * from "./bytes";
 export * from "./callables";
 export * from "./capabilities";
@@ -8,6 +10,8 @@ export * from "./data-origin";
 export * from "./entities";
 export * from "./identifiers";
 export * from "./ids";
+export * from "./implied-roles";
+export * from "./person-units";
 export * from "./schemas/base";
 export * from "./schemas/datasets";
 export * from "./schemas/identity";

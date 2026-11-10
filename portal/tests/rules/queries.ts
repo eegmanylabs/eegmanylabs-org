@@ -240,4 +240,13 @@ export const QUERY_CATALOGUE: readonly CataloguedQuery[] = [
     where: [["sourceRecordIds", "array-contains-any", ["source-record-1"]]],
     limit: LIMIT,
   }),
+
+  // Made by the claim functions with the Admin SDK, to find the roles that the records about a
+  // person imply for the person's account.
+  catalogued("the member entries of one person, across laboratories", null, null, {
+    collection: "laboratoryMembers",
+    within: "group",
+    where: [["personId", "==", OWNER_PERSON]],
+    limit: LIMIT,
+  }),
 ];

@@ -37,7 +37,53 @@ node scripts/emulators.mjs run npm run --silent -w @eegml/tools cli -- import ru
 
 A run prints counts, field names and identifiers of documents. It never prints a name, an address or the content of a cell. A second apply of an unchanged input writes its own batch record and nothing else, and says so. An apply that is interrupted is safe to run again: the next run writes what remains, as a batch of its own.
 
+A review item is raised once, under its fingerprint. Two things keep the queue and the leads in step with it, whichever source is read first:
+
+| What an import finds | What it does |
+|---|---|
+| A question that every source of a family states as far as it knows it, such as whether the rows of one name in several contributor sheets are one person | The item carries the key of the question (`subjectKey`). When a later source states the question with further candidates, the earlier statements are closed as superseded in the same run, whichever source raised them. A statement with a candidate that the new one lacks is left alone. A family of sources therefore settles in one pass, in any order. |
+| A `conflictingLead` item about a replication that is open after the run | Every lead of that replication whose confirmation an import wrote is lowered to `needsReview`, and the row behind the question is named as the source of that one field. The membership and the person stay. A confirmation that a person has set, and one whose question a reviewer has decided, is never lowered. |
+| An identifier or a tab title that resolves to no study and differs from exactly one study identifier by its year alone | The study is named in the item as a proposal (`proposal/otherYear`), and lead claims made under the identifier are put beside the leads of that study in a `conflictingLead` item. Nothing is matched: the study gets no alias, no figure, no contact and no lead from those rows. |
+
 An import against a real project is not possible by accident. It needs `--production`, `--project <identifier>` and credentials in `GOOGLE_APPLICATION_CREDENTIALS` together, it is refused while an emulator address is set, and an apply must name its previewed batch. No real project exists yet.
+
+## Checking citations
+
+```bash
+node scripts/emulators.mjs run npm run --silent -w @eegml/tools cli -- citations:verify --dry-run
+node scripts/emulators.mjs run npm run --silent -w @eegml/tools cli -- citations:verify
+```
+
+`citations:verify` looks up the DOI of the original study of every replication, and the DOI of every manuscript, at Crossref (`api.crossref.org`), and compares title, year and first author with the stored reference. A request names the DOI and a generic client name, and carries no address, no name and no credential. One DOI is asked once, and requests follow one another a quarter of a second apart.
+
+| Result | Status recorded | What else is recorded |
+|---|---|---|
+| Title, year and first author all agree | `verified` | The retrieved title, years, first author, journal and type, and the comparison field by field |
+| One of them differs | `mismatch` | The same. The command prints the path and the names of the fields that differ |
+| No registry holds the DOI | `notFound` | The DOI that was asked |
+| Another agency registered the DOI, as DataCite does for a data repository | stays `unverified` | The DOI and the agency |
+| Nothing differs and a field could not be compared | stays `unverified` | What was retrieved, and the comparison |
+| Crossref could not be asked | nothing is written | The command ends with status 3 and says how many citations to try again |
+
+A title agrees when the two are equal without regard to case, diacritics, punctuation and markup, with or without the subtitle that Crossref keeps apart. A year agrees when it is one of the years that Crossref gives for the work. The command writes `citationStatus`, `citationCheckedAt`, `citationSource` and `citationMetadata` of a replication, and `citationStatus` and `citationMetadata` of a manuscript, where the metadata names the source and the time. It never writes a field of the reference itself: a mismatch is for a person to settle. An importer sets the status when it creates a record and never afterwards, so a later import leaves the result of the check alone, and a second run of the check writes nothing unless Crossref has changed. `--dry-run` compares and prints without writing.
+
+## Keeping the imported state
+
+The state of the emulators can be saved and started from again, so that the import does not have to be repeated for every session of development. Both commands run in the `portal` directory. The saved state holds real data once real sources have been imported, so it belongs in `portal/.private/`, which git ignores, and nowhere else.
+
+```bash
+# Save, while `npm run emulators` is running. The hub of the emulators listens at the port base plus 40.
+curl -X POST "http://127.0.0.1:$(( ${PORTAL_PORT_BASE:-9100} + 40 ))/_admin/export" \
+  -H 'Content-Type: application/json' \
+  -d "{\"path\":\"$PWD/.private/emulator-data\",\"initiatedBy\":\"import\"}"
+
+# Start the emulators from the saved state, in place of `npm run emulators`.
+node --input-type=module -e 'import { writeFirebaseConfig } from "./scripts/firebase-config.mjs"; import { resolvePortBase } from "./scripts/ports.mjs"; writeFirebaseConfig(resolvePortBase());'
+npm run fb -- emulators:start --project demo-eegml --config "firebase.run-${PORTAL_PORT_BASE:-9100}.json" \
+  --only auth,firestore --import .private/emulator-data
+```
+
+The first line of the second block writes the Firebase configuration of the port base, which `npm run emulators` otherwise writes and removes by itself. Remove `firebase.run-<base>.json` again after the emulators have stopped. Add `functions,storage` to `--only`, after `npm run build -w @eegml/functions`, when the application is to run against the state. Identifiers of people, contributors and outreach contacts in a saved state are derived with the hash key of `portal/.private/sources.json`, so a later import into that state needs the same key.
 
 ## Private configuration
 
@@ -79,6 +125,7 @@ An importer is one module in `src/import/sources/` that exports its definition a
 | `preview.ts`, `apply.ts`, `rollback.ts`, `verify.ts`, `run.ts` | The stages of a run |
 | `registry.ts`, `config.ts`, `fetch.ts`, `discover.ts` | The source registry, the private configuration, the fetch stage and the discovery of importers |
 | `codes.ts` | Checks of external codes by shape and check digit, without any lookup |
+| `../citations/compare.ts`, `../citations/crossref.ts` | The citation check: the comparison of a stored reference with a retrieved one, and the look-up of a DOI at Crossref |
 | `contributor-values.ts` | The readings of a contributor sheet: the mapping from header text to field, the classes of a row, a checkbox, an order value, and the screen for affiliation strings that may name one institution |
 | `workbook-structure.ts` | The structure check for a workbook whose layout is known from a description only: the tolerant match of a header, with everything that was not recognised named |
 | `recruitment-workbook.ts`, `recruitment-plan.ts`, `recruitment-values.ts` | The reader and the planner of a recruitment and contact workbook, with the source key and the reviewed table of tabs as parameters, so that a second workbook of that layout uses them unchanged |

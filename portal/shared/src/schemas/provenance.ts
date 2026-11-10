@@ -289,6 +289,12 @@ export const reconciliationItemDocSchema = documentBaseSchema.extend({
   resolvedAt: timestampSchema.nullable(),
   /** The batch that raised the item. */
   batchId: idSchema,
+  /**
+   * The key of the question itself, for a question that several sources of one family each state
+   * as far as they know it: the fingerprint of the item without its candidates. When a source
+   * states the question with further candidates, the earlier statements are superseded.
+   */
+  subjectKey: idSchema.exactOptional(),
 });
 export type ReconciliationItemDoc = z.output<typeof reconciliationItemDocSchema>;
 

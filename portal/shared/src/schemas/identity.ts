@@ -202,12 +202,17 @@ export const accessDocSchema = documentBaseSchema.extend({
    * `demographics.read`), each with the scope keys in which it holds. Read it with `can`.
    */
   capabilities: z.partialRecord(capabilityFieldSchema, capabilityScopesSchema),
-  /** Whether the account has enrolled a second factor. */
+  /**
+   * Whether the second factor of the account is in place: the account has enrolled one, or the
+   * system setting `requireSecondFactor` waives it for a holder of a programme role or of a
+   * named grant. The security rules grant the powers of a programme role only beside it.
+   */
   mfaEnrolled: z.boolean(),
   /**
    * True when the account holds a programme role or a named capability grant and must
-   * therefore enrol a second factor. Until it has, those powers are withheld from
-   * `capabilities` and `scopeKeys`.
+   * therefore enrol a second factor and present it in the session. Until it has enrolled one,
+   * those powers are withheld from `capabilities` and `scopeKeys`. False for such an account
+   * only while `requireSecondFactor` of `system/settings` is false.
    */
   secondFactorRequired: z.boolean(),
   /**

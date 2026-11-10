@@ -38,6 +38,8 @@
     "emulators": "node scripts/emulators.mjs start",
     "seed:demo": "node scripts/emulators.mjs run npm run --silent -w @eegml/tools cli -- seed:demo",
     "seed:lookups": "node scripts/emulators.mjs run npm run --silent -w @eegml/tools cli -- seed:lookups",
+    "access:rebuild": "node scripts/emulators.mjs run npm run --silent -w @eegml/tools cli -- access:rebuild",
+    "admin:bootstrap": "node scripts/emulators.mjs run npm run --silent -w @eegml/tools cli -- admin:bootstrap",
     "fb": "scripts/fb.sh"
   },
   "devDependencies": {

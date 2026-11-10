@@ -106,6 +106,13 @@ export interface AccessInputs {
   readonly groupKeys: readonly string[];
   /** The replications in which the linked person has a current, confirmed membership. */
   readonly confirmedReplicationIds: readonly string[];
+  /**
+   * `requireSecondFactor` of `system/settings`: whether holders of a programme role or of a named
+   * grant must enrol and present a second factor. Absent means true, which is also what a missing
+   * settings document means. Only the Local Emulator Suite, which cannot run a time-based
+   * one-time password, switches it off.
+   */
+  readonly requireSecondFactor?: boolean;
 }
 
 const sortedUnique = (values: Iterable<string>): string[] => [...new Set(values)].sort();
@@ -151,6 +158,11 @@ function comparePendingRoles(a: PendingRole, b: PendingRole): number {
  * keys. The roles stay listed in `programmeRoles`, so that the interface can explain what is
  * missing. Arrays are sorted and free of duplicates, so two resolutions of the same inputs are
  * equal and a writer can skip a write that would change nothing.
+ *
+ * Where `requireSecondFactor` is false the factor is waived for such an account:
+ * `secondFactorRequired` is false, the powers are in effect, and `mfaEnrolled` is written as
+ * true, because the security rules grant the powers of a programme role only beside it. The
+ * profile in `users/{uid}` keeps saying whether a factor is really enrolled.
  */
 export function resolveAccess(inputs: AccessInputs): ResolvedAccess {
   const { uid, now } = inputs;
@@ -192,7 +204,10 @@ export function resolveAccess(inputs: AccessInputs): ResolvedAccess {
 
   const roles = new Set<Role>(active.map((assignment) => assignment.role));
   const programmeRoles = [...roles].filter(isProgrammeRole).sort();
-  const secondFactorRequired = programmeRoles.length > 0 || grants.length > 0;
+  /** Whether the account holds something that calls for a second factor. */
+  const needsFactor = programmeRoles.length > 0 || grants.length > 0;
+  const factorWaived = needsFactor && inputs.requireSecondFactor === false;
+  const secondFactorRequired = needsFactor && !factorWaived;
   /** Whether the powers of the programme roles and of the named grants are in effect. */
   const privileged = !secondFactorRequired || inputs.user.mfaEnrolled;
 
@@ -285,7 +300,7 @@ export function resolveAccess(inputs: AccessInputs): ResolvedAccess {
       .map(({ role, scopeType, scopeId }) => ({ role, scopeType, scopeId }))
       .sort(comparePendingRoles),
     capabilities,
-    mfaEnrolled: inputs.user.mfaEnrolled,
+    mfaEnrolled: inputs.user.mfaEnrolled || factorWaived,
     secondFactorRequired,
     sessionsValidAfter: inputs.sessionsValidAfter,
     suspended: false,

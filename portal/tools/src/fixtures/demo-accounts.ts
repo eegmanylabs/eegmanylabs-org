@@ -8,9 +8,18 @@ export interface DemoAccount {
   readonly uid: string;
   readonly email: string;
   readonly displayName: string;
+  /** The person of the demonstration world that the account has claimed already, or null. */
+  readonly personId: string | null;
 }
 
 export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
-  { uid: "demo-account-one", email: "demo.one@example.org", displayName: "Demo Account One" },
-  { uid: "demo-account-two", email: "demo.two@example.org", displayName: "Demo Account Two" },
+  // A member who has claimed a profile: the person "Ivy Pretend" of the demonstration world.
+  {
+    uid: "demo-account-one",
+    email: "demo.one@example.org",
+    displayName: "Demo Account One",
+    personId: "demo-person-ivy",
+  },
+  // An account whose address matches nobody, so it has to ask for access.
+  { uid: "demo-account-two", email: "demo.two@example.org", displayName: "Demo Account Two", personId: null },
 ];

@@ -26,6 +26,12 @@ export interface CallableContext {
    * use it to identify the caller or to decide anything.
    */
   readonly selfAssertedName: string | null;
+  /**
+   * Whether the caller's sign-in token says that a second factor was verified in this session.
+   * A function that needs the factor compares it with `secondFactorRequired` of the caller's
+   * access document (see `requireSecondFactor`).
+   */
+  readonly secondFactorVerified: boolean;
   /** Firestore through the Admin SDK. It bypasses security rules: authorise before using it. */
   readonly db: Firestore;
   readonly clock: Clock;

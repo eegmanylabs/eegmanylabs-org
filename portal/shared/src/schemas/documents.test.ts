@@ -675,6 +675,22 @@ describe("provenance", () => {
     expect(accepts("reconciliationItems", { ...item, kind: "somethingOdd" })).toBe(false);
     expect(accepts("reconciliationItems", { ...item, status: "reopened" })).toBe(false);
   });
+
+  it("lets a reconciliation item carry the key of a question that several sources state", () => {
+    const item = {
+      ...base,
+      kind: "duplicatePerson",
+      entityRefs: [],
+      candidates: [{ key: "ctable__0123456789abcdef0123:aa" }],
+      status: "open",
+      resolvedBy: null,
+      resolvedAt: null,
+      batchId: "run__20260101T000000Z__aabbccddeeff",
+    };
+    expect(issuesOf("reconciliationItems", { ...item, subjectKey: "0123456789abcdef0123" })).toEqual([]);
+    expect(accepts("reconciliationItems", { ...item, subjectKey: "" })).toBe(false);
+    expect(accepts("reconciliationItems", { ...item, subjectKey: 7 })).toBe(false);
+  });
 });
 
 describe("parseStoredDocument", () => {

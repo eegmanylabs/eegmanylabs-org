@@ -192,6 +192,12 @@ export interface PlannedItem {
   readonly candidates: readonly ItemCandidate[];
   /** True for an item that explains why a batch cannot be applied. It is written at preview. */
   readonly blocking: boolean;
+  /**
+   * The key of the question itself, for a question that every source of a family states as far
+   * as it knows it. A statement with further candidates supersedes the earlier statements of the
+   * same question, whichever member of the family made them.
+   */
+  readonly subjectKey?: string;
 }
 
 export interface BlockingCheck {

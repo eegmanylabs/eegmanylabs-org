@@ -10,7 +10,7 @@ import {
   nestedEntityId,
 } from "@eegml/shared";
 import type { Timestamp } from "firebase-admin/firestore";
-import { createdFields, entryOf, type RunContext, readDocuments, updatedFields, validated } from "./context";
+import { chunked, createdFields, entryOf, type RunContext, readDocuments, updatedFields, validated } from "./context";
 import type { ImportPlan, PlannedItem } from "./model";
 import { type FieldConflict, mergeDocument, newDocument } from "./ownership";
 import type { ItemBuilders } from "./reconcile";
@@ -131,6 +131,155 @@ function conflictItem(
 /** The statuses with which the importer itself closes an item, and from which it may open one again. */
 const CLOSED_BY_IMPORTER = new Set(["superseded", "cleared", "withdrawn"]);
 
+/**
+ * The earlier statements of a question that a planned item states more fully. Where every source
+ * of a family states one question as far as it knows it, the first sources state it with fewer
+ * candidates than the last. An open item with the key of a planned item, whose candidates are all
+ * among those of the planned item, is such an earlier statement and is superseded, whichever
+ * source raised it. An item with a candidate that the planned item lacks is left alone, so two
+ * sources that state a question differently never close each other's items.
+ */
+async function containedStatements(
+  context: RunContext,
+  plannedItems: ReadonlyMap<string, PlannedItem>,
+  itemChanges: readonly ItemChange[],
+): Promise<ItemChange[]> {
+  const fuller = new Map<string, PlannedItem[]>();
+  for (const item of plannedItems.values()) {
+    if (item.subjectKey === undefined) continue;
+    fuller.set(item.subjectKey, [...(fuller.get(item.subjectKey) ?? []), item]);
+  }
+  const handled = new Set(itemChanges.map((change) => change.fingerprint));
+  const itemEntry = entryOf("reconciliationItems");
+  const superseded: ItemChange[] = [];
+  for (const keys of chunked([...fuller.keys()].sort(), 30)) {
+    const stored = await context.db
+      .collection(COLLECTIONS.reconciliationItems.collectionPath())
+      .where("subjectKey", "in", keys)
+      .get();
+    for (const doc of stored.docs.sort((a, b) => (a.id < b.id ? -1 : 1))) {
+      const data = doc.data();
+      if (data.status !== "open" || plannedItems.has(doc.id) || handled.has(doc.id)) continue;
+      const stated = new Set((data.candidates as { key: string }[]).map((candidate) => candidate.key));
+      const contained = (fuller.get(String(data.subjectKey)) ?? []).some((item) => {
+        const keys = new Set(item.candidates.map((candidate) => candidate.key));
+        return keys.size > stated.size && [...stated].every((key) => keys.has(key));
+      });
+      if (!contained) continue;
+      superseded.push({
+        path: doc.ref.path,
+        fingerprint: doc.id,
+        kind: String(data.kind),
+        action: "supersede",
+        blocking: false,
+        before: data,
+        after: validated(itemEntry, doc.ref.path, {
+          ...data,
+          status: "superseded",
+          resolvedBy: updatedFields(context.now).updatedBy,
+          resolvedAt: context.now,
+          ...updatedFields(context.now),
+        }),
+        sourceRecordIds: [],
+        updateTime: doc.updateTime,
+      });
+    }
+  }
+  return superseded;
+}
+
+/** The roles of a membership that lead a replication. */
+const LEAD_ROLES = new Set(["lead", "coLead"]);
+
+/**
+ * Lowers the confirmed leads of a replication to `needsReview` while a question about its lead is
+ * open (docs/MIGRATION_PLAN.md, section 4.1): when claims for one study name different people or
+ * a further person, every membership concerned is marked for review. Only a membership whose
+ * confirmation an import wrote is lowered. One that a person has set since, and one whose
+ * question a reviewer has decided, stands. No lead is chosen and none is removed.
+ */
+async function lowerQuestionedLeads(
+  context: RunContext,
+  plannedItems: ReadonlyMap<string, PlannedItem>,
+  itemChanges: readonly ItemChange[],
+  changes: DocumentChange[],
+  ownRecordIds: ReadonlySet<string>,
+): Promise<void> {
+  const { db, now } = context;
+  const closed = new Set(
+    itemChanges.filter((change) => change.action === "supersede" || change.action === "clear").map((c) => c.path),
+  );
+  const opened = new Set(
+    itemChanges.filter((change) => change.action === "raise" || change.action === "reopen").map((c) => c.path),
+  );
+  const questions = [...plannedItems.values()].filter((item) => item.kind === "conflictingLead");
+  const standing = await readDocuments(
+    db,
+    questions.map((item) => COLLECTIONS.reconciliationItems.docPath(item.fingerprint)),
+  );
+  /** The record of this source behind the question of each replication, which is named as the supplier of the lowering. */
+  const supplierOf = new Map<string, string>();
+  for (const item of questions.sort((a, b) => (a.fingerprint < b.fingerprint ? -1 : 1))) {
+    const path = COLLECTIONS.reconciliationItems.docPath(item.fingerprint);
+    const open = !closed.has(path) && (opened.has(path) || standing.get(path)?.data.status === "open");
+    const supplier = item.candidates.find(
+      (candidate) => candidate.sourceRecordId !== undefined && ownRecordIds.has(candidate.sourceRecordId),
+    )?.sourceRecordId;
+    if (!open || supplier === undefined) continue;
+    for (const ref of item.entityRefs) {
+      if (ref.entityType === "replication" && !supplierOf.has(ref.entityId)) supplierOf.set(ref.entityId, supplier);
+    }
+  }
+  const entry = entryOf("replicationMemberships");
+  /** The state of a membership with its confirmation lowered, or null where it is not one that an import confirmed. */
+  const lower = (path: string, data: Record<string, unknown>, supplier: string): Record<string, unknown> | null => {
+    const imported = (data.importedValues as Record<string, unknown> | undefined)?.reviewStatus;
+    if (!LEAD_ROLES.has(String(data.role)) || data.reviewStatus !== "confirmed" || imported !== "confirmed")
+      return null;
+    return validated(entry, path, {
+      ...data,
+      reviewStatus: "needsReview",
+      importedValues: { ...(data.importedValues as Record<string, unknown>), reviewStatus: "needsReview" },
+      // The record behind the question is named for this one field. The membership itself comes from other rows.
+      fieldSources: { ...(data.fieldSources as Record<string, string> | undefined), reviewStatus: supplier },
+      ...updatedFields(now),
+    });
+  };
+  for (const [replicationId, supplier] of [...supplierOf].sort(([a], [b]) => (a < b ? -1 : 1))) {
+    const memberships = await db.collection(COLLECTIONS.replicationMemberships.collectionPath(replicationId)).get();
+    for (const doc of memberships.docs.sort((a, b) => (a.id < b.id ? -1 : 1))) {
+      const planned = changes.findIndex((change) => change.path === doc.ref.path);
+      const change = changes[planned];
+      if (change !== undefined) {
+        // The plan writes the membership for another reason. Its confirmation is lowered in the same write.
+        const after = lower(change.path, change.after, supplier);
+        if (after === null) continue;
+        changes[planned] = {
+          ...change,
+          relation: "updated",
+          after,
+          changedFields: [...new Set([...change.changedFields, "reviewStatus"])],
+        };
+        continue;
+      }
+      const after = lower(doc.ref.path, doc.data(), supplier);
+      if (after === null) continue;
+      changes.push({
+        path: doc.ref.path,
+        collection: "replicationMemberships",
+        operation: "update",
+        relation: "updated",
+        before: doc.data(),
+        after,
+        changedFields: ["reviewStatus"],
+        // No row of the source stands behind the membership, so no row that goes takes the membership with it.
+        sourceRecordIds: [],
+        updateTime: doc.updateTime ?? null,
+      });
+    }
+  }
+}
+
 export interface DiffOptions {
   readonly ownRecordIds: ReadonlySet<string>;
   readonly items: ItemBuilders;
@@ -220,6 +369,7 @@ export async function comparePlan(context: RunContext, plan: ImportPlan, options
         resolvedBy: null,
         resolvedAt: null,
         batchId,
+        ...(item.subjectKey === undefined ? {} : { subjectKey: item.subjectKey }),
       });
       itemChanges.push({
         path,
@@ -293,6 +443,11 @@ export async function comparePlan(context: RunContext, plan: ImportPlan, options
         updateTime: doc.updateTime,
       });
     }
+  }
+
+  if (options.complete) {
+    for (const change of await containedStatements(context, plannedItems, itemChanges)) itemChanges.push(change);
+    await lowerQuestionedLeads(context, plannedItems, itemChanges, changes, options.ownRecordIds);
   }
 
   const planHash = contentHash({

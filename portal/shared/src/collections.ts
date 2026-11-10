@@ -8,7 +8,7 @@
 // tables of the data model in both directions, so neither can change without the other.
 import type { GrantableCapability, Role } from "./capabilities";
 import type { EntityType } from "./entities";
-import { type IdBuilderName, splitNestedEntityId } from "./ids";
+import { ID_SEPARATOR, type IdBuilderName, splitNestedEntityId } from "./ids";
 import { PROVENANCE_FIELDS } from "./schemas/base";
 import * as datasets from "./schemas/datasets";
 import * as identity from "./schemas/identity";
@@ -2197,4 +2197,63 @@ export function entityPath(entityType: EntityType, entityId: string): string {
   const { path } = COLLECTIONS[ENTITY_COLLECTIONS[entityType]];
   const nested = path.split("/").length > 2;
   return fillPath(path, nested ? splitNestedEntityId(entityId) : [entityId]);
+}
+
+/** An entry of the registry with the identifiers that a document path gives its parameters, in order. */
+export interface MatchedEntry {
+  readonly entry: CollectionEntry;
+  readonly ids: readonly string[];
+}
+
+/**
+ * The entry that a document path belongs to, or null for a path that the registry does not
+ * know. A fixed name wins over a parameter in the same place, so `persons/x/private/contact`
+ * is the contact document and never a document of some collection named `private`.
+ */
+export function entryOfDocumentPath(documentPath: string): MatchedEntry | null {
+  const segments = documentPath.split("/");
+  let best: { match: MatchedEntry; fixed: number } | null = null;
+  for (const entry of COLLECTION_ENTRIES) {
+    const template = entry.path.split("/");
+    if (template.length !== segments.length) continue;
+    const ids: string[] = [];
+    let fixed = 0;
+    const fits = template.every((part, index) => {
+      const segment = segments[index] ?? "";
+      if (PARAMETER.test(part)) {
+        ids.push(segment);
+        return segment !== "";
+      }
+      fixed += 1;
+      return part === segment;
+    });
+    if (fits && (best === null || fixed > best.fixed)) best = { match: { entry, ids }, fixed };
+  }
+  return best?.match ?? null;
+}
+
+/**
+ * The record of the entity registry that a document is, or that it lies beneath: the document
+ * itself where its collection holds an entity type, and otherwise the nearest document above
+ * it that does. Null for a document that belongs to no such record, such as a lookup.
+ */
+export function entityOfDocumentPath(documentPath: string): { entityType: EntityType; entityId: string } | null {
+  const typeOfKey = new Map<string, EntityType>(
+    (Object.entries(ENTITY_COLLECTIONS) as [EntityType, string][]).map(([entityType, key]) => [key, entityType]),
+  );
+  const segments = documentPath.split("/");
+  for (let length = segments.length; length >= 2; length -= 2) {
+    const matched = entryOfDocumentPath(segments.slice(0, length).join("/"));
+    if (matched === null) continue;
+    const entityType = typeOfKey.get(matched.entry.key);
+    if (entityType === undefined) continue;
+    const [parentId, ownId] = matched.ids.slice(-2);
+    const nested = matched.entry.path.split("/").length > 2;
+    if (nested && (parentId === undefined || ownId === undefined)) continue;
+    return {
+      entityType,
+      entityId: nested ? [parentId, ownId].join(ID_SEPARATOR) : (matched.ids[0] ?? ""),
+    };
+  }
+  return null;
 }

@@ -232,7 +232,19 @@ function printReport(report: RunReport, target: string): void {
       `${report.conflicts} fields were left alone because their live value differs from the source. Each is in the queue.`,
     );
   }
-  if (report.documentsWritten === 0) {
+  const pending =
+    Object.values(report.collections).reduce(
+      (sum, account) => sum + account.created + account.changed + account.matched,
+      0,
+    ) +
+    (["raise", "reopen", "supersede", "clear"] as const).reduce(
+      (sum, action) => sum + Object.values(report.items[action]).reduce((a, b) => a + (b ?? 0), 0),
+      0,
+    );
+  if (report.documentsWritten === 0 && pending > 0) {
+    // A preview of rows that are stored already writes nothing, and still has changes to show.
+    console.log("Nothing was written except the batch record. An apply would write the changes listed above.");
+  } else if (report.documentsWritten === 0) {
     console.log("Nothing was written except the batch record: the database already holds everything this input says.");
   } else {
     console.log(

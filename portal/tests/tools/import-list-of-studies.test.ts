@@ -369,7 +369,6 @@ describe("the list of studies, applied after the website data", () => {
     expect((await documentsOf("persons")).size).toBe(15);
     expect((await documentsOf("memberships", true)).size).toBe(7);
     expect(report.collections.persons).toBeUndefined();
-    expect(report.collections.replicationMemberships).toBeUndefined();
 
     const conflicts = await items("conflictingLead", "lead");
     expect(conflicts.map((item) => item.entityRefs[0].entityId).sort()).toEqual(["EpsilonVanZeta2010", "Iota2004"]);
@@ -379,10 +378,23 @@ describe("the list of studies, applied after the website data", () => {
     expect(claimSources(againstPortal)).toEqual(["d/list", "portal/membership"]);
     expect(againstPortal?.entityRefs).toHaveLength(2);
     expect(againstPortal?.entityRefs[1].entityType).toBe("person");
-    // The membership that the website confirmed is not touched.
+    // The lead that the website confirmed is in question now: the membership stays, the same person stays, and
+    // its confirmation is lowered until a reviewer has decided. The row of the workbook is named as the reason.
     const memberships = [...(await documentsOf("memberships", true)).entries()];
     const iota = memberships.find(([documentPath]) => documentPath.startsWith("replications/Iota2004/"));
-    expect(iota?.[1]).toMatchObject({ role: "lead", reviewStatus: "confirmed" });
+    expect(iota?.[1]).toMatchObject({ role: "lead", isCurrent: true, reviewStatus: "needsReview" });
+    expect(iota?.[1].personId).toBe(againstPortal?.entityRefs[1].entityId);
+    const reason = await adminDb.doc(`sourceRecords/${iota?.[1].fieldSources.reviewStatus}`).get();
+    expect(reason.data()).toMatchObject({ sourceKey: "d", tabKey: tabKey("list") });
+    // The same holds where the two tabs of the workbook name different leads. Where nothing disagrees, a
+    // confirmation stands.
+    const confirmed = memberships
+      .filter(([, membership]) => membership.reviewStatus === "confirmed")
+      .map(([documentPath]) => documentPath.split("/")[1]);
+    expect(confirmed).not.toContain("Iota2004");
+    expect(confirmed).not.toContain("EpsilonVanZeta2010");
+    expect(confirmed.length).toBeGreaterThan(0);
+    expect(report.collections.replicationMemberships).toMatchObject({ created: 0, changed: 2 });
 
     // A name that folds like the archived one, or like one of the leads of the portal, is no disagreement.
     expect(await items("conflictingLead", "lead", "AlphaGamma2002")).toEqual([]);
@@ -454,6 +466,12 @@ describe("the list of studies, applied after the website data", () => {
     const onHold = await candidateOf("10.1000/invented.1998.09");
     expect(onHold).toMatchObject({ selectionStatus: "shortlisted", replicationId: null });
     expect(onHold?.originalReference).toContain("An imaginary inquiry into sounds");
+    // The citation stands in the shortlist and the title in the ranked list, and each field names its own row.
+    const citedIn = await adminDb.doc(`sourceRecords/${onHold?.fieldSources.originalReference}`).get();
+    const titledIn = await adminDb.doc(`sourceRecords/${onHold?.fieldSources.originalTitle}`).get();
+    expect(citedIn.get("tabKey")).toBe(tabKey("shortlist"));
+    expect(titledIn.get("tabKey")).toBe(tabKey("ranked"));
+    expect(onHold?.sourceRecordIds).toEqual(expect.arrayContaining([citedIn.id, titledIn.id]));
     expect(await candidateOf("10.1000/invented.1997.10")).toMatchObject({ selectionStatus: "shortlisted" });
     // The candidates of the subproject: one by its DOI, one found by its title in the ranked list.
     expect(await candidateOf("10.1000/invented.2003.11")).toMatchObject({ selectionStatus: "shortlisted" });
@@ -684,6 +702,58 @@ describe("the list of studies over several runs", () => {
   beforeEach(async () => {
     await freshDatabase();
     await applyWebsite();
+  });
+
+  it("lowers a confirmed lead while its question is open, and never against a reviewer or a second time", async () => {
+    const file = await workbookFile();
+    const path = async () =>
+      [...(await documentsOf("memberships", true)).keys()].find((documentPath) =>
+        documentPath.startsWith("replications/Iota2004/"),
+      ) ?? "";
+    const membership = adminDb.doc(await path());
+    expect((await membership.get()).get("reviewStatus")).toBe("confirmed");
+
+    // A preview lowers nothing. The apply lowers the one membership and logs the change.
+    const preview = await run(studies, file, "preview");
+    expect((await membership.get()).get("reviewStatus")).toBe("confirmed");
+    expect(preview.collections.replicationMemberships).toMatchObject({ changed: 2, fields: { reviewStatus: 2 } });
+    const applied = await run(studies, file, "apply", { previewBatchId: preview.batchId });
+    expect(applied.collections.replicationMemberships).toMatchObject({ created: 0, changed: 2 });
+    expect((await membership.get()).get("reviewStatus")).toBe("needsReview");
+
+    // Neither the website nor the workbook writes anything when it is run again, in either order.
+    expect((await applyWebsite()).documentsWritten).toBe(0);
+    expect((await run(studies, file, "apply")).documentsWritten).toBe(0);
+    expect((await membership.get()).get("reviewStatus")).toBe("needsReview");
+
+    // A reviewer confirms the lead. The question is still open in the queue, and the confirmation stands.
+    await membership.update({ reviewStatus: "confirmed" });
+    expect((await run(studies, file, "apply")).documentsWritten).toBe(0);
+    expect((await applyWebsite()).documentsWritten).toBe(0);
+    expect((await membership.get()).get("reviewStatus")).toBe("confirmed");
+  });
+
+  it("leaves a confirmed lead alone once a reviewer has decided the question about it", async () => {
+    const file = await workbookFile();
+    const preview = await run(studies, file, "preview");
+    expect(preview.items.raise.conflictingLead).toBe(2);
+    // The reviewer dismisses the question before the batch is applied: the item exists and is decided.
+    const first = await run(studies, file, "apply");
+    const [question] = (await items("conflictingLead", "lead", "Iota2004")).map((item) => item.id);
+    const membershipPath =
+      [...(await documentsOf("memberships", true)).keys()].find((documentPath) =>
+        documentPath.startsWith("replications/Iota2004/"),
+      ) ?? "";
+    expect(first.collections.replicationMemberships).toMatchObject({ changed: 2 });
+    await adminDb.doc(`reconciliationItems/${question}`).update({ status: "dismissed" });
+    // The lead is confirmed again, by an import this time, as a rollback and a new apply of the website would leave it.
+    await adminDb.doc(membershipPath).update({
+      reviewStatus: "confirmed",
+      "importedValues.reviewStatus": "confirmed",
+    });
+    const again = await run(studies, file, "apply");
+    expect(again.collections.replicationMemberships).toBeUndefined();
+    expect((await adminDb.doc(membershipPath).get()).get("reviewStatus")).toBe("confirmed");
   });
 
   it("previews without writing an entity, and the apply then writes what the preview counted", async () => {
