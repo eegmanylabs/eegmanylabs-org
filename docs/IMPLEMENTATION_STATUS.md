@@ -14,8 +14,8 @@ The portal is being built as a static application for GitHub Pages with Firebase
 | 1 | Portal foundation: application shell, sign-in, Firebase configuration, functions framework, test harness, design continuity, public-site entry, data model in code, security rules | Complete on the emulators. The security rules were attacked by two red teams and hardened. Protected staging is blocked (see below) |
 | 2 | Migration tooling, registry of members, laboratories and replications, profile and laboratory claiming, participation and onboarding, imports console, administration console | Complete on the emulators for the accessible sources. The importers ran on the real accessible sources into a local emulator. Sources A and G remain blocked, and the pages have not yet been run against the real imported data |
 | 3 | Notion-style workspace: pages, the block editor, comments and mentions, version history, linked databases and views, dashboards | Complete on the emulators, with an independent run of the full suite (`docs/TEST_REPORT.md` section 5). Database templates, configurable workflow buttons, attribution of individual blocks and favourites for pages remain |
-| 4 | Quire-grade tasks: task lists and nested tasks, dependencies, recurrence, reminders, planning views, meeting pages with action items, progress feeds, the Quire importer | Complete on the emulators. The Quire importer is tested on a synthetic fixture, and real Quire data remains blocked. The independent run of the full suite is still to be recorded |
-| 5 | Recruitment: reports by modality and category, reported and verified values, corrections, rollups, historical views, forecasts, planned pauses, inactivity follow-up | Complete on the emulators. The master projection spreadsheets remain blocked. The independent run of the full suite is still to be recorded |
+| 4 | Quire-grade tasks: task lists and nested tasks, dependencies, recurrence, reminders, planning views, meeting pages with action items, progress feeds, the Quire importer | Complete on the emulators. The Quire importer is tested on a synthetic fixture, and real Quire data remains blocked. Independent run of the full suite in `docs/TEST_REPORT.md` section 6 |
+| 5 | Recruitment: reports by modality and category, reported and verified values, corrections, rollups, historical views, forecasts, planned pauses, inactivity follow-up | Complete on the emulators. The master projection spreadsheets remain blocked. Independent run of the full suite in `docs/TEST_REPORT.md` section 6 |
 | 6 to 9 | Google Workspace, research data, scientific workflows, reporting and automation | Designed in the data model and integrations documents, and modelled in code with every collection closed to clients. Not started |
 | 10 | Hardening, restore rehearsal, deployment readiness | Not started. Needs a staging Firebase project |
 
@@ -59,7 +59,7 @@ The first real import of the website data, sources B to F and the five contribut
 | Independent run of the full suite on 11 November 2026 (`docs/TEST_REPORT.md` section 4) | 1,858 unit and component tests, 3,791 rules and tools tests, 222 functions tests and 95 browser tests passed, with none failing |
 | Red-team regression tests | 730 tests across 27 files |
 | Independent run of the full suite after phase 3 on 11 November 2026 (`docs/TEST_REPORT.md` section 5) | 1,971 unit and component tests, 3,898 rules and tools tests, 247 functions tests and 110 browser tests passed, with none failing |
-| Phases 4 and 5 | The engineers' final run of the full suite, with type checking and lint, passed. The independent run is recorded in `docs/TEST_REPORT.md` once it has been made |
+| Independent run of the full suite after phases 4 and 5 on 11 November 2026 (`docs/TEST_REPORT.md` section 6) | 2,084 unit and component tests, 3,990 rules and tools tests, 282 functions tests and 120 browser tests passed in a single run, with none failing |
 | Acceptance scenarios | AS-1, AS-2, AS-4, AS-5 and AS-7 have browser tests that run end to end on the demonstration world. AS-11 is tested by the importer suites and the imports console tests, and AS-12 by the rules matrix and the browser tests of the record pages. AS-3 is partly met: the equipment edit and its propagation are tested, and the Google Sheet synchronisation is blocked. AS-6 is partly met: the nested task, dependency, deadline, notification and consistent views are tested, and a dataset link opens only once the phase 7 registry exists. AS-14 is met on a synthetic Quire dump and stays blocked for real data |
 
 ## Blocked items and what each one needs
@@ -89,10 +89,9 @@ Three actions always need explicit approval from a programme administrator: a pr
 
 ## Next steps, in order
 
-1. Make the independent run of the full suite for phases 4 and 5 and record it in `docs/TEST_REPORT.md`.
-2. Close the gaps that keep phase 3 to 5 items in progress: database templates, configurable workflow buttons, attribution of individual blocks, favourites for pages, a drill-down from dashboard widgets, subscriptions to pages, and tests of undo and redo, of pointer dragging of blocks and of column sizing.
-3. Run the registry, laboratory, imports, workspace, tasks and recruitment pages against the real imported data in a private local emulator, and record what is found without committing any of it.
-4. Close the residual risk of the manuscript identifier before any deployment, as described in `docs/SECURITY.md`.
-5. Close the gaps that keep phase 2 items in progress: a test of a claim by a member with several affiliations, the status of a replication at a chosen past date, saved searches, and recovery for a member who has lost their address.
-6. Ask the programme administrators for the decisions and access listed at the end of `docs/DECISIONS.md`, which unblock sources A and G, a Quire export, the master projection spreadsheets, staging and the Google integration.
-7. Begin phase 6, Google Workspace, behind adapters tested against fakes until credentials are supplied.
+1. Close the gaps that keep phase 3 to 5 items in progress: database templates, configurable workflow buttons, attribution of individual blocks, favourites for pages, a drill-down from dashboard widgets, subscriptions to pages, and tests of undo and redo, of pointer dragging of blocks and of column sizing.
+2. Run the registry, laboratory, imports, workspace, tasks and recruitment pages against the real imported data in a private local emulator, and record what is found without committing any of it.
+3. Close the residual risk of the manuscript identifier before any deployment, as described in `docs/SECURITY.md`.
+4. Close the gaps that keep phase 2 items in progress: a test of a claim by a member with several affiliations, the status of a replication at a chosen past date, saved searches, and recovery for a member who has lost their address.
+5. Ask the programme administrators for the decisions and access listed at the end of `docs/DECISIONS.md`, which unblock sources A and G, a Quire export, the master projection spreadsheets, staging and the Google integration.
+6. Build phase 6, Google Workspace, and phase 7, the dataset registry, behind adapters tested against fakes until credentials are supplied. This work is under way.

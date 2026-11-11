@@ -101,7 +101,24 @@ The figures above needed more than one run, and both failures are recorded here.
 
 Two independent reviews examined the workspace. A permissions review attacked it through the client SDK and the functions emulator, and a journeys review drove the built application at three screen widths. Among their findings were that moving a page could widen or narrow who can read it without the right to share it, that comments kept a stale and wider audience after a page was restricted, that an undecodable editor update could break a page for everyone, that a file of a type a browser runs as a document could be attached, and that a member who lost access to a page saw it load forever. All were fixed with tests. The red-team tests of the workspace (eight across two files) remain in the run as regressions.
 
-## 6. Public-site entry
+## 6. Tasks, meetings, the Quire importer, recruitment and forecasts
+
+Run on 11 November 2026 by the orchestrating session, independently of the engineers, from `portal/` with port base 9300 on the tree committed as "Tasks, meetings, progress updates, Quire importer, recruitment and forecasts". `npm run typecheck` and `npm run lint` exited 0, with 774 files checked and no findings, and `npm test` exited 0 in a single run.
+
+| Suite | Files | Tests passed | Tests failed |
+|---|---|---|---|
+| Unit and component tests | 126 | 2,084 | 0 |
+| Emulator-backed rules and tools tests | 58 | 3,990 | 0 |
+| Emulator-backed functions tests | 29 | 282 | 0 |
+| Browser tests (Playwright, Chromium) | | 120 | 0 |
+
+The two intermittent failures recorded in section 5 were made deterministic before this run. The harness test now waits for a greeting from the child process it watches, and the trigger waits in the functions tests keep waiting while audit events are still arriving, up to a bounded limit. Each affected file passed three consecutive runs in the engineer's hands, and both passed here.
+
+Acceptance scenarios AS-4 and AS-5 (recruitment reported separately for the main experiment and resting state without double counting, forecasts from stated assumptions and recruitment at the end of a previous month) and AS-6 (a nested task with a dependency, a deadline and a link) have browser tests in this run. The dataset link of AS-6 waits for the dataset registry. AS-14 is met by the Quire importer against a synthetic export only.
+
+Two independent reviews examined this work and reported 24 findings, all fixed with tests. Among them, every member could read each laboratory's recruitment figures through a stored forecast, a reminder could reveal the title of a record its owner could not read, one call could create a cycle of task dependencies, a crafted Quire export could write corrupt task trees, a completion percentage divided the tested count of some laboratories by the targets of others, and an assignee who opened a task from My tasks could not change it.
+
+## 7. Public-site entry
 
 The gated Members' portal entry was verified by building the public site in scratch copies, never inside the repository.
 
@@ -115,7 +132,7 @@ The gated Members' portal entry was verified by building the public site in scra
 
 The comparison with `main` was run twice by the orchestrating session, before the first commit of the entry and again after the review fixes, and independently by the reviewer.
 
-## 7. Architecture spikes
+## 8. Architecture spikes
 
 Two throwaway spikes were run before the build to prove the architecture. Their code is not in the repository. Their results are summarised in `docs/ARCHITECTURE.md` section 10 and `docs/DECISIONS.md` D-010.
 
@@ -124,7 +141,7 @@ Two throwaway spikes were run before the build to prove the architecture. Their 
 | Application stack | 177 emulator-backed tests and 15 browser tests passed |
 | Collaborative editor on Firestore | All suites passed: security rules 28, provider 15, two-browser collaboration 10, editor features 18, versions 9, comments 11, presence 7 |
 
-## 8. Not yet verified
+## 9. Not yet verified
 
 | Item | Why it is unverified | What will verify it |
 |---|---|---|
@@ -139,4 +156,5 @@ Two throwaway spikes were run before the build to prove the architecture. Their 
 | The test suite on Node 24 | Node 24 was not available on the development machine | Continuous integration once a Node 24 job is added |
 | Firefox, Safari, touch devices and screen readers | Browser tests run in Chromium only | Manual and cross-browser testing before rollout |
 | Collaborative editing, file storage and presence on production Firebase, including cross-origin access to the storage bucket and the 1,000-document cap on page sync queries under load | Run on the emulators only | The staging project |
+| Recruitment forecasts against real recruitment histories | The method has been tested with fixed synthetic inputs only | Use with programme data after deployment, reviewed by the leads |
 | Any import of sources A, G or Quire | No access | Access as described in `docs/IMPLEMENTATION_STATUS.md` |
