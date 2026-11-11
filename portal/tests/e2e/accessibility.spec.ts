@@ -89,22 +89,34 @@ test("a page with a checklist, a code block and a table has no serious accessibi
   await dialog.getByRole("button", { name: "Create the page" }).click();
   const editor = page.getByTestId("page-editor").locator(".bn-editor");
   await expect(editor).toBeVisible();
-  const insert = async (command: string, option: RegExp) => {
-    await editor.locator(".bn-block-content").last().click();
+  const slash = async (command: string, option: RegExp) => {
     await page.keyboard.type(command);
     await expect(page.getByRole("option", { name: option })).toBeVisible();
     await page.keyboard.press("Enter");
   };
-  await insert("/checklist", /Check list/);
+  // Each block goes on a line of its own, made with the keyboard: a click on the last block can
+  // land in a cell of the table, where the menu of blocks does not open.
+  const item = editor.locator('[data-content-type="checkListItem"]');
+  await editor.locator(".bn-block-content").last().click();
+  await slash("/checklist", /Check list/);
   await page.keyboard.type("Book the EEG room");
-  await insert("/table", /Table/);
+  // Enter twice leaves the item for a new line, which the next block takes.
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  await slash("/table", /Table/);
   await expect(editor.locator("table")).toBeVisible();
-  await insert("/code", /Code block/);
+  await item.getByText("Book the EEG room").click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  await slash("/code", /Code block/);
   await page.keyboard.type("print('synthetic')");
-  await expect(editor.locator('[data-content-type="checkListItem"] input[type="checkbox"]')).toHaveAttribute(
-    "aria-label",
-    "Done",
-  );
+  await expect(editor.locator('[data-content-type="codeBlock"]')).toContainText("print('synthetic')");
+  // Every box of the checklist, the empty items the keys left included, has its name.
+  for (const box of await editor.locator('[data-content-type="checkListItem"] input[type="checkbox"]').all()) {
+    await expect(box).toHaveAttribute("aria-label", "Done");
+  }
+  await expect(editor.locator('[data-content-type="checkListItem"] input[type="checkbox"]')).not.toHaveCount(0);
   expect(await seriousFindings(page)).toEqual([]);
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await seriousFindings(page)).toEqual([]);

@@ -26,6 +26,7 @@ import {
   sourceTabKey,
   statusDefinitionId,
   studyAliasId,
+  tagId,
   unitScopeKeys,
   userWriteContext,
 } from "@eegml/shared";
@@ -136,6 +137,10 @@ const BY_REPLICATION_KEY: ListCase = {
   where: ["scopeKeys", "array-contains", REPLICATION_KEY],
   proves: { scopeKeys: [REPLICATION_KEY] },
 };
+const BY_LABORATORY_KEY: ListCase = {
+  where: ["scopeKeys", "array-contains", LABORATORY_KEY],
+  proves: { scopeKeys: [LABORATORY_KEY] },
+};
 const BY_MEMBERS_KEY: ListCase = {
   where: ["scopeKeys", "array-contains", MEMBERS_SCOPE_KEY],
   proves: { scopeKeys: [MEMBERS_SCOPE_KEY], memberVisible: true },
@@ -161,6 +166,9 @@ const SECOND_CONTRIBUTOR = "contributor-2";
 const SOURCE = "F";
 const BATCH = "batch-1";
 const SOURCE_RECORD = "source-record-1";
+/** The task list and the task of the world. */
+const TASK_LIST = autoId("stored task list");
+const TASK = autoId("stored task");
 const INTEGRITY_RUN = "run-1";
 const EARLIER = Timestamp.fromDate(new Date("2025-11-01T09:00:00Z"));
 
@@ -1132,6 +1140,137 @@ export const FIXTURES: { readonly [K in CollectionKey]?: Fixture } = {
     update: () => ({ label: "Tested in the laboratory" }),
   },
 
+  recruitmentReports: {
+    ids: [autoId("stored recruitment report")],
+    seed: appendedDocument({
+      participationId: OWN_PARTICIPATION,
+      ...UNIT_FIELDS,
+      asOfDate: "2026-01-31",
+      reportKind: "cumulative",
+      basis: "labReported",
+      entryKind: "new",
+      counts: { main: { tested: 12 }, rest: { tested: 10 }, participants: { tested: 13 } },
+      exclusions: [],
+      reportedBy: uidOfCaller("ownCoordinator"),
+      source: "manual",
+      dataOrigin: "live",
+    }),
+    subject: IN_UNIT,
+    listBy: [BY_REPLICATION_KEY, BY_LABORATORY_KEY, BY_REPLICATION, BY_LABORATORY],
+  },
+  plannedPauses: {
+    ids: [autoId("stored planned pause")],
+    seed: document({
+      participationId: OWN_PARTICIPATION,
+      ...UNIT_FIELDS,
+      startsOn: "2026-07-01",
+      endsOn: "2026-07-31",
+      reason: "The synthetic laboratory closes for the summer.",
+    }),
+    subject: IN_UNIT,
+    listBy: [BY_REPLICATION_KEY, BY_LABORATORY_KEY, BY_REPLICATION, BY_LABORATORY],
+    create: {
+      ids: [autoId("new planned pause")],
+      data: () => ({
+        participationId: OWN_PARTICIPATION,
+        ...UNIT_FIELDS,
+        startsOn: "2026-08-01",
+        endsOn: "2026-08-14",
+      }),
+    },
+    update: () => ({ endsOn: "2026-07-15" }),
+  },
+  forecastRuns: {
+    ids: [autoId("stored forecast run")],
+    seed: appendedDocument({
+      replicationId: OWN_REPLICATION,
+      generatedAt: STORED_AT,
+      generatedBy: uidOfCaller("ownLead"),
+      methodVersion: "recruitment-forecast/1",
+      assumptions: { stated: { windowDays: 90 } },
+      scenarios: { optimistic: {}, central: {}, conservative: {} },
+      inputsAsOf: "2026-01-31",
+      dataOrigin: "projected",
+    }),
+    subject: UNSCOPED,
+  },
+
+  // Tasks.
+  taskLists: {
+    ids: [TASK_LIST],
+    seed: document({
+      name: "Synthetic plan",
+      kind: "project",
+      ownerUid: null,
+      scopeType: "replication",
+      scopeId: OWN_REPLICATION,
+      replicationId: OWN_REPLICATION,
+      laboratoryId: null,
+      scopeKeys: [REPLICATION_KEY],
+    }),
+    subject: IN_REPLICATION,
+    listBy: [BY_REPLICATION_KEY],
+  },
+  tasks: {
+    ids: [TASK],
+    seed: document({
+      listId: TASK_LIST,
+      ownerUid: null,
+      parentId: null,
+      ancestorIds: [],
+      order: "i",
+      kind: "task",
+      title: "Pilot the synthetic paradigm",
+      mentionUids: [],
+      statusKey: "toDo",
+      statusHistoryId: null,
+      priority: "high",
+      completedAt: null,
+      assigneeUids: [MEMBER_UID],
+      collaboratorUids: [],
+      followerUids: [],
+      unclaimedParticipants: [],
+      dependsOn: {},
+      links: [],
+      checklist: {},
+      tagIds: [],
+      custom: {},
+      replicationId: OWN_REPLICATION,
+      laboratoryId: null,
+      scopeKeys: [REPLICATION_KEY],
+    }),
+    subject: { ...IN_REPLICATION, participantUids: [MEMBER_UID] },
+    listBy: [
+      BY_REPLICATION_KEY,
+      { where: ["assigneeUids", "array-contains", MEMBER_UID], proves: { participantUids: [MEMBER_UID] } },
+    ],
+  },
+  tags: {
+    ids: [tagId("Pilot")],
+    seed: document({ name: "Pilot", nameFolded: "pilot", colour: "coral" }),
+    subject: UNSCOPED,
+    create: {
+      ids: [tagId("Synthetic tag")],
+      data: () => ({ name: "Synthetic tag", nameFolded: "synthetictag" }),
+    },
+    update: () => ({ colour: "graphite" }),
+  },
+  reminders: {
+    ids: [autoId("stored reminder")],
+    seed: document({
+      uid: OWNER_UID,
+      entityType: "task",
+      entityId: TASK,
+      remindAt: STORED_AT,
+      sentAt: null,
+      channel: "inApp",
+    }),
+    subject: OWNED,
+    listBy: [BY_OWNER],
+    // A reminder is set through the callable function `setReminder`, never by a client.
+    update: () => ({ channel: "email" }),
+  },
+
   // Scientific outputs and governance.
   manuscripts: {
     ids: [MANUSCRIPT],
@@ -1645,6 +1784,21 @@ export const FIXTURES: { readonly [K in CollectionKey]?: Fixture } = {
         proves: { memberVisible: true },
       },
     ],
+  },
+  progressUpdates: {
+    ids: [autoId("stored progress update")],
+    seed: appendedDocument({
+      entityType: "replication",
+      entityId: OWN_REPLICATION,
+      authorUid: uidOfCaller("ownTeam"),
+      body: "Piloting finished at the synthetic laboratory.",
+      mentionUids: [],
+      pinned: true,
+      replicationId: OWN_REPLICATION,
+      laboratoryId: null,
+      scopeKeys: [REPLICATION_KEY, MEMBERS_SCOPE_KEY],
+    }),
+    subject: UNSCOPED,
   },
   dashboards: {
     ids: [autoId("stored dashboard")],

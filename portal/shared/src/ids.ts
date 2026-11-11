@@ -757,6 +757,22 @@ export function scopeDashboardId(scopeType: "programme" | "replication" | "labor
   return compose([scopeType, scopeId], 1);
 }
 
+// Recruitment.
+
+/**
+ * The follow-up task that the inactivity sweep opens for a participation that has not reported
+ * since a date: `inactivity__` and the hash of the two, so the sweep opens one task for each
+ * participation and each spell without reports, however often it runs.
+ */
+export function inactivityFollowUpTaskId(participationId: string, sinceDate: string): string {
+  return compose(["inactivity", shortHash(lines([participationId, sinceDate]))]);
+}
+
+/** The task list of a laboratory that holds the follow-ups of its recruitment: `recruitmentFollowUp__` and the hash of the laboratory. */
+export function recruitmentFollowUpListId(laboratoryId: string): string {
+  return compose(["recruitmentFollowUp", shortHash(laboratoryId)]);
+}
+
 /**
  * Every builder of a natural key, by name. The collection registry names the builder of each
  * collection whose identifier is derived, and the integrity checker rebuilds identifiers with it.
@@ -809,5 +825,7 @@ export const ID_BUILDERS = {
   eventFailureId,
   searchIndexId,
   scopeDashboardId,
+  inactivityFollowUpTaskId,
+  recruitmentFollowUpListId,
 } as const;
 export type IdBuilderName = keyof typeof ID_BUILDERS;

@@ -401,3 +401,29 @@ export const dashboardDocSchema = documentBaseSchema.extend({
   ...scopeFieldsShape,
 });
 export type DashboardDoc = z.output<typeof dashboardDocSchema>;
+
+/** The records that keep a feed of progress updates. */
+export const PROGRESS_UPDATE_ENTITY_TYPES = ["replication", "laboratory", "person"] as const;
+export const progressUpdateEntityTypeSchema = z.enum(PROGRESS_UPDATE_ENTITY_TYPES);
+export type ProgressUpdateEntityType = z.output<typeof progressUpdateEntityTypeSchema>;
+
+/** The longest progress update, in characters. A longer report belongs in a page. */
+export const PROGRESS_UPDATE_MAX_LENGTH = 5_000;
+
+/**
+ * `progressUpdates/{id}`: one dated entry of the feed of progress updates of a replication, a
+ * laboratory or a member. The feed is append-only: an update is posted once, through a callable
+ * function that notifies those who follow the record, and is never changed. One posted with
+ * `pinned` stands at the top of the record until a later one is pinned.
+ */
+export const progressUpdateDocSchema = appendOnlyBaseSchema.extend({
+  entityType: progressUpdateEntityTypeSchema,
+  entityId: idSchema,
+  authorUid: uidSchema,
+  /** The text in the form of a comment body, whose mentions notify the members named. */
+  body: z.string().min(1).max(PROGRESS_UPDATE_MAX_LENGTH),
+  mentionUids: uidListSchema.max(50),
+  pinned: z.boolean(),
+  ...scopeFieldsShape,
+});
+export type ProgressUpdateDoc = z.output<typeof progressUpdateDocSchema>;

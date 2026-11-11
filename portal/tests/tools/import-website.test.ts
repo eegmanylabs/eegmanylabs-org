@@ -375,6 +375,7 @@ describe("the website importer on the synthetic fixture", () => {
         "coreRole",
         "country",
         "creditRole",
+        "exclusionReason",
         "journal",
         "psychConstruct",
         "publicStage",

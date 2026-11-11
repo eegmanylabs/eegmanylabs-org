@@ -1,4 +1,12 @@
-import { COLLECTIONS, entityRefId, openEntityPageContract, pageDocSchema } from "@eegml/shared";
+import {
+  COLLECTIONS,
+  entityRefId,
+  openEntityPageContract,
+  pageDocSchema,
+  parseStoredDocument,
+  readsTask,
+  taskDocSchema,
+} from "@eegml/shared";
 import {
   AppError,
   callerStamp,
@@ -11,8 +19,9 @@ import {
 import { audienceOf, descendantsOf, entityAudience, readPage, rewriteTree, sameAudience } from "../pages/pages";
 
 /**
- * The body page of a replication, a laboratory or a member: its notes. Capability: membership,
- * which reads every one of these records. The page is created on first use, under the
+ * The body page of a replication, a laboratory or a member, which holds its notes, or of a task,
+ * which holds its description. Capability: membership, which reads every replication, laboratory
+ * and member, and for a task the right to read the task. The page is created on first use, under the
  * identifier `entityType__entityId`, with the audience of its record and an audit entry, and a
  * repeated call, or a call that loses a race to another, creates nothing. Where the audience of
  * the record has changed since, as when the person of a member page has claimed an account, the
@@ -26,6 +35,19 @@ export const openEntityPage = defineCallable(openEntityPageContract, {
     return db.runTransaction(async (transaction) => {
       const access = await readAccessDocument(db, uid, transaction);
       if (!access.member) throw new AppError("permission-denied", NOT_ALLOWED_MESSAGE);
+      if (input.entityType === "task") {
+        // Every member reads the other records with a body page; a task only those who read it.
+        const task = parseStoredDocument(
+          taskDocSchema,
+          (await transaction.get(db.doc(COLLECTIONS.tasks.docPath(input.entityId)))).data(),
+        );
+        if (
+          !task.success ||
+          !readsTask(access, { secondFactorVerified: context.secondFactorVerified }, uid, task.data)
+        ) {
+          throw new AppError("not-found", "This task does not exist, or your account may not open it.");
+        }
+      }
       const existing = await readPage(db, transaction, pageId);
       const { audience, title } = await entityAudience(db, transaction, input.entityType, input.entityId);
       if (existing !== null) {

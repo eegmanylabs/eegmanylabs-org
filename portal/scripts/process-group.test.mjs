@@ -46,15 +46,32 @@ function alive(pid) {
   }
 }
 
-/** @param {number} port */
-function listening(port) {
+/**
+ * Whether the child of the tree still answers on its port. The answer is decided by the
+ * greeting of the tree's own socket, never by the port alone: once the child has gone, the
+ * system may give the same port to a socket that another test opens, and that socket neither
+ * sends the greeting nor belongs to the tree.
+ * @param {{ port: number, child: number }} tree
+ * @returns {Promise<boolean>}
+ */
+function listening(tree) {
+  const greeting = `process-tree ${tree.child}\n`;
   return new Promise((resolve) => {
-    const socket = net.connect({ host: "127.0.0.1", port });
-    socket.once("connect", () => {
+    let received = "";
+    const socket = net.connect({ host: "127.0.0.1", port: tree.port });
+    const finish = (/** @type {boolean} */ answer) => {
       socket.destroy();
-      resolve(true);
+      resolve(answer);
+    };
+    // A socket of another process may accept and say nothing: it is not the tree's.
+    socket.setTimeout(2_000, () => finish(false));
+    socket.setEncoding("utf8");
+    socket.on("data", (chunk) => {
+      received += chunk;
+      if (received.length >= greeting.length) finish(received.startsWith(greeting));
     });
-    socket.once("error", () => resolve(false));
+    socket.once("end", () => finish(received.startsWith(greeting)));
+    socket.once("error", () => finish(false));
   });
 }
 
@@ -103,14 +120,14 @@ describe("a run that is interrupted", () => {
     const { launcher, exited, tree } = await launch();
     expect(alive(tree.parent)).toBe(true);
     expect(alive(tree.child)).toBe(true);
-    expect(await listening(tree.port)).toBe(true);
+    expect(await listening(tree)).toBe(true);
 
     launcher.kill(signal);
 
     expect(await exited).toBe(status);
     expect(alive(tree.parent)).toBe(false);
     expect(alive(tree.child)).toBe(false);
-    expect(await listening(tree.port)).toBe(false);
+    expect(await listening(tree)).toBe(false);
   });
 
   it("kills processes that ignore the interrupt and the termination signal, and only then ends", async () => {
@@ -124,7 +141,7 @@ describe("a run that is interrupted", () => {
     expect(Date.now() - began).toBeGreaterThanOrEqual(500);
     expect(alive(tree.parent)).toBe(false);
     expect(alive(tree.child)).toBe(false);
-    expect(await listening(tree.port)).toBe(false);
+    expect(await listening(tree)).toBe(false);
   });
 });
 
@@ -140,7 +157,7 @@ describe("a run whose command started a process outside its group", () => {
     expect(Date.now() - began).toBeGreaterThanOrEqual(250);
     expect(alive(tree.parent)).toBe(false);
     expect(alive(tree.child)).toBe(false);
-    expect(await listening(tree.port)).toBe(false);
+    expect(await listening(tree)).toBe(false);
   });
 
   it("kills it when it ignores every polite signal", async () => {
@@ -151,7 +168,7 @@ describe("a run whose command started a process outside its group", () => {
     expect(await exited).toBe(143);
     expect(alive(tree.parent)).toBe(false);
     expect(alive(tree.child)).toBe(false);
-    expect(await listening(tree.port)).toBe(false);
+    expect(await listening(tree)).toBe(false);
   });
 });
 
@@ -187,7 +204,7 @@ describe("a run that ends by itself", () => {
 
     expect(await exited).toBe(7);
     expect(alive(tree.child)).toBe(false);
-    expect(await listening(tree.port)).toBe(false);
+    expect(await listening(tree)).toBe(false);
   });
 });
 

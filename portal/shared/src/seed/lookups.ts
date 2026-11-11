@@ -1,5 +1,6 @@
 // The lookup data the application depends on: the programme, the statuses, the participant
-// count categories, the onboarding checklist and the contributor roles. Administrators may
+// count categories, the onboarding checklist, the contributor roles and the reasons for
+// exclusion. Administrators may
 // reconfigure most of it afterwards (docs/DATA_MODEL.md, section 1), so these are the values a
 // new database starts with and not a copy that code may rely on staying equal.
 //
@@ -206,6 +207,23 @@ export const CREDIT_ROLES = [
   { key: "writingReviewEditing", name: "Writing – review & editing" },
 ] as const satisfies readonly { readonly key: CreditRoleKey; readonly name: string }[];
 
+/** The kind of the vocabulary terms that hold the reasons for excluding participants from a count. */
+export const EXCLUSION_REASON_TERM_KIND = "exclusionReason";
+
+/**
+ * The reasons a laboratory gives for excluding participants, which a recruitment report names
+ * by term. Administrators may add others as vocabulary terms of the same kind.
+ */
+export const EXCLUSION_REASONS = [
+  { key: "artefacts", name: "Excessive artefacts in the EEG recording" },
+  { key: "incompleteSession", name: "Incomplete session" },
+  { key: "technicalFailure", name: "Technical failure of equipment or software" },
+  { key: "inclusionCriteria", name: "Preregistered inclusion criteria not met" },
+  { key: "protocolDeviation", name: "Deviation from the protocol" },
+  { key: "consentWithdrawn", name: "Consent withdrawn" },
+  { key: "other", name: "Other reason, described in the note" },
+] as const;
+
 type StandardField = keyof z.output<typeof documentBaseSchema>;
 
 /** The fields of a document that a seed states. The command that writes it adds the standard fields. */
@@ -255,6 +273,20 @@ export function lookupSeedDocuments(): readonly LookupSeedDocument[] {
       },
     }),
   );
+  const exclusionReasons = EXCLUSION_REASONS.map(
+    (reason): LookupSeedDocument => ({
+      collection: "vocabularyTerms",
+      id: vocabularyTermId(EXCLUSION_REASON_TERM_KIND, reason.name),
+      data: {
+        sourceId: reason.key,
+        name: reason.name,
+        kind: EXCLUSION_REASON_TERM_KIND,
+        sameAsSource: [],
+        labelsSource: [reason.name],
+        isDeprecated: false,
+      },
+    }),
+  );
   return [
     { collection: "programmes", id: PROGRAMME_SEED.key, data: PROGRAMME_SEED },
     ...statuses,
@@ -265,5 +297,6 @@ export function lookupSeedDocuments(): readonly LookupSeedDocument[] {
       data: { key: ONBOARDING_CHECKLIST_TEMPLATE.key, items: [...ONBOARDING_CHECKLIST_TEMPLATE.items] },
     },
     ...creditRoles,
+    ...exclusionReasons,
   ];
 }

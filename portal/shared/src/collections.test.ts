@@ -67,7 +67,7 @@ const parameterNames = (path: string) => [...path.matchAll(/\{([^{}]+)\}/g)].map
 
 describe("the registry", () => {
   it("has one entry for every collection, subcollection and fixed-name document of the data model", () => {
-    expect(COLLECTION_KEYS).toHaveLength(144);
+    expect(COLLECTION_KEYS).toHaveLength(145);
     expect(COLLECTION_ENTRIES.map((entry) => entry.key)).toEqual(COLLECTION_KEYS);
   });
 
@@ -153,15 +153,6 @@ describe("the enforcement of an entry", () => {
         "taskCustom",
         "datasetCustom",
         "manuscriptCustom",
-        // Recruitment reports, planned pauses and forecasts.
-        "recruitmentReports",
-        "plannedPauses",
-        "forecastRuns",
-        // Tasks.
-        "taskLists",
-        "tasks",
-        "tags",
-        "reminders",
         // Attachments. Pages and their threads are built (D-010), and so are databases, custom
         // properties, views and dashboards (D-011).
         "attachments",
@@ -201,7 +192,7 @@ describe("the enforcement of an entry", () => {
         "eventFailures",
       ].sort(),
     );
-    expect(COLLECTION_ENTRIES.filter((entry) => entry.enforcement === "enforced")).toHaveLength(102);
+    expect(COLLECTION_ENTRIES.filter((entry) => entry.enforcement === "enforced")).toHaveLength(110);
   });
 
   it("never opens a document beneath a parent that is still closed", () => {
@@ -255,6 +246,10 @@ describe("the identifier rule of an entry", () => {
       "documentLinkSlotId",
       // The dashboard of a scope, which the registry calls opaque beside personal dashboards.
       "scopeDashboardId",
+      // The follow-up task and the list of follow-ups that the inactivity sweep of recruitment
+      // opens, which the registry calls opaque beside the tasks and lists made in the portal.
+      "inactivityFollowUpTaskId",
+      "recruitmentFollowUpListId",
     ]);
   });
 });
@@ -461,7 +456,10 @@ describe("the access rules of an entry", () => {
       "manuscriptCustom",
     ];
     const workspace = ["databaseRows", "collectionSchemas", "dashboards"];
-    expect(actual.sort()).toEqual([...functionOnly, ...customValues, ...workspace].sort());
+    // Task lists and tasks are written by callable functions that keep the tree, the status
+    // history and the dependencies, and progress updates by one that notifies followers.
+    const tasks = ["taskLists", "tasks", "progressUpdates"];
+    expect(actual.sort()).toEqual([...functionOnly, ...customValues, ...workspace, ...tasks].sort());
   });
 
   it("let the owner of a notification set readAt and nothing else", () => {
@@ -556,9 +554,10 @@ describe("the access rules of an entry", () => {
   });
 
   it("keep every status that has a history from direct client writes", () => {
+    // An entry that no client writes keeps every one of its fields from clients.
     const reserved = (key: keyof typeof COLLECTIONS) => {
-      const { write } = COLLECTIONS[key];
-      return write.mode === "client" ? write.functionOnlyFields : [];
+      const { write, schema } = COLLECTIONS[key];
+      return write.mode === "client" ? write.functionOnlyFields : Object.keys(schema.shape);
     };
     expect(reserved("replications")).toEqual(expect.arrayContaining(["statusKey", "statusHistoryId"]));
     expect(reserved("participations")).toEqual(expect.arrayContaining(["status", "statusHistoryId"]));

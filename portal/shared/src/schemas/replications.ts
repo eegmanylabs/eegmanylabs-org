@@ -306,6 +306,8 @@ export const replicationSummaryDocSchema = documentBaseSchema.extend({
   kind: keySchema,
   /** Basis to modality to category key to count, with unknown values absent. */
   totals: z.partialRecord(recruitmentBasisSchema, recruitmentCountsSchema),
+  /** Basis to modality to category key to the number of participations that state the value. */
+  reporting: z.partialRecord(recruitmentBasisSchema, recruitmentCountsSchema).exactOptional(),
   participationCount: z.number().int().min(0),
   reportCount: z.number().int().min(0),
   latestAsOfDate: isoDateSchema.nullable(),

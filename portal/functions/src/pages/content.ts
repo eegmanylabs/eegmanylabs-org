@@ -153,6 +153,12 @@ export function extractPageText(doc: Y.Doc): PageText {
       context.text.push(`@${label}`);
       return;
     }
+    if (name === "actionItem") {
+      // An action item of a meeting reads as the title of its task.
+      const title = node.getAttribute("title");
+      if (typeof title === "string" && title !== "") context.text.push(title);
+      return;
+    }
     if (name === "blockContainer") {
       const id = node.getAttribute("id");
       const inner: Context = { blockId: typeof id === "string" ? id : null, text: [] };

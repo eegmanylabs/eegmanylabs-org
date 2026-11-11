@@ -26,6 +26,8 @@ import {
 import { CORRECTABLE_PERSON_FIELDS, CorrectionRequestDialog } from "@/pages/home/CorrectionRequestDialog";
 import { replicationPath } from "@/pages/replications/replication-display";
 import { Section } from "@/pages/replications/tabs/OverviewTab";
+import { EntityTasksTab } from "@/pages/tasks/EntityTasksTab";
+import { UpdatesTab } from "@/pages/tasks/UpdatesTab";
 import { NotesTab } from "@/pages/workspace/NotesTab";
 import {
   countryName,
@@ -162,7 +164,9 @@ function DemographicsSection({ personId, own }: { personId: string; own: boolean
 
 function PersonRecord({ person, viewer }: { person: Person; viewer: Viewer }) {
   const [params, setParams] = useSearchParams();
-  const tab = params.get("tab") === "notes" ? "notes" : "profile";
+  const requestedTab = params.get("tab");
+  const tab =
+    requestedTab === "notes" || requestedTab === "tasks" || requestedTab === "updates" ? requestedTab : "profile";
   const showTab = (value: string) =>
     setParams(
       (current) => {
@@ -254,6 +258,8 @@ function PersonRecord({ person, viewer }: { person: Person; viewer: Viewer }) {
       <Tabs value={tab} onValueChange={showTab}>
         <TabsList aria-label="Sections of the member">
           <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsTrigger value="tasks">Tasks</TabsTrigger>
+          <TabsTrigger value="updates">Updates</TabsTrigger>
           <TabsTrigger value="notes">Notes</TabsTrigger>
         </TabsList>
         <TabsContent value="profile">
@@ -421,6 +427,17 @@ function PersonRecord({ person, viewer }: { person: Person; viewer: Viewer }) {
               </Section>
             ) : null}
           </div>
+        </TabsContent>
+        <TabsContent value="tasks">
+          <EntityTasksTab viewer={viewer} entityType="person" entityId={person.id} userId={person.userId} />
+        </TabsContent>
+        <TabsContent value="updates">
+          <UpdatesTab
+            viewer={viewer}
+            entityType="person"
+            entityId={person.id}
+            canPost={viewer.access.member && (own || viewer.can("people.manage", "programme"))}
+          />
         </TabsContent>
         <TabsContent value="notes">
           <NotesTab entityType="person" entityId={person.id} />

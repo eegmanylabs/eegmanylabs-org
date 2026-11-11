@@ -32,7 +32,7 @@ import { RecordDialog, type RecordEditing } from "./RecordDialog";
 import { TableView } from "./TableView";
 import { FilterEditor, GroupingEditor, PropertiesEditor, SortEditor } from "./toolbar";
 import { useViewData, type ViewData } from "./use-view-data";
-import { type RecordChange, saveRecordChanges } from "./writes";
+import { type RecordChange, saveRecordChanges, saveTaskValues } from "./writes";
 
 export const VIEW_TYPES = ["table", "list", "board", "calendar", "timeline", "gallery"] as const;
 export type ViewType = (typeof VIEW_TYPES)[number];
@@ -72,6 +72,12 @@ export interface ViewSurfaceProps {
   readonly compact?: boolean;
   /** The page a view saved from here belongs to. */
   readonly pageId?: string | null;
+  /**
+   * Opens a record in place of the dialog of record values, where the record has a page of its
+   * own. A task opens in its own panel whatever holds the view: without this, the view goes to
+   * the task on the page of tasks.
+   */
+  readonly onOpenRecord?: (record: DerivedRecord) => void;
 }
 
 /** Saves values of records and reports a failure in words. */
@@ -82,13 +88,26 @@ function editingFor(collectionKey: string): RecordEditing & {
     property.source === "title"
       ? { recordId: record.id, title: typeof value === "string" && value !== "" ? value : "Untitled", values: {} }
       : { recordId: record.id, values: { [property.id]: value } };
+  const failed = (failure: unknown) =>
+    new Error(failure instanceof CallableError ? failure.message : "The change was not saved.");
   const run = async (changes: RecordChange[]) => {
     try {
       await saveRecordChanges(collectionKey, changes);
     } catch (failure) {
-      throw new Error(failure instanceof CallableError ? failure.message : "The change was not saved.");
+      throw failed(failure);
     }
   };
+  if (collectionKey === "core:tasks") {
+    // A task changes through the functions of tasks, which keep its history and its tree.
+    const saveTasks = async (records: readonly DerivedRecord[], property: ViewProperty, value: PropertyValue) => {
+      try {
+        await saveTaskValues(records, property.id, value);
+      } catch (failure) {
+        throw failure instanceof CallableError ? failed(failure) : failure;
+      }
+    };
+    return { save: (record, property, value) => saveTasks([record], property, value), saveMany: saveTasks };
+  }
   return {
     save: (record, property, value) => run([changeOf(record, property, value)]),
     saveMany: (records, property, value) => run(records.map((record) => changeOf(record, property, value))),
@@ -283,7 +302,7 @@ function SavedViews({
 }
 
 function Surface(props: ViewSurfaceProps & { readonly data: ViewData }) {
-  const { data, settings, onSettings, scope, caption } = props;
+  const { data, settings, onSettings, scope, caption, onOpenRecord } = props;
   const { config, type } = settings;
   const [open, setOpen] = useState<DerivedRecord | null>(null);
   const [property, setProperty] = useState<ViewProperty | null | "new">(null);
@@ -306,7 +325,13 @@ function Surface(props: ViewSurfaceProps & { readonly data: ViewData }) {
     config,
     onConfig: setConfig,
     editing,
-    onOpen: setOpen,
+    onOpen: (record: DerivedRecord) => {
+      if (onOpenRecord !== undefined) onOpenRecord(record);
+      // A view can be drawn outside the router, in a block of a page, so it goes there by the address.
+      else if (data.collection.key === "core:tasks")
+        window.location.hash = `#/tasks?task=${encodeURIComponent(record.id)}`;
+      else setOpen(record);
+    },
     caption,
   };
   let body: ReactNode;
@@ -354,8 +379,8 @@ function Surface(props: ViewSurfaceProps & { readonly data: ViewData }) {
   else body = <TimelineView {...layoutProps} />;
 
   return (
-    <div className="grid gap-3" data-testid="view-surface" data-view-type={type}>
-      <div className="flex flex-wrap items-center gap-1" role="toolbar" aria-label={`${caption}: view settings`}>
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3" data-testid="view-surface" data-view-type={type}>
+      <div className="flex flex-wrap items-center gap-1" role="toolbar" aria-label={`View settings of ${caption}`}>
         <div className="flex items-center gap-2">
           <span className="sr-only">Show as</span>
           <Select

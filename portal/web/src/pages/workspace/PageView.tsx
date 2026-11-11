@@ -9,6 +9,7 @@ import {
   FilePlus2,
   History,
   Keyboard,
+  ListTodo,
   ListTree,
   MessageSquare,
   MessageSquarePlus,
@@ -57,6 +58,7 @@ import { useRecordVisit } from "@/registry/use-record-visit";
 import { useViewer, type Viewer } from "@/registry/viewer";
 import { cn } from "@/utils/cn";
 import { useViewHost } from "@/views/host";
+import { ActionItemDialog } from "./ActionItemDialog";
 import { ActivityPanel } from "./ActivityPanel";
 import { CommentsPanel, useAnchorStore } from "./CommentsPanel";
 import { HistoryPanel } from "./HistoryPanel";
@@ -145,6 +147,7 @@ function PageBody({
     readonly state: Uint8Array;
   } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [actionLine, setActionLine] = useState<{ readonly blockId: string; readonly text: string } | null>(null);
   const editorApi = useRef<PageEditorApi | null>(null);
 
   const threads = useLiveQuery(threadsOfPage(viewer, page.id));
@@ -182,9 +185,55 @@ function PageBody({
     [selectThread],
   );
   const anchors = useAnchorStore(threadList, selectedThreadId, selectAnchoredThread);
-  const onReady = useCallback((api: PageEditorApi) => {
-    editorApi.current = api;
-  }, []);
+  // A new meeting starts with its sections, written once by the person who created it, who
+  // arrives here from the dialog of a new meeting with its date and attendees in the address.
+  const meetingStart =
+    page.kind === "meeting" && params.get("start") === "meeting" && page.createdBy === viewer.uid ? params : null;
+  const onReady = useCallback(
+    (api: PageEditorApi) => {
+      editorApi.current = api;
+      // The attendees are named as the directory names them, so the sections wait for it.
+      if (meetingStart === null || members.candidates.length === 0) return;
+      if (api.isEmpty()) {
+        const attendees = (meetingStart.get("attendees") ?? "")
+          .split(",")
+          .filter((uid) => uid !== "")
+          .map((uid) => ({ uid, name: members.nameOf(uid) ?? "A member" }));
+        api.insertMeetingSections({ date: meetingStart.get("date") ?? "", attendees });
+      }
+      setParams(
+        (current) => {
+          const next = new URLSearchParams(current);
+          for (const key of ["start", "date", "attendees"]) next.delete(key);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [meetingStart, members, setParams],
+  );
+  /** Offers a line as an action item, unless it is the instruction that earlier meeting pages held. */
+  const offerActionItem = useCallback(
+    (line: { readonly blockId: string; readonly text: string }) => {
+      if (line.text.startsWith(FORMER_MEETING_INSTRUCTION)) {
+        toast.show({
+          title: "This line explains action items.",
+          description: "Write the task on a line of its own, then choose Action item.",
+        });
+        return;
+      }
+      setActionLine(line);
+    },
+    [toast],
+  );
+  const startActionItem = () => {
+    const line = editorApi.current?.currentLine() ?? null;
+    if (line === null) {
+      toast.show({ title: "Put the cursor on a line with text first.", description: "That line becomes the task." });
+      return;
+    }
+    offerActionItem(line);
+  };
   const startComment = useCallback((anchor: ThreadAnchor | null) => {
     setPanel("comments");
     setDraft({ anchor });
@@ -366,9 +415,16 @@ function PageBody({
           )}
           <div className="flex flex-wrap gap-1">
             {page.isTemplate ? <Badge tone="neutral">Template</Badge> : null}
+            {page.kind === "meeting" ? <Badge tone="outline">Meeting</Badge> : null}
             {page.accessMode === "restricted" ? <Badge tone="outline">Restricted</Badge> : null}
             {archived ? <Badge tone="accent">Archived</Badge> : null}
           </div>
+          {page.kind === "meeting" && editable ? (
+            <p className="text-xs text-fg-muted" data-testid="action-item-help">
+              To make a line a task, put the cursor on it and choose Action item, above the page or in the menu of
+              blocks.
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-1" role="toolbar" aria-label="Page actions">
           {others.length === 0 ? null : (
@@ -378,6 +434,12 @@ function PageBody({
           )}
           <SaveIndicator state={saveState} editable={editable} />
           <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
+          {editable ? (
+            <Button size="sm" variant="ghost" onClick={startActionItem}>
+              <ListTodo aria-hidden="true" strokeWidth={1.8} />
+              Action item
+            </Button>
+          ) : null}
           {holds(level, "comment") && !archived ? (
             <Button size="sm" variant="ghost" onClick={commentOnSelection} aria-keyshortcuts="Control+Alt+M">
               <MessageSquarePlus aria-hidden="true" strokeWidth={1.8} />
@@ -539,10 +601,28 @@ function PageBody({
                 onIdleAfterEdit={onIdleAfterEdit}
                 onPresence={setOthers}
                 viewHost={viewHost}
+                onActionItem={offerActionItem}
               />
             </Suspense>
           </div>
           <PageDatabases page={page} viewer={viewer} editable={editable} />
+          {actionLine === null ? null : (
+            <ActionItemDialog
+              viewer={viewer}
+              pageId={page.id}
+              line={actionLine}
+              members={members.candidates}
+              onClose={() => setActionLine(null)}
+              onCreated={(blockId, taskId, title) => {
+                editorApi.current?.makeActionItem(blockId, taskId, title);
+                setActionLine(null);
+                toast.show({
+                  title: "The action item has been created.",
+                  description: "It is a task in its list now.",
+                });
+              }}
+            />
+          )}
           <section aria-labelledby={`children-${page.id}`} className="grid gap-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 id={`children-${page.id}`} className="text-lg text-fg">
@@ -651,6 +731,9 @@ function PageBody({
 }
 
 /** A page, live, with the standard loading and error states. */
+/** The start of the instruction that meeting pages held as a line before it moved beside the page. */
+const FORMER_MEETING_INSTRUCTION = "Write a line, then choose Action item";
+
 export function PageView({ pageId, embedded = false }: { readonly pageId: string; readonly embedded?: boolean }) {
   const viewer = useViewer();
   const page = useLiveDocument("pages", pageId === "" ? null : [pageId]);

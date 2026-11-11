@@ -98,6 +98,7 @@ export const createPage = defineCallable(createPageContract, {
           changes: [
             { field: "title", after: input.title },
             { field: "parentPageId", after: input.parentPageId },
+            ...(input.kind === undefined ? [] : [{ field: "kind", after: input.kind }]),
             ...(template === null ? [] : [{ field: "templateSourceId", after: template.id }]),
           ],
           at,
@@ -110,7 +111,7 @@ export const createPage = defineCallable(createPageContract, {
         ...createdFields("pages", stamp),
         parentPageId: input.parentPageId,
         ancestorPageIds: parent === null ? [] : [...parent.data.ancestorPageIds, parent.id],
-        kind: "custom",
+        kind: input.kind ?? "custom",
         title: input.title,
         ...(input.icon === undefined ? {} : { icon: input.icon }),
         order: orderBetween(last ?? null, null),

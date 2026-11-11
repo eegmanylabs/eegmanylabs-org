@@ -28,7 +28,12 @@ function NotificationItem({
   const user = useSignedInUser();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
-  const { title, detail, to } = describeNotification(notification.payload);
+  // The record a notification is about stands beside its payload, which names what a link needs.
+  const { title, detail, to } = describeNotification({
+    entityType: notification.entityType,
+    entityId: notification.entityId,
+    ...notification.payload,
+  });
   const unread = notification.readAt === null;
   const created = notification.createdAt.toDate();
 

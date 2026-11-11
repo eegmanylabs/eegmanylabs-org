@@ -2,7 +2,7 @@
 // leads only to a page that exists. Pure, so that it is tested by itself.
 import type { Role } from "@eegml/shared";
 import { ROLE_LABELS } from "@/app/labels";
-import { pagePath } from "@/registry/paths";
+import { pagePath, participationRecruitmentPath } from "@/registry/paths";
 
 export interface NotificationText {
   readonly title: string;
@@ -16,6 +16,28 @@ type Payload = Readonly<Record<string, unknown>>;
 const text = (value: unknown): string | null => (typeof value === "string" && value !== "" ? value : null);
 const roleLabel = (value: unknown): string =>
   typeof value === "string" && value in ROLE_LABELS ? ROLE_LABELS[value as Role] : "a role";
+
+/** The address of the task a notification is about, which the notification names beside its payload. */
+function taskPath(payload: Payload): string | null {
+  const taskId = text(payload.entityId);
+  return taskId === null ? "/tasks" : `/tasks?task=${encodeURIComponent(taskId)}`;
+}
+
+/** The page of the record whose feed of progress updates a notification is about. */
+function recordPath(payload: Payload): string | null {
+  const entityId = text(payload.entityId);
+  if (entityId === null) return null;
+  switch (payload.entityType) {
+    case "replication":
+      return `/replications/${encodeURIComponent(entityId)}?tab=updates`;
+    case "laboratory":
+      return `/labs/${encodeURIComponent(entityId)}?tab=updates`;
+    case "person":
+      return `/members/${encodeURIComponent(entityId)}?tab=updates`;
+    default:
+      return null;
+  }
+}
 
 export function describeNotification(payload: Payload): NotificationText {
   switch (payload.kind) {
@@ -103,6 +125,34 @@ export function describeNotification(payload: Payload): NotificationText {
             : `${text(payload.authorName) ?? "A member"} replied in a discussion you took part in`,
         detail: text(payload.title),
         to: pageId === null ? null : pagePath(pageId, threadId ?? undefined),
+      };
+    }
+    case "taskAssigned":
+      return { title: "A task was assigned to you", detail: text(payload.title), to: taskPath(payload) };
+    case "taskStatusChanged":
+      return {
+        title: `A task you follow is now ${(text(payload.statusLabel) ?? "changed").toLowerCase()}`,
+        detail: text(payload.title),
+        to: taskPath(payload),
+      };
+    case "reminderDue":
+      return { title: "A reminder you set is due", detail: text(payload.title), to: taskPath(payload) };
+    case "progressUpdatePosted":
+      return {
+        title: payload.pinned === true ? "A pinned progress update was posted" : "A progress update was posted",
+        detail: text(payload.title),
+        to: recordPath(payload),
+      };
+    case "recruitmentInactive": {
+      const days = typeof payload.silentDays === "number" ? payload.silentDays : null;
+      const participationId = text(payload.participationId);
+      return {
+        title:
+          days === null
+            ? "A laboratory has not reported its recruitment for a while"
+            : `A laboratory has not reported its recruitment for ${days} days`,
+        detail: text(payload.title),
+        to: participationId === null ? null : participationRecruitmentPath(participationId),
       };
     }
     default:

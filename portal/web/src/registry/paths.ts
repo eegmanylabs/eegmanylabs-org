@@ -24,5 +24,19 @@ export function recordPath(entityType: EntityType, entityId: string): string | n
   if (entityType === "person") return memberPath(entityId);
   if (entityType === "laboratory") return laboratoryPath(entityId);
   if (entityType === "page") return pagePath(entityId);
+  if (entityType === "participation") return participationRecruitmentPath(entityId);
   return null;
 }
+
+/** The recruitment of the programme, with its rollups, as of a date where one is given. */
+export const RECRUITMENT_PATH = "/recruitment";
+
+/** The recruitment of one participation: its reports, its current values and its planned pauses. */
+export const participationRecruitmentPath = (participationId: string): string =>
+  `/recruitment/participations/${encodeURIComponent(participationId)}`;
+
+/** The forecast of a replication. */
+export const forecastPath = (studyKey: string): string => `/recruitment/forecast/${encodeURIComponent(studyKey)}`;
+
+/** The categories of participant counts and their definitions. */
+export const COUNT_CATEGORIES_PATH = "/recruitment/categories";

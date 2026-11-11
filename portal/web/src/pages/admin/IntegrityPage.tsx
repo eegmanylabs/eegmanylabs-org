@@ -19,6 +19,7 @@ const CHECK_LABELS: Readonly<Record<IntegrityCheck, string>> = {
   personLinkedToSeveralUsers: "Persons linked to more than one account",
   derivedValueDisagrees: "Derived values that disagree with their source",
   equipmentChainCurrent: "Equipment chains with more than one current configuration",
+  dependencyCycle: "Tasks whose dependencies form a cycle",
 };
 
 const LATEST: LiveQuery<"integrityReports"> = {

@@ -1205,30 +1205,42 @@ const DEFINITIONS = {
     path: "recruitmentReports/{id}",
     schema: recruitment.recruitmentReportDocSchema,
     id: auto,
+    // Within the scope of its participation: the leads of the replication, the coordinators and
+    // members of the laboratory, programme administrators and the core team. Filed only through
+    // `fileRecruitmentReports`, and never updated or deleted (D-009, D-019).
     read: read(["SCOPED"], ["scopeKeys"]),
     write: FUNCTION_ONLY,
     dataClass: "member",
     flags: { appendOnly: true, importable: true },
-    enforcement: DENIED,
+    enforcement: ENFORCED,
   }),
   plannedPauses: define({
     path: "plannedPauses/{id}",
     schema: recruitment.plannedPauseDocSchema,
     id: auto,
     read: read(["SCOPED"], ["scopeKeys"]),
-    write: client([grant(MANAGERS, WRITE, { capability: "participations.manage" })], UNIT),
+    write: client(
+      [
+        grant(MANAGERS, WRITE, {
+          capability: "participations.manage",
+          condition: "The participation exists, and the pause repeats its replication, laboratory and scope keys.",
+        }),
+      ],
+      UNIT,
+    ),
     dataClass: "member",
-    enforcement: DENIED,
+    enforcement: ENFORCED,
   }),
   forecastRuns: define({
     path: "forecastRuns/{id}",
     schema: recruitment.forecastRunDocSchema,
     id: auto,
     read: read(["MEMBER"]),
+    // Written through `generateForecast` for the holders of `replications.manage`, and never changed.
     write: FUNCTION_ONLY,
     dataClass: "member",
     flags: { appendOnly: true },
-    enforcement: DENIED,
+    enforcement: ENFORCED,
   }),
 
   // Tasks (section 8).
@@ -1237,13 +1249,13 @@ const DEFINITIONS = {
     schema: tasks.taskListDocSchema,
     id: auto,
     read: read(["SCOPED", "SELF"], ["scopeKeys", "ownerUid"], "By scope, or by owner for a personal list."),
-    write: client(
-      [grant(["self"], WRITE), grant(MANAGERS, WRITE, { capability: "tasks.manage" })],
-      ["scopeKeys", "ownerUid"],
-    ),
+    // Created, renamed and archived through callable functions: a list made from a template
+    // copies the template's tasks in the same transaction, and the scope of a list decides the
+    // audience of every task in it.
+    write: FUNCTION_ONLY,
     dataClass: "member",
     flags: { importable: true },
-    enforcement: DENIED,
+    enforcement: ENFORCED,
   }),
   tasks: define({
     path: "tasks/{id}",
@@ -1254,36 +1266,52 @@ const DEFINITIONS = {
       ["scopeKeys", "ownerUid", "assigneeUids", "collaboratorUids", "followerUids"],
       "By scope or owner, as its list. A user named in a participant array reads the task whatever its list.",
     ),
-    write: client(
-      [
-        grant(["self"], WRITE),
-        grant(MANAGERS, WRITE, { capability: "tasks.manage" }),
-        grant(["participant"], ["update"], { condition: "A user named in assigneeUids or collaboratorUids." }),
-      ],
-      ["scopeKeys", "ownerUid", "assigneeUids", "collaboratorUids"],
-      ["statusKey", "statusHistoryId"],
-    ),
+    // Written through callable functions for the managers of the list's scope, the owner of a
+    // personal list and, for their own work, the assignees and collaborators: every change keeps
+    // the tree, the copies of the list's audience, the dated status history, the dependencies
+    // free of cycles and an audit entry, and the checklist, the links, the dependencies and the
+    // unclaimed participants are maps and lists of maps that no rule can check element by element.
+    write: FUNCTION_ONLY,
     dataClass: "member",
     flags: { importable: true, searchable: true },
-    enforcement: DENIED,
+    enforcement: ENFORCED,
   }),
   tags: define({
     path: "tags/{nameHash}",
     schema: tasks.tagDocSchema,
     id: built("tagId", ["name"]),
     read: read(["MEMBER"]),
-    write: client([grant(["member"], ["create"]), grant(STAFF, ["update"], { capability: "lookups.manage" })]),
+    write: client([
+      grant(["member"], ["create"], {
+        condition:
+          "The identifier is the hash of nameFolded, which the integrity checker compares with the fold of the name.",
+      }),
+      grant(STAFF, ["update"], { capability: "lookups.manage", onlyFields: ["colour"] }),
+    ]),
     dataClass: "member",
-    enforcement: DENIED,
+    flags: { importable: true },
+    enforcement: ENFORCED,
   }),
   reminders: define({
     path: "reminders/{id}",
     schema: tasks.reminderDocSchema,
     id: auto,
     read: read(["SELF"], ["uid"]),
-    write: client([grant(["self"], ["create", "update", "delete"])], ["uid"], ["sentAt"]),
+    // A reminder is set through a callable function, which checks that its owner reads the task
+    // and bounds how many are waiting; its owner moves it while it is not sent, and removes it.
+    write: client(
+      [
+        grant(["self"], ["delete"]),
+        grant(["self"], ["update"], {
+          onlyFields: ["remindAt", "channel"],
+          condition: "Only while it is not sent, and to a time between an hour ago and two years ahead.",
+        }),
+      ],
+      ["uid"],
+      ["sentAt"],
+    ),
     dataClass: "member",
-    enforcement: DENIED,
+    enforcement: ENFORCED,
   }),
   taskCustom: customValues("tasks/{id}/private/custom", ["parent.scopeKeys"]),
 
@@ -1536,6 +1564,19 @@ const DEFINITIONS = {
     // user's dashboard and for holders of pages.manage for the scope of any other.
     write: FUNCTION_ONLY,
     dataClass: "member",
+    enforcement: ENFORCED,
+  }),
+
+  progressUpdates: define({
+    path: "progressUpdates/{id}",
+    schema: workspace.progressUpdateDocSchema,
+    id: auto,
+    read: read(["MEMBER"]),
+    // Posted through a callable function, which checks that the author belongs to the record,
+    // and notifies those who follow it and the members it mentions. Nobody changes an update.
+    write: FUNCTION_ONLY,
+    dataClass: "member",
+    flags: { appendOnly: true, searchable: true },
     enforcement: ENFORCED,
   }),
 

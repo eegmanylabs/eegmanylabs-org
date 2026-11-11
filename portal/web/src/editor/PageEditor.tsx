@@ -29,7 +29,7 @@ import {
   useCreateBlockNote,
 } from "@blocknote/react";
 import { PAGE_FRAGMENT_NAME } from "@eegml/shared";
-import { MessageSquarePlus, StickyNote, Table2 } from "lucide-react";
+import { ListTodo, MessageSquarePlus, StickyNote, Table2 } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
 import { yXmlFragmentToProseMirrorRootNode } from "y-prosemirror";
 import * as Y from "yjs";
@@ -57,6 +57,14 @@ export interface PageEditorApi {
    * which can itself be undone. Unchanged blocks keep their identity, so comments stay in place.
    */
   restore(state: Uint8Array): void;
+  /** The block the cursor is in, with its text, or null where it holds no text to turn into a task. */
+  currentLine(): { readonly blockId: string; readonly text: string } | null;
+  /** Turns a block into the action item of a task, which then shows the task live. */
+  makeActionItem(blockId: string, taskId: string, title: string): void;
+  /** Whether the page holds nothing yet. */
+  isEmpty(): boolean;
+  /** Writes the sections of a meeting into an empty page: its date, attendees, agenda, notes, decisions and action items. */
+  insertMeetingSections(meeting: { readonly date: string; readonly attendees: readonly MentionCandidate[] }): void;
 }
 
 export interface PageEditorProps {
@@ -74,6 +82,8 @@ export interface PageEditorProps {
   readonly onReady: (api: PageEditorApi) => void;
   /** The signed-in account, for the linked views of the page, which render in the editor's own root. */
   readonly viewHost: ViewHost | null;
+  /** The caller asks to turn the line of the cursor into an action item: a task linked to the page. */
+  readonly onActionItem?: (line: { readonly blockId: string; readonly text: string }) => void;
 }
 
 /** The button that the formatting toolbar adds to the default ones: a comment on the selected text. */
@@ -95,7 +105,7 @@ function CommentButton({ onClick }: { readonly onClick: () => void }) {
  * The items of the slash menu: those of BlockNote, with their shortcuts in words, then the
  * blocks of the portal, the callout and the linked view, in a group of their own.
  */
-function slashItems(editor: PageEditorInstance): DefaultReactSuggestionItem[] {
+function slashItems(editor: PageEditorInstance, onActionItem: (() => void) | null): DefaultReactSuggestionItem[] {
   return [
     ...getDefaultReactSlashMenuItems(editor).map((item) =>
       item.badge === undefined ? item : { ...item, badge: shortcutText(item.badge) },
@@ -116,7 +126,34 @@ function slashItems(editor: PageEditorInstance): DefaultReactSuggestionItem[] {
       icon: <Table2 aria-hidden="true" size={18} strokeWidth={1.8} />,
       onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: "linkedView", props: {} }),
     },
+    ...(onActionItem === null
+      ? []
+      : [
+          {
+            title: "Action item",
+            subtext: "Turn this line into a task, with an assignee and a due date",
+            aliases: ["action", "task", "todo", "assign"],
+            group: "Portal",
+            icon: <ListTodo aria-hidden="true" size={18} strokeWidth={1.8} />,
+            onItemClick: onActionItem,
+          },
+        ]),
   ];
+}
+
+/** The text of a block, with each mention as the name it shows. */
+function plainTextOf(content: unknown): string {
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((part: { type?: string; text?: unknown; props?: { label?: unknown } }) =>
+      part.type === "text" && typeof part.text === "string"
+        ? part.text
+        : part.type === "mention" && typeof part.props?.label === "string"
+          ? `@${part.props.label}`
+          : "",
+    )
+    .join("")
+    .trim();
 }
 
 /** The menu of a block's drag handle, without colours, which the portal does not offer. */
@@ -191,9 +228,45 @@ export function PageEditor(props: PageEditorProps) {
     [],
   );
 
-  const { onReady } = props;
+  const { onReady, onActionItem } = props;
+  const currentLine = useCallback(() => {
+    const block = editor.getTextCursorPosition().block;
+    const text = plainTextOf(block.content);
+    return text === "" ? null : { blockId: block.id, text };
+  }, [editor]);
   useEffect(() => {
     onReady({
+      currentLine,
+      makeActionItem(blockId, taskId, title) {
+        editor.replaceBlocks([blockId], [{ type: "actionItem", props: { taskId, title } }]);
+      },
+      isEmpty() {
+        const blocks = editor.document;
+        return blocks.length === 0 || (blocks.length === 1 && plainTextOf(blocks[0]?.content) === "");
+      },
+      insertMeetingSections({ date, attendees }) {
+        const heading = (text: string) => ({ type: "heading" as const, props: { level: 2 as const }, content: text });
+        const blocks = [
+          { type: "paragraph" as const, content: `Date: ${date}` },
+          heading("Attendees"),
+          ...(attendees.length === 0
+            ? [{ type: "bulletListItem" as const, content: "" }]
+            : attendees.map((attendee) => ({
+                type: "bulletListItem" as const,
+                content: [{ type: "mention" as const, props: { userId: attendee.uid, label: attendee.name } }],
+              }))),
+          heading("Agenda"),
+          { type: "numberedListItem" as const, content: "" },
+          heading("Notes"),
+          { type: "paragraph" as const, content: "" },
+          heading("Decisions"),
+          { type: "bulletListItem" as const, content: "" },
+          heading("Action items"),
+          // An empty line: how to make it a task is said beside the page, never written into it.
+          { type: "bulletListItem" as const, content: "" },
+        ];
+        editor.replaceBlocks(editor.document, blocks);
+      },
       selectionAnchor: () => anchorOfSelection(editor.prosemirrorState),
       restore(state) {
         const saved = new Y.Doc();
@@ -205,7 +278,7 @@ export function PageEditor(props: PageEditorProps) {
         });
       },
     });
-  }, [editor, onReady]);
+  }, [editor, onReady, currentLine]);
 
   const members = props.members;
   return (
@@ -224,7 +297,20 @@ export function PageEditor(props: PageEditorProps) {
         <SideMenuController sideMenu={PortalSideMenu} />
         <SuggestionMenuController
           triggerCharacter="/"
-          getItems={async (query) => filterSuggestionItems(slashItems(editor), query)}
+          getItems={async (query) =>
+            filterSuggestionItems(
+              slashItems(
+                editor,
+                onActionItem === undefined
+                  ? null
+                  : () => {
+                      const line = currentLine();
+                      if (line !== null) onActionItem(line);
+                    },
+              ),
+              query,
+            )
+          }
         />
         <SuggestionMenuController
           triggerCharacter="@"

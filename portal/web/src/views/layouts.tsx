@@ -64,19 +64,75 @@ function Facts({
   );
 }
 
-export function ListView({ data, records, properties, onOpen, caption }: LayoutProps) {
+/** The identifier of the first record that a relation value of a record names, or null. */
+function relatedId(value: PropertyValue | undefined): string | null {
+  if (!Array.isArray(value)) return null;
+  const [first] = value as readonly unknown[];
+  return typeof first === "object" && first !== null && "entityId" in first ? String(first.entityId) : null;
+}
+
+/** The identifiers that a relation value of a record names. */
+function relatedIds(value: PropertyValue | undefined): string[] {
+  if (!Array.isArray(value)) return [];
+  return (value as readonly unknown[]).flatMap((entry) =>
+    typeof entry === "object" && entry !== null && "entityId" in entry ? [String(entry.entityId)] : [],
+  );
+}
+
+/**
+ * The records of a list in their order, each with its depth: where the view nests records by a
+ * relation to their parent, a record follows its parent, and a record whose parent the view
+ * does not show stands at the top. Without such a relation every record stands at the top.
+ */
+function nestedRecords(
+  records: readonly DerivedRecord[],
+  parentProperty: string | undefined,
+): { readonly record: DerivedRecord; readonly depth: number }[] {
+  if (parentProperty === undefined) return records.map((record) => ({ record, depth: 0 }));
+  const shown = new Set(records.map((record) => record.id));
+  const children = new Map<string | null, DerivedRecord[]>();
+  for (const record of records) {
+    const parent = relatedId(record.values[parentProperty]);
+    const key = parent !== null && shown.has(parent) ? parent : null;
+    children.set(key, [...(children.get(key) ?? []), record]);
+  }
+  const ordered: { record: DerivedRecord; depth: number }[] = [];
+  const seen = new Set<string>();
+  const walk = (parent: string | null, depth: number) => {
+    for (const record of children.get(parent) ?? []) {
+      if (seen.has(record.id)) continue;
+      seen.add(record.id);
+      ordered.push({ record, depth });
+      walk(record.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return ordered;
+}
+
+export function ListView({ data, records, properties, config, onOpen, caption }: LayoutProps) {
+  const parent = data.collection.properties.find(
+    (property) => property.id === config.parentProperty && property.type === "relation",
+  );
+  const rows = nestedRecords(records, parent?.id);
   return (
     <ul aria-label={caption} className="divide-y divide-border rounded-tile border border-border bg-surface">
-      {records.slice(0, 500).map((record) => (
-        <li key={record.id} className="grid gap-2 p-3 sm:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
+      {rows.slice(0, 500).map(({ record, depth }) => (
+        <li
+          key={record.id}
+          className="grid gap-2 p-3 sm:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]"
+          style={depth === 0 ? undefined : { paddingLeft: `${0.75 + Math.min(depth, 10) * 1.25}rem` }}
+          data-depth={depth}
+        >
           <button
             type="button"
             className="truncate text-left font-medium text-fg hover:underline"
             onClick={() => onOpen(record)}
           >
+            {depth === 0 ? null : <span className="sr-only">Beneath the record above, level {depth + 1}: </span>}
             {titleOf(data, record)}
           </button>
-          <Facts data={data} record={record} properties={properties} />
+          <Facts data={data} record={record} properties={properties.filter((property) => property.id !== parent?.id)} />
         </li>
       ))}
       {records.length > 500 ? (
@@ -131,7 +187,7 @@ export function BoardView({ data, records, properties, config, onConfig, editing
       .catch((failure: unknown) => setError(failure instanceof Error ? failure.message : "The record was not moved."));
   };
   return (
-    <div className="grid gap-2">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
       <div className="flex items-center gap-2 text-sm">
         Columns by
         <Select
@@ -248,10 +304,12 @@ function spanOf(
   if (isDateRange(value)) {
     first = dayOf(value.start) ?? dayOf(value.end);
     last = dayOf(value.end) ?? first;
-  } else if (typeof value === "string") {
-    first = dayOf(value);
+  } else {
     const until = end === undefined ? null : record.values[end.id];
-    last = typeof until === "string" ? (dayOf(until) ?? first) : first;
+    const finish = typeof until === "string" ? dayOf(until) : null;
+    // A record that has an end and no start is placed on its end, as a task with a due date alone.
+    first = typeof value === "string" ? dayOf(value) : finish;
+    last = finish ?? first;
   }
   if (first === null || last === null) return null;
   return last < first ? [first, first] : [first, last];
@@ -448,11 +506,21 @@ export function CalendarView({ data, records, config, onConfig, onOpen, caption 
 }
 
 const DAY_WIDTH = 12;
+/** The height of a row of the timeline and of its header, and the width of its labels, in pixels. */
+const ROW_HEIGHT = 36;
+const HEADER_HEIGHT = 32;
+const LABEL_WIDTH = 224;
 
 export function TimelineView({ data, records, config, onConfig, onOpen, caption }: LayoutProps) {
   const candidates = dateProperties(data.collection.properties);
   const start = candidates.find((candidate) => candidate.id === config.dateProperty) ?? candidates[0];
   const end = candidates.find((candidate) => candidate.id === config.endDateProperty);
+  const dependency = data.collection.properties.find(
+    (property) => property.id === config.dependencyProperty && property.type === "relation",
+  );
+  const milestone = data.collection.properties.find(
+    (property) => property.id === config.milestoneProperty && property.type === "checkbox",
+  );
   const bars = useMemo(() => {
     if (start === undefined) return [];
     return records
@@ -473,6 +541,26 @@ export function TimelineView({ data, records, config, onConfig, onOpen, caption 
   const until = [addDays(today, 14), ...bars.map((bar) => bar.span[1])].sort().at(-1) ?? today;
   const days = Math.min(730, Math.round((Date.parse(until) - Date.parse(from)) / 86_400_000) + 1);
   const offset = (day: string) => Math.round((Date.parse(day) - Date.parse(from)) / 86_400_000);
+  const row = new Map(bars.map((bar, index) => [bar.record.id, index]));
+  const titles = new Map(bars.map((bar) => [bar.record.id, titleOf(data, bar.record)]));
+  // Each dependency on a record that the timeline also shows is drawn as a line from the end of
+  // that record's bar to the start of the bar that depends on it.
+  const lines =
+    dependency === undefined
+      ? []
+      : bars.flatMap((bar, index) =>
+          relatedIds(bar.record.values[dependency.id]).flatMap((id) => {
+            const at = row.get(id);
+            const before = at === undefined ? undefined : bars[at];
+            if (at === undefined || before === undefined) return [];
+            const x1 = LABEL_WIDTH + (offset(before.span[1]) + 1) * DAY_WIDTH;
+            const x2 = LABEL_WIDTH + offset(bar.span[0]) * DAY_WIDTH;
+            const y1 = HEADER_HEIGHT + at * ROW_HEIGHT + ROW_HEIGHT / 2;
+            const y2 = HEADER_HEIGHT + index * ROW_HEIGHT + ROW_HEIGHT / 2;
+            const bend = Math.max(x1, x2 - 6) + 4;
+            return [{ key: `${id}>${bar.record.id}`, d: `M${x1} ${y1} H${bend} V${y2} H${x2}` }];
+          }),
+        );
   const months: { key: string; left: number; label: string }[] = [];
   for (
     let day = `${from.slice(0, 7)}-01`;
@@ -486,7 +574,7 @@ export function TimelineView({ data, records, config, onConfig, onOpen, caption 
     });
   }
   return (
-    <div className="grid gap-2">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
       <DateSettings data={data} config={config} onConfig={onConfig} withEnd />
       {bars.length === 0 ? (
         <EmptyState
@@ -495,7 +583,7 @@ export function TimelineView({ data, records, config, onConfig, onOpen, caption 
         />
       ) : (
         <div className="overflow-x-auto rounded-tile border border-border bg-surface">
-          <div className="relative" style={{ width: 224 + days * DAY_WIDTH }}>
+          <div className="relative" style={{ width: LABEL_WIDTH + days * DAY_WIDTH }}>
             <div className="sticky top-0 flex h-8 border-b border-border bg-surface-muted text-xs" aria-hidden="true">
               <div className="w-56 shrink-0 border-r border-border" />
               <div className="relative flex-1">
@@ -522,24 +610,65 @@ export function TimelineView({ data, records, config, onConfig, onOpen, caption 
                     {titleOf(data, record)}
                   </button>
                   <div className="relative h-full flex-1">
-                    <span
-                      className="absolute top-2 h-5 rounded-control border border-accent-strong bg-surface-accent"
-                      style={{
-                        left: offset(span[0]) * DAY_WIDTH,
-                        width: Math.max(1, offset(span[1]) - offset(span[0]) + 1) * DAY_WIDTH,
-                      }}
-                      title={`${formatDate(span[0], data.context)} to ${formatDate(span[1], data.context)}`}
-                    >
-                      <span className="sr-only">
-                        {span[0] === span[1]
-                          ? `On ${formatDate(span[0], data.context)}`
-                          : `From ${formatDate(span[0], data.context)} to ${formatDate(span[1], data.context)}`}
+                    {milestone !== undefined && record.values[milestone.id] === true ? (
+                      <span
+                        className="absolute top-2.5 size-4 rotate-45 border border-accent-strong bg-accent"
+                        style={{ left: offset(span[1]) * DAY_WIDTH + DAY_WIDTH / 2 - 8 }}
+                        title={`Milestone on ${formatDate(span[1], data.context)}`}
+                        data-milestone="true"
+                      >
+                        <span className="sr-only">Milestone on {formatDate(span[1], data.context)}</span>
                       </span>
-                    </span>
+                    ) : (
+                      <span
+                        className="absolute top-2 h-5 rounded-control border border-accent-strong bg-surface-accent"
+                        style={{
+                          left: offset(span[0]) * DAY_WIDTH,
+                          width: Math.max(1, offset(span[1]) - offset(span[0]) + 1) * DAY_WIDTH,
+                        }}
+                        title={`${formatDate(span[0], data.context)} to ${formatDate(span[1], data.context)}`}
+                      >
+                        <span className="sr-only">
+                          {span[0] === span[1]
+                            ? `On ${formatDate(span[0], data.context)}`
+                            : `From ${formatDate(span[0], data.context)} to ${formatDate(span[1], data.context)}`}
+                        </span>
+                      </span>
+                    )}
+                    {dependency === undefined ? null : (
+                      <span className="sr-only">
+                        {relatedIds(record.values[dependency.id])
+                          .flatMap((id) => {
+                            const title = titles.get(id);
+                            return title === undefined ? [] : [`Depends on ${title}.`];
+                          })
+                          .join(" ")}
+                      </span>
+                    )}
                   </div>
                 </li>
               ))}
             </ul>
+            {lines.length === 0 ? null : (
+              <svg
+                aria-hidden="true"
+                className="pointer-events-none absolute top-0 left-0 text-fg-accent"
+                width={LABEL_WIDTH + days * DAY_WIDTH}
+                height={HEADER_HEIGHT + bars.length * ROW_HEIGHT}
+                data-testid="timeline-dependencies"
+              >
+                {lines.map((line) => (
+                  <path
+                    key={line.key}
+                    d={line.d}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1"
+                    data-dependency={line.key}
+                  />
+                ))}
+              </svg>
+            )}
           </div>
         </div>
       )}

@@ -2,7 +2,9 @@
 // @ts-check
 // A process tree for the tests of process-group.mjs: this process and one child that it starts.
 // Both write nothing and wait. The identifiers of both, and the port the child listens on, are
-// written to the file named by the first argument.
+// written to the file named by the first argument. The child greets every connection with
+// `process-tree <pid>`, so a test can tell its socket from one that another process opened later
+// on the same port, which the system may hand out again as soon as the child has gone.
 //
 //   STUBBORN=1       both processes ignore the interrupt and the termination signal
 //   STRAY=1          the child is started in a process group of its own, as the Firebase
@@ -20,7 +22,7 @@ if (process.env.STUBBORN === "1") {
 }
 
 if (role === "child") {
-  const server = createServer();
+  const server = createServer((socket) => socket.end(`process-tree ${process.pid}\n`));
   server.listen(0, "127.0.0.1", () => {
     const address = server.address();
     process.send?.({ port: typeof address === "object" && address ? address.port : 0 });

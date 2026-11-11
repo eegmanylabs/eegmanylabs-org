@@ -10,10 +10,12 @@ import { entityTypeSchema } from "./entities";
 import { hasValidOrcidCheckDigit } from "./identifiers";
 import { nameFold } from "./ids";
 import { ORDER_KEY_MAX_LENGTH } from "./order";
+import { forecastAssumptionsSchema } from "./recruitment-forecast";
 import {
   countryCodeSchema,
   idListSchema,
   idSchema,
+  isoDateSchema,
   keySchema,
   LIMITS,
   mapKeySchema,
@@ -34,11 +36,31 @@ import {
 import { participationStatusSchema } from "./schemas/participation";
 import { laboratoryMemberRoleSchema, laboratoryMemberStatusSchema } from "./schemas/programme";
 import { reconciliationStatusSchema } from "./schemas/provenance";
-import { replicationMembershipRoleSchema, reviewStatusSchema, studyKeySchema } from "./schemas/replications";
+import { reportEntryKindSchema, reportKindSchema } from "./schemas/recruitment";
+import {
+  recruitmentBasisSchema,
+  recruitmentModalitySchema,
+  replicationMembershipRoleSchema,
+  reviewStatusSchema,
+  studyKeySchema,
+} from "./schemas/replications";
 import { auditActionSchema, auditActorKindSchema } from "./schemas/system";
 import {
+  recurrenceRuleSchema,
+  reminderChannelSchema,
+  reminderEntityTypeSchema,
+  taskDependencyKindSchema,
+  taskKindSchema,
+  taskListKindSchema,
+  taskParticipantRoleSchema,
+  taskPrioritySchema,
+  taskScopeTypeSchema,
+} from "./schemas/tasks";
+import {
+  PROGRESS_UPDATE_MAX_LENGTH,
   pageAccessModeSchema,
   pageLevelSchema,
+  progressUpdateEntityTypeSchema,
   propertyAudienceSchema,
   propertyTypeSchema,
   viewTypeSchema,
@@ -946,12 +968,14 @@ export const createPageContract = {
     title: pageTitleSchema,
     icon: pageIconSchema.optional(),
     templatePageId: idSchema.optional(),
+    /** A meeting page, which the interface starts with the sections of a meeting. */
+    kind: z.enum(["custom", "meeting"]).optional(),
   }),
   output: z.strictObject({ pageId: idSchema }),
 } as const satisfies CallableContract;
 
-/** The records that have a body page with notes. */
-export const ENTITY_PAGE_TYPES = ["replication", "laboratory", "person"] as const;
+/** The records that have a body page: notes on a replication, a laboratory or a member, and the description of a task. */
+export const ENTITY_PAGE_TYPES = ["replication", "laboratory", "person", "task"] as const;
 export const entityPageTypeSchema = z.enum(ENTITY_PAGE_TYPES);
 export type EntityPageType = z.output<typeof entityPageTypeSchema>;
 
@@ -1184,6 +1208,324 @@ export const saveDashboardContract = {
     archived: z.boolean().optional(),
   }),
   output: z.strictObject({ dashboardId: idSchema }),
+} as const satisfies CallableContract;
+
+// ===== Tasks =====
+
+/** One participant who has no account yet, by person. */
+const unclaimedParticipantInputSchema = z.strictObject({
+  personId: idSchema,
+  role: taskParticipantRoleSchema,
+});
+
+/** A record that a task links to. A dataset link stores its identifier until the registry of datasets exists. */
+const taskLinkInputSchema = z.strictObject({ entityType: entityTypeSchema, entityId: idSchema });
+
+const checklistInputSchema = z.record(
+  mapKeySchema,
+  z.strictObject({ label: z.string().trim().min(1).max(LIMITS.shortText), done: z.boolean(), order: orderKeySchema }),
+);
+
+/**
+ * The fields of a task that a change may set. A field that is absent stays as it is, and null
+ * clears a field that may be empty. The lists and the maps are replaced whole.
+ */
+export const taskPatchSchema = z.strictObject({
+  title: z.string().trim().min(1).max(LIMITS.shortText).optional(),
+  kind: taskKindSchema.optional(),
+  priority: taskPrioritySchema.optional(),
+  startAt: instantSchema.nullable().optional(),
+  dueAt: instantSchema.nullable().optional(),
+  estimateMinutes: z.number().int().min(0).max(1_000_000).nullable().optional(),
+  progressPercent: z.number().int().min(0).max(100).nullable().optional(),
+  recurrenceRule: recurrenceRuleSchema.nullable().optional(),
+  assigneeUids: z.array(uidSchema).max(50).optional(),
+  collaboratorUids: z.array(uidSchema).max(50).optional(),
+  followerUids: z.array(uidSchema).max(100).optional(),
+  unclaimedParticipants: z.array(unclaimedParticipantInputSchema).max(100).optional(),
+  dependsOn: z.record(mapKeySchema, taskDependencyKindSchema).optional(),
+  links: z.array(taskLinkInputSchema).max(100).optional(),
+  checklist: checklistInputSchema.optional(),
+  tagIds: z.array(idSchema).max(50).optional(),
+  archived: z.boolean().optional(),
+});
+export type TaskPatch = z.output<typeof taskPatchSchema>;
+
+/** The most tasks one call changes, and the most a list made from a template copies. */
+export const TASK_BATCH_MAX = 100;
+export const TASK_TEMPLATE_MAX = 400;
+
+/**
+ * Creates a task list: a personal list of the caller, or a project or template list of the
+ * programme, a replication, a laboratory or a group for the holders of `tasks.manage` there.
+ * A list made from a template copies the template's tasks, with their tree, their order, their
+ * checklists reopened and their dependencies, and names the template in `templateSourceId`.
+ */
+export const createTaskListContract = {
+  name: "createTaskList",
+  input: z.strictObject({
+    name: z.string().trim().min(1).max(LIMITS.shortText),
+    kind: taskListKindSchema,
+    scopeType: taskScopeTypeSchema,
+    /** The replication, the laboratory or the group; the programme key; the caller's uid for a personal list. */
+    scopeId: idSchema,
+    templateListId: idSchema.optional(),
+  }),
+  output: z.strictObject({ listId: idSchema, copiedTasks: z.number().int().min(0) }),
+} as const satisfies CallableContract;
+
+/** Renames a task list, or archives or restores it, for those who manage it. */
+export const updateTaskListContract = {
+  name: "updateTaskList",
+  input: z.strictObject({
+    listId: idSchema,
+    name: z.string().trim().min(1).max(LIMITS.shortText).optional(),
+    archived: z.boolean().optional(),
+  }),
+  output: z.strictObject({}),
+} as const satisfies CallableContract;
+
+/**
+ * Creates a task in a list, at the top of the list or beneath a task of it, at the end of its
+ * siblings or at `index` among them, for those who manage the list. Its first status is the
+ * default status of tasks, with its first history entry. The assignees are notified.
+ */
+export const createTaskContract = {
+  name: "createTask",
+  input: z.strictObject({
+    listId: idSchema,
+    parentId: idSchema.nullable(),
+    index: z.number().int().min(0).optional(),
+    fields: taskPatchSchema.extend({ title: z.string().trim().min(1).max(LIMITS.shortText) }),
+  }),
+  output: z.strictObject({ taskId: idSchema }),
+} as const satisfies CallableContract;
+
+/**
+ * Changes tasks: one, or many at once for a bulk edit, in one transaction with an audit entry
+ * for each. The managers of a list change every field. An assignee or a collaborator changes the
+ * progress, the estimate and the checklist, and anyone who reads a task follows it or stops
+ * following it. A dependency that would close a cycle is refused, and so is a link to a record
+ * that does not exist, apart from a dataset, whose registry does not exist yet.
+ */
+export const updateTasksContract = {
+  name: "updateTasks",
+  input: z.strictObject({
+    changes: z
+      .array(z.strictObject({ taskId: idSchema, patch: taskPatchSchema }))
+      .min(1)
+      .max(TASK_BATCH_MAX),
+  }),
+  output: z.strictObject({ taskIds: z.array(idSchema).max(TASK_BATCH_MAX) }),
+} as const satisfies CallableContract;
+
+/**
+ * Moves a task, with every task beneath it, beneath another task or to the top of a list, which
+ * may be another list, at `index` among its new siblings. The ancestors, the owner and the scope
+ * fields of every task of the subtree are rewritten in one transaction. A move beneath the task
+ * itself or one of its descendants is refused. The caller manages the list the task leaves and
+ * the list it joins.
+ */
+export const moveTaskContract = {
+  name: "moveTask",
+  input: z.strictObject({
+    taskId: idSchema,
+    listId: idSchema,
+    parentId: idSchema.nullable(),
+    index: z.number().int().min(0),
+  }),
+  output: z.strictObject({ movedTasks: z.number().int().min(1) }),
+} as const satisfies CallableContract;
+
+/**
+ * Changes the status of tasks, each from the status the caller saw, with a dated history entry
+ * for each, for the managers of their lists and their assignees and collaborators. A finished
+ * status sets `completedAt` and any other clears it. The assignees and the followers are told,
+ * apart from the caller.
+ */
+export const setTaskStatusContract = {
+  name: "setTaskStatus",
+  input: z.strictObject({
+    tasks: z
+      .array(z.strictObject({ taskId: idSchema, fromStatusKey: keySchema }))
+      .min(1)
+      .max(TASK_BATCH_MAX),
+    toStatusKey: keySchema,
+    reason: reasonSchema.optional(),
+  }),
+  output: z.strictObject({ statusHistoryIds: z.array(idSchema).max(TASK_BATCH_MAX) }),
+} as const satisfies CallableContract;
+
+/**
+ * Sets a reminder of the caller about a task they read, delivered among their notifications at
+ * its time. The time lies between an hour ago and two years ahead, and a user holds at most
+ * `REMINDERS_PER_USER_MAX` reminders that are not sent yet.
+ */
+export const setReminderContract = {
+  name: "setReminder",
+  input: z.strictObject({
+    entityType: reminderEntityTypeSchema,
+    entityId: idSchema,
+    remindAt: instantSchema,
+    channel: reminderChannelSchema,
+  }),
+  output: z.strictObject({ reminderId: idSchema }),
+} as const satisfies CallableContract;
+
+/** The most members one progress update mentions. */
+export const PROGRESS_UPDATE_MENTIONS_MAX = 10;
+
+/**
+ * Posts a progress update to the feed of a replication, a laboratory or a member: by its team,
+ * by its members, or by the member and those who manage people. The update is dated and never
+ * changes. Those who follow the record and the members it mentions are told.
+ */
+export const postProgressUpdateContract = {
+  name: "postProgressUpdate",
+  input: z.strictObject({
+    entityType: progressUpdateEntityTypeSchema,
+    entityId: idSchema,
+    body: z.string().trim().min(1).max(PROGRESS_UPDATE_MAX_LENGTH),
+    mentionUids: z.array(uidSchema).max(PROGRESS_UPDATE_MENTIONS_MAX),
+    pinned: z.boolean(),
+  }),
+  output: z.strictObject({ updateId: idSchema }),
+} as const satisfies CallableContract;
+
+// ===== Recruitment =====
+
+/** The most reports one call files: one for each row that changed in a table of participations. */
+export const RECRUITMENT_BATCH_MAX = 100;
+
+/** The most categories one report states for one modality. */
+export const REPORT_CATEGORIES_MAX = 50;
+
+/** A count as a person enters it: a whole number from zero. */
+const countInputSchema = z.number().int().min(0).max(1_000_000);
+
+/** Counts by modality and category. A key that is left out is unknown and stays so. */
+export const reportCountsInputSchema = z.partialRecord(
+  recruitmentModalitySchema,
+  z.record(keySchema, countInputSchema).refine((counts) => Object.keys(counts).length <= REPORT_CATEGORIES_MAX, {
+    error: `A report states at most ${REPORT_CATEGORIES_MAX} categories for one modality`,
+  }),
+);
+
+/** One exclusion: how many participants of one modality were excluded, for a reason of the vocabulary. */
+export const reportExclusionInputSchema = z.strictObject({
+  modality: recruitmentModalitySchema,
+  reasonTermId: idSchema,
+  count: z.number().int().min(1).max(1_000_000),
+});
+
+/**
+ * One report as a person files it. The function adds the scope, the author, the time, the
+ * source and the origin, and checks every category and reason against the lookup data.
+ */
+export const recruitmentReportInputSchema = z
+  .strictObject({
+    participationId: idSchema,
+    /** The date for which the counts hold. A period report holds for the last day of its period. */
+    asOfDate: isoDateSchema,
+    reportKind: reportKindSchema,
+    periodStart: isoDateSchema.optional(),
+    periodEnd: isoDateSchema.optional(),
+    basis: recruitmentBasisSchema,
+    entryKind: reportEntryKindSchema,
+    /** The report a correction or a void replaces. */
+    correctsReportId: idSchema.optional(),
+    /** The lab-reported report a new central verification checks. */
+    verifiesReportId: idSchema.optional(),
+    counts: reportCountsInputSchema,
+    exclusions: z.array(reportExclusionInputSchema).max(50),
+    note: reasonSchema.optional(),
+  })
+  .refine((report) => (report.entryKind === "new") === (report.correctsReportId === undefined), {
+    error: "A correction and a void name the report they replace, and a new report names none",
+    path: ["correctsReportId"],
+  })
+  .refine((report) => report.entryKind === "new" || report.note !== undefined, {
+    error: "A correction and a void say why in their note",
+    path: ["note"],
+  })
+  .refine(
+    (report) =>
+      report.entryKind === "void"
+        ? Object.keys(report.counts).length === 0 && report.exclusions.length === 0
+        : Object.values(report.counts).some((counts) => Object.keys(counts).length > 0),
+    { error: "A void carries no counts, and every other report states at least one count", path: ["counts"] },
+  )
+  .refine((report) => report.basis === "centrallyVerified" || report.verifiesReportId === undefined, {
+    error: "Only a central verification names a report it verifies",
+    path: ["verifiesReportId"],
+  })
+  .refine(
+    (report) =>
+      report.basis !== "centrallyVerified" || report.entryKind !== "new" || report.verifiesReportId !== undefined,
+    { error: "A new central verification names the report it verifies", path: ["verifiesReportId"] },
+  )
+  .refine(
+    (report) =>
+      report.reportKind === "period"
+        ? report.periodStart !== undefined &&
+          report.periodEnd !== undefined &&
+          report.periodStart <= report.periodEnd &&
+          report.asOfDate === report.periodEnd
+        : report.periodStart === undefined && report.periodEnd === undefined,
+    {
+      error:
+        "A period report states its start and its end, and holds for its last day; a cumulative report states no period",
+      path: ["periodStart"],
+    },
+  );
+export type RecruitmentReportInput = z.output<typeof recruitmentReportInputSchema>;
+
+/**
+ * Files recruitment reports, one for each participation that changed, in one transaction with
+ * an audit entry for each and the recruitment summary of each replication recomputed. A
+ * lab-reported report is filed by whoever holds `recruitment.report` for its laboratory or its
+ * replication, and a central verification, or its correction, by the holders of
+ * `recruitment.verify`. A correction or a void names a report of the same participation and
+ * basis that nothing has replaced yet. A report is never changed afterwards.
+ */
+export const fileRecruitmentReportsContract = {
+  name: "fileRecruitmentReports",
+  input: z.strictObject({
+    reports: z.array(recruitmentReportInputSchema).min(1).max(RECRUITMENT_BATCH_MAX),
+  }),
+  output: z.strictObject({ reportIds: z.array(idSchema).max(RECRUITMENT_BATCH_MAX) }),
+} as const satisfies CallableContract;
+
+/**
+ * Creates or changes a category of participant counts. A global category is for the holders of
+ * `lookups.manage`; a category that extends one replication is also for the holders of
+ * `replications.manage` there. A key names one category for good: it is never reused by another
+ * replication, and a seeded core category is never archived.
+ */
+export const saveCountCategoryContract = {
+  name: "saveCountCategory",
+  input: z.strictObject({
+    key: keySchema,
+    /** Whether the call creates the category, which must then not exist yet. */
+    create: z.boolean(),
+    label: z.string().trim().min(1).max(LIMITS.shortText),
+    definition: z.string().trim().min(1).max(2_000),
+    /** The replication the category extends, or null for a global category. Never changes. */
+    replicationId: idSchema.nullable(),
+    archived: z.boolean(),
+  }),
+  output: z.strictObject({ key: keySchema }),
+} as const satisfies CallableContract;
+
+/**
+ * Runs the recruitment forecast of a replication under stated assumptions and stores the run,
+ * which never changes afterwards and whose figures are all projected. For the holders of
+ * `replications.manage` for the replication: its leads, the core team and administrators.
+ */
+export const generateForecastContract = {
+  name: "generateForecast",
+  input: z.strictObject({ replicationId: idSchema, assumptions: forecastAssumptionsSchema }),
+  output: z.strictObject({ forecastRunId: idSchema }),
 } as const satisfies CallableContract;
 
 /**

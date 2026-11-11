@@ -32,6 +32,8 @@ import type { CallerProfile } from "./world";
 export interface Known {
   /** The account that owns the record: the tier SELF and the writer `self`. */
   readonly ownerUid?: string;
+  /** The accounts that a participant array of the record names, who read it as the tier SELF: the assignees of a task. */
+  readonly participantUids?: readonly string[];
   readonly replicationId?: string | null;
   readonly laboratoryId?: string | null;
   /** Scope keys that the record is known to carry. */
@@ -109,7 +111,10 @@ function satisfiesTier(entry: CollectionEntry, tier: AccessTier, caller: CallerP
       return false;
     case "SELF":
       // The owner reads before the account is a member, which is what the claim flow needs.
-      return known.ownerUid !== undefined && known.ownerUid === caller.uid;
+      return (
+        (known.ownerUid !== undefined && known.ownerUid === caller.uid) ||
+        (caller.uid !== null && (known.participantUids ?? []).includes(caller.uid))
+      );
     case "MEMBER":
       // Beside the tier SCOPED or SELF, MEMBER covers only the records that are open to every
       // member: a shared view, a dashboard that is not a user's own.

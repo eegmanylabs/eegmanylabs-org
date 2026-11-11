@@ -6,23 +6,36 @@ import {
   type Bucket,
   computeView,
   type DashboardWidget,
+  FIGURE_BASIS_LABELS,
   groupedAggregate,
+  laboratoryScopeKey,
   type Measure,
+  replicationScopeKey,
   type ViewConfig,
   type ViewScope,
 } from "@eegml/shared";
 import { useMemo, useState } from "react";
 import { LiveView } from "@/components/feedback/live-view";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { type RecordOf, retryFailedLiveData, useLiveQuery } from "@/data";
+import { type LiveQuery, type RecordOf, retryFailedLiveData, useLiveQuery } from "@/data";
+import { activityVerb, changedFieldsText } from "@/registry/activity-text";
 import type { Viewer } from "@/registry/viewer";
-import { originNote } from "./origins";
+import { basesOf, originNote, statedCount } from "./origins";
 import { useViewData, type ViewData } from "./use-view-data";
 import { settingsOf, type ViewSettings, ViewSurface } from "./ViewSurface";
+
+/** The unit whose dashboard holds a widget. */
+export interface DashboardScope {
+  readonly scopeType: "programme" | "replication" | "laboratory" | "group" | "user";
+  readonly scopeId: string;
+}
 
 export interface WidgetProps {
   readonly widget: DashboardWidget;
   readonly viewer: Viewer;
+  /** The unit of the dashboard, or null for a widget shown outside one. */
+  readonly scope: DashboardScope | null;
   readonly secondFactor: boolean;
   /** Keeps a change to the view of a widget, where the viewer may change the dashboard. */
   readonly onChange: ((widget: DashboardWidget) => void) | null;
@@ -92,14 +105,30 @@ function KpiFigure(props: {
           data.collection.properties.find((property) => property.id === measured)?.config.numberFormat === "percent";
         const unit = percent ? "%" : "";
         const origin = originNote(result.records);
+        const total = result.records.length;
+        const stated = measured === null ? total : statedCount(result.records, measured);
+        const bases = measured === null ? [] : basesOf(result.records, measured);
         return (
           <p className="text-3xl text-fg" data-testid="kpi-value">
             {formatFigure(value)}
             {value === null ? "" : unit}
+            {bases.length === 0 ? null : (
+              <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
+                {bases.map((basis) => (
+                  <Badge key={basis} tone="outline" data-basis={basis}>
+                    {FIGURE_BASIS_LABELS[basis]}
+                  </Badge>
+                ))}
+              </span>
+            )}
             <span className="block text-xs text-fg-muted">
-              {MEASURE_LABELS[props.measure.kind]} over {result.records.length}{" "}
-              {result.records.length === 1 ? "record" : "records"}
+              {MEASURE_LABELS[props.measure.kind]} over {total} {total === 1 ? "record" : "records"}
             </span>
+            {stated < total ? (
+              <span className="block text-xs text-fg-secondary" data-testid="kpi-incomplete">
+                Incomplete: {stated} of {total} stated
+              </span>
+            ) : null}
             {origin === null ? null : (
               <span className="block text-xs text-fg-secondary" data-testid="origin-note">
                 {origin}
@@ -246,22 +275,53 @@ function ViewWidget({ widget, viewer, secondFactor, onChange }: WidgetProps) {
   );
 }
 
-/** What an activity entry says, in words. */
-const ACTION_LABELS: Readonly<Record<string, string>> = { "page.edited": "edited" };
+/**
+ * The activity a dashboard shows: of its replication or laboratory alone, by the scope key of
+ * that unit, and of everything the viewer reads on the dashboards of the programme, a group or
+ * a user. A viewer who holds no key of the unit sees none of its activity, so the query is not
+ * made at all. Null stands for that.
+ */
+export function activityQuery(viewer: Viewer, scope: DashboardScope | null): LiveQuery<"activity"> | null {
+  const newest: LiveQuery<"activity"> = {
+    collection: "activity",
+    within: [],
+    orderBy: [["createdAt", "desc"]],
+    limit: 20,
+  };
+  const unitKey =
+    scope?.scopeType === "replication"
+      ? replicationScopeKey(scope.scopeId)
+      : scope?.scopeType === "laboratory"
+        ? laboratoryScopeKey(scope.scopeId)
+        : null;
+  if (unitKey !== null) {
+    if (!viewer.staff && !viewer.queryScopeKeys.includes(unitKey)) return null;
+    return { ...newest, where: [["scopeKeys", "array-contains", unitKey]] };
+  }
+  return viewer.staff
+    ? newest
+    : { ...newest, where: [["scopeKeys", "array-contains-any", [...viewer.queryScopeKeys]]] };
+}
 
-function ActivityWidget({ widget, viewer }: WidgetProps) {
-  const limit = widget.type === "activity" ? widget.config.limit : 10;
-  const live = useLiveQuery<"activity">(
-    viewer.staff
-      ? { collection: "activity", within: [], orderBy: [["createdAt", "desc"]], limit: 20 }
-      : {
-          collection: "activity",
-          within: [],
-          where: [["scopeKeys", "array-contains-any", [...viewer.queryScopeKeys]]],
-          orderBy: [["createdAt", "desc"]],
-          limit: 20,
-        },
+function ActivityWidget({ widget, viewer, scope }: WidgetProps) {
+  const query = activityQuery(viewer, scope);
+  return query === null ? (
+    <p className="text-fg-muted">Your account reads none of the activity of this unit.</p>
+  ) : (
+    <ActivityList limit={widget.type === "activity" ? widget.config.limit : 10} query={query} viewer={viewer} />
   );
+}
+
+function ActivityList({
+  limit,
+  query,
+  viewer,
+}: {
+  readonly limit: number;
+  readonly query: LiveQuery<"activity">;
+  readonly viewer: Viewer;
+}) {
+  const live = useLiveQuery<"activity">(query);
   const people = useViewData("core:persons", viewer, false);
   // The titles of the pages the viewer reads. An entry of activity carries no title, so that the
   // title of a restricted page is never copied where its old audience could read it.
@@ -305,7 +365,11 @@ function ActivityWidget({ widget, viewer }: WidgetProps) {
               return (
                 <li key={entry.id} className="flex flex-wrap gap-x-1">
                   <span className="font-medium">{name}</span>
-                  <span>{ACTION_LABELS[entry.action] ?? entry.action}</span>
+                  <span>
+                    {entry.action === "task.updated" && entry.changedFields.length > 0
+                      ? `changed ${changedFieldsText(entry.changedFields)} of`
+                      : activityVerb(entry.action)}
+                  </span>
                   {entry.entityType === "page" ? (
                     pageTitle === undefined ? (
                       <span>a page you cannot open</span>

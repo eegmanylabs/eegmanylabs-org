@@ -5,14 +5,20 @@ import { systemWriteContext } from "../schemas/base";
 import type { FirestoreTimestamp } from "../timestamp";
 import {
   COUNT_CATEGORIES,
+  CREDIT_ROLE_TERM_KIND,
   CREDIT_ROLES,
   DATASET_WORKFLOW_STATUSES,
+  EXCLUSION_REASON_TERM_KIND,
+  EXCLUSION_REASONS,
+  type LookupSeedDocument,
   lookupSeedDocuments,
   ONBOARDING_CHECKLIST_TEMPLATE,
   PROGRAMME_SEED,
   REPLICATION_STATUSES,
   TASK_STATUSES,
 } from "./lookups";
+
+type Term = Extract<LookupSeedDocument, { readonly collection: "vocabularyTerms" }>;
 
 const now: FirestoreTimestamp = { seconds: 0, nanoseconds: 0, toDate: () => new Date(0), toMillis: () => 0 };
 const standard = {
@@ -167,7 +173,10 @@ describe("the contributor roles", () => {
   });
 
   it("are seeded as vocabulary terms that keep the key of each role", () => {
-    const terms = lookupSeedDocuments().filter((document) => document.collection === "vocabularyTerms");
+    const terms = lookupSeedDocuments().filter(
+      (document): document is Term =>
+        document.collection === "vocabularyTerms" && document.data.kind === CREDIT_ROLE_TERM_KIND,
+    );
     expect(terms.map((term) => term.id)).toEqual([
       "creditRole__conceptualization",
       "creditRole__datacuration",
@@ -188,11 +197,23 @@ describe("the contributor roles", () => {
   });
 });
 
+describe("the reasons for exclusion", () => {
+  it("are seeded as vocabulary terms of their own kind, each with a key and a sentence-case name", () => {
+    const terms = lookupSeedDocuments().filter(
+      (document): document is Term =>
+        document.collection === "vocabularyTerms" && document.data.kind === EXCLUSION_REASON_TERM_KIND,
+    );
+    expect(terms.map((term) => term.data.sourceId)).toEqual(keysOf(EXCLUSION_REASONS));
+    expect(terms.map((term) => term.id)).toContain("exclusionReason__incompletesession");
+    for (const reason of EXCLUSION_REASONS) expect(reason.name).toMatch(/^[A-Z][^A-Z]*(EEG[^A-Z]*)?$/);
+  });
+});
+
 describe("the documents of the lookup data", () => {
   const documents = lookupSeedDocuments();
 
-  it("are 54, each with a path of its own", () => {
-    expect(documents).toHaveLength(1 + 27 + 11 + 1 + 14);
+  it("are 61, each with a path of its own", () => {
+    expect(documents).toHaveLength(1 + 27 + 11 + 1 + 14 + 7);
     const paths = documents.map((document) => COLLECTIONS[document.collection].docPath(document.id));
     expect(new Set(paths).size).toBe(documents.length);
     expect(paths).toContain("programmes/eegmanylabs");

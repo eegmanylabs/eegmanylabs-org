@@ -135,17 +135,55 @@ export async function codeOf(promise: Promise<unknown>): Promise<string> {
   return "(no error)";
 }
 
-/** Waits until a probe gives a value, and fails with what was awaited when it never does. */
+/**
+ * How much the triggers have done: the number of audit entries, which the audit trigger writes
+ * for nearly every write. While it changes, the functions emulator is still working through
+ * the events it was given.
+ */
+async function triggerProgress(): Promise<number> {
+  return (await adminDb.collection("auditEvents").count().get()).data().count;
+}
+
+/** How long the triggers must have made no progress before a wait that is past its time gives up. */
+const QUIET_MS = 5_000;
+/** How long a wait lasts at most, however busy the emulator stays. */
+const WAIT_CAP_FACTOR = 6;
+
+/**
+ * Waits until a probe gives a value, and fails with what was awaited when it never does.
+ *
+ * The functions emulator runs every trigger for every write, and a burst of writes starts a
+ * runtime for each event that arrives while the others are busy, so on a loaded machine one
+ * event can wait for a long time behind events of other triggers. A fixed deadline would then
+ * fail a test whose trigger is merely queued. The deadline therefore scales with the emulator:
+ * past `timeoutMs`, the wait goes on while the triggers still make progress, and gives up once
+ * they have made none for a few seconds, or at six times `timeoutMs` whatever they do.
+ */
 export async function eventually<T>(
   probe: () => Promise<T | undefined | null | false>,
   what: string,
   timeoutMs = 30_000,
 ): Promise<T> {
-  const deadline = Date.now() + timeoutMs;
+  const started = Date.now();
+  let progress = await triggerProgress();
+  let progressedAt = started;
+  let checkedAt = started;
   for (;;) {
     const value = await probe();
     if (value !== undefined && value !== null && value !== false) return value;
-    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}.`);
+    const now = Date.now();
+    if (now - checkedAt >= 1_000) {
+      checkedAt = now;
+      const current = await triggerProgress();
+      if (current !== progress) {
+        progress = current;
+        progressedAt = now;
+      }
+    }
+    const pastDeadline = now - started > timeoutMs;
+    if ((pastDeadline && now - progressedAt > QUIET_MS) || now - started > timeoutMs * WAIT_CAP_FACTOR) {
+      throw new Error(`Timed out waiting for ${what} after ${Math.round((now - started) / 1000)} s.`);
+    }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
 }
@@ -175,6 +213,30 @@ export async function leaveNoTrace(): Promise<void> {
   await resetWorld();
   await pause(100);
   await setBackgroundTriggers(true);
+  await warmTriggers();
+}
+
+/**
+ * Waits until the triggers that were just switched on answer again: a sentinel write has been
+ * audited and the sentinel removed. The emulator loads its triggers anew when they are switched
+ * on, so without this the first events of the next file would pay for that load.
+ */
+async function warmTriggers(): Promise<void> {
+  sentinels += 1;
+  const sentinel = adminDb.doc(`countCategories/zz-warm-${process.pid}-${sentinels}`);
+  await sentinel.set({
+    ...standard(),
+    key: "zzWarm",
+    label: "Warm",
+    definition: "A sentinel.",
+    position: 999,
+    isCore: false,
+  });
+  await eventually(
+    async () => (await adminDb.collection("auditEvents").where("documentPath", "==", sentinel.path).get()).size > 0,
+    "the audit entry of the sentinel",
+  );
+  await sentinel.delete();
 }
 
 let sentinels = 0;

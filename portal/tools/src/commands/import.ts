@@ -24,7 +24,7 @@
 // Everything printed here is a count, an identifier or a path of a document. No name, address
 // or cell content is ever printed.
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { COLLECTIONS, isoDateSchema } from "@eegml/shared";
 import type { Firestore } from "firebase-admin/firestore";
@@ -349,6 +349,19 @@ async function fetchSource(given: Arguments): Promise<number | undefined> {
   return undefined;
 }
 
+/**
+ * Writes the report that an importer gives of its input beside the input, which lies where the
+ * operator keeps private exports, as `<input>.report.json` and `<input>.report.txt`. It holds
+ * keys, counts and object identifiers only.
+ */
+async function writeInputReport(importer: ImporterDefinition, input: ImportInput): Promise<void> {
+  const report = await importer.report?.(input);
+  if (report === undefined || report === null) return;
+  writeFileSync(`${input.path}.report.json`, `${JSON.stringify(report.data, null, 2)}\n`);
+  writeFileSync(`${input.path}.report.txt`, `${report.summary}\n`);
+  console.log(`The report of the input is ${input.path}.report.txt, with its data in ${input.path}.report.json.`);
+}
+
 async function run(given: Arguments): Promise<number | undefined> {
   const source = required(given.positional[1], "The source");
   const mode = required(given.values.get("--mode"), "--mode");
@@ -376,6 +389,7 @@ async function run(given: Arguments): Promise<number | undefined> {
       ...(previewBatchId === undefined ? {} : { previewBatchId }),
     });
     printReport(report, label);
+    await writeInputReport(importer, input);
     return report.blocking.length > 0 ? EXIT_BLOCKED : undefined;
   } catch (error) {
     if (!(error instanceof ImportStopped)) throw error;

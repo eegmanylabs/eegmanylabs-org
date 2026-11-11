@@ -346,4 +346,17 @@ export interface ImporterDefinition {
   read(input: ImportInput, context: ReadContext): Promise<SourceReading>;
   /** Interprets the rows and returns the plan. */
   plan(context: PlanContext): Promise<ImportPlan>;
+  /**
+   * A report of the input beside the run, for a source whose import cannot carry everything it
+   * holds: what was read, what has no place in the portal and what could not be recovered. The
+   * command line writes it beside the input, as data and as text, on every run. Null where the
+   * input is not one the importer can describe.
+   */
+  readonly report?: (input: ImportInput) => Promise<ImportReport | null>;
+}
+
+/** The report of an input: its data, written as JSON, and the same as readable text. */
+export interface ImportReport {
+  readonly data: unknown;
+  readonly summary: string;
 }

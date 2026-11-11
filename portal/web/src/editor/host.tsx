@@ -110,6 +110,7 @@ export default function PageEditorHost(props: PageEditorHostProps) {
     onFileError: props.onFileError,
     onReady: props.onReady,
     viewHost: props.viewHost,
+    ...(props.onActionItem === undefined ? {} : { onActionItem: props.onActionItem }),
   };
   return <Isolated component={PageEditor} props={editorProps} />;
 }

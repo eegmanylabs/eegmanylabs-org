@@ -19,6 +19,8 @@ import {
   personPageAudience,
   type ResolvedAccess,
   replicationPageAudience,
+  taskDocSchema,
+  taskPageAudience,
   workspacePageAudience,
 } from "@eegml/shared";
 import type { DocumentReference, Firestore, Transaction } from "firebase-admin/firestore";
@@ -101,6 +103,12 @@ export async function entityAudience(
       if (!snapshot.exists || !person.success) throw new AppError("not-found", "This member does not exist.");
       return { audience: personPageAudience(person.data.userId), title: `Notes on ${person.data.displayName}` };
     }
+    case "task": {
+      const snapshot = await transaction.get(db.doc(COLLECTIONS.tasks.docPath(entityId)));
+      const task = parseStoredDocument(taskDocSchema, snapshot.data());
+      if (!snapshot.exists || !task.success) throw new AppError("not-found", "This task does not exist.");
+      return { audience: taskPageAudience(task.data), title: `Description of ${task.data.title}`.slice(0, 300) };
+    }
   }
 }
 
@@ -115,7 +123,12 @@ export async function inheritedAudience(
   parent: PageDoc | null,
 ): Promise<PageAudience> {
   if (parent !== null) return audienceOf(parent);
-  if (page.entityType === "replication" || page.entityType === "laboratory" || page.entityType === "person") {
+  if (
+    page.entityType === "replication" ||
+    page.entityType === "laboratory" ||
+    page.entityType === "person" ||
+    page.entityType === "task"
+  ) {
     if (page.entityId === undefined) throw new Error("A body page names its record.");
     return (await entityAudience(db, transaction, page.entityType, page.entityId)).audience;
   }

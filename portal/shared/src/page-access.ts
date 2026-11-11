@@ -135,6 +135,31 @@ export function personPageAudience(userId: string | null): PageAudience {
   return audience({ replicationId: null, laboratoryId: null }, [MEMBERS_SCOPE_KEY], [MEMBERS_SCOPE_KEY], own, own);
 }
 
+/**
+ * The body page of a task, which holds its description, its files and its comments: read and
+ * commented on by everyone who reads the task, and edited by its assignees, its collaborators
+ * and the owner of a personal list. The holders of `pages.manage` for the replication or the
+ * laboratory of the task hold full access, as on any page that inherits.
+ */
+export function taskPageAudience(task: {
+  readonly replicationId: string | null;
+  readonly laboratoryId: string | null;
+  readonly scopeKeys: readonly string[];
+  readonly ownerUid: string | null;
+  readonly assigneeUids: readonly string[];
+  readonly collaboratorUids: readonly string[];
+  readonly followerUids: readonly string[];
+}): PageAudience {
+  const participants = [...task.assigneeUids, ...task.followerUids, ...task.collaboratorUids].map(userScopeKey);
+  const editors = [
+    ...task.assigneeUids,
+    ...task.collaboratorUids,
+    ...(task.ownerUid === null ? [] : [task.ownerUid]),
+  ].map(userScopeKey);
+  const readers = [...task.scopeKeys, ...participants];
+  return audience(task, readers, readers, editors, []);
+}
+
 /** A page at the top of the programme's workspace: every member edits it, and its creator holds full access. */
 export function workspacePageAudience(creatorUid: string): PageAudience {
   return audience(

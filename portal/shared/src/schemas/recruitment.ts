@@ -40,6 +40,8 @@ export type CountCategoryDoc = z.output<typeof countCategoryDocSchema>;
 export const reportKindSchema = z.enum(["cumulative", "period"]);
 export const reportEntryKindSchema = z.enum(["new", "correction", "void"]);
 export const reportSourceSchema = z.enum(["manual", "import", "sheetSync"]);
+export type ReportKind = z.output<typeof reportKindSchema>;
+export type ReportEntryKind = z.output<typeof reportEntryKindSchema>;
 
 export const recruitmentExclusionSchema = z.strictObject({
   modality: recruitmentModalitySchema,

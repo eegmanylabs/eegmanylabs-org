@@ -186,8 +186,10 @@ export function nextPlacement(layout: readonly Placement[], id: string, w: numbe
 
 /**
  * The widgets that the dashboard of the programme, a replication or a laboratory starts with:
- * figures and a chart of its participations, the participations themselves, and its activity.
- * The participations are the same documents on every dashboard (D-011), scoped to the record.
+ * figures and a chart of its participations, the participations themselves, its activity, and
+ * the effective recruitment of its participations, the main experiment, the resting state and
+ * unique participants each a figure of its own and never added together. The participations are
+ * the same documents on every dashboard (D-011), scoped to the record.
  */
 export function defaultDashboardWidgets(
   scopeType: "programme" | "replication" | "laboratory",
@@ -198,6 +200,15 @@ export function defaultDashboardWidgets(
       ? null
       : { property: scopeType === "replication" ? "replication" : "laboratory", value: scopeId };
   const participations = { collectionKey: "core:participations", scope } as const;
+  const recruitment = { collectionKey: "core:recruitment", scope } as const;
+  const recruited = (title: string, property: string, x: number) => ({
+    type: "kpi" as const,
+    config: { title, ...recruitment, config: {}, measure: { kind: "sum" as const, property } },
+    x,
+    y: 12,
+    w: 4,
+    h: 2,
+  });
   return {
     participationCount: {
       type: "kpi",
@@ -277,5 +288,8 @@ export function defaultDashboardWidgets(
       w: 12,
       h: 6,
     },
+    testedMain: recruited("Tested, main experiment", "main_tested", 0),
+    testedRest: recruited("Tested, resting state", "rest_tested", 4),
+    testedParticipants: recruited("Tested, unique participants", "participants_tested", 8),
   };
 }

@@ -10,6 +10,7 @@
 // | `personLinkedToSeveralUsers` | A person that more than one login names, or a person and a login that disagree about their link |
 // | `derivedValueDisagrees`      | A denormalised value that differs from its source: the leads of a replication, the units of a person, a status and its history, the scope of a checklist item |
 // | `equipmentChainCurrent`      | A chain of equipment configurations with more than one current member    |
+// | `dependencyCycle`            | Tasks whose dependencies close a cycle, which the functions refuse to create and an import may bring |
 import {
   COLLECTIONS,
   type CollectionEntry,
@@ -24,12 +25,15 @@ import {
   historicalAggregateId,
   type IdBuilderName,
   labClaimId,
+  lookupFold,
   participationId,
   replicationMembershipId,
   sequenceId,
   statusDefinitionId,
+  tagId,
 } from "./ids";
 import { memberEntryCounts, membershipCounts, sameUnits } from "./person-units";
+import { dependencyCycles } from "./task-tree";
 
 export const INTEGRITY_CHECKS = [
   "danglingReference",
@@ -37,6 +41,7 @@ export const INTEGRITY_CHECKS = [
   "personLinkedToSeveralUsers",
   "derivedValueDisagrees",
   "equipmentChainCurrent",
+  "dependencyCycle",
 ] as const;
 export type IntegrityCheck = (typeof INTEGRITY_CHECKS)[number];
 
@@ -54,6 +59,9 @@ export const INTEGRITY_COLLECTIONS = [
   "participations",
   "participationChecklist",
   "statusHistory",
+  "taskLists",
+  "tasks",
+  "tags",
 ] as const satisfies readonly CollectionKey[];
 export type IntegrityCollection = (typeof INTEGRITY_COLLECTIONS)[number];
 
@@ -102,6 +110,7 @@ const REBUILDABLE: Partial<Record<IdBuilderName, (...parts: string[]) => string>
   acknowledgementId,
   labClaimId,
   historicalAggregateId,
+  tagId,
   // A stored document gives its entity type as text, which must be one of the registry.
   statusDefinitionId: (entityType, key) => statusDefinitionId(entityTypeSchema.parse(entityType), key),
 };
@@ -386,6 +395,91 @@ function equipmentChains(snapshot: IntegritySnapshot): IntegrityFinding[] {
   return findings;
 }
 
+/**
+ * The structure of tasks: the list, the parent, the dependencies and the tags each names exist;
+ * the ancestors and the scope of a task agree with its parent and its list; no dependencies
+ * close a cycle; and the folded name of a tag is the fold of its name.
+ */
+function taskStructure(snapshot: IntegritySnapshot, paths: ReadonlySet<string>): IntegrityFinding[] {
+  const findings: IntegrityFinding[] = [];
+  const tasks = snapshot.get("tasks") ?? [];
+  const byId = new Map(tasks.map((task) => [lastSegment(task.path), task]));
+  const lists = new Map((snapshot.get("taskLists") ?? []).map((list) => [lastSegment(list.path), list]));
+  const dangling = (document: CheckedDocument, field: string, id: string, collection: string) =>
+    findings.push({
+      check: "danglingReference",
+      documentPath: document.path,
+      field,
+      detail: `${field} names ${id}, which does not exist in ${collection}.`,
+    });
+  for (const task of tasks) {
+    const listId = textOf(task.data.listId);
+    const list = listId === null ? undefined : lists.get(listId);
+    if (snapshot.has("taskLists") && listId !== null && list === undefined)
+      dangling(task, "listId", listId, "taskLists");
+    if (
+      list !== undefined &&
+      sorted(textsOf(list.data.scopeKeys)).join() !== sorted(textsOf(task.data.scopeKeys)).join()
+    ) {
+      findings.push({
+        check: "derivedValueDisagrees",
+        documentPath: task.path,
+        field: "scopeKeys",
+        detail: `The scope of the task differs from that of its list ${listId}.`,
+      });
+    }
+    const parentId = textOf(task.data.parentId);
+    const parent = parentId === null ? undefined : byId.get(parentId);
+    if (parentId !== null && parent === undefined) dangling(task, "parentId", parentId, "tasks");
+    const expected =
+      parent === undefined ? (parentId === null ? [] : null) : [...textsOf(parent.data.ancestorIds), parentId];
+    if (expected !== null && expected.join() !== textsOf(task.data.ancestorIds).join()) {
+      findings.push({
+        check: "derivedValueDisagrees",
+        documentPath: task.path,
+        field: "ancestorIds",
+        detail: "The ancestors of the task are not those of its parent followed by the parent.",
+      });
+    }
+    const dependsOn = task.data.dependsOn;
+    for (const id of typeof dependsOn === "object" && dependsOn !== null ? Object.keys(dependsOn) : []) {
+      if (!byId.has(id)) dangling(task, "dependsOn", id, "tasks");
+    }
+    if (snapshot.has("tags")) {
+      for (const id of textsOf(task.data.tagIds)) {
+        if (!paths.has(COLLECTIONS.tags.docPath(id))) dangling(task, "tagIds", id, "tags");
+      }
+    }
+  }
+  const nodes = tasks.map((task) => ({
+    id: lastSegment(task.path),
+    dependsOn:
+      typeof task.data.dependsOn === "object" && task.data.dependsOn !== null
+        ? (task.data.dependsOn as Readonly<Record<string, string>>)
+        : {},
+  }));
+  for (const cycle of dependencyCycles(nodes)) {
+    findings.push({
+      check: "dependencyCycle",
+      documentPath: COLLECTIONS.tasks.docPath(cycle[0] as string),
+      field: "dependsOn",
+      detail: `These tasks depend on each other in a cycle: ${cycle.join(", ")}.`,
+    });
+  }
+  for (const tag of snapshot.get("tags") ?? []) {
+    const name = textOf(tag.data.name);
+    if (name !== null && lookupFold(name) !== tag.data.nameFolded) {
+      findings.push({
+        check: "derivedValueDisagrees",
+        documentPath: tag.path,
+        field: "nameFolded",
+        detail: "The folded name of the tag is not the fold of its name.",
+      });
+    }
+  }
+  return findings;
+}
+
 /** Runs every check over a snapshot. A check whose collections are not in the snapshot finds nothing. */
 export function checkIntegrity(snapshot: IntegritySnapshot): IntegrityFinding[] {
   const paths = new Set([...snapshot.values()].flatMap((documents) => documents.map((document) => document.path)));
@@ -395,6 +489,7 @@ export function checkIntegrity(snapshot: IntegritySnapshot): IntegrityFinding[] 
     ...personLinks(snapshot),
     ...derivedValues(snapshot),
     ...equipmentChains(snapshot),
+    ...taskStructure(snapshot, paths),
   ];
 }
 

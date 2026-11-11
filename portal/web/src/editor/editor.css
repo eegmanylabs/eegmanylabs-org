@@ -227,3 +227,13 @@
   flex-wrap: wrap;
   height: auto;
 }
+
+/*
+ * BlockNote reverts the links of a page to the browser's own blue, outside any cascade layer, so
+ * the utilities of a component cannot override it. Links in a page, those of an action item
+ * among them, take the colour of every other link of the portal.
+ */
+.portal-editor .bn-editor a {
+  color: var(--fg-accent);
+  text-decoration: underline;
+}

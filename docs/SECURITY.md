@@ -157,6 +157,35 @@ The capability matrix restricts sensitive operations for the core team. Its defa
 
 Every allow statement has a test that grants it and a test that refuses it, and section 12 describes how that is checked. In the spike 45 of the 66 policy tests were denials, and every statement that allows something had at least one test in which an unauthorised caller was refused. The spike's rules covered persons, contact and demographics documents, laboratories, replications, participations, recruitment reports, access documents and the audit collection. The portal's rules cover the 82 entries of the first slice to that standard on the emulators, and the remainder of the model is written to it, phase by phase, before any real data is loaded (D-016). The spike also tested storage rules for uploads: an upload was accepted from its owner only, within a size limit, for permitted file types and as a file that cannot be overwritten, listed or deleted by a client. The portal has no upload rules yet. Its storage rules deny everything, and its tests prove the denial for every kind of caller.
 
+### Workspace, tasks and recruitment
+
+The rules for the workspace, tasks and recruitment were written in phases 3 to 5. Where an earlier paragraph of this document says that these collections, or uploads of files, are closed to every client, it describes the state before those phases. Each collection below has fixtures in the matrix of section 12 and allow and deny tests of its own in `portal/tests/rules/workspace-features.test.ts`, `views-features.test.ts`, `tasks-features.test.ts`, `recruitment-features.test.ts` and `storage.rules.test.ts`. Like the rest of the rules, they are tested on the emulators only.
+
+A page carries its resolved audience in two fields: the scope keys whose holders read it and, for each of the levels comment, edit and full, the keys that hold at least that level. Callable functions create, move and share pages and compute both fields, so a rule reads the page alone and never walks its parents. Programme administrators and the core team read every page, and those who manage the pages of a replication or laboratory hold every level on a page of that unit that inherits its audience. A restricted page keeps to its named principals. Threads, databases and the documents beneath a page copy its audience and are decided by the page as it stands now, so a copy that a trigger has not yet rewritten never opens anything to someone the page has shut out.
+
+| Collection | Read by | Written by |
+|---|---|---|
+| `pages` | Holders of one of its scope keys, programme administrators and the core team | Functions create, move and share a page. Its editors rename it, place it among its siblings, mark it as a template and archive it |
+| Editor updates, content chunks and versions of a page | Readers of the page | Editors append updates in their own name. No update or chunk is changed, an update is removed only by the compaction that merged it, and versions are written by a function |
+| Presence of a page | Readers of the page | Each open tab writes and removes its own document |
+| Files of a page in Cloud Storage | Readers of the page, with their own credentials on each read | Editors add a file within the size limit, of a type that a browser does not run as a document. No client replaces or removes a file |
+| `threads` and their comments | Readers of the page as it stands now | Holders of the level comment, in their own name. An author edits their comment while they may still comment on the page, and removes it at any time |
+| `databases` and their rows | Readers of the parent page | Functions create a database, define its properties and write its rows after checking each value. Editors of the parent page rename and archive a database |
+| `collectionSchemas` | Every member | A function, for holders of `lookups.manage`. Values of restricted custom properties sit in a `private/custom` document that is read within the record's scope |
+| `views` | Its owner until it is shared, then those who read what it shows | A function stores a view, and its owner deletes it |
+| `dashboards` | A user's own dashboard by that user, every other by every member | Functions |
+| `taskLists` | The owner of a personal list, holders of the list's scope, programme administrators and the core team | Functions alone |
+| `tasks` | As its list, and also its owner and its assignees, collaborators and followers, whatever its list | Functions alone, its status and its place in the tree included |
+| `tags` | Every member | A member creates a tag under the hash of its folded name, and those who manage lookups change its colour. Its name never changes |
+| `reminders` | Its owner alone | The function `setReminder` creates one about a task its owner reads, within a cap on unsent reminders. The owner moves it within set bounds before it is sent, and removes it |
+| `progressUpdates` | Every member | A function, which limits mentions and how often one author posts on a record |
+| `countCategories` | Every member | Those who manage lookups. Leads add extensions of their own replication through the function `saveCountCategory` |
+| `recruitmentReports` | The leads and team of the replication, the coordinators and members of the laboratory, programme administrators and the core team. A member of one laboratory never reads another laboratory's reports | No client. The function `fileRecruitmentReports` files each report after checking scope, categories, reasons and dates. A correction, a withdrawal and a central verification are new reports, and no report is changed or deleted |
+| `plannedPauses` | Within the scope of the participation | Those who manage the participation. A pause stays tied to its participation, and its dates must be in order |
+| `forecastRuns` | Every member | The function `generateForecast`, for the leads of the replication. A stored run holds figures of the whole replication and no figure of a single laboratory |
+
+Because every member reads progress updates, forecast runs, tags and count categories, none of them holds restricted values, and a unit test in `portal/shared/src/recruitment-forecast.test.ts` proves that a stored forecast keeps no figure of a single laboratory.
+
 ## 6. Audit, logging and retention
 
 The audit trail is written by trusted code (D-007). A callable function writes its audit entry in the same transaction as the change it makes. Every other write is captured by a Firestore trigger that records the path, the operation and a field-by-field difference with the configured sensitive fields omitted. Trigger delivery is at least once, unordered and may lag the write by seconds, so each entry uses the event identifier as its document identifier.[3] On the emulators three deliveries of one event produced one entry, the difference was correct and sensitive values were dropped.

@@ -751,3 +751,96 @@ export const DEMO_SOURCES: readonly DemoSource[] = [
 
 /** The instant of the demonstration import batch, fixed so that a second seed writes the same batch. */
 export const DEMO_BATCH_STARTED_AT = "2026-10-01T09:00:00.000Z";
+
+export interface DemoReport {
+  readonly id: string;
+  readonly participationId: string;
+  readonly asOfDate: string;
+  readonly basis: "labReported" | "centrallyVerified";
+  readonly entryKind: "new" | "correction";
+  readonly correctsReportId?: string;
+  readonly verifiesReportId?: string;
+  readonly counts: Readonly<Partial<Record<"main" | "rest" | "participants", Readonly<Record<string, number>>>>>;
+  readonly note?: string;
+}
+
+/** The participation whose recruitment has a history in the world. */
+export const DEMO_RECRUITING_PARTICIPATION = "DemoBeta2005__demo-lab-cognition";
+
+/**
+ * Cumulative reports of one participation over four months, at fixed dates so that a second
+ * seed writes the same reports: a September report that a later report corrects, and a central
+ * verification of the October report. Main experiment, resting state and unique participants
+ * are each stated apart. The other participations have reported nothing, so their values are
+ * unknown.
+ */
+export const DEMO_REPORTS: readonly DemoReport[] = [
+  {
+    id: "demo-report-beta-cognition-1",
+    participationId: DEMO_RECRUITING_PARTICIPATION,
+    asOfDate: "2026-07-15",
+    basis: "labReported",
+    entryKind: "new",
+    counts: { main: { tested: 6, recorded: 6 }, rest: { tested: 5 }, participants: { tested: 7 } },
+  },
+  {
+    id: "demo-report-beta-cognition-2",
+    participationId: DEMO_RECRUITING_PARTICIPATION,
+    asOfDate: "2026-08-20",
+    basis: "labReported",
+    entryKind: "new",
+    counts: { main: { tested: 14, recorded: 13, usable: 12 }, rest: { tested: 11 }, participants: { tested: 16 } },
+  },
+  {
+    id: "demo-report-beta-cognition-3",
+    participationId: DEMO_RECRUITING_PARTICIPATION,
+    asOfDate: "2026-09-25",
+    basis: "labReported",
+    entryKind: "new",
+    counts: { main: { tested: 20, recorded: 19, usable: 17 }, rest: { tested: 15 }, participants: { tested: 22 } },
+  },
+  {
+    id: "demo-report-beta-cognition-3-fix",
+    participationId: DEMO_RECRUITING_PARTICIPATION,
+    asOfDate: "2026-09-25",
+    basis: "labReported",
+    entryKind: "correction",
+    correctsReportId: "demo-report-beta-cognition-3",
+    counts: { main: { tested: 19, recorded: 19, usable: 17 }, rest: { tested: 15 }, participants: { tested: 21 } },
+    note: "Synthetic: one session had been counted twice.",
+  },
+  {
+    id: "demo-report-beta-cognition-4",
+    participationId: DEMO_RECRUITING_PARTICIPATION,
+    asOfDate: "2026-10-28",
+    basis: "labReported",
+    entryKind: "new",
+    counts: { main: { tested: 26, recorded: 25, usable: 22 }, rest: { tested: 20 }, participants: { tested: 28 } },
+  },
+  {
+    id: "demo-report-beta-cognition-4-verified",
+    participationId: DEMO_RECRUITING_PARTICIPATION,
+    asOfDate: "2026-10-28",
+    basis: "centrallyVerified",
+    entryKind: "new",
+    verifiesReportId: "demo-report-beta-cognition-4",
+    counts: { main: { tested: 25, usable: 21 } },
+  },
+];
+
+/** A planned pause of the participation that reports, which forecasts leave out. */
+export const DEMO_PAUSE = {
+  id: "demo-pause-beta-cognition-winter",
+  participationId: DEMO_RECRUITING_PARTICIPATION,
+  startsOn: "2026-12-21",
+  endsOn: "2027-01-04",
+  reason: "Synthetic: the laboratory closes over the winter holidays.",
+} as const;
+
+/** A category that extends one replication, beside the global ones. */
+export const DEMO_CATEGORY_EXTENSION = {
+  key: "eyesClosedComplete",
+  label: "Eyes closed, complete",
+  definition: "Participants whose resting recording includes the complete eyes-closed block of the protocol.",
+  replicationId: "DemoAlpha2001",
+} as const;

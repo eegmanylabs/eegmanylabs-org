@@ -32,6 +32,7 @@ import {
   sequenceId,
   sha256Hex,
   studyAliasId,
+  summaryTotals,
   systemActor,
   systemWriteContext,
   unitScopeKeys,
@@ -45,6 +46,7 @@ import { DEMO_ACCOUNTS } from "../fixtures/demo-accounts";
 import {
   DEMO_BATCH_STARTED_AT,
   DEMO_BOOTSTRAP_ADMIN_EMAIL,
+  DEMO_CATEGORY_EXTENSION,
   DEMO_CONTRIBUTOR_TABLE,
   DEMO_CONTRIBUTORS,
   DEMO_DOCUMENT_LINKS,
@@ -57,8 +59,10 @@ import {
   DEMO_MANUSCRIPTS,
   DEMO_MEMBERSHIPS,
   DEMO_PARTICIPATIONS,
+  DEMO_PAUSE,
   DEMO_PERSONS,
   DEMO_REPLICATIONS,
+  DEMO_REPORTS,
   DEMO_REQUIREMENTS,
   DEMO_SOURCES,
   DEMO_STATUS_HISTORY,
@@ -420,6 +424,78 @@ export function demoDocuments(now: Date, hashKey: string): DemoDocument[] {
       },
     );
   }
+  // Recruitment: the reports of one participation, its summary, a planned pause and a category
+  // that extends one replication. The summary is computed as the function that files a report
+  // computes it, so the totals every member reads agree with the reports.
+  const participationOf = new Map(
+    DEMO_PARTICIPATIONS.map((item) => [participationId(item.replicationId, item.laboratoryId), item] as const),
+  );
+  for (const report of DEMO_REPORTS) {
+    const participation = participationOf.get(report.participationId);
+    if (participation === undefined) throw new Error(`The demonstration report ${report.id} names no participation.`);
+    append("recruitmentReports", COLLECTIONS.recruitmentReports.docPath(report.id), {
+      participationId: report.participationId,
+      replicationId: participation.replicationId,
+      laboratoryId: participation.laboratoryId,
+      scopeKeys: unitScopeKeys(participation.replicationId, participation.laboratoryId),
+      asOfDate: report.asOfDate,
+      reportKind: "cumulative",
+      basis: report.basis,
+      entryKind: report.entryKind,
+      ...(report.correctsReportId === undefined ? {} : { correctsReportId: report.correctsReportId }),
+      ...(report.verifiesReportId === undefined ? {} : { verifiesReportId: report.verifiesReportId }),
+      counts: report.counts,
+      exclusions: [],
+      ...(report.note === undefined ? {} : { note: report.note }),
+      reportedBy: SEED_DEMO_ACTOR,
+      source: "manual",
+      dataOrigin: "demo",
+    });
+  }
+  const reportingReplications = [
+    ...new Set(DEMO_REPORTS.map((report) => participationOf.get(report.participationId)?.replicationId)),
+  ];
+  for (const replicationId of reportingReplications) {
+    if (replicationId === undefined) continue;
+    const ids = DEMO_PARTICIPATIONS.filter((item) => item.replicationId === replicationId).map((item) =>
+      participationId(item.replicationId, item.laboratoryId),
+    );
+    const facts = DEMO_REPORTS.filter((report) => ids.includes(report.participationId)).map((report, index) => ({
+      ...report,
+      reportKind: "cumulative" as const,
+      exclusions: [],
+      createdAtMillis: index,
+      dataOrigin: "demo" as const,
+    }));
+    const { totals, reporting, latestAsOfDate } = summaryTotals(ids, facts, "9999-12-31");
+    add("replicationSummaries", COLLECTIONS.replicationSummaries.docPath(replicationId, "recruitment"), {
+      replicationId,
+      kind: "recruitment",
+      totals,
+      reporting,
+      participationCount: ids.length,
+      reportCount: facts.length,
+      latestAsOfDate,
+      computedAt: timestamp,
+    });
+  }
+  const pausedParticipation = participationOf.get(DEMO_PAUSE.participationId);
+  if (pausedParticipation !== undefined) {
+    add("plannedPauses", COLLECTIONS.plannedPauses.docPath(DEMO_PAUSE.id), {
+      participationId: DEMO_PAUSE.participationId,
+      replicationId: pausedParticipation.replicationId,
+      laboratoryId: pausedParticipation.laboratoryId,
+      scopeKeys: unitScopeKeys(pausedParticipation.replicationId, pausedParticipation.laboratoryId),
+      startsOn: DEMO_PAUSE.startsOn,
+      endsOn: DEMO_PAUSE.endsOn,
+      reason: DEMO_PAUSE.reason,
+    });
+  }
+  add("countCategories", COLLECTIONS.countCategories.docPath(DEMO_CATEGORY_EXTENSION.key), {
+    ...DEMO_CATEGORY_EXTENSION,
+    position: 100,
+    isCore: false,
+  });
   for (const link of DEMO_DOCUMENT_LINKS) {
     add("documentLinks", COLLECTIONS.documentLinks.docPath(link.id), {
       entityType: "replication",

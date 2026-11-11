@@ -12,10 +12,12 @@ import { useToast } from "@/components/ui/toast";
 import { type RecordOf, retryFailedLiveData, setPageArchived, useLiveQuery } from "@/data";
 import { pagePath } from "@/registry/paths";
 import { useViewer, type Viewer } from "@/registry/viewer";
+import { useMembers } from "./members";
+import { NewMeetingDialog } from "./NewMeetingDialog";
 import { NewPageDialog } from "./PageDialogs";
 import { PageTree } from "./PageTree";
 import { PageView } from "./PageView";
-import { workspacePages } from "./queries";
+import { meetingPages, workspacePages } from "./queries";
 
 function ArchivedPages({ pages, viewer }: { readonly pages: readonly RecordOf<"pages">[]; readonly viewer: Viewer }) {
   const toast = useToast();
@@ -56,6 +58,8 @@ function ArchivedPages({ pages, viewer }: { readonly pages: readonly RecordOf<"p
 export function WorkspacePage() {
   const viewer = useViewer();
   const pages = useLiveQuery(viewer === null ? null : workspacePages(viewer));
+  const meetings = useLiveQuery(viewer === null ? null : meetingPages(viewer));
+  const members = useMembers(viewer !== null);
   const [creating, setCreating] = useState(false);
   return (
     <>
@@ -63,10 +67,13 @@ export function WorkspacePage() {
         title="Workspace"
         description="Pages of the programme that members write together: notes, minutes, plans and templates."
         actions={
-          <Button variant="primary" onClick={() => setCreating(true)}>
-            <FilePlus2 aria-hidden="true" strokeWidth={1.8} />
-            New page
-          </Button>
+          <>
+            <NewMeetingDialog members={members.candidates} />
+            <Button variant="primary" onClick={() => setCreating(true)}>
+              <FilePlus2 aria-hidden="true" strokeWidth={1.8} />
+              New page
+            </Button>
+          </>
         }
       />
       <LiveView
@@ -93,6 +100,31 @@ export function WorkspacePage() {
                   />
                 ) : viewer === null ? null : (
                   <PageTree pages={live} reorderAs={viewer.uid} />
+                )}
+              </section>
+              <section aria-labelledby="workspace-meetings" className="grid gap-2">
+                <h2 id="workspace-meetings" className="text-lg text-fg">
+                  Meetings
+                </h2>
+                {meetings.status !== "ready" ? null : meetings.data.filter((page) => page.archivedAt === null)
+                    .length === 0 ? (
+                  <p className="text-fg-muted">No meetings yet. Choose New meeting to start the page of one.</p>
+                ) : (
+                  <ul className="grid gap-1">
+                    {meetings.data
+                      .filter((page) => page.archivedAt === null)
+                      .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
+                      .map((page) => (
+                        <li key={page.id}>
+                          <Link
+                            to={pagePath(page.id)}
+                            className="rounded-control text-fg-secondary hover:text-fg-accent"
+                          >
+                            {page.title}
+                          </Link>
+                        </li>
+                      ))}
+                  </ul>
                 )}
               </section>
               <section aria-labelledby="workspace-templates" className="grid gap-2">

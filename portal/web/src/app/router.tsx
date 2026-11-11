@@ -182,6 +182,44 @@ export function portalRoutes(signInLink: string | null): RouteObject[] {
                       ],
                     },
                     {
+                      path: "/recruitment",
+                      ...titled("Recruitment"),
+                      children: [
+                        {
+                          index: true,
+                          ...lazyPage(
+                            async () => (await import("@/pages/recruitment/RecruitmentPage")).RecruitmentPage,
+                          ),
+                        },
+                        {
+                          path: "participations/:participationId",
+                          ...lazyPage(
+                            async () =>
+                              (await import("@/pages/recruitment/ParticipationRecruitmentPage"))
+                                .ParticipationRecruitmentPage,
+                          ),
+                          handle: { title: "Recruitment of a participation" } satisfies RouteHandle,
+                        },
+                        {
+                          path: "forecast/:studyKey",
+                          ...lazyPage(async () => (await import("@/pages/recruitment/ForecastPage")).ForecastPage),
+                          handle: {
+                            title: (params: Readonly<Params>) => `Forecast of ${params.studyKey ?? "a replication"}`,
+                          } satisfies RouteHandle,
+                        },
+                        {
+                          path: "categories",
+                          ...lazyPage(async () => (await import("@/pages/recruitment/CategoriesPage")).CategoriesPage),
+                          ...titled("Count categories"),
+                        },
+                      ],
+                    },
+                    {
+                      path: "/tasks",
+                      ...lazyPage(async () => (await import("@/pages/tasks/TasksPage")).TasksPage),
+                      ...titled("Tasks"),
+                    },
+                    {
                       path: "/databases/:databaseId",
                       ...lazyPage(async () => (await import("@/pages/databases/DatabasePage")).DatabasePage),
                       handle: { title: "Database", crumb: DatabaseCrumb, trail: DatabaseTrail } satisfies RouteHandle,

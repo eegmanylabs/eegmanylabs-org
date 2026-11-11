@@ -21,6 +21,16 @@ export function workspacePages(viewer: Viewer): LiveQuery<"pages"> {
   };
 }
 
+/** The meetings of the workspace the viewer reads: pages of the kind `meeting`, newest first. */
+export function meetingPages(viewer: Viewer): LiveQuery<"pages"> {
+  return {
+    collection: "pages",
+    within: [],
+    where: [["kind", "==", "meeting"], ...scoped(viewer)],
+    limit: WORKSPACE_LIMIT,
+  };
+}
+
 /** The threads of a page. */
 export function threadsOfPage(viewer: Viewer, pageId: string): LiveQuery<"threads"> {
   return { collection: "threads", within: [], where: [["targetId", "==", pageId], ...scoped(viewer)], limit: 200 };

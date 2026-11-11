@@ -37,7 +37,7 @@ function runCli(args: string[], environment: Record<string, string | undefined>)
 const withEmulators = emulatorEnvironment(PORTS, PROJECT_ID);
 
 /** What a first run creates: every document of the world, and an account and an access document for each demonstration account. */
-const WORLD_SIZE = 210;
+const WORLD_SIZE = 219;
 
 /** Every document names the command as its author, as trusted code acting by itself. */
 const STANDARD = {
@@ -225,6 +225,19 @@ describe("seed:demo", () => {
     expect(await sizeOf("sources")).toBe(2);
     expect(await sizeOf("importBatches")).toBe(1);
     expect(await sizeOf("reconciliationItems")).toBe(3);
+    // Recruitment has a history at one participation, with a correction and a verification, the
+    // summary that every member reads, a planned pause and a category of one replication.
+    expect(await sizeOf("recruitmentReports")).toBe(6);
+    expect((await adminDb.doc("replications/DemoBeta2005/summaries/recruitment").get()).get("totals")).toEqual({
+      labReported: {
+        main: { tested: 26, recorded: 25, usable: 22 },
+        rest: { tested: 20 },
+        participants: { tested: 28 },
+      },
+      centrallyVerified: { main: { tested: 25, usable: 21 } },
+    });
+    expect(await sizeOf("plannedPauses")).toBe(1);
+    expect((await adminDb.doc("countCategories/eyesClosedComplete").get()).get("replicationId")).toBe("DemoAlpha2001");
     // The statuses that the replications name exist, because the lookup data is seeded with the world.
     const withStatus = DEMO_REPLICATIONS.filter((replication) => replication.statusKey !== null);
     expect(withStatus).toHaveLength(3);

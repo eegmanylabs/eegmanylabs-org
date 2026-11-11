@@ -6,7 +6,7 @@
 // must declare, so that a query, its rule and its index are added together.
 // Everything here is synthetic: fictitious accounts, people and studies on the example.org domain.
 import type { ListableCollectionKey } from "@eegml/shared";
-import { COLLECTIONS, entityRefId, MEMBERS_SCOPE_KEY } from "@eegml/shared";
+import { COLLECTIONS, entityRefId, laboratoryScopeKey, MEMBERS_SCOPE_KEY, replicationScopeKey } from "@eegml/shared";
 import type { DocumentData, Firestore, Query } from "firebase/firestore";
 import type { LiveQuery, QueryOperator, QueryValue } from "../../web/src/data/query-spec";
 import { queryReference } from "../../web/src/data/refs";
@@ -14,6 +14,7 @@ import {
   autoId,
   CALLERS,
   type CallerKind,
+  MEMBER_UID,
   OWN_LABORATORY,
   OWN_PARTICIPATION,
   OWN_REPLICATION,
@@ -496,6 +497,22 @@ export const QUERY_CATALOGUE: readonly CataloguedQuery[] = [
     limit: 20,
   }),
 
+  catalogued("the latest activity of one replication, for its dashboard", "ownTeam", "scopeKeys", {
+    collection: "activity",
+    within: [],
+    where: [["scopeKeys", "array-contains", replicationScopeKey(OWN_REPLICATION)]],
+    orderBy: [["createdAt", "desc"]],
+    limit: 20,
+  }),
+
+  catalogued("the latest activity of one laboratory, for its dashboard", "ownLabMember", "scopeKeys", {
+    collection: "activity",
+    within: [],
+    where: [["scopeKeys", "array-contains", laboratoryScopeKey(OWN_LABORATORY)]],
+    orderBy: [["createdAt", "desc"]],
+    limit: 20,
+  }),
+
   // Made by the trigger that records a spell of editing, with the Admin SDK.
   catalogued("the latest spell of editing of one account on a page", null, null, {
     collection: "activity",
@@ -529,5 +546,160 @@ export const QUERY_CATALOGUE: readonly CataloguedQuery[] = [
     within: "group",
     where: [["personId", "==", OWNER_PERSON]],
     limit: LIMIT,
+  }),
+
+  catalogued("the meetings of the workspace a member reads", "member", "scopeKeys", {
+    collection: "pages",
+    within: [],
+    where: [
+      ["kind", "==", "meeting"],
+      ["scopeKeys", "array-contains-any", heldBy("member")],
+    ],
+    limit: 1_000,
+  }),
+
+  // Tasks (section 8). The browser reads the lists and the tasks a caller may read, by scope and
+  // as owner or participant, and filters them by list itself (section 15).
+  catalogued("the task lists a caller reads by scope", "ownTeam", "scopeKeys", {
+    collection: "taskLists",
+    within: [],
+    where: [["scopeKeys", "array-contains-any", heldBy("ownTeam")]],
+    limit: 1_000,
+  }),
+  catalogued("the personal task lists of a caller", "owner", "ownerUid", {
+    collection: "taskLists",
+    within: [],
+    where: [["ownerUid", "==", OWNER_UID]],
+    limit: 1_000,
+  }),
+  catalogued("the tasks a caller reads by scope", "ownTeam", "scopeKeys", {
+    collection: "tasks",
+    within: [],
+    where: [["scopeKeys", "array-contains-any", heldBy("ownTeam")]],
+    limit: 1_000,
+  }),
+  catalogued("the tasks of the personal lists of a caller", "owner", "ownerUid", {
+    collection: "tasks",
+    within: [],
+    where: [["ownerUid", "==", OWNER_UID]],
+    limit: 1_000,
+  }),
+  catalogued("the tasks a caller is assigned to, whatever their list", "member", "assigneeUids", {
+    collection: "tasks",
+    within: [],
+    where: [["assigneeUids", "array-contains", MEMBER_UID]],
+    limit: 1_000,
+  }),
+  catalogued("the tasks a caller collaborates on, whatever their list", "member", "collaboratorUids", {
+    collection: "tasks",
+    within: [],
+    where: [["collaboratorUids", "array-contains", MEMBER_UID]],
+    limit: 1_000,
+  }),
+  catalogued("the tasks a caller follows, whatever their list", "member", "followerUids", {
+    collection: "tasks",
+    within: [],
+    where: [["followerUids", "array-contains", MEMBER_UID]],
+    limit: 1_000,
+  }),
+  catalogued("the reminders of a caller", "owner", "uid", {
+    collection: "reminders",
+    within: [],
+    where: [["uid", "==", OWNER_UID]],
+    limit: LIMIT,
+  }),
+  catalogued("the progress updates of a record, newest first", "member", null, {
+    collection: "progressUpdates",
+    within: [],
+    where: [
+      ["entityType", "==", "replication"],
+      ["entityId", "==", OWN_REPLICATION],
+    ],
+    orderBy: [["createdAt", "desc"]],
+    limit: LIMIT,
+  }),
+
+  // Recruitment. A member reads the reports and pauses of the scopes it holds, and the browser
+  // works out the effective values from them; programme staff read the collections whole.
+  catalogued("the recruitment reports of every scope a caller holds", "ownLabMember", "scopeKeys", {
+    collection: "recruitmentReports",
+    within: [],
+    where: [["scopeKeys", "array-contains-any", heldBy("ownLabMember")]],
+    limit: 1_000,
+  }),
+  catalogued("the recruitment reports of a replication, for its leads", "ownLead", "replicationId", {
+    collection: "recruitmentReports",
+    within: [],
+    where: [["replicationId", "==", OWN_REPLICATION]],
+    limit: 1_000,
+  }),
+  catalogued("the recruitment reports of a laboratory, for its coordinators", "ownCoordinator", "laboratoryId", {
+    collection: "recruitmentReports",
+    within: [],
+    where: [["laboratoryId", "==", OWN_LABORATORY]],
+    limit: 1_000,
+  }),
+  catalogued("the planned pauses of every scope a caller holds", "ownCoordinator", "scopeKeys", {
+    collection: "plannedPauses",
+    within: [],
+    where: [["scopeKeys", "array-contains-any", heldBy("ownCoordinator")]],
+    limit: 1_000,
+  }),
+  catalogued("the forecast runs of a replication, newest first", "member", null, {
+    collection: "forecastRuns",
+    within: [],
+    where: [["replicationId", "==", OWN_REPLICATION]],
+    orderBy: [["generatedAt", "desc"]],
+    limit: 50,
+  }),
+
+  // Made by the functions of tasks and of reminders with the Admin SDK.
+  catalogued("the in-app reminders that are due and not yet sent", null, null, {
+    collection: "reminders",
+    within: [],
+    where: [
+      ["channel", "==", "inApp"],
+      ["sentAt", "==", null],
+      ["remindAt", "<=", new Date("2026-01-01T00:00:00Z")],
+    ],
+    limit: LIMIT,
+  }),
+  catalogued("the reminders of a user that are not yet sent, which setReminder counts", null, null, {
+    collection: "reminders",
+    within: [],
+    where: [
+      ["uid", "==", OWNER_UID],
+      ["sentAt", "==", null],
+    ],
+    limit: LIMIT,
+  }),
+  catalogued("the latest update of an author on a record, which postProgressUpdate waits a minute after", null, null, {
+    collection: "progressUpdates",
+    within: [],
+    where: [
+      ["authorUid", "==", OWNER_UID],
+      ["entityId", "==", OWN_REPLICATION],
+      ["createdAt", ">", new Date("2026-01-01T00:00:00Z")],
+    ],
+    limit: 1,
+  }),
+  catalogued("the tasks of a list beneath one parent, where a task is placed", null, null, {
+    collection: "tasks",
+    within: [],
+    where: [
+      ["listId", "==", "list-1"],
+      ["parentId", "==", null],
+    ],
+    limit: 1_000,
+  }),
+  catalogued("the accounts that follow a record, across users", null, null, {
+    collection: "userSubscriptions",
+    within: "group",
+    where: [
+      ["entityType", "==", "replication"],
+      ["entityId", "==", OWN_REPLICATION],
+      ["level", "==", "all"],
+    ],
+    limit: 1_000,
   }),
 ];

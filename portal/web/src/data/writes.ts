@@ -1,7 +1,16 @@
 // The few writes a browser makes directly, under the security rules. Each one sets exactly the
 // fields the rules allow, with the caller as its author and the server's time as its instant.
 // Everything else that changes state goes through a callable function.
-import { COLLECTIONS, correctableFieldSchema, type EntityType, entityRefId, userWriteContext } from "@eegml/shared";
+import {
+  COLLECTIONS,
+  correctableFieldSchema,
+  type EntityType,
+  entityRefId,
+  lookupFold,
+  tagId,
+  unitScopeKeys,
+  userWriteContext,
+} from "@eegml/shared";
 import {
   collection,
   deleteDoc,
@@ -285,6 +294,106 @@ export async function updateDatabaseFields(
     ...(patch.description === undefined ? {} : { description: patch.description ?? deleteField() }),
     ...(patch.icon === undefined ? {} : { icon: patch.icon ?? deleteField() }),
     ...(patch.archived === undefined ? {} : { archivedAt: patch.archived ? serverTimestamp() : null }),
+    ...touched(uid),
+  });
+}
+
+/** The standard fields of a document that the signed-in account creates directly. */
+const created = (key: "tags" | "userSubscriptions", uid: string) => ({
+  schemaVersion: COLLECTIONS[key].schemaVersion,
+  createdAt: serverTimestamp(),
+  updatedAt: serverTimestamp(),
+  createdBy: uid,
+  updatedBy: uid,
+  archivedAt: null,
+  writeContext: userWriteContext(),
+});
+
+/**
+ * The shared tag of a name, created where no tag of that name exists yet. Its identifier is the
+ * hash of the folded name, so the tag of a name is found again however the name is spelt, and a
+ * second creation of the same name is refused by the rules and changes nothing.
+ */
+export async function ensureTag(uid: string, name: string): Promise<string> {
+  const id = tagId(name);
+  const reference = doc(db, COLLECTIONS.tags.docPath(id));
+  await runTransaction(db, async (transaction) => {
+    if ((await transaction.get(reference)).exists()) return;
+    transaction.set(reference, { ...created("tags", uid), name: name.trim(), nameFolded: lookupFold(name) });
+  });
+  return id;
+}
+
+/** Removes a reminder of the signed-in account. */
+export async function removeReminder(reminderId: string): Promise<void> {
+  await deleteDoc(doc(db, COLLECTIONS.reminders.docPath(reminderId)));
+}
+
+/**
+ * Follows a record, or stops following it: one who follows a replication, a laboratory or a
+ * member is told of each progress update posted to it.
+ */
+export async function setFollowing(uid: string, entityType: EntityType, entityId: string, on: boolean): Promise<void> {
+  const reference = doc(db, COLLECTIONS.userSubscriptions.docPath(uid, entityRefId(entityType, entityId)));
+  if (!on) {
+    await deleteDoc(reference);
+    return;
+  }
+  await setDoc(reference, { ...created("userSubscriptions", uid), uid, entityType, entityId, level: "all" });
+}
+
+/** A planned pause of a participation, as a coordinator enters it. */
+export interface PlannedPauseInput {
+  readonly participationId: string;
+  readonly replicationId: string;
+  readonly laboratoryId: string;
+  readonly startsOn: string;
+  readonly endsOn: string;
+  readonly reason: string | null;
+}
+
+/**
+ * Enters a period in which a laboratory will not collect for a replication. The security rules
+ * accept it from those who manage the participation, with the replication, the laboratory and
+ * the scope keys of the participation, and dates in order. Returns the generated identifier.
+ */
+export async function createPlannedPause(uid: string, pause: PlannedPauseInput): Promise<string> {
+  const reference = doc(collection(db, COLLECTIONS.plannedPauses.collectionPath()));
+  await setDoc(reference, {
+    schemaVersion: COLLECTIONS.plannedPauses.schemaVersion,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    createdBy: uid,
+    updatedBy: uid,
+    archivedAt: null,
+    writeContext: userWriteContext(),
+    participationId: pause.participationId,
+    replicationId: pause.replicationId,
+    laboratoryId: pause.laboratoryId,
+    scopeKeys: unitScopeKeys(pause.replicationId, pause.laboratoryId),
+    startsOn: pause.startsOn,
+    endsOn: pause.endsOn,
+    ...(pause.reason === null ? {} : { reason: pause.reason }),
+  });
+  return reference.id;
+}
+
+/** Changes the dates or the reason of a planned pause, or archives it, under the same rules. */
+export async function updatePlannedPause(
+  uid: string,
+  pauseId: string,
+  patch: {
+    readonly startsOn?: string;
+    readonly endsOn?: string;
+    readonly reason?: string | null;
+    readonly archive?: boolean;
+  },
+): Promise<void> {
+  await updateDoc(doc(db, COLLECTIONS.plannedPauses.docPath(pauseId)), {
+    ...(patch.startsOn === undefined ? {} : { startsOn: patch.startsOn }),
+    ...(patch.endsOn === undefined ? {} : { endsOn: patch.endsOn }),
+    ...(patch.reason === undefined ? {} : { reason: patch.reason === null ? deleteField() : patch.reason }),
+    ...(patch.archive === true ? { archivedAt: serverTimestamp() } : {}),
     ...touched(uid),
   });
 }

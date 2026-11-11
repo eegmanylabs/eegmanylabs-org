@@ -76,6 +76,19 @@ import {
  * | `record.saved`                  | Values of a record are changed, or a row of a database is created or archived |
  * | `view.saved`                    | A view is created or changed                                        |
  * | `dashboard.saved`               | A dashboard is created or its widgets change                        |
+ * | `taskList.created`              | A task list is created, empty or from a template with its tasks     |
+ * | `taskList.updated`              | A task list is renamed, archived or restored                        |
+ * | `task.created`                  | A task is created, by a person or by the recurrence of a completed task |
+ * | `task.updated`                  | Fields of a task change, alone or in a bulk edit                    |
+ * | `task.moved`                    | A task moves, with every task beneath it                            |
+ * | `task.statusChanged`            | The status of a task changes, with its history entry                |
+ * | `task.participantClaimed`       | A person named on a task claims an account and joins its participants |
+ * | `progressUpdate.posted`         | A progress update is posted to the feed of a record                 |
+ * | `reminder.set`                  | A user sets a reminder for themselves about a task                  |
+ * | `recruitmentReport.filed`       | A recruitment report is filed: new, a correction, a void or a central verification |
+ * | `countCategory.saved`           | A count category is created, changed, archived or restored         |
+ * | `forecast.generated`            | A recruitment forecast is run and stored                            |
+ * | `recruitment.inactivityFlagged` | The sweep finds a participation without reports and opens a follow-up task |
  * | `document.created`              | The audit trigger saw a document created outside a callable function |
  * | `document.updated`              | The audit trigger saw a document changed outside a callable function |
  * | `document.deleted`              | The audit trigger saw a document deleted                           |
@@ -130,6 +143,19 @@ export const AUDIT_ACTIONS = [
   "record.saved",
   "view.saved",
   "dashboard.saved",
+  "taskList.created",
+  "taskList.updated",
+  "task.created",
+  "task.updated",
+  "task.moved",
+  "task.statusChanged",
+  "task.participantClaimed",
+  "progressUpdate.posted",
+  "reminder.set",
+  "recruitmentReport.filed",
+  "countCategory.saved",
+  "forecast.generated",
+  "recruitment.inactivityFlagged",
   "document.created",
   "document.updated",
   "document.deleted",
@@ -373,5 +399,10 @@ export const systemSettingsDocSchema = documentBaseSchema.extend({
    * off in the Local Emulator Suite, which cannot run a time-based one-time password.
    */
   requireSecondFactor: z.boolean().exactOptional(),
+  /**
+   * The days without a recruitment report after which a collecting participation is flagged and
+   * given a follow-up task. Absent means 30.
+   */
+  recruitmentInactivityDays: z.number().int().min(7).max(365).exactOptional(),
 });
 export type SystemSettingsDoc = z.output<typeof systemSettingsDocSchema>;

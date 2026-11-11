@@ -27,6 +27,7 @@ import {
   importBatchId,
   importedAffiliationId,
   importedPersonId,
+  inactivityFollowUpTaskId,
   institutionCandidateId,
   integrationMappingId,
   isAutoId,
@@ -55,6 +56,7 @@ import {
   predictionMarketItemId,
   reconciliationFingerprint,
   recordGrantId,
+  recruitmentFollowUpListId,
   registeredInstitutionId,
   registeredLaboratoryId,
   replicationMembershipId,
@@ -237,6 +239,11 @@ const GOLDEN: { readonly [Name in IdBuilderName]: readonly [actual: string | nul
   eventFailureId: [eventFailureId("searchIndexer", "0a1b2c3d-event"), "searchIndexer__0a1b2c3d-event"],
   searchIndexId: [searchIndexId("page", "replication__AmodioJost2007", 0), "page__replication__AmodioJost2007__000000"],
   scopeDashboardId: [scopeDashboardId("laboratory", "lab__0f3a"), "laboratory__lab__0f3a"],
+  inactivityFollowUpTaskId: [
+    inactivityFollowUpTaskId("AmodioJost2007__lab__0f3a", "2026-03-01"),
+    "inactivity__5a3384dcdb973395b3f3",
+  ],
+  recruitmentFollowUpListId: [recruitmentFollowUpListId("lab__0f3a"), "recruitmentFollowUp__e6274d880e0bed504d50"],
 };
 
 describe("the identifier builders", () => {

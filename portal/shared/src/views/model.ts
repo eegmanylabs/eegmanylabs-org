@@ -317,6 +317,12 @@ export const viewConfigSchema = z.strictObject({
   dateProperty: mapKeySchema.optional(),
   /** The date property that ends a bar of the timeline, where `dateProperty` is a single date. */
   endDateProperty: mapKeySchema.optional(),
+  /** The relation to a record of the same collection that a list nests a record beneath. */
+  parentProperty: mapKeySchema.optional(),
+  /** The relation to records of the same collection that a record depends on, drawn as lines on the timeline. */
+  dependencyProperty: mapKeySchema.optional(),
+  /** The checkbox property that draws a record on the timeline as a milestone: a dated point without duration. */
+  milestoneProperty: mapKeySchema.optional(),
 });
 export type ViewConfig = z.output<typeof viewConfigSchema>;
 

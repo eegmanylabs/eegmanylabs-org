@@ -45,8 +45,11 @@ export default defineConfig({
           ...emulated,
           name: "functions",
           include: ["tests/functions/**/*.test.ts"],
-          // A test may wait for a trigger, whose first run after the emulator has loaded takes seconds.
-          testTimeout: 60_000,
+          // A test may wait for a trigger, whose first run after the emulator has loaded takes seconds,
+          // and `eventually` in tests/functions/support.ts waits longer while the emulator is busy
+          // with the events of other triggers, up to six times its own time.
+          testTimeout: 240_000,
+          hookTimeout: 240_000,
         },
       },
       { test: { ...emulated, name: "tools", include: ["tests/tools/**/*.test.ts"], sequence: { groupOrder: 1 } } },

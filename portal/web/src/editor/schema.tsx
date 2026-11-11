@@ -6,6 +6,7 @@ import { codeBlockOptions } from "@blocknote/code-block";
 import { BlockNoteSchema, createCodeBlockSpec, defaultBlockSpecs } from "@blocknote/core";
 import { createReactBlockSpec, createReactInlineContentSpec } from "@blocknote/react";
 import {
+  actionItemBlockConfig,
   CALLOUT_VARIANTS,
   type CalloutVariant,
   calloutBlockConfig,
@@ -13,6 +14,7 @@ import {
   mentionInlineConfig,
 } from "@eegml/shared";
 import { CircleAlert, Info, NotebookPen, OctagonAlert } from "lucide-react";
+import { ActionItemBlock } from "./action-item";
 import { withControlLabels } from "./control-labels";
 import { LinkedViewBlock } from "./linked-view";
 
@@ -71,6 +73,16 @@ const linkedView = createReactBlockSpec(linkedViewBlockConfig, {
   toExternalHTML: ({ block }) => <p data-linked-view={block.props.viewId}>{block.props.title}</p>,
 });
 
+/** An action item of a meeting: a line turned into a task, shown live from the task. */
+const actionItem = createReactBlockSpec(actionItemBlockConfig, {
+  render: ({ block }) => (
+    <div contentEditable={false} className="w-full">
+      <ActionItemBlock taskId={block.props.taskId} title={block.props.title} />
+    </div>
+  ),
+  toExternalHTML: ({ block }) => <p data-action-item={block.props.taskId}>{block.props.title}</p>,
+});
+
 /** A mention of a member. The uid is what counts. The name is the one the member had when mentioned. */
 const mention = createReactInlineContentSpec(mentionInlineConfig, {
   render: ({ inlineContent }) => (
@@ -91,6 +103,7 @@ export const pageSchema = BlockNoteSchema.create().extend({
     heading: withControlLabels(defaultBlockSpecs.heading),
     callout: callout(),
     linkedView: linkedView(),
+    actionItem: actionItem(),
   },
   inlineContentSpecs: { mention },
 });

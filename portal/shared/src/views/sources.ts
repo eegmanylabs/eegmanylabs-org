@@ -7,9 +7,12 @@
 import { DATA_ORIGINS } from "../data-origin";
 import type { EntityType } from "../entities";
 import { nestedEntityId } from "../ids";
+import { RECRUITMENT_MODALITIES, RECRUITMENT_MODALITY_LABELS } from "../recruitment-effective";
 import { participationStatusSchema, readinessStatusSchema } from "../schemas/participation";
 import { laboratoryStatusSchema } from "../schemas/programme";
-import { replicationSelectionStatusSchema } from "../schemas/replications";
+import { reportEntryKindSchema, reportKindSchema } from "../schemas/recruitment";
+import { recruitmentBasisSchema, replicationSelectionStatusSchema } from "../schemas/replications";
+import { taskKindSchema, taskPrioritySchema } from "../schemas/tasks";
 import type { PropertyType } from "../schemas/workspace";
 import { isFirestoreTimestamp } from "../timestamp";
 import {
@@ -44,6 +47,14 @@ export interface SourceLookups {
   readonly laboratoryName: (laboratoryId: string) => string | null;
   /** The statuses of replications as the programme configures them, in order. */
   readonly replicationStatuses: readonly { readonly key: string; readonly label: string }[];
+  /** The statuses of tasks as the programme configures them, in order, with their category. */
+  readonly taskStatuses?: readonly { readonly key: string; readonly label: string; readonly category: string }[];
+  /** The task lists the reader may read, for the list a task belongs to. */
+  readonly taskLists?: readonly { readonly id: string; readonly name: string }[];
+  /** The shared tags, for the tags of a task. */
+  readonly tags?: readonly { readonly id: string; readonly name: string }[];
+  /** The categories of participant counts that are in use, in order, for the counts of recruitment. */
+  readonly countCategories?: readonly { readonly key: string; readonly label: string }[];
 }
 
 /** A built-in property of a core source, and how its value is read from a document. */
@@ -57,6 +68,9 @@ export const CORE_SOURCE_KEYS = [
   "core:laboratories",
   "core:participations",
   "core:checklistItems",
+  "core:tasks",
+  "core:recruitmentReports",
+  "core:recruitment",
 ] as const;
 export type CoreSourceKey = (typeof CORE_SOURCE_KEYS)[number];
 
@@ -104,6 +118,20 @@ function field(
   return { id, name, type, config: options.config ?? {}, source: options.source ?? "core", read };
 }
 
+/** The group of a status option of a task, from the category of its status definition. */
+const TASK_STATUS_GROUPS: Readonly<Record<string, PropertyOption["group"]>> = {
+  notStarted: "toDo",
+  active: "inProgress",
+  paused: "inProgress",
+  done: "complete",
+  cancelled: "complete",
+};
+
+const uids = (value: unknown): PropertyValue => {
+  const list = Array.isArray(value) ? value.filter((uid): uid is string => typeof uid === "string") : [];
+  return list.length === 0 ? null : list;
+};
+
 const dataOrigin = () =>
   field("dataOrigin", "Origin of the data", "select", (document) => text(document.dataOrigin), {
     config: { options: optionsOf(DATA_ORIGINS) },
@@ -120,6 +148,66 @@ const PARTICIPATION_STATUS_GROUPS: Readonly<Record<string, PropertyOption["group
   withdrawn: "complete",
   declined: "complete",
 };
+
+/** The identifier of the property of one count: the modality, an underscore and the category key. */
+export function countPropertyId(modality: string, category: string): string {
+  return `${modality}_${category}`;
+}
+
+/**
+ * One number property for each modality and category, labelled apart, so that a view shows
+ * main experiment, resting state and unique participants side by side and never adds them.
+ */
+function countFields(
+  lookups: SourceLookups,
+  read: (document: Readonly<Record<string, unknown>>, modality: string, category: string) => PropertyValue,
+): CoreField[] {
+  return (lookups.countCategories ?? []).flatMap((category) =>
+    RECRUITMENT_MODALITIES.map((modality) =>
+      field(
+        countPropertyId(modality, category.key),
+        `${category.label}, ${RECRUITMENT_MODALITY_LABELS[modality].toLowerCase()}`,
+        "number",
+        (document) => read(document, modality, category.key),
+        { config: { numberFormat: "integer" } },
+      ),
+    ),
+  );
+}
+
+/** A count of a report, or null where the report does not state it. */
+function reportCount(document: Readonly<Record<string, unknown>>, modality: string, category: string): PropertyValue {
+  const counts = document.counts as Readonly<Record<string, Readonly<Record<string, unknown>> | undefined>> | undefined;
+  return numeric(counts?.[modality]?.[category]);
+}
+
+/** An effective value of the state of a participation, or null where it is unknown. */
+function effectiveCount(
+  document: Readonly<Record<string, unknown>>,
+  modality: string,
+  category: string,
+): PropertyValue {
+  const effective = document.effective as
+    | Readonly<Record<string, Readonly<Record<string, { readonly value?: unknown } | undefined>> | undefined>>
+    | undefined;
+  return numeric(effective?.[modality]?.[category]?.value);
+}
+
+/** The counts that a view of recruitment shows before a person chooses: tested and usable. */
+const DEFAULT_COUNT_CATEGORIES: ReadonlySet<string> = new Set(["tested", "usable"]);
+
+/** The counts that a new view of recruitment hides, so that it opens with tested and usable alone. */
+export function hiddenRecruitmentCounts(lookups: SourceLookups): string[] {
+  return (lookups.countCategories ?? [])
+    .filter((category) => !DEFAULT_COUNT_CATEGORIES.has(category.key))
+    .flatMap((category) => RECRUITMENT_MODALITIES.map((modality) => countPropertyId(modality, category.key)));
+}
+
+/** The value of the list of a task whose list its reader may not open. */
+export const UNREADABLE_LIST = "unreadableList";
+
+/** The basis of the effective values of a participation: reported, verified, both or none. */
+export const EFFECTIVE_BASIS_OPTIONS = ["reported", "verified", "mixed"] as const;
 
 /** The core sources. Their order is the order a person chooses from. */
 export const CORE_SOURCES: Readonly<Record<CoreSourceKey, CoreSource>> = {
@@ -304,6 +392,212 @@ export const CORE_SOURCES: Readonly<Record<CoreSourceKey, CoreSource>> = {
       field("completedAt", "Completed", "date", (document) => instantText(document.completedAt)),
     ],
     defaultConfig: {},
+  },
+  "core:tasks": {
+    key: "core:tasks",
+    label: "Tasks",
+    selectable: true,
+    entityType: "task",
+    titleProperty: "title",
+    // Custom properties of tasks wait for the restricted values of tasks, whose rules are not written.
+    customKey: null,
+    reference: (id) => ({ entityType: "task", entityId: id }),
+    fields: (lookups) => [
+      field("title", "Task", "text", (document) => text(document.title), { source: "coreEditable" }),
+      field("status", "Status", "status", (document) => text(document.statusKey), {
+        source: "coreEditable",
+        config: {
+          options: (lookups.taskStatuses ?? []).map((status) => {
+            const group = TASK_STATUS_GROUPS[status.category];
+            return group === undefined
+              ? { id: status.key, name: status.label }
+              : { id: status.key, name: status.label, group };
+          }),
+        },
+      }),
+      // A task that its reader reads as a participant may sit in a list they may not open: its
+      // identifier is never shown, only that the list is closed to them.
+      field(
+        "list",
+        "List",
+        "select",
+        (document) => {
+          const listId = text(document.listId);
+          return listId !== null && (lookups.taskLists ?? []).some((list) => list.id === listId)
+            ? listId
+            : UNREADABLE_LIST;
+        },
+        {
+          config: {
+            options: [
+              ...(lookups.taskLists ?? []).map((list) => ({ id: list.id, name: list.name })),
+              { id: UNREADABLE_LIST, name: "A list you may not open" },
+            ],
+          },
+        },
+      ),
+      field("kind", "Kind", "select", (document) => text(document.kind), {
+        config: { options: optionsOf(taskKindSchema.options) },
+      }),
+      field("milestone", "Milestone", "checkbox", (document) => document.kind === "milestone"),
+      field("priority", "Priority", "select", (document) => text(document.priority), {
+        source: "coreEditable",
+        config: { options: optionsOf(taskPrioritySchema.options) },
+      }),
+      field("assignees", "Assignees", "person", (document) => uids(document.assigneeUids), {
+        source: "coreEditable",
+      }),
+      field("collaborators", "Collaborators", "person", (document) => uids(document.collaboratorUids)),
+      field("startAt", "Start", "date", (document) => instantText(document.startAt), { source: "coreEditable" }),
+      field("dueAt", "Due", "date", (document) => instantText(document.dueAt), { source: "coreEditable" }),
+      field("completedAt", "Completed", "date", (document) => instantText(document.completedAt)),
+      // Kept under its stored name, so that saved views still find it, and shown in hours as the task panel shows it.
+      field(
+        "estimateMinutes",
+        "Estimate in hours",
+        "number",
+        (document) => {
+          const minutes = document.estimateMinutes;
+          return typeof minutes === "number" && Number.isFinite(minutes)
+            ? Math.round((minutes / 60) * 100) / 100
+            : null;
+        },
+        { source: "coreEditable", config: { numberFormat: "decimal" } },
+      ),
+      field("progressPercent", "Progress in per cent", "number", (document) => numeric(document.progressPercent), {
+        source: "coreEditable",
+        config: { numberFormat: "integer" },
+      }),
+      field("parent", "Parent task", "relation", (document) => references("task", document.parentId), {
+        config: { relation: { target: "core:tasks" } },
+      }),
+      field(
+        "dependsOn",
+        "Depends on",
+        "relation",
+        (document) =>
+          references(
+            "task",
+            typeof document.dependsOn === "object" && document.dependsOn !== null
+              ? Object.keys(document.dependsOn)
+              : [],
+          ),
+        { config: { relation: { target: "core:tasks" } } },
+      ),
+      field("replication", "Replication", "relation", (document) => references("replication", document.replicationId), {
+        config: { relation: { target: "core:replications" } },
+      }),
+      field("laboratory", "Laboratory", "relation", (document) => references("laboratory", document.laboratoryId), {
+        config: { relation: { target: "core:laboratories" } },
+      }),
+      field("tags", "Tags", "multiSelect", (document) => uids(document.tagIds), {
+        source: "coreEditable",
+        config: { options: (lookups.tags ?? []).map((tag) => ({ id: tag.id, name: tag.name })) },
+      }),
+      field("recurrence", "Repeats", "text", (document) => text(document.recurrenceRule)),
+    ],
+    defaultConfig: {
+      sorts: [{ property: "dueAt", direction: "ascending" }],
+      boardProperty: "status",
+      dateProperty: "dueAt",
+      parentProperty: "parent",
+      dependencyProperty: "dependsOn",
+      milestoneProperty: "milestone",
+    },
+  },
+  "core:recruitmentReports": {
+    key: "core:recruitmentReports",
+    label: "Recruitment reports",
+    selectable: true,
+    entityType: "recruitmentReport",
+    titleProperty: "report",
+    customKey: null,
+    reference: (id) => ({ entityType: "recruitmentReport", entityId: id }),
+    fields: (lookups) => [
+      field("report", "Report", "text", (document) => {
+        const laboratoryId = typeof document.laboratoryId === "string" ? document.laboratoryId : "";
+        return `${text(document.replicationId) ?? ""} at ${lookups.laboratoryName(laboratoryId) ?? laboratoryId}, ${text(document.asOfDate) ?? ""}`;
+      }),
+      field(
+        "participation",
+        "Participation",
+        "relation",
+        (document) => references("participation", document.participationId),
+        { config: { relation: { target: "core:participations" } } },
+      ),
+      field("replication", "Replication", "relation", (document) => references("replication", document.replicationId), {
+        config: { relation: { target: "core:replications" } },
+      }),
+      field("laboratory", "Laboratory", "relation", (document) => references("laboratory", document.laboratoryId), {
+        config: { relation: { target: "core:laboratories" } },
+      }),
+      field("asOfDate", "As of", "date", (document) => text(document.asOfDate)),
+      field("reportKind", "Kind", "select", (document) => text(document.reportKind), {
+        config: { options: optionsOf(reportKindSchema.options) },
+      }),
+      field("basis", "Basis", "select", (document) => text(document.basis), {
+        config: {
+          options: recruitmentBasisSchema.options.map((key) => ({
+            id: key,
+            name: key === "labReported" ? "Reported" : "Verified",
+          })),
+        },
+      }),
+      field("entryKind", "Entry", "select", (document) => text(document.entryKind), {
+        config: { options: optionsOf(reportEntryKindSchema.options) },
+      }),
+      field(
+        "corrects",
+        "Replaces",
+        "relation",
+        (document) => references("recruitmentReport", document.correctsReportId),
+        { config: { relation: { target: "core:recruitmentReports" } } },
+      ),
+      ...countFields(lookups, reportCount),
+      field("note", "Note", "text", (document) => text(document.note)),
+      field("filedAt", "Filed", "date", (document) => instantText(document.createdAt)),
+      dataOrigin(),
+    ],
+    defaultConfig: {
+      sorts: [{ property: "asOfDate", direction: "descending" }],
+      dateProperty: "asOfDate",
+      boardProperty: "basis",
+    },
+  },
+  "core:recruitment": {
+    key: "core:recruitment",
+    label: "Recruitment by participation",
+    selectable: true,
+    entityType: "participation",
+    titleProperty: "participation",
+    customKey: null,
+    // One record for each participation, holding the values that hold today: the effective
+    // values of its reports, verified where available, which the browser resolves.
+    reference: (id) => ({ entityType: "participation", entityId: id }),
+    fields: (lookups) => [
+      field("participation", "Participation", "text", (document) => {
+        const laboratoryId = typeof document.laboratoryId === "string" ? document.laboratoryId : "";
+        return `${text(document.replicationId) ?? ""} at ${lookups.laboratoryName(laboratoryId) ?? laboratoryId}`;
+      }),
+      field("replication", "Replication", "relation", (document) => references("replication", document.replicationId), {
+        config: { relation: { target: "core:replications" } },
+      }),
+      field("laboratory", "Laboratory", "relation", (document) => references("laboratory", document.laboratoryId), {
+        config: { relation: { target: "core:laboratories" } },
+      }),
+      field("status", "Status", "status", (document) => text(document.status), {
+        config: { options: optionsOf(participationStatusSchema.options, (key) => PARTICIPATION_STATUS_GROUPS[key]) },
+      }),
+      field("latestAsOfDate", "Latest report", "date", (document) => text(document.latestAsOfDate)),
+      field("basis", "Basis", "select", (document) => text(document.basis), {
+        config: { options: optionsOf(EFFECTIVE_BASIS_OPTIONS) },
+      }),
+      ...countFields(lookups, effectiveCount),
+    ],
+    defaultConfig: {
+      sorts: [{ property: "participation", direction: "ascending" }],
+      boardProperty: "status",
+    },
   },
 };
 

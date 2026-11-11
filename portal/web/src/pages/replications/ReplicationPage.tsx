@@ -15,6 +15,9 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type Live, type RecordOf, retryFailedLiveData, useLiveDocument, useLiveQuery } from "@/data";
 import { ScopeDashboard } from "@/pages/dashboards/ScopeDashboard";
+import { RecruitmentTab } from "@/pages/recruitment/RecruitmentTab";
+import { EntityTasksTab } from "@/pages/tasks/EntityTasksTab";
+import { UpdatesTab } from "@/pages/tasks/UpdatesTab";
 import { NotesTab } from "@/pages/workspace/NotesTab";
 import { combineLive, orEmpty } from "@/registry/combine";
 import {
@@ -55,11 +58,14 @@ const TAB_IDS = [
   "overview",
   "leadership",
   "laboratories",
+  "recruitment",
   "hypotheses",
   "publications",
   "contributors",
   "documents",
   "activity",
+  "tasks",
+  "updates",
   "notes",
   "dashboard",
 ] as const;
@@ -69,11 +75,14 @@ const TAB_LABELS: Readonly<Record<TabId, string>> = {
   overview: "Overview",
   leadership: "Leadership",
   laboratories: "Laboratories",
+  recruitment: "Recruitment",
   hypotheses: "Hypotheses",
   publications: "Publications",
   contributors: "Contributors",
   documents: "Documents",
   activity: "Activity",
+  tasks: "Tasks",
+  updates: "Updates",
   notes: "Notes",
   dashboard: "Dashboard",
 };
@@ -229,6 +238,9 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
         />
       ),
     },
+    // Every replication has recruitment, whose reports its team and laboratories read and whose
+    // latest totals every member reads.
+    { id: "recruitment", live: ALWAYS, render: () => <RecruitmentTab viewer={viewer} studyKey={studyKey} /> },
     {
       id: "hypotheses",
       // The team waits for the restricted labels too, so that none is shown as missing while it loads.
@@ -255,6 +267,24 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
       id: "activity",
       live: hasAny(history),
       render: () => <ActivityTab entries={ready(history)} statusLabel={statusLabel} />,
+    },
+    // Every replication has tasks and a log of progress updates, which every member may read.
+    {
+      id: "tasks",
+      live: ALWAYS,
+      render: () => <EntityTasksTab viewer={viewer} entityType="replication" entityId={studyKey} />,
+    },
+    {
+      id: "updates",
+      live: ALWAYS,
+      render: () => (
+        <UpdatesTab
+          viewer={viewer}
+          entityType="replication"
+          entityId={studyKey}
+          canPost={member && (team || viewer.can("replications.manage", { replicationId: studyKey }))}
+        />
+      ),
     },
     // Every replication has notes, which every member may read.
     { id: "notes", live: ALWAYS, render: () => <NotesTab entityType="replication" entityId={studyKey} /> },

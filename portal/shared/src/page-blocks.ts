@@ -37,6 +37,20 @@ export const linkedViewBlockConfig = {
   content: "none",
 } as const;
 
+/**
+ * An action item of a meeting: a line of the page turned into a task, which the block shows live
+ * from the task itself. `title` is the title the task was given, which stands in for a reader who
+ * may not open the task.
+ */
+export const actionItemBlockConfig = {
+  type: "actionItem",
+  propSchema: {
+    taskId: { default: "" },
+    title: { default: "" },
+  },
+  content: "none",
+} as const;
+
 /** The kinds of callout. None of them is shown in green, which the visual system of the portal does not use. */
 export const CALLOUT_VARIANTS = ["info", "note", "warning", "danger"] as const;
 export type CalloutVariant = (typeof CALLOUT_VARIANTS)[number];

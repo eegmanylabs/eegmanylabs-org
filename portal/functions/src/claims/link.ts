@@ -18,6 +18,7 @@ import { type AccessDraft, commitAccess, draftAccess, withAssignment } from "../
 import { writeAudit } from "../framework/audit";
 import { touchedFields, type WriteStamp } from "../framework/documents";
 import { assignmentIdOf, nextAssignment, readAssignments, type StoredAssignment } from "../roles/assignments";
+import { handOverTasks, readUnclaimedTasks, type UnclaimedTask } from "../tasks/claims";
 
 type Stored = Readonly<Record<string, unknown>>;
 
@@ -33,6 +34,8 @@ export interface LinkReads {
   readonly implied: readonly ImpliedRole[];
   readonly assignments: ReadonlyMap<string, StoredAssignment>;
   readonly access: AccessDraft | null;
+  /** The tasks that name the person as a participant without an account, which the link hands over. */
+  readonly unclaimedTasks: readonly UnclaimedTask[];
 }
 
 /** The records about a person that imply roles: the member entries and the memberships across parents. */
@@ -89,6 +92,7 @@ export async function readLink(
     implied,
     assignments,
     access: await draftAccess(db, transaction, uid, at),
+    unclaimedTasks: person === null ? [] : await readUnclaimedTasks(db, transaction, personId),
   };
 }
 
@@ -171,11 +175,14 @@ export interface LinkResult {
   /** The roles among them that await approval by an administrator. */
   readonly pendingRoles: ImpliedRole[];
   readonly access: ResolvedAccess;
+  /** How many tasks named the person without an account and now name the account. */
+  readonly handedOverTasks: number;
 }
 
 /**
  * Writes the link. `stamp` names the audit entry of the claim, and each role assignment that
- * the link creates gets an audit entry of its own.
+ * the link creates gets an audit entry of its own, as does each task that named the person
+ * without an account and is handed over to the account.
  */
 export function writeLink(db: Firestore, transaction: Transaction, reads: LinkReads, stamp: WriteStamp): LinkResult {
   if (reads.access === null || reads.person === null) throw new Error("A link needs a profile and a person.");
@@ -195,5 +202,6 @@ export function writeLink(db: Firestore, transaction: Transaction, reads: LinkRe
     : [];
   reads.access.inputs = { ...inputs, personId, confirmedReplicationIds: replicationIds };
   const { resolved } = commitAccess(db, transaction, reads.access, stamp);
-  return { createdAssignmentIds, pendingRoles, access: resolved };
+  const handedOverTasks = handOverTasks(db, transaction, reads.unclaimedTasks, personId, uid, stamp);
+  return { createdAssignmentIds, pendingRoles, access: resolved, handedOverTasks };
 }

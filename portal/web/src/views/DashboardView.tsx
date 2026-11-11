@@ -456,10 +456,15 @@ export function DashboardView({
                     </Button>
                   ) : null}
                 </header>
-                <div className="min-h-0 flex-1 overflow-auto p-3">
+                <div
+                  // biome-ignore lint/a11y/noNoninteractiveTabindex: a widget that scrolls must be reachable by keyboard
+                  tabIndex={0}
+                  className="min-h-0 flex-1 overflow-auto p-3 focus-visible:outline-2 focus-visible:outline-accent"
+                >
                   <WidgetBody
                     widget={widget}
                     viewer={viewer}
+                    scope={dashboard}
                     secondFactor={secondFactor}
                     onChange={editable ? (next) => save({ [id]: next }).catch(() => undefined) : null}
                   />

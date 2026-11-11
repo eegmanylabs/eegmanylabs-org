@@ -466,7 +466,8 @@ service cloud.firestore {
     function notificationTypes() {
       return [
         'mention', 'assignment', 'comment', 'statusChange', 'dueSoon', 'overdue', 'reminder',
-        'claimDecision', 'roleDecision', 'protocolUpdate', 'milestone', 'integrationFailure'
+        'claimDecision', 'roleDecision', 'protocolUpdate', 'milestone', 'integrationFailure', 'progressUpdate',
+        'recruitmentInactive'
       ];
     }
 
@@ -2287,6 +2288,151 @@ service cloud.firestore {
         && validCategory(incoming());
     }
 
+    // A recruitment report, read within the scope of its participation: the leads and the team
+    // of the replication, the coordinators and members of the laboratory, programme
+    // administrators and the core team. A member of one laboratory never reads the reports of
+    // another. The callable function fileRecruitmentReports files every report, after checking
+    // each count against the categories, and nobody changes or deletes one (D-009, D-019): a
+    // correction, a void and a central verification are new reports.
+    // Reads: 1 (access).
+    match /recruitmentReports/{reportId} {
+      allow read: if isMember() && (core() || withinUnit(resource.data)) && boundedRead();
+    }
+
+    // A period in which a laboratory will not collect for a replication, which the forecast
+    // leaves out. Those who manage the participation enter it: the coordinators of the
+    // laboratory, the leads of the replication, programme administrators and the core team. It
+    // repeats the replication, the laboratory and the scope keys of its participation.
+    // Reads: 2 (access, the participation).
+    match /plannedPauses/{pauseId} {
+      function plannedPausesFields() {
+        return ['participationId', 'replicationId', 'laboratoryId', 'scopeKeys', 'startsOn', 'endsOn', 'reason'];
+      }
+      function plannedPausesRequired() {
+        return ['participationId', 'replicationId', 'laboratoryId', 'scopeKeys', 'startsOn', 'endsOn'];
+      }
+      // A participation is the pair of its replication and its laboratory, which never change, so
+      // the participation a pause names stays the same too.
+      function plannedPausesEditable() { return ['participationId', 'startsOn', 'endsOn', 'reason']; }
+
+      // Calendar dates as ISO text sort as dates, so a pause ends on or after the day it starts.
+      function validPause(d) {
+        return isoDate(d.startsOn) && isoDate(d.endsOn) && d.startsOn <= d.endsOn && longText(d.get('reason', 'x'));
+      }
+
+      function ofItsParticipation(d) {
+        return docId(d.participationId)
+          && participationDocument(d.participationId) != null
+          && d.replicationId == participation(d.participationId).replicationId
+          && d.laboratoryId == participation(d.participationId).laboratoryId
+          && d.scopeKeys == ['rep:' + d.replicationId, 'lab:' + d.laboratoryId];
+      }
+
+      allow read: if isMember() && (core() || withinUnit(resource.data)) && boundedRead();
+      allow create: if isMember()
+        && canForUnit('participationsManage', incoming().replicationId, incoming().laboratoryId)
+        && autoId(pauseId)
+        && createdNow(incoming(), plannedPausesFields(), plannedPausesRequired())
+        && ofItsParticipation(incoming())
+        && validPause(incoming());
+      allow update: if isMember()
+        && canForUnit('participationsManage', resource.data.replicationId, resource.data.laboratoryId)
+        && updatedNow(incoming(), stampFields().concat(plannedPausesEditable()), plannedPausesRequired())
+        && ofItsParticipation(incoming())
+        && validPause(incoming());
+    }
+
+    // A run of the recruitment forecast, which every member reads. The callable function
+    // generateForecast stores it for the leads of the replication, and nobody changes one.
+    // Reads: 1 (access).
+    match /forecastRuns/{runId} {
+      allow read: if isMember() && boundedRead();
+    }
+
+    // ===== Tasks (section 8) =====
+    //
+    // Task lists and tasks are written by callable functions alone, which keep the tree, the
+    // copies of a list's audience, the status history and the dependencies (docs/DATA_MODEL.md,
+    // section 8). A client reads a list by its scope or as its owner, and a task the same way or
+    // as one of its participants, whatever its list.
+
+    // Reads: 1 (access).
+    match /taskLists/{listId} {
+      allow read: if isActive()
+        && (resource.data.ownerUid == request.auth.uid || (member() && (core() || holdsScopeOf(resource.data))))
+        && boundedRead();
+    }
+
+    // A list of a user's own tasks asks for them by one of the participant arrays, which is the
+    // constraint that proves the caller is named there.
+    // Reads: 1 (access).
+    match /tasks/{taskId} {
+      allow read: if isActive()
+        && (resource.data.ownerUid == request.auth.uid
+          || request.auth.uid in resource.data.assigneeUids
+          || request.auth.uid in resource.data.collaboratorUids
+          || request.auth.uid in resource.data.followerUids
+          || (member() && (core() || holdsScopeOf(resource.data))))
+        && boundedRead();
+    }
+
+    // A shared tag. Its identifier is the hash of its folded name, so one name is one tag
+    // however it is spelt (`tagId` of portal/shared/src/ids.ts). The rules cannot fold a name,
+    // so they check the identifier against `nameFolded`, and the integrity checker checks
+    // `nameFolded` against the fold of `name`. The name is the identity of a tag and never
+    // changes; those who manage lookups change its colour.
+    // Reads: 1 (access).
+    match /tags/{tagId} {
+      function tagsFields() { return ['name', 'nameFolded', 'colour']; }
+      function tagsRequired() { return ['name', 'nameFolded']; }
+      function tagsEditableByProgrammeAdmin() { return ['colour']; }
+
+      function validTag(d) {
+        return d.name is string
+          && d.name.matches('(?s)^.{1,100}$')
+          && (!('colour' in d) || (d.colour is string && d.colour.matches('^[^\n]{1,32}$')));
+      }
+
+      allow read: if isMember() && boundedRead();
+      allow create: if isMember()
+        && createdNow(incoming(), tagsFields(), tagsRequired())
+        && validTag(incoming())
+        && incoming().nameFolded is string
+        && incoming().nameFolded.matches('^[a-z0-9]{1,100}$')
+        && tagId.matches('^[0-9a-f]{20}$')
+        && hashing.sha256(incoming().nameFolded).toHexString().lower().matches('^' + tagId + '.*');
+      allow update: if isMember() && canForProgramme('lookupsManage')
+        && updatedNow(incoming(), touchFields().concat(tagsEditableByProgrammeAdmin()), tagsRequired())
+        && validTag(incoming());
+    }
+
+    // A reminder a user sets for themselves about a task. The callable function `setReminder`
+    // creates it, because only a function can check that its owner reads the task and count the
+    // reminders still to come. Its owner moves it while it is not sent, never to a time long
+    // past, which would put it before everyone else's in the sweep, and removes it. A scheduled
+    // function delivers it and sets `sentAt`, after which it no longer changes.
+    // Reads: 1 (access).
+    match /reminders/{reminderId} {
+      function remindersRequired() { return ['uid', 'entityType', 'entityId', 'remindAt', 'sentAt', 'channel']; }
+      function remindersEditableBySelf() { return ['remindAt', 'channel']; }
+
+      // A new time lies between an hour ago and two years ahead; a time left as it is stays.
+      function validReminder(d) {
+        return d.remindAt is timestamp
+          && (d.remindAt == resource.data.remindAt
+            || (d.remindAt > request.time - duration.value(1, 'h')
+              && d.remindAt < request.time + duration.value(730, 'd')))
+          && d.channel in ['inApp', 'email'];
+      }
+
+      allow read: if isActive() && resource.data.uid == request.auth.uid && boundedRead();
+      allow update: if isMember() && resource.data.uid == request.auth.uid
+        && resource.data.sentAt == null
+        && updatedNow(incoming(), touchFields().concat(remindersEditableBySelf()), remindersRequired())
+        && validReminder(incoming());
+      allow delete: if isMember() && resource.data.uid == request.auth.uid;
+    }
+
     // ===== Workspace (section 9) =====
     //
     // A page carries its resolved audience: `scopeKeys` names who reads it, and `levelKeys`
@@ -2753,6 +2899,13 @@ service cloud.firestore {
       allow read: if isActive()
         && (resource.data.ownerUid == request.auth.uid || (member() && resource.data.ownerUid == null))
         && boundedRead();
+    }
+
+    // The feed of progress updates of a replication, a laboratory or a member, which every
+    // member reads. A callable function posts an update, and nobody changes one.
+    // Reads: 1 (access).
+    match /progressUpdates/{updateId} {
+      allow read: if isMember() && boundedRead();
     }
 
     // ===== Scientific outputs and governance (section 11) =====

@@ -1,5 +1,6 @@
 // Synthetic documents only: invented identifiers, no person's details.
 import { describe, expect, it } from "vitest";
+import { tagId } from "./ids";
 import {
   type CheckedDocument,
   checkIntegrity,
@@ -219,6 +220,88 @@ describe("checkIntegrity", () => {
       personLinkedToSeveralUsers: 0,
       derivedValueDisagrees: 0,
       equipmentChainCurrent: 0,
+      dependencyCycle: 0,
     });
+  });
+});
+
+describe("the structure of tasks", () => {
+  const task = (id: string, data: Record<string, unknown>) =>
+    doc(`tasks/${id}`, {
+      listId: "list-1",
+      parentId: null,
+      ancestorIds: [],
+      dependsOn: {},
+      tagIds: [],
+      scopeKeys: ["rep:Rep2001"],
+      ...data,
+    });
+  const snapshot = (tasks: CheckedDocument[], tags: CheckedDocument[] = []) =>
+    new Map<IntegrityCollection, CheckedDocument[]>([
+      ["taskLists", [doc("taskLists/list-1", { scopeKeys: ["rep:Rep2001"] })]],
+      ["tasks", tasks],
+      ["tags", tags],
+    ]);
+
+  it("finds nothing in a sound tree with sound dependencies and tags", () => {
+    const tagged = doc(`tags/${tagId("Pilot")}`, { name: "Pilot", nameFolded: "pilot" });
+    expect(
+      checkIntegrity(
+        snapshot(
+          [
+            task("a", { tagIds: [tagId("Pilot")] }),
+            task("b", { parentId: "a", ancestorIds: ["a"], dependsOn: { a: "finishToStart" } }),
+            task("c", { parentId: "b", ancestorIds: ["a", "b"] }),
+          ],
+          [tagged],
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it("reports a cycle of dependencies once, and every reference that names nothing", () => {
+    const findings = checkIntegrity(
+      snapshot([
+        task("a", { dependsOn: { b: "finishToStart" } }),
+        task("b", { dependsOn: { a: "blocks", gone: "blocks" } }),
+        task("c", { listId: "list-2", parentId: "missing", ancestorIds: ["missing"], tagIds: ["nope"] }),
+      ]),
+    );
+    expect(findings.filter((finding) => finding.check === "dependencyCycle")).toEqual([
+      {
+        check: "dependencyCycle",
+        documentPath: "tasks/a",
+        field: "dependsOn",
+        detail: "These tasks depend on each other in a cycle: a, b.",
+      },
+    ]);
+    expect(
+      findings
+        .filter((finding) => finding.check === "danglingReference")
+        .map((finding) => [finding.documentPath, finding.field]),
+    ).toEqual([
+      ["tasks/b", "dependsOn"],
+      ["tasks/c", "listId"],
+      ["tasks/c", "parentId"],
+      ["tasks/c", "tagIds"],
+    ]);
+  });
+
+  it("reports ancestors and a scope that disagree with the parent and the list, and a tag folded wrongly", () => {
+    const findings = checkIntegrity(
+      snapshot(
+        [task("a", { scopeKeys: ["rep:Other2002"] }), task("b", { parentId: "a", ancestorIds: [] })],
+        [doc(`tags/${tagId("Pilot")}`, { name: "Pilot", nameFolded: "other" })],
+      ),
+    );
+    expect(
+      findings
+        .filter((finding) => finding.check === "derivedValueDisagrees")
+        .map((finding) => [finding.documentPath, finding.field]),
+    ).toEqual([
+      ["tasks/a", "scopeKeys"],
+      ["tasks/b", "ancestorIds"],
+      [`tags/${tagId("Pilot")}`, "nameFolded"],
+    ]);
   });
 });

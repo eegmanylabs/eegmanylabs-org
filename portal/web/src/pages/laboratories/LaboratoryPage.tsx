@@ -27,6 +27,8 @@ import {
 import { ScopeDashboard } from "@/pages/dashboards/ScopeDashboard";
 import { ParticipationCard } from "@/pages/participations/ParticipationCard";
 import { Section } from "@/pages/replications/tabs/OverviewTab";
+import { EntityTasksTab } from "@/pages/tasks/EntityTasksTab";
+import { UpdatesTab } from "@/pages/tasks/UpdatesTab";
 import { NotesTab } from "@/pages/workspace/NotesTab";
 import { combineLive } from "@/registry/combine";
 import { countryName, LABORATORY_STATUS_LABELS, PARTICIPATION_STATUS_LABELS } from "@/registry/labels";
@@ -46,7 +48,17 @@ import { EquipmentTab } from "./EquipmentTab";
 import { LaboratoryMembersTab } from "./LaboratoryMembersTab";
 import { RepresentDialog } from "./RepresentDialog";
 
-const TAB_IDS = ["profile", "members", "equipment", "participations", "activity", "notes", "dashboard"] as const;
+const TAB_IDS = [
+  "profile",
+  "members",
+  "equipment",
+  "participations",
+  "activity",
+  "tasks",
+  "updates",
+  "notes",
+  "dashboard",
+] as const;
 type TabId = (typeof TAB_IDS)[number];
 
 const TAB_LABELS: Readonly<Record<TabId, string>> = {
@@ -55,6 +67,8 @@ const TAB_LABELS: Readonly<Record<TabId, string>> = {
   equipment: "Equipment",
   participations: "Participations",
   activity: "Activity",
+  tasks: "Tasks",
+  updates: "Updates",
   notes: "Notes",
   dashboard: "Dashboard",
 };
@@ -428,6 +442,27 @@ function LaboratoryRecord({ laboratory, viewer }: { laboratory: Laboratory; view
       id: "activity",
       live: combineLive([history, configurations] as const, () => activity.length > 0),
       render: () => <ActivityTab entries={activity} />,
+    },
+    // Every laboratory has tasks and a log of progress updates, which every member may read.
+    {
+      id: "tasks",
+      live: { status: "ready", data: true, fromCache: false, hasPendingWrites: false },
+      render: () => <EntityTasksTab viewer={viewer} entityType="laboratory" entityId={laboratory.id} />,
+    },
+    {
+      id: "updates",
+      live: { status: "ready", data: true, fromCache: false, hasPendingWrites: false },
+      render: () => (
+        <UpdatesTab
+          viewer={viewer}
+          entityType="laboratory"
+          entityId={laboratory.id}
+          canPost={
+            viewer.access.member &&
+            (viewer.readsLaboratoryDetail(laboratory.id) || viewer.can("labs.manage", { laboratoryId: laboratory.id }))
+          }
+        />
+      ),
     },
     // Every laboratory has notes, which every member may read.
     {

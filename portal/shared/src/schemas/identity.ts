@@ -100,6 +100,8 @@ export const notificationTypeSchema = z.enum([
   "protocolUpdate",
   "milestone",
   "integrationFailure",
+  "progressUpdate",
+  "recruitmentInactive",
 ]);
 export type NotificationType = z.output<typeof notificationTypeSchema>;
 

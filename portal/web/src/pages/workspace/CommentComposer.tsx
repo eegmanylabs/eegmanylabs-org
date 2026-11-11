@@ -4,7 +4,7 @@
 // chooses and Escape closes it. A chosen name is stored as a mention (`commentMention` of the
 // shared package), which notifies the member.
 import { COMMENT_MENTIONS_MAX, commentMention, commentSegments } from "@eegml/shared";
-import { type FormEvent, type KeyboardEvent, useId, useMemo, useRef, useState } from "react";
+import { type FormEvent, type KeyboardEvent, type ReactNode, useId, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/utils/cn";
 import type { MentionCandidate } from "./members";
@@ -18,6 +18,10 @@ export interface CommentComposerProps {
   readonly onSubmit: (body: string, mentionUids: readonly string[]) => Promise<void>;
   readonly onCancel?: () => void;
   readonly autoFocus?: boolean;
+  /** The most members one text mentions, where it is fewer than a comment's. */
+  readonly mentionsMax?: number;
+  /** Controls of the text that come before its submit button, such as a choice to pin it. */
+  readonly beforeSubmit?: ReactNode;
 }
 
 /** The text of a stored body as the person sees it, with the mentions it holds. */
@@ -34,12 +38,16 @@ function editable(body: string): { readonly text: string; readonly mentions: Men
 }
 
 /** The stored body of what the person typed: each chosen name that is still in the text becomes a mention. */
-function stored(text: string, chosen: readonly MentionCandidate[]): { readonly body: string; readonly uids: string[] } {
+function stored(
+  text: string,
+  chosen: readonly MentionCandidate[],
+  most: number,
+): { readonly body: string; readonly uids: string[] } {
   let body = text.trim();
   const uids: string[] = [];
   for (const member of [...chosen].sort((a, b) => b.name.length - a.name.length)) {
     const typed = `@${member.name}`;
-    if (!body.includes(typed) || uids.length >= COMMENT_MENTIONS_MAX) continue;
+    if (!body.includes(typed) || uids.length >= most) continue;
     body = body.split(typed).join(commentMention(member.uid, member.name));
     if (!uids.includes(member.uid)) uids.push(member.uid);
   }
@@ -54,6 +62,8 @@ export function CommentComposer({
   onSubmit,
   onCancel,
   autoFocus = false,
+  mentionsMax = COMMENT_MENTIONS_MAX,
+  beforeSubmit,
 }: CommentComposerProps) {
   const start = useMemo(() => editable(initialBody ?? ""), [initialBody]);
   const [text, setText] = useState(start.text);
@@ -120,7 +130,7 @@ export function CommentComposer({
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    const { body, uids } = stored(text, chosen);
+    const { body, uids } = stored(text, chosen, mentionsMax);
     if (body === "") {
       setError("Write a comment first.");
       return;
@@ -205,6 +215,7 @@ export function CommentComposer({
           {error}
         </p>
       )}
+      {beforeSubmit}
       <div className="flex flex-wrap gap-2">
         <Button type="submit" variant="primary" size="sm" disabled={busy}>
           {busy ? "Saving" : submitLabel}

@@ -67,6 +67,21 @@ describe("describeNotification", () => {
     expect(describeNotification({ kind: "correctionResolved", outcome: "rejected" }).title).toContain("not accepted");
   });
 
+  it("says how long a laboratory has not reported, and leads to the recruitment of its participation", () => {
+    expect(
+      describeNotification({
+        kind: "recruitmentInactive",
+        silentDays: 34,
+        participationId: "SyntheticStudy2001__lab-a",
+        title: "Recruitment report overdue: SyntheticStudy2001 at Synthetic laboratory A",
+      }),
+    ).toEqual({
+      title: "A laboratory has not reported its recruitment for 34 days",
+      detail: "Recruitment report overdue: SyntheticStudy2001 at Synthetic laboratory A",
+      to: "/recruitment/participations/SyntheticStudy2001__lab-a",
+    });
+  });
+
   it("says something general about a kind it does not know, and leads nowhere", () => {
     expect(describeNotification({ kind: "somethingNew" })).toEqual({
       title: "Something changed that concerns you",

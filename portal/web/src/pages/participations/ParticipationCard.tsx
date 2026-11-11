@@ -4,8 +4,10 @@
 // compatibility of the laboratory's current equipment, the onboarding checklist and the
 // restricted details. What is restricted is asked for only where the rules allow the account
 // to read it, and is then shown; for anyone else the card says who can see it.
+
 import { type EquipmentRequirement, equipmentCompatibility, type ParticipationSide } from "@eegml/shared";
 import type { ReactNode } from "react";
+import { Link } from "react-router";
 import { formatDate } from "@/app/labels";
 import { Detail, Details } from "@/components/registry/details";
 import { OriginBadge } from "@/components/registry/origin-badge";
@@ -19,6 +21,7 @@ import {
   READINESS_LABELS,
   TRAINING_STATUS_LABELS,
 } from "@/registry/labels";
+import { participationRecruitmentPath } from "@/registry/paths";
 import { checklistOfParticipation, type ParticipationRecord } from "@/registry/queries";
 import type { Viewer } from "@/registry/viewer";
 import { ChecklistSection } from "./ChecklistSection";
@@ -112,6 +115,13 @@ export function ParticipationCard({
       <p className="text-xs text-fg-muted">
         The two targets are kept apart and never added: a participant can take part in both.
       </p>
+      {scope === null ? null : (
+        <p className="text-sm">
+          <Link className="text-fg-accent underline" to={participationRecruitmentPath(participation.id)}>
+            Recruitment reports of {label}
+          </Link>
+        </p>
+      )}
       <section className="grid gap-2" aria-label={`Equipment of ${label}`}>
         <h4 className="text-sm font-medium text-fg-strong">Equipment</h4>
         <CompatibilityStatement report={report} configurationName={configuration?.name ?? null} />

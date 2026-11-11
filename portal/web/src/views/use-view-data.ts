@@ -36,6 +36,13 @@ import {
   checklistsInScope,
   REPLICATION_STATUS_DEFINITIONS,
 } from "@/registry/queries";
+import {
+  currentCategories,
+  type RecruitmentData,
+  recruitmentCollections,
+  useRecruitmentData,
+} from "@/registry/recruitment-data";
+import { roleOnTask, type TaskData, taskCollection, taskLookups, useTaskData } from "@/registry/task-data";
 import type { Viewer } from "@/registry/viewer";
 
 /** The most rows of a database a view reads: ten pages of the limit of one query. */
@@ -101,8 +108,38 @@ function mayChangeCore(
     case "core:persons":
       return viewer.can("people.manage", "programme");
     case "core:checklistItems":
+    case "core:tasks":
+    case "core:recruitmentReports":
+    case "core:recruitment":
+      // The functions of tasks decide who changes a task, which `taskEditable` asks, and a
+      // recruitment report is never changed: a correction is a new report.
       return false;
   }
+}
+
+/** The core sources that take no custom properties, and so no restricted values either. */
+const WITHOUT_CUSTOM: ReadonlySet<CoreSourceKey> = new Set([
+  "core:checklistItems",
+  "core:tasks",
+  "core:recruitmentReports",
+  "core:recruitment",
+]);
+
+/** The sources of recruitment, which read the reports. */
+const RECRUITMENT_SOURCES: ReadonlySet<string> = new Set(["core:recruitmentReports", "core:recruitment"]);
+
+/** The properties of a task that a participant changes beside its managers. */
+const PARTICIPANT_PROPERTIES: ReadonlySet<string> = new Set(["status", "progressPercent", "estimateMinutes"]);
+
+/** Whether the viewer may change a property of a task, as the functions of tasks decide it. */
+function taskEditable(viewer: Viewer, tasks: TaskData, recordId: string, property: ViewProperty): boolean {
+  if (property.source !== "coreEditable") return false;
+  const task = tasks.tasks.find((candidate) => candidate.id === recordId);
+  if (task === undefined || task.archivedAt !== null) return false;
+  const list = tasks.lists.find((candidate) => candidate.id === task.listId);
+  if (list?.archivedAt !== null) return false;
+  const role = roleOnTask(viewer, list, task);
+  return role === "manager" || (role === "participant" && PARTICIPANT_PROPERTIES.has(property.id));
 }
 
 /**
@@ -120,6 +157,8 @@ export function useViewData(collectionKey: string | null, viewer: Viewer, second
   const participations = useLiveCollection(ALL_PARTICIPATIONS);
   const statuses = useLiveQuery(REPLICATION_STATUS_DEFINITIONS);
   const checklists = orEmpty(useLiveQuery(checklistsInScope(viewer.staff ? "all" : viewer.queryScopeKeys)));
+  const taskData = useTaskData(coreKey === "core:tasks" ? viewer : null);
+  const recruitmentData = useRecruitmentData(coreKey !== null && RECRUITMENT_SOURCES.has(coreKey) ? viewer : null);
   const schema = useLiveDocument(
     "collectionSchemas",
     coreSource?.customKey === null || coreSource === null ? null : [coreSource.customKey],
@@ -166,7 +205,7 @@ export function useViewData(collectionKey: string | null, viewer: Viewer, second
   // The restricted custom values, of the records whose scope the viewer holds.
   const schemaData = schema.status === "ready" ? schema.data : null;
   const restrictedIds = useMemo((): [string][] => {
-    if (coreKey === null || coreKey === "core:checklistItems" || schemaData === null) return [];
+    if (coreKey === null || WITHOUT_CUSTOM.has(coreKey) || schemaData === null) return [];
     const hasRestricted = Object.values(schemaData.properties).some(
       (definition) => definition.audience === "restricted" && definition.archivedAt === null,
     );
@@ -186,12 +225,23 @@ export function useViewData(collectionKey: string | null, viewer: Viewer, second
     return ids.map((id) => [id]);
   }, [coreKey, schemaData, participations, replications, laboratories, viewer]);
   const restricted = useLiveDocumentsAt(
-    coreKey === null || coreKey === "core:checklistItems" ? "participationCustom" : RESTRICTED_ENTRY[coreKey],
+    coreKey === null || WITHOUT_CUSTOM.has(coreKey)
+      ? "participationCustom"
+      : RESTRICTED_ENTRY[coreKey as keyof typeof RESTRICTED_ENTRY],
     restrictedIds,
   );
 
   const ready = combineLive(
-    [persons, replications, laboratories, participations, statuses, checklists] as const,
+    [
+      persons,
+      replications,
+      laboratories,
+      participations,
+      statuses,
+      checklists,
+      orIdleTasks(taskData),
+      orIdleRecruitment(recruitmentData),
+    ] as const,
     (...values) => values,
   );
   const ownReady = combineLive(
@@ -211,7 +261,16 @@ export function useViewData(collectionKey: string | null, viewer: Viewer, second
     if (collectionKey === null) return { status: "idle" };
     if (ready.status !== "ready") return ready;
     if (ownReady.status !== "ready") return ownReady;
-    const [personList, replicationList, laboratoryList, participationList, statusList, checklistList] = ready.data;
+    const [
+      personList,
+      replicationList,
+      laboratoryList,
+      participationList,
+      statusList,
+      checklistList,
+      tasks,
+      recruitment,
+    ] = ready.data;
     const names = new Map<string, string>();
     for (const person of personList.items) if (person.userId !== null) names.set(person.userId, person.displayName);
     const people = [...names]
@@ -223,6 +282,15 @@ export function useViewData(collectionKey: string | null, viewer: Viewer, second
       replicationStatuses: [...statusList]
         .sort((a, b) => a.position - b.position)
         .map((status) => ({ key: status.key, label: status.label })),
+      ...(tasks === null ? {} : taskLookups(tasks)),
+      ...(recruitment === null
+        ? {}
+        : {
+            countCategories: currentCategories(recruitment.categories, "all").map((category) => ({
+              key: category.key,
+              label: category.label,
+            })),
+          }),
     };
     const customOf = (key: CoreSourceKey): Readonly<Record<string, StoredPropertyDefinition>> =>
       key === coreKey && schemaData !== null
@@ -251,7 +319,13 @@ export function useViewData(collectionKey: string | null, viewer: Viewer, second
       ["core:participations", core("core:participations", participationList.items)],
       ["core:checklistItems", core("core:checklistItems", checklistList)],
     ]);
+    if (tasks !== null) collections.set("core:tasks", taskCollection(tasks, lookups));
     const now = new Date();
+    if (recruitment !== null) {
+      const built = recruitmentCollections(recruitment, participationList.items, lookups, todayIso(now));
+      collections.set("core:recruitmentReports", built.reports);
+      collections.set("core:recruitment", built.states);
+    }
     const context: EngineContext = {
       today: todayIso(now),
       now,
@@ -318,6 +392,40 @@ export function useViewData(collectionKey: string | null, viewer: Viewer, second
 
     if (coreKey === null) return { status: "error", error: { code: "not-found", message: "No such collection." } };
     const collection = collections.get(coreKey) as CollectionData;
+    if (coreKey === "core:recruitmentReports" || coreKey === "core:recruitment") {
+      return {
+        status: "ready",
+        fromCache: false,
+        hasPendingWrites: false,
+        data: {
+          collection,
+          context,
+          database: null,
+          canEdit: () => false,
+          canAddRows: false,
+          canManageProperties: false,
+          truncated: recruitment?.truncated ?? false,
+          people,
+        },
+      };
+    }
+    if (coreKey === "core:tasks") {
+      return {
+        status: "ready",
+        fromCache: false,
+        hasPendingWrites: false,
+        data: {
+          collection,
+          context,
+          database: null,
+          canEdit: (record, property) => tasks !== null && taskEditable(viewer, tasks, record.id, property),
+          canAddRows: false,
+          canManageProperties: false,
+          truncated: tasks?.truncated ?? false,
+          people,
+        },
+      };
+    }
     const sourceData = new Map(
       {
         "core:replications": replicationList.items,
@@ -345,6 +453,16 @@ export function useViewData(collectionKey: string | null, viewer: Viewer, second
       },
     };
   }, [collectionKey, coreKey, databaseId, ready, ownReady, schemaData, relatedIds, viewer, secondFactor]);
+}
+
+/** The recruitment data where it was asked for, and null where it was not. */
+function orIdleRecruitment(live: Live<RecruitmentData>): Live<RecruitmentData | null> {
+  return live.status === "idle" ? { status: "ready", data: null, ...READY } : live;
+}
+
+/** The tasks where they were asked for, and null where they were not. */
+function orIdleTasks(live: Live<TaskData>): Live<TaskData | null> {
+  return live.status === "idle" ? { status: "ready", data: null, ...READY } : live;
 }
 
 // An idle value stands for "nothing asked for", which these views read as empty.
