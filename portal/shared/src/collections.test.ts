@@ -67,7 +67,7 @@ const parameterNames = (path: string) => [...path.matchAll(/\{([^{}]+)\}/g)].map
 
 describe("the registry", () => {
   it("has one entry for every collection, subcollection and fixed-name document of the data model", () => {
-    expect(COLLECTION_KEYS).toHaveLength(143);
+    expect(COLLECTION_KEYS).toHaveLength(144);
     expect(COLLECTION_ENTRIES.map((entry) => entry.key)).toEqual(COLLECTION_KEYS);
   });
 
@@ -201,7 +201,7 @@ describe("the enforcement of an entry", () => {
         "eventFailures",
       ].sort(),
     );
-    expect(COLLECTION_ENTRIES.filter((entry) => entry.enforcement === "enforced")).toHaveLength(101);
+    expect(COLLECTION_ENTRIES.filter((entry) => entry.enforcement === "enforced")).toHaveLength(102);
   });
 
   it("never opens a document beneath a parent that is still closed", () => {
@@ -356,7 +356,16 @@ describe("the access rules of an entry", () => {
         entry.write.mode === "client" && entry.write.grants.some((grant) => grant.operations.includes("delete")),
     ).map((entry) => entry.key);
     expect(deletable.sort()).toEqual(
-      ["pageContent", "pageUpdates", "reminders", "userFavourites", "userRecents", "userSubscriptions", "views"].sort(),
+      [
+        "pageContent",
+        "pagePresence",
+        "pageUpdates",
+        "reminders",
+        "userFavourites",
+        "userRecents",
+        "userSubscriptions",
+        "views",
+      ].sort(),
     );
   });
 
@@ -683,6 +692,7 @@ describe("the flags of an entry", () => {
         "userRecents",
         "pageContent",
         "pageUpdates",
+        "pagePresence",
         "pageVersionChunks",
         "datasetManifestFileChunks",
       ].sort(),

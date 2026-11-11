@@ -1,7 +1,13 @@
 // The files of a page in Cloud Storage (D-010). The page body holds the path of a file with the
 // scheme `PAGE_FILE_SCHEME`, never a download address: a file is read with the reader's own
 // credentials each time, so the storage rules, which follow the page, decide every read.
-import { PAGE_FILE_MAX_BYTES, PAGE_FILE_SCHEME, pageFilePath } from "@eegml/shared";
+import {
+  PAGE_FILE_MAX_BYTES,
+  PAGE_FILE_SCHEME,
+  pageFileContentType,
+  pageFilePath,
+  pageFileServedType,
+} from "@eegml/shared";
 import { getBlob, ref, uploadBytes } from "firebase/storage";
 import { storage } from "./firebase";
 
@@ -26,7 +32,8 @@ export async function uploadPageFile(pageId: string, uid: string, file: File): P
   const path = pageFilePath(pageId, fileId(), file.name);
   try {
     await uploadBytes(ref(storage, path), file, {
-      contentType: file.type || "application/octet-stream",
+      // A type that a browser would run as a document, such as HTML or SVG, is stored as bytes.
+      contentType: pageFileContentType(file.type),
       customMetadata: { uploadedBy: uid },
     });
   } catch {
@@ -37,10 +44,12 @@ export async function uploadPageFile(pageId: string, uid: string, file: File): P
 
 /**
  * The address a browser shows a file of a page at: a local `blob:` address of the bytes, read
- * with the reader's credentials. Any other address is returned as it is.
+ * with the reader's credentials. A `blob:` address has the portal's own origin, so only an image
+ * keeps its type; every other file is given as bytes, which a browser downloads and never
+ * renders as a document of the portal. Any other address is returned as it is.
  */
 export async function pageFileUrl(address: string): Promise<string> {
   if (!address.startsWith(PAGE_FILE_SCHEME)) return address;
   const blob = await getBlob(ref(storage, address.slice(PAGE_FILE_SCHEME.length)));
-  return URL.createObjectURL(blob);
+  return URL.createObjectURL(new Blob([blob], { type: pageFileServedType(blob.type) }));
 }

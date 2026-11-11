@@ -264,7 +264,7 @@ describe("custom properties", () => {
 });
 
 describe("views", () => {
-  it("are read by their owner alone until shared, and by every member afterwards", async () => {
+  it("are read by their owner alone until shared, and by those who read what they show afterwards", async () => {
     await expectOutcomes({
       "the owner reads the personal view": ["allowed", get("owner", PERSONAL_VIEW)],
       "another member reads it": ["denied", get("member", PERSONAL_VIEW)],
@@ -272,7 +272,21 @@ describe("views", () => {
       "a member reads the shared view": ["allowed", get("member", SHARED_VIEW)],
       "an account without membership reads the shared view": ["denied", get("noMembership", SHARED_VIEW)],
       "the owner lists their views": ["allowed", list("owner", "views", where("ownerUid", "==", OWNER_UID), limit(10))],
-      "a member lists the shared views": ["allowed", list("member", "views", where("isShared", "==", true), limit(10))],
+      "a member lists the shared views of a collection": [
+        "allowed",
+        list(
+          "member",
+          "views",
+          where("collectionKey", "==", "core:participations"),
+          where("isShared", "==", true),
+          limit(10),
+        ),
+      ],
+      // The rules read the database of a shared view by its collection, which the list must name.
+      "a member lists the shared views of every collection": [
+        "denied",
+        list("member", "views", where("isShared", "==", true), limit(10)),
+      ],
       "a member lists another's views": [
         "denied",
         list("member", "views", where("ownerUid", "==", OWNER_UID), limit(10)),

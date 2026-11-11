@@ -571,6 +571,14 @@ export function pageContentChunkId(generation: number, index: number): string {
   return compose([sequenceId(generation), sequenceId(index)]);
 }
 
+/**
+ * `uid__tab`: the presence of one open tab of an account on a page. The account comes first, so
+ * that the rules see whose document a path names before it exists.
+ */
+export function pagePresenceId(uid: string, tab: string): string {
+  return compose([uid, tab]);
+}
+
 // Scientific outputs.
 
 /** The highest ordinal that the identifier of a contributor can carry. */
@@ -783,6 +791,7 @@ export const ID_BUILDERS = {
   pagePermissionId,
   sequenceId,
   pageContentChunkId,
+  pagePresenceId,
   contributorTableId,
   contributorId,
   sourceTabKey,

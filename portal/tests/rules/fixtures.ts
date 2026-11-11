@@ -16,6 +16,7 @@ import {
   type PageAccessFacts,
   pageContentChunkId,
   pagePermissionId,
+  pagePresenceId,
   recordGrantId,
   replicationMembershipId,
   replicationScopeKey,
@@ -58,8 +59,16 @@ import {
 } from "./world";
 
 /** A query constraint, and what it proves about every document the query could return. */
+export type ListConstraint = readonly [field: string, operator: WhereFilterOp, value: unknown];
+
 export interface ListCase {
-  readonly where: readonly [field: string, operator: WhereFilterOp, value: unknown];
+  readonly where: ListConstraint;
+  /**
+   * Further constraints that every list of the collection names, where the rules read another
+   * document by a field of the listed ones: a thread's page by `targetId`, a shared view's
+   * database by `collectionKey`. They prove nothing of the scope.
+   */
+  readonly also?: readonly ListConstraint[];
   readonly proves: Known;
 }
 
@@ -231,6 +240,11 @@ const newEntityReference = { entityType: "laboratory", entityId: OWN_LABORATORY 
 const PAGE = entityRefId("replication", OWN_REPLICATION);
 const PAGE_PATH = `pages/${PAGE}`;
 const PAGE_SCOPE = [LABORATORY_KEY, MEMBERS_SCOPE_KEY, REPLICATION_KEY];
+/** The tabs of the stored presence on the page and of a new one. */
+const STORED_TAB = "StoredTabAbCdEfGhIjK";
+const NEW_TAB = "NewTabAbCdEfGhIjKlMn";
+/** The author of the stored comment: a member of the laboratory, who may comment on the page. */
+export const COMMENT_AUTHOR_UID = uidOfCaller("ownLabMember");
 const PAGE_LEVELS = { comment: [LABORATORY_KEY, REPLICATION_KEY], edit: [REPLICATION_KEY], full: [] };
 const PAGE_FACTS: PageAccessFacts = {
   accessMode: "inherit",
@@ -1467,6 +1481,30 @@ export const FIXTURES: { readonly [K in CollectionKey]?: Fixture } = {
     seed: document({ pageId: PAGE, principalType: "user", principalId: MEMBER_UID, level: "view" }),
     subject: ON_PAGE,
   },
+  pagePresence: {
+    ids: [PAGE, pagePresenceId(OWNER_UID, STORED_TAB)],
+    seed: document({
+      pageId: PAGE,
+      uid: OWNER_UID,
+      tab: STORED_TAB,
+      clientId: 7,
+      clock: 1,
+      state: JSON.stringify({ user: { name: "Owner Example", color: "var(--accent)" } }),
+    }),
+    subject: { ...ON_PAGE, ownerUid: OWNER_UID },
+    create: {
+      ids: [PAGE, pagePresenceId(OWNER_UID, NEW_TAB)],
+      data: (uid) => ({
+        pageId: PAGE,
+        uid,
+        tab: NEW_TAB,
+        clientId: 8,
+        clock: 1,
+        state: JSON.stringify({ user: { name: "Owner Example", color: "var(--accent)" } }),
+      }),
+    },
+    update: () => ({ clock: 2, state: JSON.stringify({ user: { name: "Owner Example" }, cursor: null }) }),
+  },
   threads: {
     ids: [THREAD],
     seed: document({
@@ -1479,7 +1517,7 @@ export const FIXTURES: { readonly [K in CollectionKey]?: Fixture } = {
       resolvedBy: null,
     }),
     subject: ON_PAGE,
-    listBy: [BY_MEMBERS_KEY],
+    listBy: [{ ...BY_MEMBERS_KEY, also: [["targetId", "==", PAGE]] }],
     create: {
       ids: [autoId("new thread")],
       data: () => ({
@@ -1498,14 +1536,14 @@ export const FIXTURES: { readonly [K in CollectionKey]?: Fixture } = {
     ids: [THREAD, autoId("stored comment")],
     seed: document({
       threadId: THREAD,
-      authorUid: OWNER_UID,
+      authorUid: COMMENT_AUTHOR_UID,
       body: "A synthetic comment about the impedance.",
       mentionUids: [],
       editedAt: null,
       deletedAt: null,
       ...PAGE_SCOPE_FIELDS,
     }),
-    subject: { ...ON_PAGE, authorUid: OWNER_UID },
+    subject: { ...ON_PAGE, authorUid: COMMENT_AUTHOR_UID },
     listBy: [BY_MEMBERS_KEY],
     create: {
       ids: [THREAD, autoId("new comment")],
@@ -1601,7 +1639,11 @@ export const FIXTURES: { readonly [K in CollectionKey]?: Fixture } = {
     subject: { ownerUid: OWNER_UID, memberVisible: false },
     listBy: [
       { where: ["ownerUid", "==", OWNER_UID], proves: { ownerUid: OWNER_UID } },
-      { where: ["isShared", "==", true], proves: { memberVisible: true } },
+      {
+        where: ["isShared", "==", true],
+        also: [["collectionKey", "==", "core:participations"]],
+        proves: { memberVisible: true },
+      },
     ],
   },
   dashboards: {

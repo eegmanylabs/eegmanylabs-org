@@ -67,6 +67,9 @@ describe("resolveBuildConfig", () => {
   it("builds Google sign-in in only when the flag says so", () => {
     expect(resolveBuildConfig("emulator", { VITE_ENABLE_GOOGLE_SIGN_IN: "true" }, ports).googleSignIn).toBe(true);
     expect(resolveBuildConfig("emulator", { VITE_ENABLE_GOOGLE_SIGN_IN: "false" }, ports).googleSignIn).toBe(false);
+    expect(resolveBuildConfig("emulator", {}, ports).presence).toBe("cursor");
+    expect(resolveBuildConfig("emulator", { VITE_PRESENCE: "presence" }, ports).presence).toBe("presence");
+    expect(() => resolveBuildConfig("emulator", { VITE_PRESENCE: "carets" }, ports)).toThrow(/VITE_PRESENCE/);
     expect(() => resolveBuildConfig("emulator", { VITE_ENABLE_GOOGLE_SIGN_IN: "yes" }, ports)).toThrow(
       /"true" or "false"/,
     );

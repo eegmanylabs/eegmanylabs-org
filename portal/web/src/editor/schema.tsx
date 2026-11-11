@@ -3,7 +3,7 @@
 // read pages with, so a page means the same in the browser and on the server.
 
 import { codeBlockOptions } from "@blocknote/code-block";
-import { BlockNoteSchema, createCodeBlockSpec } from "@blocknote/core";
+import { BlockNoteSchema, createCodeBlockSpec, defaultBlockSpecs } from "@blocknote/core";
 import { createReactBlockSpec, createReactInlineContentSpec } from "@blocknote/react";
 import {
   CALLOUT_VARIANTS,
@@ -13,6 +13,7 @@ import {
   mentionInlineConfig,
 } from "@eegml/shared";
 import { CircleAlert, Info, NotebookPen, OctagonAlert } from "lucide-react";
+import { withControlLabels } from "./control-labels";
 import { LinkedViewBlock } from "./linked-view";
 
 const CALLOUT_LABELS: Readonly<Record<CalloutVariant, string>> = {
@@ -84,7 +85,10 @@ const mention = createReactInlineContentSpec(mentionInlineConfig, {
 
 export const pageSchema = BlockNoteSchema.create().extend({
   blockSpecs: {
-    codeBlock: createCodeBlockSpec(codeBlockOptions),
+    // The controls these blocks draw are named, and their headings stepped down, as they are drawn.
+    codeBlock: withControlLabels(createCodeBlockSpec(codeBlockOptions)),
+    checkListItem: withControlLabels(defaultBlockSpecs.checkListItem),
+    heading: withControlLabels(defaultBlockSpecs.heading),
     callout: callout(),
     linkedView: linkedView(),
   },

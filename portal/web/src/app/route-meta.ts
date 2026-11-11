@@ -14,6 +14,11 @@ export interface RouteHandle {
    * The title remains the text of the browser tab.
    */
   readonly crumb?: ComponentType<{ readonly params: Readonly<Params> }>;
+  /**
+   * Renders the crumbs that lead to this one without being routes above it, such as the page
+   * that a database sits beneath, as items of the list of crumbs.
+   */
+  readonly trail?: ComponentType<{ readonly params: Readonly<Params> }>;
 }
 
 export interface Crumb {
@@ -21,6 +26,7 @@ export interface Crumb {
   readonly path: string;
   readonly params: Readonly<Params>;
   readonly Label: RouteHandle["crumb"];
+  readonly Trail: RouteHandle["trail"];
 }
 
 const hasTitle = (match: UIMatch): match is UIMatch<unknown, RouteHandle> => {
@@ -37,6 +43,7 @@ export function useCrumbs(): readonly Crumb[] {
       path: match.pathname,
       params: match.params,
       Label: match.handle.crumb,
+      Trail: match.handle.trail,
     }));
 }
 

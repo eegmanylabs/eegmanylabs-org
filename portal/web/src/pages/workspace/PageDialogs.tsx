@@ -327,3 +327,48 @@ export function ShortcutsDialog({
     </Dialog>
   );
 }
+
+/** Saves a version of a page, with a name that the person may give it. */
+export function SaveVersionDialog({
+  open,
+  onOpenChange,
+  busy,
+  onSave,
+}: {
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly busy: boolean;
+  /** Saves the version with its name, or without one. Resolves whether it was saved. */
+  readonly onSave: (label: string | undefined) => Promise<boolean>;
+}) {
+  const [label, setLabel] = useState("");
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    const trimmed = label.trim();
+    if (await onSave(trimmed === "" ? undefined : trimmed)) {
+      setLabel("");
+      onOpenChange(false);
+    }
+  };
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent title="Save a version" description="The version keeps the page as it is now.">
+        <form className="mt-4 grid gap-4" onSubmit={(event) => void submit(event)}>
+          <FormField label="Name of the version" hint="Optional. For example, Before the data freeze.">
+            {(control) => (
+              <Input {...control} value={label} maxLength={300} onChange={(event) => setLabel(event.target.value)} />
+            )}
+          </FormField>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" disabled={busy}>
+              Save the version
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

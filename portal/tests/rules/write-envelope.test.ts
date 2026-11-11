@@ -46,9 +46,12 @@ const writable = COLLECTION_ENTRIES.filter(
 /** A time that a client chose for itself: an hour before the request. */
 const clientTime = () => Timestamp.fromMillis(Date.now() - 3_600_000);
 
-/** An allowed writer of an operation: an administrator where one may write, and the owner or a member otherwise. */
+/**
+ * An allowed writer of an operation: an administrator where one may write, and the owner, a
+ * member or a member of the laboratory otherwise (the author of the stored comment is one).
+ */
 function writerOf(entry: CollectionEntry, operation: WriteOperation, known: Known): CallerProfile {
-  const writer = [CALLERS.admin, CALLERS.owner, CALLERS.member].find(
+  const writer = [CALLERS.admin, CALLERS.owner, CALLERS.member, CALLERS.ownLabMember].find(
     (caller) => grantsFor(entry, operation, caller, known).length > 0,
   );
   if (writer === undefined) throw new Error(`Nobody of the world may ${operation} a document of ${entry.key}.`);

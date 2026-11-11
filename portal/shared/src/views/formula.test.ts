@@ -68,6 +68,15 @@ describe("the formulas the programme needs", () => {
     expect(run('if(empty(prop("Nothing")), null, prop("Target") - prop("Nothing"))')).toBeNull();
   });
 
+  it("gives an unknown result, not an error, where an operand is empty", () => {
+    expect(run('prop("Nothing") * 2')).toBeNull();
+    expect(run('prop("Target") - prop("Nothing")')).toBeNull();
+    expect(run('prop("Nothing") < 3')).toBeNull();
+    expect(run('prop("Nothing") == null')).toBe(true);
+    expect(run('"Lab " + prop("Nothing")')).toBe("Lab ");
+    expect(failure("true * 2")).toMatch(/needs a number/);
+  });
+
   it("computes the days to a due date", () => {
     expect(run('dateBetween(prop("Due"), today(), "days")')).toBe(10);
     expect(run('dateBetween(today(), prop("Due"), "days")')).toBe(-10);

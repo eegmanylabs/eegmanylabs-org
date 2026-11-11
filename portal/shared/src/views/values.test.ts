@@ -329,6 +329,17 @@ describe("the layout of a dashboard", () => {
   it("closes holes and places a new widget below the others", () => {
     expect(compactLayout([{ id: "x", x: 0, y: 5, w: 2, h: 1 }])).toEqual([{ id: "x", x: 0, y: 0, w: 2, h: 1 }]);
     expect(nextPlacement(layout, "d", 20, 4)).toEqual({ id: "d", x: 0, y: 5, w: 12, h: 4 });
+    // A figure, a chart and two narrow notes fill the free places beside one another first.
+    const figure = nextPlacement([], "figure", 3, 2);
+    const chart = nextPlacement([figure], "chart", 6, 4);
+    const note = nextPlacement([figure, chart], "note", 3, 2);
+    const second = nextPlacement([figure, chart, note], "second", 3, 2);
+    expect([figure, chart, note, second].map(({ x, y }) => [x, y])).toEqual([
+      [0, 0],
+      [3, 0],
+      [9, 0],
+      [0, 2],
+    ]);
     expect(placeWidget(layout, "c", 0, 0)[2]).toEqual({ id: "c", x: 0, y: 0, w: 12, h: 3 });
     expect(placeWidget(layout, "missing", 0, 0)).toEqual(layout);
   });

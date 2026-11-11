@@ -49,6 +49,20 @@ test.beforeAll(async () => {
 /** The text of the editor of a page, as the reader sees it. */
 const editorOf = (page: Page) => page.getByTestId("page-editor").locator(".bn-editor");
 
+/**
+ * The text of the editor without the carets of collaborators, whose names the editor draws
+ * inside the text where each one's caret stands.
+ */
+async function textOf(page: Page): Promise<string> {
+  return editorOf(page).evaluate((root) => {
+    const copy = root.cloneNode(true) as HTMLElement;
+    for (const caret of copy.querySelectorAll(".collaboration-cursor__base, .bn-collaboration-cursor__base")) {
+      caret.remove();
+    }
+    return copy.textContent ?? "";
+  });
+}
+
 /** Waits until the page says that every change has reached the server. */
 async function saved(page: Page): Promise<void> {
   await expect(page.getByTestId("save-state")).toHaveText("Saved", { timeout: 30_000 });
@@ -133,6 +147,9 @@ test("AS-7: a member edits the notes of a replication, comments, mentions a memb
     // Version history: a named version, listed with its author, shown read only.
     await page.getByRole("button", { name: "History" }).click();
     await page.getByRole("button", { name: "Save a version" }).click();
+    await page.getByRole("dialog").getByLabel("Name of the version").fill("Before the synthetic review");
+    await page.getByRole("dialog").getByRole("button", { name: "Save the version" }).click();
+    await expect(page.getByTestId("version").first()).toContainText("Before the synthetic review");
     const version = page.getByTestId("version").first();
     await expect(version).toContainText(IVY.name);
     await version.click();
@@ -184,6 +201,9 @@ test("two members typing in the same paragraph converge, and a reload restores w
     await ben.page.goto(address);
     const benEditor = editorOf(ben.page);
     await expect(benEditor).toContainText("Shared paragraph");
+    // Each sees that the other has the page open.
+    await expect(page.getByTestId("also-here")).toHaveText(`Also here: ${BEN.name}`, { timeout: 30_000 });
+    await expect(ben.page.getByTestId("also-here")).toHaveText(`Also here: ${IVY.name}`, { timeout: 30_000 });
     // Both type at once: Ivy at the start of the paragraph, Ben at its end.
     await benEditor.getByText("Shared paragraph").click();
     await ben.page.keyboard.press("End");
@@ -192,12 +212,12 @@ test("two members typing in the same paragraph converge, and a reload restores w
     await Promise.all([page.keyboard.type("IVY-AT-START "), ben.page.keyboard.type(" BEN-AT-END")]);
     await Promise.all([saved(page), saved(ben.page)]);
     const expected = "IVY-AT-START Shared paragraph BEN-AT-END";
-    await expect(editorOf(page)).toContainText(expected, { timeout: 30_000 });
-    await expect(benEditor).toContainText(expected, { timeout: 30_000 });
+    await expect.poll(() => textOf(page), { timeout: 30_000 }).toContain(expected);
+    await expect.poll(() => textOf(ben.page), { timeout: 30_000 }).toContain(expected);
 
     // A reload, and a browser that opens the page afresh, show the same.
     await ben.page.reload();
-    await expect(editorOf(ben.page)).toContainText(expected);
+    await expect.poll(() => textOf(ben.page), { timeout: 30_000 }).toContain(expected);
   } finally {
     await ben.context.close();
   }
@@ -230,9 +250,9 @@ test("an edit made offline is kept and reaches the other member once the connect
 
     await page.context().setOffline(false);
     await saved(page);
-    for (const editor of [editorOf(page), editorOf(ben.page)]) {
-      await expect(editor).toContainText("Written online. Ben meanwhile.", { timeout: 30_000 });
-      await expect(editor).toContainText("Written while offline.", { timeout: 30_000 });
+    for (const reader of [page, ben.page]) {
+      await expect.poll(() => textOf(reader), { timeout: 30_000 }).toContain("Written online. Ben meanwhile.");
+      await expect.poll(() => textOf(reader), { timeout: 30_000 }).toContain("Written while offline.");
     }
     // Offline, Firestore loads an image from Google to tell "network down" from "server down",
     // which the policy of an emulator build refuses. That is the one problem allowed here.
@@ -297,4 +317,81 @@ test("the formatting toolbar, the blocks and the comment of a selection are reac
   await page.getByRole("menuitem", { name: "Keyboard shortcuts" }).click();
   await expect(page.getByRole("dialog", { name: "Keyboard shortcuts" })).toContainText("Alt F10");
   expect(await seriousFindings(page)).toEqual([]);
+});
+
+test("a member who loses access to a page that they have open is told so, with a way out", async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const ben = await linkedBrowser(browser, baseURL as string, BEN.email);
+  try {
+    await signInAsIvy(page);
+    const address = await newWorkspacePage(page, "Access check");
+    await editorOf(page).click();
+    await page.keyboard.type("Soon for Ivy alone.");
+    await saved(page);
+    await ben.page.goto(address);
+    await expect(editorOf(ben.page)).toContainText("Soon for Ivy alone.");
+
+    // Ivy restricts the page to herself.
+    await page.getByRole("button", { name: "Share" }).click();
+    const dialog = page.getByRole("dialog", { name: "Share the page" });
+    await dialog.getByRole("radio", { name: /Only the people and groups listed here/ }).check();
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByText("Restricted", { exact: true })).toBeVisible({ timeout: 20_000 });
+
+    await expect(ben.page.getByRole("alert").getByText("You no longer have access to this page")).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(ben.page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("A page you cannot open");
+    await ben.page.reload();
+    await expect(ben.page.getByRole("alert").getByText("You no longer have access to this page")).toBeVisible({
+      timeout: 30_000,
+    });
+    await ben.page.getByRole("link", { name: "Go to the workspace" }).click();
+    await expect(ben.page.getByRole("heading", { level: 1, name: "Workspace" })).toBeVisible();
+  } finally {
+    await ben.context.close();
+  }
+});
+
+test("the editor is set in DM Sans, in the portal's words, and fits a narrow screen with its toolbar open", async ({
+  page,
+}) => {
+  await signInAsIvy(page);
+  await newWorkspacePage(page, "Typeface check");
+  await editorOf(page).click();
+  await page.keyboard.type("# A heading");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("Some **bold** text to select");
+  await saved(page);
+  const families = await editorOf(page).evaluate((root) => {
+    const found = new Set<string>();
+    for (const element of root.querySelectorAll("*"))
+      found.add(getComputedStyle(element).fontFamily.split(",")[0] ?? "");
+    return [...found];
+  });
+  expect(families.filter((family) => !family.includes("DM Sans") && !family.includes("monospace"))).toEqual([]);
+  // A heading of the content sits below the title of the page.
+  await expect(editorOf(page).locator("h1")).toHaveAttribute("aria-level", "2");
+
+  // The slash menu speaks UK English in sentence case.
+  await editorOf(page).locator(".bn-block-content").last().click();
+  await page.keyboard.type("/list");
+  await expect(page.getByRole("option", { name: /Numbered list/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await editorOf(page).getByText("Some").click();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("Shift+End");
+  await expect(page.locator(".bn-formatting-toolbar")).toBeVisible();
+  await expect(page.locator(".bn-formatting-toolbar").getByRole("button", { name: /Colours/ })).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+
+  // Below the wide layout, a panel opens above the page and takes the focus.
+  await page.getByRole("button", { name: "History" }).click();
+  await expect(page.getByRole("complementary", { name: "Beside the page" })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Version history" })).toBeInViewport();
 });

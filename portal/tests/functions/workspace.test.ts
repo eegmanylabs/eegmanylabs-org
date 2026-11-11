@@ -227,6 +227,39 @@ describe("moving and sharing pages", () => {
     expect(await auditOf("page.moved", b.pageId)).toHaveLength(1);
   });
 
+  it("refuses a move that changes who may open a page to an editor who may not share it", async () => {
+    const ada = await member("uid-ada", "Ada Example");
+    const ben = await member("uid-ben", "Ben Sample");
+    const board = await call(ada, createPageContract, { parentPageId: null, title: "Board" });
+    await call(ada, setPageSharingContract, {
+      pageId: board.pageId,
+      accessMode: "restricted",
+      permissions: [{ principalType: "user", principalId: ben.uid, level: "edit" }],
+    });
+    const minutes = await call(ada, createPageContract, { parentPageId: board.pageId, title: "Minutes" });
+    const agenda = await call(ada, createPageContract, { parentPageId: board.pageId, title: "Agenda" });
+    const open = await call(ben, createPageContract, { parentPageId: null, title: "Open" });
+    const handbook = await call(ada, createPageContract, { parentPageId: null, title: "Handbook" });
+    const hideout = await call(ben, createPageContract, { parentPageId: null, title: "Private" });
+    await call(ben, setPageSharingContract, { pageId: hideout.pageId, accessMode: "restricted", permissions: [] });
+
+    // Publishing a page of a restricted board, and taking a page of the workspace from everyone.
+    expect(
+      await codeOf(call(ben, movePageContract, { pageId: minutes.pageId, parentPageId: open.pageId, order: "m" })),
+    ).toBe("permission-denied");
+    expect(
+      await codeOf(call(ben, movePageContract, { pageId: handbook.pageId, parentPageId: hideout.pageId, order: "m" })),
+    ).toBe("permission-denied");
+    expect((await pageOf(minutes.pageId)).scopeKeys).toEqual(["user:uid-ada", "user:uid-ben"]);
+    expect((await pageOf(handbook.pageId)).scopeKeys).toEqual(["members", "user:uid-ada"]);
+
+    // A move that keeps the audience needs the level edit alone, and one by a holder of full is allowed.
+    await call(ben, movePageContract, { pageId: agenda.pageId, parentPageId: minutes.pageId, order: "m" });
+    expect((await pageOf(agenda.pageId)).ancestorPageIds).toEqual([board.pageId, minutes.pageId]);
+    await call(ada, movePageContract, { pageId: minutes.pageId, parentPageId: null, order: "m" });
+    expect((await pageOf(agenda.pageId)).scopeKeys).toEqual(["members", "user:uid-ada"]);
+  });
+
   it("restricts a page to its principals, keeps its sharer at full access, and lets it inherit again", async () => {
     const ada = await member("uid-ada", "Ada Example");
     const ben = await member("uid-ben", "Ben Sample");
@@ -411,11 +444,33 @@ describe("the trigger of an editor's update", () => {
       expect.objectContaining({ actorUid: ada.uid, action: "page.edited", changedFields: ["content"] }),
     ]);
     expect(activity.docs[0]?.data()).not.toHaveProperty("title");
+    // The page was restricted after the spell began: its activity follows the narrower audience.
+    expect(activity.docs[0]?.get("scopeKeys")).toEqual(["user:uid-ada"]);
 
     await adminDb.doc(COLLECTIONS.pages.docPath(pageId)).update({ archivedAt: Timestamp.now() });
     await eventually(
       async () => !(await adminDb.doc(COLLECTIONS.searchIndex.docPath(searchIndexId("page", pageId, 0))).get()).exists,
       "the index entry of the archived page to go",
+    );
+  });
+});
+
+describe("an update that is no Yjs update", () => {
+  it("is skipped by every reader of the page and removed with an audit entry", async () => {
+    const ada = await member("uid-ada", "Ada Example");
+    const { pageId } = await call(ada, createPageContract, { parentPageId: null, title: "Synthetic agenda" });
+    await appendUpdate(pageId, ada.uid, new Uint8Array([1, 2, 3]));
+    await eventually(async () => (await auditOf("page.updateDiscarded", pageId)).length === 1, "the audit entry");
+    expect((await adminDb.collection(COLLECTIONS.pageUpdates.collectionPath(pageId)).get()).size).toBe(0);
+    await appendUpdate(pageId, ada.uid, blocksUpdate([{ id: "b1", text: "Still indexed" }]));
+    await eventually(
+      async () =>
+        (
+          (await adminDb.doc(COLLECTIONS.searchIndex.docPath(searchIndexId("page", pageId, 0))).get()).get("tokens") as
+            | string[]
+            | undefined
+        )?.includes("indexed"),
+      "the index entry of the page",
     );
   });
 });

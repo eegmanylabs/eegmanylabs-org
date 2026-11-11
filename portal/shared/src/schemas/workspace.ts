@@ -147,6 +147,31 @@ export const pagePermissionDocSchema = documentBaseSchema.extend({
 });
 export type PagePermissionDoc = z.output<typeof pagePermissionDocSchema>;
 
+/** The longest awareness state that a presence document holds, in characters. */
+export const PAGE_PRESENCE_STATE_MAX = 4_000;
+
+/**
+ * `pages/{pageId}/presence/{uid__tab}`: who has a page open, and in the mode "cursor" where their
+ * caret is (D-010). One document for each open tab of an account, written by that tab: its
+ * awareness state as JSON, rewritten when it changes and as a heartbeat, and removed when the tab
+ * closes or is hidden. `updatedAt` is the time of its last heartbeat.
+ */
+export const pagePresenceDocSchema = documentBaseSchema.extend({
+  pageId: idSchema,
+  uid: uidSchema,
+  /** Twenty letters and digits that name the tab. */
+  tab: z
+    .string()
+    .length(20)
+    .regex(/^[A-Za-z0-9]{20}$/),
+  /** The Yjs client identifier of the tab's document. */
+  clientId: z.number().int().min(0),
+  /** Counts the states the tab has written, as y-protocols counts them. */
+  clock: z.number().int().min(0),
+  state: z.string().min(2).max(PAGE_PRESENCE_STATE_MAX),
+});
+export type PagePresenceDoc = z.output<typeof pagePresenceDocSchema>;
+
 /**
  * `threads/{id}`: a thread of comments on any record. It carries the audience of its target as
  * scope fields, and one marked `restricted` takes the audience of the target's restricted document.
@@ -177,6 +202,13 @@ export const threadDocSchema = documentBaseSchema.extend({
   ...provenanceShape,
 });
 export type ThreadDoc = z.output<typeof threadDocSchema>;
+
+/**
+ * The text that stands in a removed comment, so that what was written is no longer stored. The
+ * security rules let an author who may no longer comment on the page remove a comment with this
+ * text alone.
+ */
+export const REMOVED_COMMENT_TEXT = "This comment was removed by its author.";
 
 /** `threads/{threadId}/comments/{commentId}`: a comment. Its author edits it, and removes it by setting `deletedAt`. */
 export const threadCommentDocSchema = documentBaseSchema.extend({

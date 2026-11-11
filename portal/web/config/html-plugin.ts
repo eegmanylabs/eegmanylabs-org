@@ -98,7 +98,7 @@ export function notFoundHtml({ publicPath, tokens, fontFile }: NotFoundPage): st
   <head>
     ${CHARSET_ELEMENT}
     <meta http-equiv="Content-Security-Policy" content="${policy}" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="robots" content="noindex, nofollow" />
     <meta name="theme-color" content="${escapeHtml(token("ink-950"))}" />

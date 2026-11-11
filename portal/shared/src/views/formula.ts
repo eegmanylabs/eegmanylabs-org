@@ -659,6 +659,14 @@ function evaluate(expression: Expression, environment: FormulaEnvironment, budge
       }
       const left = evaluate(expression.left, environment, budget);
       const right = evaluate(expression.right, environment, budget);
+      // An empty operand makes the result unknown, so that a record whose value is missing shows
+      // an empty cell rather than an error. Equality still compares, and + still joins a text.
+      const unknown =
+        (left === null || right === null) &&
+        operator !== "==" &&
+        operator !== "!=" &&
+        !(operator === "+" && (typeof left === "string" || typeof right === "string"));
+      if (unknown) return null;
       switch (operator) {
         case "==":
           return equal(left, right);

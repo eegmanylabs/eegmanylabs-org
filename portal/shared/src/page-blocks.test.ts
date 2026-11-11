@@ -6,7 +6,9 @@ import {
   commentMentionUids,
   commentPlainText,
   commentSegments,
+  pageFileContentType,
   pageFilePath,
+  pageFileServedType,
 } from "./page-blocks";
 
 describe("a comment body", () => {
@@ -38,5 +40,24 @@ describe("pageFilePath", () => {
     );
     expect(() => pageFilePath("page/one", "AbCdEfGhIjKlMnOpQrSt", "a.png")).toThrow(RangeError);
     expect(() => pageFilePath("pageOne", "short", "a.png")).toThrow(RangeError);
+  });
+});
+
+describe("the type of a file of a page", () => {
+  it("is stored as bytes where a browser would run it as a document", () => {
+    for (const type of ["text/html", "image/svg+xml", "application/xhtml+xml", "text/xml", "text/javascript", ""]) {
+      expect(pageFileContentType(type)).toBe("application/octet-stream");
+    }
+    expect(pageFileContentType("image/PNG")).toBe("image/png");
+    expect(pageFileContentType("application/pdf")).toBe("application/pdf");
+    expect(pageFileContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document")).toBe(
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    );
+  });
+
+  it("is given to a reader as an image only for the images a page shows, and as bytes otherwise", () => {
+    expect(pageFileServedType("image/webp")).toBe("image/webp");
+    expect(pageFileServedType("application/pdf")).toBe("application/octet-stream");
+    expect(pageFileServedType("text/html")).toBe("application/octet-stream");
   });
 });

@@ -42,8 +42,34 @@ export function chunksOf(bytes: Uint8Array): Uint8Array[] {
 type Reader = Pick<Transaction, "get">;
 
 /**
+ * Whether bytes decode as a Yjs update. The rules accept any bytes from an editor, so trusted
+ * code checks before it applies an update: one that does not decode is skipped, never thrown.
+ */
+export function decodesAsUpdate(bytes: Uint8Array): boolean {
+  try {
+    Y.decodeUpdate(bytes);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Applies an update to a document unless it does not decode. Returns whether it was applied. */
+function applyIfDecodable(doc: Y.Doc, bytes: Uint8Array): boolean {
+  if (!decodesAsUpdate(bytes)) return false;
+  try {
+    Y.applyUpdate(doc, bytes);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * The Yjs document of a page as it is stored now: the snapshot that `contentHead` names and every
- * update whose parts have all arrived. Pass a transaction to read one consistent state; a read
+ * update whose parts have all arrived. A snapshot or an update that does not decode is skipped,
+ * so that one editor's bad bytes cannot stop the mentions, the index and the versions of the
+ * page. Pass a transaction to read one consistent state; a read
  * outside one may meet a compaction halfway, which leaves an update applied twice and nothing
  * missing, because Yjs updates are idempotent.
  */
@@ -65,7 +91,7 @@ export async function loadPageDocument(
       .map((chunk) => chunk.data())
       .sort((a, b) => (a.index as number) - (b.index as number))
       .map((chunk) => bytesOf(chunk.snapshot as FirestoreBytes));
-    if (parts.length === page.contentHead.chunkCount) Y.applyUpdate(doc, concatenate(parts));
+    if (parts.length === page.contentHead.chunkCount) applyIfDecodable(doc, concatenate(parts));
   }
   const updates = await read(db.collection(COLLECTIONS.pageUpdates.collectionPath(pageId)));
   const groups = new Map<string, DocumentData[]>();
@@ -79,7 +105,7 @@ export async function loadPageDocument(
     // A large update arrives in parts, and is applied only once every part is there.
     if (parts.length !== parts[0]?.count) continue;
     const ordered = [...parts].sort((a, b) => (a.index as number) - (b.index as number));
-    Y.applyUpdate(doc, concatenate(ordered.map((part) => bytesOf(part.update as FirestoreBytes))));
+    applyIfDecodable(doc, concatenate(ordered.map((part) => bytesOf(part.update as FirestoreBytes))));
   }
   return doc;
 }

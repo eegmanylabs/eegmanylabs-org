@@ -26,9 +26,9 @@ export function threadsOfPage(viewer: Viewer, pageId: string): LiveQuery<"thread
   return { collection: "threads", within: [], where: [["targetId", "==", pageId], ...scoped(viewer)], limit: 200 };
 }
 
-/** The comments of a thread. */
-export function commentsOfThread(viewer: Viewer, threadId: string): LiveQuery<"threadComments"> {
-  return { collection: "threadComments", within: [threadId], where: [...scoped(viewer)], limit: 200 };
+/** The comments of a thread, which are read as the thread: its page decides, so no scope is named. */
+export function commentsOfThread(threadId: string): LiveQuery<"threadComments"> {
+  return { collection: "threadComments", within: [threadId], limit: 200 };
 }
 
 /** The saved versions of a page, newest first. The page decides who reads them. */

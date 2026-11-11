@@ -18,7 +18,8 @@ import {
   touchedFields,
   writeAudit,
 } from "../framework";
-import { readDatabase, readsDatabase } from "../views/collections";
+import { levelOn, readPage } from "../pages/pages";
+import { readDatabase, readsDatabaseNow } from "../views/collections";
 
 const VIEW_NOT_FOUND_MESSAGE = "This view does not exist, or your account may not open it.";
 
@@ -26,8 +27,10 @@ const VIEW_NOT_FOUND_MESSAGE = "This view does not exist, or your account may no
  * Saves a view. Capability: membership. A new view belongs to the caller, who alone sees it
  * until it is shared. An existing view is changed by its owner, and a shared one also by
  * programme administrators and the core team with their second factor; nobody changes whose it
- * is or which collection it shows. The collection must be one the caller reads. The view and its
- * audit entry are written in one transaction.
+ * is or which collection it shows. The collection must be one the caller reads, and the page it
+ * is placed on one the caller opens. A shared view of a database is read by the readers of the
+ * database alone, which the rules decide. The view and its audit entry are written in one
+ * transaction.
  */
 export const saveView = defineCallable(saveViewContract, {
   handler: async (input, context) => {
@@ -61,8 +64,18 @@ export const saveView = defineCallable(saveViewContract, {
         }
       } else {
         const database = await readDatabase(db, transaction, databaseId);
-        if (database === null || !readsDatabase(access, context.secondFactorVerified, database.data)) {
+        if (
+          database === null ||
+          !(await readsDatabaseNow(db, transaction, context.secondFactorVerified, access, database))
+        ) {
           throw new AppError("not-found", "There is no such collection.");
+        }
+      }
+      // A view placed on a page names a page that the caller reads.
+      if (input.pageId !== null) {
+        const page = await readPage(db, transaction, input.pageId);
+        if (page === null || levelOn(access, context.secondFactorVerified, page.data) === "none") {
+          throw new AppError("not-found", "This page does not exist, or your account may not open it.");
         }
       }
       const auditEventId = writeAudit(

@@ -23,7 +23,7 @@ import {
 import type { DocumentReference, Firestore, Transaction } from "firebase-admin/firestore";
 import { AppError, NOT_ALLOWED_MESSAGE, requireCapability } from "../framework";
 import type { AuthenticatedContext } from "../framework/context";
-import { levelOn, PAGE_NOT_FOUND_MESSAGE, readPage } from "../pages/pages";
+import { levelOn, readPage } from "../pages/pages";
 
 export const DATABASE_NOT_FOUND_MESSAGE = "This database does not exist, or your account may not open it.";
 
@@ -64,8 +64,25 @@ export function readsDatabase(access: ResolvedAccess, secondFactorVerified: bool
 }
 
 /**
+ * Whether the caller reads a database now: by the audience it copied and by its parent page as
+ * the page stands, so that a copy that a trigger has not rewritten yet after a change of sharing
+ * opens nothing. The rules make the same decision in `readsDatabaseAt`.
+ */
+export async function readsDatabaseNow(
+  db: Firestore,
+  transaction: Transaction,
+  secondFactorVerified: boolean,
+  access: ResolvedAccess,
+  database: StoredDatabase,
+): Promise<boolean> {
+  if (!readsDatabase(access, secondFactorVerified, database.data)) return false;
+  const page = await readPage(db, transaction, database.data.parentPageId);
+  return page !== null && levelOn(access, secondFactorVerified, page.data) !== "none";
+}
+
+/**
  * The level of the caller on a database, which is the level on its parent page. Refuses a
- * database the caller may not read as one that does not exist.
+ * database the caller may not read, by its copy or by its page, as one that does not exist.
  */
 export async function databaseLevel(
   db: Firestore,
@@ -78,8 +95,9 @@ export async function databaseLevel(
     throw new AppError("not-found", DATABASE_NOT_FOUND_MESSAGE);
   }
   const page = await readPage(db, transaction, database.data.parentPageId);
-  if (page === null) throw new AppError("not-found", PAGE_NOT_FOUND_MESSAGE);
-  return levelOn(access, context.secondFactorVerified, page.data);
+  const level = page === null ? "none" : levelOn(access, context.secondFactorVerified, page.data);
+  if (level === "none") throw new AppError("not-found", DATABASE_NOT_FOUND_MESSAGE);
+  return level;
 }
 
 /** Refuses a caller who may not edit a database, or a database that is archived. */

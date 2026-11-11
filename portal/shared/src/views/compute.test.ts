@@ -81,6 +81,7 @@ const PROPERTIES: ViewProperty[] = [
   }),
   property("remaining", "formula", { formula: { expression: 'prop("Target") - prop("Recruited")' } }),
   property("progress", "formula", { formula: { expression: 'round(prop("Recruited") / prop("Target") * 100)' } }),
+  property("ratio", "formula", { formula: { expression: 'prop("Target") / prop("Recruited")' } }),
   property("daysLeft", "formula", { formula: { expression: 'dateBetween(prop("Due"), today(), "days")' } }),
   property("loopA", "formula", { formula: { expression: 'prop("LoopB")' } }),
   property("loopB", "formula", { formula: { expression: 'prop("LoopA")' } }),
@@ -255,9 +256,14 @@ describe("formulas over records", () => {
 
   it("shows an error in the cell of the record where a formula fails, and nowhere else", () => {
     expect(derivedValue("b", "progress")).toBe(0);
-    expect(errorOf("d", "remaining")).toMatch(/needs a number, and was given nothing/);
-    expect(derivedValue("d", "remaining")).toBeNull();
+    expect(errorOf("b", "ratio")).toBe("Division by zero.");
+    expect(errorOf("a", "ratio")).toBeUndefined();
     expect(errorOf("a", "remaining")).toBeUndefined();
+  });
+
+  it("leaves a formula over an empty value empty, with no error", () => {
+    expect(errorOf("d", "remaining")).toBeUndefined();
+    expect(derivedValue("d", "remaining")).toBeNull();
   });
 
   it("reports a formula that refers to itself and one that does not parse", () => {

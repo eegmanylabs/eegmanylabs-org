@@ -37,6 +37,14 @@ export type Live<T> =
   | { readonly status: "error"; readonly error: LiveError };
 
 export const IDLE: Live<never> = { status: "idle" };
+
+/** The code of a failure in which the server refused the read: the account may not see the value. */
+export const DENIED = "permission-denied";
+
+/** Whether a live value is a refusal of the server, which an interface shows as no access. */
+export function isDenied(live: Live<unknown>): boolean {
+  return live.status === "error" && live.error.code === DENIED;
+}
 export const LOADING: Live<never> = { status: "loading" };
 
 /** Hands the cache a new value. A value may be an error about the data: the subscription goes on. */
@@ -147,8 +155,16 @@ export class SubscriptionCache {
     if (!existing) {
       this.#entries.set(key, entry);
       this.#open(entry);
-    } else if (entry.state.status === "error" && entry.stop === stopped && entry.retry === undefined) {
-      // The subscription gave up earlier. A new consumer is a reason to try again.
+    } else if (
+      entry.state.status === "error" &&
+      entry.state.error.code !== DENIED &&
+      entry.stop === stopped &&
+      entry.retry === undefined
+    ) {
+      // The subscription gave up earlier. A new consumer is a reason to try again, unless the
+      // server refused it: a refusal is an answer, and a component that mounts again, such as
+      // a name in a breadcrumb, must not start the wait over for every other consumer of it.
+      // `retryFailed` still starts it again on request.
       entry.failures = 0;
       entry.state = LOADING;
       this.#open(entry);

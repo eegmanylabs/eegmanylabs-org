@@ -160,10 +160,28 @@ export function resizeWidget(layout: readonly Placement[], id: string, dw: numbe
   );
 }
 
-/** The place for a new widget: below every other, across the width it asks for. */
+/**
+ * The place for a new widget, of the width and height it asks for: the first free place, row by
+ * row from the top and left to right, and otherwise below every other widget.
+ */
 export function nextPlacement(layout: readonly Placement[], id: string, w: number, h: number): Placement {
+  const width = clamp(w, 1, GRID_COLUMNS);
+  const height = clamp(h, 1, WIDGET_MAX_HEIGHT);
   const bottom = layout.reduce((lowest, placement) => Math.max(lowest, placement.y + placement.h), 0);
-  return { id, x: 0, y: bottom, w: clamp(w, 1, GRID_COLUMNS), h: clamp(h, 1, WIDGET_MAX_HEIGHT) };
+  const overlaps = (x: number, y: number) =>
+    layout.some(
+      (placement) =>
+        x < placement.x + placement.w &&
+        placement.x < x + width &&
+        y < placement.y + placement.h &&
+        placement.y < y + height,
+    );
+  for (let y = 0; y < bottom; y += 1) {
+    for (let x = 0; x + width <= GRID_COLUMNS; x += 1) {
+      if (!overlaps(x, y)) return { id, x, y, w: width, h: height };
+    }
+  }
+  return { id, x: 0, y: bottom, w: width, h: height };
 }
 
 /**

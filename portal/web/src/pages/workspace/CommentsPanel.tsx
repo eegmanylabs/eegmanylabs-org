@@ -1,7 +1,7 @@
 // The threads of a page (D-010): those anchored to a selection of its text and those about the
 // page as a whole, with their comments, replies, mentions, and resolution. Those who may comment
 // write here and nowhere in the page body, so the rules let them comment without editing.
-import { commentSegments, type PageAccessLevel } from "@eegml/shared";
+import { commentSegments, type PageAccessLevel, REMOVED_COMMENT_TEXT } from "@eegml/shared";
 import { Check, MessageSquare, RotateCcw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatDateTime } from "@/app/labels";
@@ -14,7 +14,6 @@ import {
   addComment,
   createThread,
   editComment,
-  REMOVED_COMMENT_TEXT,
   type RecordOf,
   removeComment,
   retryFailedLiveData,
@@ -157,6 +156,7 @@ function CommentItem({
 }
 
 function ThreadItem({
+  page,
   thread,
   viewer,
   members,
@@ -164,6 +164,7 @@ function ThreadItem({
   selected,
   onSelect,
 }: {
+  readonly page: RecordOf<"pages">;
   readonly thread: Thread;
   readonly viewer: Viewer;
   readonly members: Members;
@@ -171,7 +172,7 @@ function ThreadItem({
   readonly selected: boolean;
   readonly onSelect: () => void;
 }) {
-  const comments = useLiveQuery(commentsOfThread(viewer, thread.id));
+  const comments = useLiveQuery(commentsOfThread(thread.id));
   const [replying, setReplying] = useState(false);
   const toast = useToast();
   const resolved = thread.resolvedAt !== null;
@@ -259,7 +260,7 @@ function ThreadItem({
           autoFocus
           onCancel={() => setReplying(false)}
           onSubmit={async (body, mentionUids) => {
-            await addComment(viewer.uid, thread, body, mentionUids);
+            await addComment(viewer.uid, thread.id, page, body, mentionUids);
             setReplying(false);
           }}
         />
@@ -349,6 +350,7 @@ export function CommentsPanel({
         <div className="grid gap-3">
           {shown.map((thread) => (
             <ThreadItem
+              page={page}
               key={thread.id}
               thread={thread}
               viewer={viewer}

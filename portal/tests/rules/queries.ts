@@ -367,6 +367,24 @@ export const QUERY_CATALOGUE: readonly CataloguedQuery[] = [
     where: [["kind", "==", "custom"]],
     limit: 1_000,
   }),
+  // The titles of every page a reader may open, which the activity of a dashboard names.
+  catalogued("every page that a member reads", "member", "scopeKeys", {
+    collection: "pages",
+    within: [],
+    where: [["scopeKeys", "array-contains-any", heldBy("member")]],
+    limit: 1_000,
+  }),
+  catalogued("every page, for the programme", "admin", null, {
+    collection: "pages",
+    within: [],
+    limit: 1_000,
+  }),
+  catalogued("the presence of the other tabs on a page", "member", null, {
+    collection: "pagePresence",
+    within: [PAGE],
+    where: [["tab", "!=", "OwnTabAbCdEfGhIjKlMn"]],
+    limit: 100,
+  }),
   catalogued("the threads of a page", "ownLabMember", "scopeKeys", {
     collection: "threads",
     within: [],
@@ -382,10 +400,10 @@ export const QUERY_CATALOGUE: readonly CataloguedQuery[] = [
     where: [["targetId", "==", PAGE]],
     limit: LIMIT,
   }),
-  catalogued("the comments of a thread", "ownLabMember", "scopeKeys", {
+  // A comment is read as its thread, whose page decides, so the query names no scope.
+  catalogued("the comments of a thread", "ownLabMember", null, {
     collection: "threadComments",
     within: [THREAD],
-    where: [["scopeKeys", "array-contains-any", heldBy("ownLabMember")]],
     limit: LIMIT,
   }),
   catalogued("the versions of a page, newest first", "member", null, {

@@ -2,7 +2,7 @@
 // loading it is marked as loading, and where the record cannot be read the identifier stands in
 // for it, so that a list never shows a blank and never shows an identifier as if it were a name.
 import type { Live } from "@/data";
-import { useLiveDocument } from "@/data";
+import { isDenied, useLiveDocument } from "@/data";
 
 function NameOrId({ live, name, id }: { live: Live<unknown>; name: string | undefined; id: string }) {
   if (name !== undefined) return name;
@@ -29,8 +29,10 @@ export function ReplicationName({ id }: { id: string }) {
   return <NameOrId live={replication} id={id} name={title === undefined ? undefined : `${title} (${id})`} />;
 }
 
+/** The title of a page, or words that say so where the account may not open it. */
 export function PageTitle({ id }: { id: string }) {
   const page = useLiveDocument("pages", [id]);
+  if (isDenied(page)) return <span className="text-fg-secondary">A page you cannot open</span>;
   return <NameOrId live={page} id={id} name={page.status === "ready" ? page.data?.title : undefined} />;
 }
 

@@ -166,6 +166,7 @@ function SavedViews({
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const loadingViews = own.status === "loading" || shared.status === "loading";
   const views = useMemo(() => {
     const all = new Map<string, RecordOf<"views">>();
     for (const list of [own, shared]) if (list.status === "ready") for (const view of list.data) all.set(view.id, view);
@@ -209,8 +210,14 @@ function SavedViews({
     <div className="grid gap-3">
       <div className="grid gap-1">
         <span className="text-sm font-medium">Saved view</span>
-        <Select aria-label="Saved view" value={viewId ?? ""} onChange={(event) => open(event.target.value)}>
-          <option value="">Not saved</option>
+        <Select
+          aria-label="Saved view"
+          aria-busy={loadingViews}
+          disabled={loadingViews}
+          value={viewId ?? ""}
+          onChange={(event) => open(event.target.value)}
+        >
+          <option value="">{loadingViews ? "Loading the saved views" : "Not saved"}</option>
           {views.map((view) => (
             <option key={view.id} value={view.id}>
               {view.name}

@@ -16,6 +16,7 @@ import { LiveView } from "@/components/feedback/live-view";
 import { Button } from "@/components/ui/button";
 import { type RecordOf, retryFailedLiveData, useLiveQuery } from "@/data";
 import type { Viewer } from "@/registry/viewer";
+import { originNote } from "./origins";
 import { useViewData, type ViewData } from "./use-view-data";
 import { settingsOf, type ViewSettings, ViewSurface } from "./ViewSurface";
 
@@ -90,6 +91,7 @@ function KpiFigure(props: {
         const percent =
           data.collection.properties.find((property) => property.id === measured)?.config.numberFormat === "percent";
         const unit = percent ? "%" : "";
+        const origin = originNote(result.records);
         return (
           <p className="text-3xl text-fg" data-testid="kpi-value">
             {formatFigure(value)}
@@ -98,6 +100,11 @@ function KpiFigure(props: {
               {MEASURE_LABELS[props.measure.kind]} over {result.records.length}{" "}
               {result.records.length === 1 ? "record" : "records"}
             </span>
+            {origin === null ? null : (
+              <span className="block text-xs text-fg-secondary" data-testid="origin-note">
+                {origin}
+              </span>
+            )}
           </p>
         );
       }}
@@ -194,14 +201,19 @@ function ChartWidget({ widget, viewer, secondFactor }: WidgetProps) {
         const groupBy = data.collection.properties.find((property) => property.id === chart.groupBy);
         if (groupBy === undefined)
           return <p className="text-fg-muted">The property this chart is grouped by no longer exists.</p>;
-        const buckets = groupedAggregate(
-          compute(data).records,
-          groupBy,
-          chart.measure,
-          data.collection.properties,
-          data.context,
+        const records = compute(data).records;
+        const buckets = groupedAggregate(records, groupBy, chart.measure, data.collection.properties, data.context);
+        const origin = originNote(records);
+        return (
+          <div className="grid gap-1">
+            <BarChart title={chart.title} buckets={buckets} />
+            {origin === null ? null : (
+              <p className="text-xs text-fg-secondary" data-testid="origin-note">
+                {origin}
+              </p>
+            )}
+          </div>
         );
-        return <BarChart title={chart.title} buckets={buckets} />;
       }}
     </LiveView>
   );
@@ -251,6 +263,25 @@ function ActivityWidget({ widget, viewer }: WidgetProps) {
         },
   );
   const people = useViewData("core:persons", viewer, false);
+  // The titles of the pages the viewer reads. An entry of activity carries no title, so that the
+  // title of a restricted page is never copied where its old audience could read it.
+  const pages = useLiveQuery<"pages">(
+    viewer.staff
+      ? { collection: "pages", within: [], limit: 1_000 }
+      : {
+          collection: "pages",
+          within: [],
+          where: [["scopeKeys", "array-contains-any", [...viewer.queryScopeKeys]]],
+          limit: 1_000,
+        },
+  );
+  const titles = useMemo(
+    () => new Map(pages.status === "ready" ? pages.data.map((page) => [page.id, page.title] as const) : []),
+    [pages],
+  );
+  if (people.status === "loading" || pages.status === "loading") {
+    return <p className="text-fg-muted">Loading the activity</p>;
+  }
   return (
     <LiveView
       live={live}
@@ -265,17 +296,24 @@ function ActivityWidget({ widget, viewer }: WidgetProps) {
           <ol className="grid gap-1.5 text-sm">
             {entries.slice(0, limit).map((entry) => {
               const name =
-                entry.actorUid === null || people.status !== "ready"
-                  ? "Someone"
-                  : (people.data.context.personName(entry.actorUid) ?? "A member");
+                entry.actorUid === null
+                  ? "The portal"
+                  : people.status === "ready"
+                    ? (people.data.context.personName(entry.actorUid) ?? "A member")
+                    : "A member";
+              const pageTitle = entry.entityType === "page" ? titles.get(entry.entityId) : undefined;
               return (
                 <li key={entry.id} className="flex flex-wrap gap-x-1">
                   <span className="font-medium">{name}</span>
                   <span>{ACTION_LABELS[entry.action] ?? entry.action}</span>
                   {entry.entityType === "page" ? (
-                    <a className="text-fg-accent underline" href={`#/pages/${entry.entityId}`}>
-                      {entry.title ?? "a page"}
-                    </a>
+                    pageTitle === undefined ? (
+                      <span>a page you cannot open</span>
+                    ) : (
+                      <a className="text-fg-accent underline" href={`#/pages/${entry.entityId}`}>
+                        {pageTitle}
+                      </a>
+                    )
                   ) : (
                     <span>{entry.title ?? entry.entityType}</span>
                   )}

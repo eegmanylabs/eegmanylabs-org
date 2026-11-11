@@ -62,7 +62,7 @@ import { CommentsPanel, useAnchorStore } from "./CommentsPanel";
 import { HistoryPanel } from "./HistoryPanel";
 import { type Members, useMembers } from "./members";
 import { PageDatabases } from "./PageDatabases";
-import { IconDialog, MovePageDialog, NewPageDialog, ShortcutsDialog } from "./PageDialogs";
+import { IconDialog, MovePageDialog, NewPageDialog, SaveVersionDialog, ShortcutsDialog } from "./PageDialogs";
 import { holds, usePageLevel } from "./page-level";
 import { threadsOfPage, workspacePages } from "./queries";
 import { ShareDialog } from "./ShareDialog";
@@ -71,7 +71,7 @@ const PageEditorHost = lazy(() => import("@/editor/host"));
 const VersionPreview = lazy(async () => ({ default: (await import("@/editor/VersionPreview")).VersionPreview }));
 
 type Panel = "comments" | "history" | "activity";
-type Dialog = "new" | "move" | "icon" | "share" | "shortcuts" | null;
+type Dialog = "new" | "move" | "icon" | "share" | "shortcuts" | "version" | null;
 
 /** Whether the page has saved what was typed, as the bar of the page says it. */
 function SaveIndicator({ state, editable }: { readonly state: SaveState; readonly editable: boolean }) {
@@ -137,6 +137,7 @@ function PageBody({
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(params.get("thread"));
   const [draft, setDraft] = useState<{ readonly anchor: ThreadAnchor | null } | null>(null);
   const [saveState, setSaveState] = useState<SaveState>({ saving: false, failed: false });
+  const [others, setOthers] = useState<readonly string[]>([]);
   const [renaming, setRenaming] = useState(false);
   const [title, setTitle] = useState(page.title);
   const [preview, setPreview] = useState<{
@@ -205,21 +206,24 @@ function PageBody({
     [toast],
   );
 
-  const saveVersion = async () => {
+  /** Saves a version, by the name given or without one. Returns whether it was saved. */
+  const saveVersion = async (label: string | undefined): Promise<boolean> => {
     setBusy(true);
     try {
       await callFunction(savePageVersionContract, {
         pageId: page.id,
         kind: "manual",
-        label: `Saved on ${formatDateTime(new Date())}`,
+        ...(label === undefined ? {} : { label }),
       });
       toast.show({ title: "A version has been saved." });
+      return true;
     } catch (error) {
       toast.show({
         tone: "error",
         title: "The version was not saved.",
         description: error instanceof CallableError ? error.message : "Try again.",
       });
+      return false;
     } finally {
       setBusy(false);
     }
@@ -297,7 +301,21 @@ function PageBody({
   };
 
   const Heading = embedded ? "h2" : "h1";
-  const togglePanel = (next: Panel) => setPanel((current) => (current === next ? null : next));
+  const aside = useRef<HTMLElement>(null);
+  /**
+   * Opens a panel beside the page, or closes it. Below the wide layout the panel stands above
+   * the page, and focus moves into it, so that the reader sees and hears what opened.
+   */
+  const togglePanel = (next: Panel) => {
+    const opening = panel !== next;
+    setPanel(opening ? next : null);
+    if (opening && !window.matchMedia("(min-width: 63.75rem)").matches) {
+      requestAnimationFrame(() => {
+        aside.current?.focus();
+        aside.current?.scrollIntoView({ block: "start" });
+      });
+    }
+  };
   return (
     <div className="grid gap-4" data-testid="page-view" data-page-id={page.id}>
       <header className="grid gap-2">
@@ -353,6 +371,11 @@ function PageBody({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1" role="toolbar" aria-label="Page actions">
+          {others.length === 0 ? null : (
+            <span className="text-xs text-fg-secondary" data-testid="also-here">
+              Also here: {others.join(", ")}
+            </span>
+          )}
           <SaveIndicator state={saveState} editable={editable} />
           <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
           {holds(level, "comment") && !archived ? (
@@ -514,6 +537,7 @@ function PageBody({
                 onReady={onReady}
                 onSaveState={setSaveState}
                 onIdleAfterEdit={onIdleAfterEdit}
+                onPresence={setOthers}
                 viewHost={viewHost}
               />
             </Suspense>
@@ -553,7 +577,12 @@ function PageBody({
           </section>
         </div>
         {panel === null ? null : (
-          <aside aria-label="Beside the page" className="grid content-start gap-4">
+          <aside
+            ref={aside}
+            tabIndex={-1}
+            aria-label="Beside the page"
+            className="order-first grid content-start gap-4 lg:order-none"
+          >
             {panel === "comments" ? (
               <CommentsPanel
                 page={page}
@@ -573,7 +602,7 @@ function PageBody({
                 canSave={editable}
                 previewing={preview?.version.id ?? null}
                 busy={busy}
-                onSave={() => void saveVersion()}
+                onSave={() => setDialog("version")}
                 onPreview={(version) => void openVersion(version)}
               />
             ) : (
@@ -611,6 +640,12 @@ function PageBody({
         />
       ) : null}
       <ShortcutsDialog open={dialog === "shortcuts"} onOpenChange={(open) => setDialog(open ? "shortcuts" : null)} />
+      <SaveVersionDialog
+        open={dialog === "version"}
+        onOpenChange={(open) => setDialog(open ? "version" : null)}
+        busy={busy}
+        onSave={saveVersion}
+      />
     </div>
   );
 }
@@ -632,6 +667,22 @@ export function PageView({ pageId, embedded = false }: { readonly pageId: string
       loadingLabel="Loading the page"
       errorTitle="The page could not be loaded."
       onRetry={retryFailedLiveData}
+      denied={
+        <ErrorState
+          title="You no longer have access to this page"
+          description="Its sharing may have changed. Ask someone with full access to the page to share it with you."
+          action={
+            <div className="flex flex-wrap gap-2">
+              <Button asChild>
+                <Link to="/pages">Go to the workspace</Link>
+              </Button>
+              <Button variant="outline" onClick={retryFailedLiveData}>
+                Try again
+              </Button>
+            </div>
+          }
+        />
+      }
     >
       {(record) =>
         record === null ? (

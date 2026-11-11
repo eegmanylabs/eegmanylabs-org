@@ -183,7 +183,13 @@ function satisfiesWriter(
     case "fullAccess":
       return holdsPageLevel(caller, known, "full");
     case "author":
-      return known.authorUid !== undefined && known.authorUid === caller.uid;
+      // An author who may no longer comment on the page keeps only the removal of their words,
+      // which the features tests cover.
+      return (
+        known.authorUid !== undefined &&
+        known.authorUid === caller.uid &&
+        (known.page === undefined || holdsPageLevel(caller, known, "comment"))
+      );
     case "participant":
     case "external_collaborator":
       // The participants of a record, and external collaborators as writers, belong to

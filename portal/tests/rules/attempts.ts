@@ -114,11 +114,12 @@ function readAttempts(
       // A list that does not say how many documents it asks for is refused to everyone.
       read("list without a limit", false, () => getDocs(container)),
     );
-    for (const { where: constraint, proves } of fixture?.listBy ?? []) {
+    for (const { where: constraint, also = [], proves } of fixture?.listBy ?? []) {
       const [field, operator, value] = constraint;
+      const constraints = [constraint, ...also].map(([name, op, operand]) => where(name, op, operand));
       attempts.push(
         read(`list where ${field} ${operator} ${String(value)}`, mayRead(entry, caller, { ...proven, ...proves }), () =>
-          getDocs(query(container, where(field, operator, value), limit(LIST_LIMIT))),
+          getDocs(query(container, ...constraints, limit(LIST_LIMIT))),
         ),
       );
     }
@@ -136,7 +137,13 @@ function readAttempts(
         getDocs(
           constraint === undefined
             ? query(group, limit(LIST_LIMIT))
-            : query(group, where(...constraint.where), limit(LIST_LIMIT)),
+            : query(
+                group,
+                ...[constraint.where, ...(constraint.also ?? [])].map(([name, op, operand]) =>
+                  where(name, op, operand),
+                ),
+                limit(LIST_LIMIT),
+              ),
         ),
       ),
     );

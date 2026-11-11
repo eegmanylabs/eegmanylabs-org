@@ -1,6 +1,7 @@
 // Automated accessibility checks with axe-core. A test fails on any serious or critical finding.
 // Fixtures are synthetic: every address is invented and uses the example.org domain.
 import { latestSignInLink } from "../support/emulators";
+import { signInAsIvy } from "./registry-support";
 import { expect, requestSignInLink, seriousFindings, signIn, test, uniqueEmail } from "./support";
 
 test("the sign-in page has no serious accessibility findings", async ({ page }) => {
@@ -77,4 +78,34 @@ test("the page for an unknown address has no serious accessibility findings", as
   expect(await seriousFindings(page)).toEqual([]);
   await expect(page.getByRole("main")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.lang)).toBe("en-GB");
+});
+
+test("a page with a checklist, a code block and a table has no serious accessibility findings", async ({ page }) => {
+  await signInAsIvy(page);
+  await page.goto("./#/pages");
+  await page.getByRole("main").getByRole("button", { name: "New page", exact: true }).first().click();
+  const dialog = page.getByRole("dialog", { name: "New page" });
+  await dialog.getByLabel("Title").fill("Synthetic blocks");
+  await dialog.getByRole("button", { name: "Create the page" }).click();
+  const editor = page.getByTestId("page-editor").locator(".bn-editor");
+  await expect(editor).toBeVisible();
+  const insert = async (command: string, option: RegExp) => {
+    await editor.locator(".bn-block-content").last().click();
+    await page.keyboard.type(command);
+    await expect(page.getByRole("option", { name: option })).toBeVisible();
+    await page.keyboard.press("Enter");
+  };
+  await insert("/checklist", /Check list/);
+  await page.keyboard.type("Book the EEG room");
+  await insert("/table", /Table/);
+  await expect(editor.locator("table")).toBeVisible();
+  await insert("/code", /Code block/);
+  await page.keyboard.type("print('synthetic')");
+  await expect(editor.locator('[data-content-type="checkListItem"] input[type="checkbox"]')).toHaveAttribute(
+    "aria-label",
+    "Done",
+  );
+  expect(await seriousFindings(page)).toEqual([]);
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await seriousFindings(page)).toEqual([]);
 });

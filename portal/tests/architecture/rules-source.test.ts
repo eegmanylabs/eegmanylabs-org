@@ -13,8 +13,10 @@ import {
   DOCUMENT_BASE_FIELDS,
   ENTITY_TYPES,
   notificationTypeSchema,
+  PAGE_FILE_CONTENT_TYPE_PATTERN,
   PAGE_FILE_MAX_BYTES,
   PROGRAMME_POWER_SCOPE_KEYS,
+  REMOVED_COMMENT_TEXT,
   SPECIAL_CATEGORY_FIELDS,
   SPECIAL_CATEGORY_NAME_PARTS,
   verbatimSourceFields,
@@ -347,5 +349,16 @@ describe("portal/storage.rules", () => {
     expect(create?.condition).toContain(
       `request.resource.size <= ${PAGE_FILE_MAX_BYTES / (1024 * 1024)} * 1024 * 1024`,
     );
+  });
+
+  it("holds an upload to the types of file of the shared package, which a browser never runs as a document", () => {
+    const create = allowStatements(storage).find((statement) => statement.methods.includes("create"));
+    expect(create?.condition).toContain(`request.resource.contentType.matches('${PAGE_FILE_CONTENT_TYPE_PATTERN}')`);
+  });
+});
+
+describe("the removal of a comment", () => {
+  it("is allowed to a former commenter with the text of the shared package alone", () => {
+    expect(source).toContain(`d.body == '${REMOVED_COMMENT_TEXT}'`);
   });
 });

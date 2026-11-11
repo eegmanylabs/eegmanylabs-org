@@ -68,7 +68,7 @@ export interface ReadRule {
  * | A role       | A holder of the role whose scope covers the document: a programme role everywhere, `replication_lead` for the document's replication, `lab_coordinator` and `lab_member` for its laboratory |
  * | `self`       | The user who owns the document                                               |
  * | `member`     | Any approved member                                                          |
- * | `author`     | The user who created the document                                            |
+ * | `author`     | The user who created the document, while they still hold the level `comment` on its page where it has one |
  * | `participant`| A user named in one of the participant arrays of the document                |
  * | `commenter`  | A holder of the level `comment` or above on the page or the target           |
  * | `editor`     | A holder of the level `edit` or above                                        |
@@ -1390,6 +1390,27 @@ const DEFINITIONS = {
     dataClass: "member",
     enforcement: ENFORCED,
   }),
+  pagePresence: define({
+    path: "pages/{pageId}/presence/{uid__tab}",
+    schema: workspace.pagePresenceDocSchema,
+    id: built("pagePresenceId", ["uid", "tab"]),
+    read: read(["SCOPED"], ["parent.scopeKeys"]),
+    // Each open tab of a reader of the page writes its own presence, in its account's name, and
+    // removes it when it closes.
+    write: client(
+      [
+        grant(["self"], ["create", "delete"], { condition: "A reader of the page, in the tab's own document." }),
+        grant(["self"], ["update"], {
+          onlyFields: ["clientId", "clock", "state"],
+          condition: "A reader of the page, in the tab's own document: a change of state or a heartbeat.",
+        }),
+      ],
+      ["uid"],
+    ),
+    dataClass: "member",
+    flags: { audited: false },
+    enforcement: ENFORCED,
+  }),
   threads: define({
     path: "threads/{id}",
     schema: workspace.threadDocSchema,
@@ -1413,13 +1434,16 @@ const DEFINITIONS = {
     path: "threads/{threadId}/comments/{commentId}",
     schema: workspace.threadCommentDocSchema,
     id: auto,
-    read: read(["MEMBER", "SCOPED"], ["scopeKeys"], "As the thread."),
+    // Read as its thread, whose page decides: a comment's own copy of the audience may lag
+    // behind a change of sharing, so the rules never read it.
+    read: read(["SCOPED"], ["parent.scopeKeys"], "As the thread."),
     write: client(
       [
         grant(["commenter"], ["create"]),
         grant(["author"], ["update"], {
           onlyFields: ["body", "mentionUids", "editedAt", "deletedAt"],
-          condition: "An author edits their own comment and removes it by setting deletedAt.",
+          condition:
+            "An author edits their own comment while they may comment on the page, and removes it by setting deletedAt at any time.",
         }),
       ],
       ["scopeKeys", "authorUid"],

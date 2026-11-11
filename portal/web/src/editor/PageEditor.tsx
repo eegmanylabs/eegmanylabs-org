@@ -10,23 +10,34 @@ import { filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from "@blockno
 import { withCollaboration } from "@blocknote/core/yjs";
 import { BlockNoteView } from "@blocknote/mantine";
 import {
+  AddBlockButton,
   type DefaultReactSuggestionItem,
+  DragHandleButton,
+  DragHandleMenu,
   FormattingToolbar,
   FormattingToolbarController,
   getDefaultReactSlashMenuItems,
   getFormattingToolbarItems,
+  RemoveBlockItem,
+  SideMenu,
+  SideMenuController,
+  type SideMenuProps,
   SuggestionMenuController,
+  TableColumnHeaderItem,
+  TableRowHeaderItem,
   useComponentsContext,
   useCreateBlockNote,
 } from "@blocknote/react";
 import { PAGE_FRAGMENT_NAME } from "@eegml/shared";
 import { MessageSquarePlus, StickyNote, Table2 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { yXmlFragmentToProseMirrorRootNode } from "y-prosemirror";
 import * as Y from "yjs";
 import { type PageSync, pageFileUrl, uploadPageFile } from "@/data";
 import { type ViewHost, ViewHostContext } from "@/views/host";
 import { type Anchor, type AnchorStore, anchorOfSelection, CommentAnchors } from "./comment-anchors";
+import { TextboxAttributes } from "./control-labels";
+import { portalDictionary, shortcutText } from "./dictionary";
 import { CodeLanguageGuard, PositionMappingGuard } from "./guards";
 import { KeyboardAccess } from "./keyboard";
 import { type PageEditorInstance, pageSchema } from "./schema";
@@ -80,15 +91,20 @@ function CommentButton({ onClick }: { readonly onClick: () => void }) {
   );
 }
 
-/** The items of the slash menu: those of BlockNote, the callout and the linked view. */
+/**
+ * The items of the slash menu: those of BlockNote, with their shortcuts in words, then the
+ * blocks of the portal, the callout and the linked view, in a group of their own.
+ */
 function slashItems(editor: PageEditorInstance): DefaultReactSuggestionItem[] {
   return [
-    ...getDefaultReactSlashMenuItems(editor),
+    ...getDefaultReactSlashMenuItems(editor).map((item) =>
+      item.badge === undefined ? item : { ...item, badge: shortcutText(item.badge) },
+    ),
     {
       title: "Callout",
       subtext: "A highlighted note: information, a note, a warning or a danger",
       aliases: ["callout", "note", "info", "warning", "danger"],
-      group: "Basic blocks",
+      group: "Portal",
       icon: <StickyNote aria-hidden="true" size={18} strokeWidth={1.8} />,
       onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: "callout", props: { variant: "info" } }),
     },
@@ -101,6 +117,27 @@ function slashItems(editor: PageEditorInstance): DefaultReactSuggestionItem[] {
       onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: "linkedView", props: {} }),
     },
   ];
+}
+
+/** The menu of a block's drag handle, without colours, which the portal does not offer. */
+function PortalDragHandleMenu() {
+  return (
+    <DragHandleMenu>
+      <RemoveBlockItem>{portalDictionary.drag_handle.delete_menuitem}</RemoveBlockItem>
+      <TableRowHeaderItem>{portalDictionary.drag_handle.header_row_menuitem}</TableRowHeaderItem>
+      <TableColumnHeaderItem>{portalDictionary.drag_handle.header_column_menuitem}</TableColumnHeaderItem>
+    </DragHandleMenu>
+  );
+}
+
+/** The side menu of a block: add a block, and the drag handle with its menu. */
+function PortalSideMenu(props: SideMenuProps) {
+  return (
+    <SideMenu {...props} dragHandleMenu={PortalDragHandleMenu}>
+      <AddBlockButton />
+      <DragHandleButton {...props} dragHandleMenu={PortalDragHandleMenu} />
+    </SideMenu>
+  );
 }
 
 export function PageEditor(props: PageEditorProps) {
@@ -116,7 +153,9 @@ export function PageEditor(props: PageEditorProps) {
         provider: { awareness: sync.awareness },
         showCursorLabels: "activity",
       },
-      tables: { headers: true, splitCells: true },
+      dictionary: portalDictionary,
+      // Colours are not offered: the portal's palette has no colours for text (D-018).
+      tables: { headers: true, splitCells: true, cellBackgroundColor: false, cellTextColor: false },
       domAttributes: { editor: { "aria-label": "Content of the page", "aria-multiline": "true" } },
       uploadFile: async (file: File) => {
         try {
@@ -131,6 +170,7 @@ export function PageEditor(props: PageEditorProps) {
         syntaxHighlighter,
         CodeLanguageGuard({ supported: codeBlockOptions.supportedLanguages }),
         PositionMappingGuard(),
+        TextboxAttributes(),
         CommentAnchors({ store: anchors }),
         KeyboardAccess({ onComment: () => commentOnSelection.current() }),
       ],
@@ -139,6 +179,17 @@ export function PageEditor(props: PageEditorProps) {
   );
 
   commentOnSelection.current = () => onComment(anchorOfSelection(editor.prosemirrorState));
+  // The same component on every render, so that a render of the page around the editor, such as
+  // another member joining, does not replace the toolbar and take the focus out of it.
+  const formattingToolbar = useCallback(
+    () => (
+      <FormattingToolbar>
+        {...getFormattingToolbarItems().filter((item) => item.key !== "colorStyleButton")}
+        <CommentButton key="comment" onClick={() => commentOnSelection.current()} />
+      </FormattingToolbar>
+    ),
+    [],
+  );
 
   const { onReady } = props;
   useEffect(() => {
@@ -165,17 +216,12 @@ export function PageEditor(props: PageEditorProps) {
         theme="light"
         slashMenu={false}
         formattingToolbar={false}
+        sideMenu={false}
         className="portal-editor"
         data-testid="page-editor"
       >
-        <FormattingToolbarController
-          formattingToolbar={() => (
-            <FormattingToolbar>
-              {...getFormattingToolbarItems()}
-              <CommentButton key="comment" onClick={() => commentOnSelection.current()} />
-            </FormattingToolbar>
-          )}
-        />
+        <FormattingToolbarController formattingToolbar={formattingToolbar} />
+        <SideMenuController sideMenu={PortalSideMenu} />
         <SuggestionMenuController
           triggerCharacter="/"
           getItems={async (query) => filterSuggestionItems(slashItems(editor), query)}

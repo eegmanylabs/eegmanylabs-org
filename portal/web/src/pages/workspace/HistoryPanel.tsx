@@ -11,7 +11,14 @@ import { cn } from "@/utils/cn";
 import type { Members } from "./members";
 import { versionsOfPage } from "./queries";
 
-const KIND_LABELS = { auto: "Saved automatically", manual: "Saved by name", restore: "Restored" } as const;
+const KIND_LABELS = { auto: "Saved automatically", manual: "Named version", restore: "Restored" } as const;
+
+/** The heading of a version: its name, or who saved it, or how it was saved. */
+function headingOf(version: RecordOf<"pageVersions">, by: string | null): string {
+  if (version.label !== undefined) return version.label;
+  if (version.kind === "manual") return by === null ? "Saved by hand" : `Saved by ${by}`;
+  return KIND_LABELS[version.kind];
+}
 
 export interface HistoryPanelProps {
   readonly pageId: string;
@@ -66,7 +73,7 @@ export function HistoryPanel({ pageId, members, canSave, previewing, busy, onSav
                         current ? "border-accent" : "border-border",
                       )}
                     >
-                      <span className="font-medium text-fg">{version.label ?? KIND_LABELS[version.kind]}</span>
+                      <span className="font-medium text-fg">{headingOf(version, by)}</span>
                       <span className="text-xs text-fg-secondary">
                         <time dateTime={version.createdAt.toDate().toISOString()}>
                           {formatDateTime(version.createdAt.toDate())}

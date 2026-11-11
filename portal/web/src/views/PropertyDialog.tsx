@@ -107,12 +107,22 @@ export function PropertyDialog({
       .map((collection) => ({ key: collection.key, label: collection.label })),
   ];
 
+  const hasOptions = type === "select" || type === "multiSelect" || type === "status";
+  /** The options with the one still typed in the field for a new option, which saving keeps. */
+  const withTyped = (): PropertyOption[] =>
+    newOption.trim() === "" ? options : [...options, { id: optionId(newOption, options), name: newOption.trim() }];
+  const addTypedOption = () => {
+    if (newOption.trim() === "") return;
+    setOptions(withTyped());
+    setNewOption("");
+  };
+
   const config = (): PropertyConfig => {
     switch (type) {
       case "select":
       case "multiSelect":
       case "status":
-        return { options };
+        return { options: withTyped() };
       case "relation":
         return { relation: { target } };
       case "rollup":
@@ -133,6 +143,10 @@ export function PropertyDialog({
     event.preventDefault();
     if (name.trim() === "") {
       setError("Give the property a name.");
+      return;
+    }
+    if (hasOptions && withTyped().length === 0) {
+      setError("Add at least one option, so that a value can be chosen.");
       return;
     }
     setBusy(true);
@@ -219,7 +233,7 @@ export function PropertyDialog({
               )}
             </FormField>
           ) : null}
-          {type === "select" || type === "multiSelect" || type === "status" ? (
+          {hasOptions ? (
             <fieldset className="grid gap-2">
               <legend className="text-sm font-medium">Options</legend>
               {options.map((option, index) => (
@@ -270,15 +284,14 @@ export function PropertyDialog({
                   aria-label="New option"
                   value={newOption}
                   onChange={(event) => setNewOption(event.target.value)}
-                />
-                <Button
-                  size="sm"
-                  disabled={newOption.trim() === ""}
-                  onClick={() => {
-                    setOptions([...options, { id: optionId(newOption, options), name: newOption.trim() }]);
-                    setNewOption("");
+                  onKeyDown={(event) => {
+                    // Enter adds the option and stays in the field, rather than saving the property.
+                    if (event.key !== "Enter") return;
+                    event.preventDefault();
+                    addTypedOption();
                   }}
-                >
+                />
+                <Button size="sm" disabled={newOption.trim() === ""} onClick={addTypedOption}>
                   <Plus aria-hidden="true" />
                   Add
                 </Button>

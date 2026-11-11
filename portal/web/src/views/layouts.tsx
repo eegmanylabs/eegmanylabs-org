@@ -343,8 +343,9 @@ export function CalendarView({ data, records, config, onConfig, onOpen, caption 
   };
   const title = `${monthName(Number(month.slice(5, 7)))} ${month.slice(0, 4)}`;
   const today = todayIso();
+  const daysOfMonth = cells.filter((day) => day.slice(0, 7) === month && (byDay.get(day) ?? []).length > 0);
   return (
-    <div className="grid gap-2">
+    <div className="grid min-w-0 gap-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <DateSettings data={data} config={config} onConfig={onConfig} withEnd={false} />
         <div className="flex items-center gap-1">
@@ -362,8 +363,37 @@ export function CalendarView({ data, records, config, onConfig, onOpen, caption 
           </Button>
         </div>
       </div>
-      <div className="overflow-x-auto">
-        <table aria-label={`${caption}, ${title}`} className="w-full min-w-[42rem] table-fixed border-collapse text-xs">
+      {/* Below the width of a small tablet the month is a list of the days that hold records. */}
+      <div className="sm:hidden">
+        {daysOfMonth.length === 0 ? (
+          <p className="text-fg-muted">Nothing is placed in {title}.</p>
+        ) : (
+          <ol aria-label={`${caption}, ${title}`} className="grid gap-2">
+            {daysOfMonth.map((day) => (
+              <li key={day} className="rounded-control border border-border p-2">
+                <h4 className={cn("mb-1 text-sm font-medium", day === today && "text-fg-accent")}>
+                  {formatDate(day, data.context)}
+                </h4>
+                <ul className="grid gap-1">
+                  {(byDay.get(day) ?? []).map((record) => (
+                    <li key={record.id}>
+                      <button
+                        type="button"
+                        className="min-h-8 w-full truncate rounded-control border border-border bg-surface px-2 text-left hover:border-accent"
+                        onClick={() => onOpen(record)}
+                      >
+                        {titleOf(data, record)}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+      <div className="hidden min-w-0 overflow-x-auto sm:block">
+        <table aria-label={`${caption}, ${title}`} className="w-full min-w-[36rem] table-fixed border-collapse text-xs">
           <thead>
             <tr>
               {WEEKDAYS.map((day) => (

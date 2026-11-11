@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_RETRY_DELAYS_MS,
   type Fail,
+  isDenied,
   type Live,
   type LiveError,
   type Publish,
@@ -26,6 +27,7 @@ function source<T>() {
 }
 
 const refused: LiveError = { code: "permission-denied", message: "Missing or insufficient permissions." };
+const unreachable: LiveError = { code: "unavailable", message: "The server could not be reached." };
 const loading = { status: "loading" };
 
 const ready = <T>(data: T): Live<T> => ({ status: "ready", data, fromCache: false, hasPendingWrites: false });
@@ -398,7 +400,7 @@ describe("a subscription that fails", () => {
     const { state, start } = source<string>();
     const earlier = vi.fn();
     cache.subscribe("doc:a", start, earlier);
-    state.fail(refused);
+    state.fail(unreachable);
     earlier.mockClear();
 
     cache.subscribe("doc:a", start, () => {});
@@ -406,6 +408,26 @@ describe("a subscription that fails", () => {
     expect(state.starts).toBe(2);
     expect(cache.read("doc:a")).toEqual(loading);
     expect(earlier).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a refusal for a new consumer, so that the others are not put back to loading, until asked again", () => {
+    const cache = new SubscriptionCache(5_000, []);
+    const { state, start } = source<string>();
+    const earlier = vi.fn();
+    cache.subscribe("doc:a", start, earlier);
+    state.publish(ready("a page the account could read"));
+    state.fail(refused);
+    earlier.mockClear();
+
+    // A name in a breadcrumb, mounted again, joins the refused subscription.
+    cache.subscribe("doc:a", start, () => {});
+
+    expect(state.starts).toBe(1);
+    expect(isDenied(cache.read("doc:a"))).toBe(true);
+    expect(earlier).not.toHaveBeenCalled();
+
+    cache.retryFailed();
+    expect(state.starts).toBe(2);
   });
 
   it("ignores what a stopped subscription still sends", () => {

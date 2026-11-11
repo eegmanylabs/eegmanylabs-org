@@ -9,14 +9,17 @@ import { RequireAuth } from "@/auth/RequireAuth";
 import { RequireLinked } from "@/auth/RequireLinked";
 import { LoadingState } from "@/components/feedback/loading-state";
 import { LaboratoryName, PageTitle, PersonName } from "@/components/record-names";
+import { useLiveDocument } from "@/data";
 import { ClaimPage } from "@/pages/claim/ClaimPage";
 import { HomePage } from "@/pages/home/HomePage";
 import { LoginPage } from "@/pages/login/LoginPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
+import { pagePath } from "@/registry/paths";
 import { Root } from "./Root";
 import { RouteError } from "./RouteError";
 import type { RouteHandle } from "./route-meta";
 import { AppShell } from "./shell/AppShell";
+import { TrailCrumb } from "./shell/Breadcrumbs";
 
 const titled = (title: string): { handle: RouteHandle } => ({ handle: { title } });
 
@@ -53,6 +56,37 @@ function PersonCrumb({ params }: { readonly params: Readonly<Params> }) {
 /** The breadcrumb of a page of the workspace: its title, read live. */
 function PageCrumb({ params }: { readonly params: Readonly<Params> }) {
   return <PageTitle id={params.pageId ?? ""} />;
+}
+
+/** The crumbs before a database: the workspace and the page the database sits beneath. */
+function DatabaseTrail({ params }: { readonly params: Readonly<Params> }) {
+  const database = useLiveDocument("databases", [params.databaseId ?? ""]);
+  return (
+    <>
+      <TrailCrumb to="/pages" first>
+        Workspace
+      </TrailCrumb>
+      {database.status === "ready" && database.data !== null ? (
+        <TrailCrumb to={pagePath(database.data.parentPageId)}>
+          <PageTitle id={database.data.parentPageId} />
+        </TrailCrumb>
+      ) : null}
+    </>
+  );
+}
+
+/** The breadcrumb of a database: its name, read live. */
+function DatabaseCrumb({ params }: { readonly params: Readonly<Params> }) {
+  const database = useLiveDocument("databases", [params.databaseId ?? ""]);
+  if (database.status === "loading") return <span className="text-fg-muted">Loading the name</span>;
+  return <>{database.status === "ready" && database.data !== null ? database.data.name : "Database"}</>;
+}
+
+/** The breadcrumb of a dashboard: its name, read live. */
+function DashboardCrumb({ params }: { readonly params: Readonly<Params> }) {
+  const dashboard = useLiveDocument("dashboards", [params.dashboardId ?? ""]);
+  if (dashboard.status === "loading") return <span className="text-fg-muted">Loading the name</span>;
+  return <>{dashboard.status === "ready" && dashboard.data !== null ? dashboard.data.name : "Dashboard"}</>;
 }
 
 /** The breadcrumb of a laboratory page: its name, read live. */
@@ -150,7 +184,7 @@ export function portalRoutes(signInLink: string | null): RouteObject[] {
                     {
                       path: "/databases/:databaseId",
                       ...lazyPage(async () => (await import("@/pages/databases/DatabasePage")).DatabasePage),
-                      ...titled("Database"),
+                      handle: { title: "Database", crumb: DatabaseCrumb, trail: DatabaseTrail } satisfies RouteHandle,
                     },
                     {
                       path: "/dashboards",
@@ -163,7 +197,7 @@ export function portalRoutes(signInLink: string | null): RouteObject[] {
                         {
                           path: ":dashboardId",
                           ...lazyPage(async () => (await import("@/pages/dashboards/DashboardsPage")).DashboardPage),
-                          ...titled("Dashboard"),
+                          handle: { title: "Dashboard", crumb: DashboardCrumb } satisfies RouteHandle,
                         },
                       ],
                     },

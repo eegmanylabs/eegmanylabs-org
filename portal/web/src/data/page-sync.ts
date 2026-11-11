@@ -43,6 +43,7 @@ import { Awareness } from "y-protocols/awareness";
 import * as Y from "yjs";
 import { db } from "./firebase";
 import { LIVE_QUERY_MAX_LIMIT } from "./query-spec";
+import { applyUpdateSafely } from "./yjs-updates";
 
 export type PageSyncStatus = "loading" | "synced" | "error";
 
@@ -238,13 +239,16 @@ export class PageSync {
           .map((chunk) => chunk.data())
           .sort((a, b) => (a.index as number) - (b.index as number))
           .map((chunk) => bytesOf(chunk.snapshot as FirestoreBytes));
-        Y.applyUpdate(this.doc, concatenate(parts), this);
+        // A snapshot that does not decode is skipped, so that the page still follows its updates.
+        applyUpdateSafely(this.doc, concatenate(parts), this);
       }
       const reload = this.loadedGeneration >= 0;
       this.loadedGeneration = Math.max(generation, 0);
       if (reload) void this.forgetMergedOwnUpdates();
       if (!this.updatesFollowed) this.followUpdates();
     });
+    // A failed read must not stop the chain: the next head the listener brings tries again.
+    this.snapshotChain = this.snapshotChain.catch(() => undefined);
     return this.snapshotChain;
   }
 
@@ -291,7 +295,10 @@ export class PageSync {
     );
   }
 
-  /** Applies one update document. Safe to call twice and in any order (I1). */
+  /**
+   * Applies one update document. Safe to call twice and in any order (I1). An update that does not
+   * decode is skipped, and is still confirmed, so that a compaction removes it from the log.
+   */
   private receive(update: QueryDocumentSnapshot): void {
     const data = update.data();
     const updateId = data.updateId as string;
@@ -300,7 +307,7 @@ export class PageSync {
       this.applied.add(update.id);
       const bytes = bytesOf(data.update as FirestoreBytes);
       if (count === 1) {
-        Y.applyUpdate(this.doc, bytes, this);
+        applyUpdateSafely(this.doc, bytes, this);
       } else {
         // A large update in several documents is applied once every part is here.
         const group = this.partial.get(updateId) ?? { count, parts: new Map<number, Uint8Array>() };
@@ -308,7 +315,7 @@ export class PageSync {
         this.partial.set(updateId, group);
         if (group.parts.size === group.count) {
           const ordered = [...group.parts].sort(([a], [b]) => a - b).map(([, part]) => part);
-          Y.applyUpdate(this.doc, concatenate(ordered), this);
+          applyUpdateSafely(this.doc, concatenate(ordered), this);
           this.partial.delete(updateId);
         }
       }

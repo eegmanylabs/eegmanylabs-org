@@ -70,6 +70,7 @@ import {
  * | `page.moved`                    | A page is moved beneath another page, with every page that inherits from it |
  * | `page.sharingChanged`           | The access mode or the permissions of a page change, with the audience of what inherits it |
  * | `page.versionSaved`             | A version of a page is saved: by name, after a quiet spell or when an earlier one is restored |
+ * | `page.updateDiscarded`          | An update of a page that does not decode as a Yjs update is removed by trusted code |
  * | `database.created`              | A database is created beneath a page                                |
  * | `property.saved`                | A property of a database or a custom property of a core collection is added, changed or archived |
  * | `record.saved`                  | Values of a record are changed, or a row of a database is created or archived |
@@ -123,6 +124,7 @@ export const AUDIT_ACTIONS = [
   "page.moved",
   "page.sharingChanged",
   "page.versionSaved",
+  "page.updateDiscarded",
   "database.created",
   "property.saved",
   "record.saved",

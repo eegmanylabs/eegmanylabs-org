@@ -14,7 +14,7 @@ import { LOCAL_HOST, type PortalPorts } from "../../scripts/ports.mjs";
 // which resolves neither the workspace package's TypeScript entry point nor an import without
 // an extension. The constants file has no imports of its own.
 import { DEMO_PROJECT_ID, DEMO_PROJECT_PREFIX, FUNCTIONS_REGION } from "../../shared/src/constants.ts";
-import { PORTAL_MODES, type PortalBuildConfig, type PortalMode } from "./types.ts";
+import { PORTAL_MODES, type PortalBuildConfig, type PortalMode, PRESENCE_MODES, type PresenceMode } from "./types.ts";
 
 /** Variables a staging or production build cannot do without. */
 export const REQUIRED_VARIABLES = [
@@ -32,6 +32,14 @@ function flag(env: Environment, name: string): boolean {
   if (value === "" || value === "false") return false;
   if (value === "true") return true;
   throw new Error(`${name} must be "true" or "false", but it is "${value}".`);
+}
+
+/** How a page shows who else has it open: VITE_PRESENCE, "cursor" unless set. */
+function presenceMode(env: Environment): PresenceMode {
+  const value = env.VITE_PRESENCE?.trim() ?? "";
+  if (value === "") return "cursor";
+  if ((PRESENCE_MODES as readonly string[]).includes(value)) return value as PresenceMode;
+  throw new Error(`VITE_PRESENCE must be one of ${PRESENCE_MODES.join(", ")}, but it is "${value}".`);
 }
 
 /**
@@ -65,6 +73,7 @@ export function resolveBuildConfig(mode: string, env: Environment, ports: Portal
     );
   }
   const googleSignIn = flag(env, "VITE_ENABLE_GOOGLE_SIGN_IN");
+  const presence = presenceMode(env);
 
   if (mode === "emulator") {
     return {
@@ -85,6 +94,7 @@ export function resolveBuildConfig(mode: string, env: Environment, ports: Portal
       },
       functionsRegion: FUNCTIONS_REGION,
       googleSignIn,
+      presence,
     };
   }
 
@@ -118,5 +128,6 @@ export function resolveBuildConfig(mode: string, env: Environment, ports: Portal
     emulators: null,
     functionsRegion: FUNCTIONS_REGION,
     googleSignIn,
+    presence,
   };
 }

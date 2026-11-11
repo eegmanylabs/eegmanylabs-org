@@ -24,7 +24,7 @@ import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { CallableError, callFunction, type RecordOf } from "@/data";
+import { CallableError, callFunction, type RecordOf, useLiveQuery } from "@/data";
 import type { Viewer } from "@/registry/viewer";
 import { cn } from "@/utils/cn";
 import { WidgetBody } from "./widgets";
@@ -106,11 +106,41 @@ function newWidget(
   }
 }
 
+/**
+ * The collections a widget may show: the core sources, and the databases the viewer reads, as the
+ * linked view of a page offers them.
+ */
+function useWidgetSources(viewer: Viewer): readonly { readonly key: string; readonly label: string }[] {
+  const databases = useLiveQuery({
+    collection: "databases",
+    within: [],
+    ...(viewer.staff ? {} : { where: [["scopeKeys", "array-contains-any", [...viewer.queryScopeKeys]]] as const }),
+    limit: 1_000,
+  });
+  return useMemo(
+    () => [
+      ...CORE_SOURCE_KEYS.filter((key) => CORE_SOURCES[key].selectable).map((key) => ({
+        key,
+        label: CORE_SOURCES[key].label,
+      })),
+      ...(databases.status === "ready"
+        ? databases.data
+            .filter((database) => database.archivedAt === null)
+            .map((database) => ({ key: `db:${database.id}`, label: database.name }))
+            .sort((a, b) => a.label.localeCompare(b.label, "en-GB"))
+        : []),
+    ],
+    [databases],
+  );
+}
+
 function AddWidgetDialog({
+  viewer,
   layout,
   onAdd,
   onClose,
 }: {
+  readonly viewer: Viewer;
   readonly layout: readonly Placement[];
   readonly onAdd: (id: string, widget: DashboardWidget) => Promise<void>;
   readonly onClose: () => void;
@@ -120,6 +150,7 @@ function AddWidgetDialog({
   const [collectionKey, setCollectionKey] = useState("core:participations");
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const sources = useWidgetSources(viewer);
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (title.trim() === "") {
@@ -157,9 +188,9 @@ function AddWidgetDialog({
             <FormField label="Records" hint="The widget's own view of them is set on the dashboard.">
               {(control) => (
                 <Select {...control} value={collectionKey} onChange={(event) => setCollectionKey(event.target.value)}>
-                  {CORE_SOURCE_KEYS.filter((key) => CORE_SOURCES[key].selectable).map((key) => (
-                    <option key={key} value={key}>
-                      {CORE_SOURCES[key].label}
+                  {sources.map((source) => (
+                    <option key={source.key} value={source.key}>
+                      {source.label}
                     </option>
                   ))}
                 </Select>
@@ -449,6 +480,7 @@ export function DashboardView({
       )}
       {adding ? (
         <AddWidgetDialog
+          viewer={viewer}
           layout={layout}
           onClose={() => setAdding(false)}
           onAdd={(id, widget) => save({ [id]: widget })}

@@ -2,7 +2,7 @@
 // the title, icon, place and template mark of a page, its archive and restoration, threads and
 // comments, and the reading of a version. Creating, moving and sharing a page, and saving a
 // version, go through callable functions, because each resolves the audience of the page.
-import { COLLECTIONS, type FirestoreBytes, userWriteContext } from "@eegml/shared";
+import { COLLECTIONS, type FirestoreBytes, REMOVED_COMMENT_TEXT, userWriteContext } from "@eegml/shared";
 import {
   collection,
   deleteField,
@@ -127,16 +127,20 @@ export async function createThread(
   return thread.id;
 }
 
-/** Adds a comment to a thread, in the caller's name. */
+/**
+ * Adds a comment to a thread, in the caller's name. The comment copies the audience of the page
+ * as it stands, which the rules check, not the copy on the thread, which may lag behind it.
+ */
 export async function addComment(
   uid: string,
-  thread: { readonly id: string } & ThreadScope,
+  threadId: string,
+  page: ThreadScope,
   body: string,
   mentionUids: readonly string[],
 ): Promise<void> {
-  const reference = doc(collection(db, COLLECTIONS.threadComments.collectionPath(thread.id)));
+  const reference = doc(collection(db, COLLECTIONS.threadComments.collectionPath(threadId)));
   const batch = writeBatch(db);
-  batch.set(reference, commentFields(uid, thread.id, thread, body, mentionUids));
+  batch.set(reference, commentFields(uid, threadId, page, body, mentionUids));
   await batch.commit();
 }
 
@@ -155,9 +159,6 @@ export async function editComment(
     ...touched(uid),
   });
 }
-
-/** The text that stands in a removed comment, so that what was written is no longer stored. */
-export const REMOVED_COMMENT_TEXT = "This comment was removed by its author.";
 
 /** Removes the caller's own comment: its text is replaced and the comment is marked as removed. */
 export async function removeComment(uid: string, threadId: string, commentId: string): Promise<void> {

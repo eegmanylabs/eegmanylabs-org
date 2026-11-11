@@ -16,19 +16,22 @@ import {
   COLLECTIONS,
   commentMentionUids,
   type EntityType,
+  type FirestoreBytes,
   pageDocSchema,
   pageLevelFor,
   parseStoredDocument,
   threadCommentDocSchema,
   threadDocSchema,
 } from "@eegml/shared";
-import { type Firestore, Timestamp, type Transaction } from "firebase-admin/firestore";
+import { type Firestore, type QuerySnapshot, Timestamp, type Transaction } from "firebase-admin/firestore";
+import { logger } from "firebase-functions";
 import { onDocumentCreated, onDocumentWritten } from "firebase-functions/firestore";
 import { firestore } from "../framework/admin";
+import { writeAudit } from "../framework/audit";
 import { reactionStamp, touchedFields, type WriteStamp } from "../framework/documents";
 import { documentTrigger } from "../framework/trigger";
 import { notifyAll } from "../notifications/notify";
-import { extractPageText, loadPageDocument, mentionedUids } from "../pages/content";
+import { bytesOf, decodesAsUpdate, extractPageText, loadPageDocument, mentionedUids } from "../pages/content";
 import { indexPage, removePageIndex } from "../pages/search-index";
 
 /** How long one spell of editing lasts: an edit within this time of the last one adds no activity. */
@@ -110,15 +113,17 @@ export async function recordPageEdit(
     return { page, text };
   });
   if (outcome === null) return;
-  if (outcome.page.archivedAt === null) await indexPage(db, edit.pageId, outcome.page, outcome.text, stamp);
-  await recordEditingSpell(db, edit, outcome.page);
+  await indexPage(db, edit.pageId, outcome.text, stamp);
+  await recordEditingSpell(db, edit);
 }
 
-/** Adds an entry to the activity of a page for a spell of editing, unless the author's last one is recent. */
+/**
+ * Adds an entry to the activity of a page for a spell of editing, unless the author's last one is
+ * recent. The entry takes the audience of the page as it stands in the transaction that writes it.
+ */
 async function recordEditingSpell(
   db: Firestore,
   edit: Cause & { readonly pageId: string; readonly authorUid: string },
-  page: { readonly replicationId: string | null; readonly laboratoryId: string | null; readonly scopeKeys: string[] },
 ): Promise<void> {
   const recent = await db
     .collection(COLLECTIONS.activity.collectionPath())
@@ -129,33 +134,79 @@ async function recordEditingSpell(
     .get();
   if (!recent.empty && recent.docs[0]?.id !== edit.eventId) return;
   const stamp = reactionStamp("pageEdit", edit.at, edit.eventId);
-  await db.doc(COLLECTIONS.activity.docPath(edit.eventId)).set(
-    COLLECTIONS.activity.schema.parse({
-      schemaVersion: COLLECTIONS.activity.schemaVersion,
-      createdAt: Timestamp.fromDate(edit.at),
-      createdBy: stamp.actor,
-      writeContext: stamp.writeContext,
-      actorUid: edit.authorUid,
-      action: "page.edited",
-      entityType: "page" satisfies EntityType,
-      entityId: edit.pageId,
-      changedFields: ["content"],
-      replicationId: page.replicationId,
-      laboratoryId: page.laboratoryId,
-      scopeKeys: page.scopeKeys,
-    }),
-  );
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(db.doc(COLLECTIONS.pages.docPath(edit.pageId)));
+    const parsed = parseStoredDocument(pageDocSchema, snapshot.data());
+    if (!snapshot.exists || !parsed.success) return;
+    const page = parsed.data;
+    transaction.set(
+      db.doc(COLLECTIONS.activity.docPath(edit.eventId)),
+      COLLECTIONS.activity.schema.parse({
+        schemaVersion: COLLECTIONS.activity.schemaVersion,
+        createdAt: Timestamp.fromDate(edit.at),
+        createdBy: stamp.actor,
+        writeContext: stamp.writeContext,
+        actorUid: edit.authorUid,
+        action: "page.edited",
+        entityType: "page" satisfies EntityType,
+        entityId: edit.pageId,
+        changedFields: ["content"],
+        replicationId: page.replicationId,
+        laboratoryId: page.laboratoryId,
+        scopeKeys: page.scopeKeys,
+      }),
+    );
+  });
+}
+
+/**
+ * Removes an update of one part that does not decode as a Yjs update, with an audit entry that
+ * names its author. The rules cannot check the bytes, and every reader skips such an update, so
+ * removing it only keeps the log clean. Returns whether it was removed.
+ */
+export async function discardUndecodableUpdate(
+  db: Firestore,
+  update: Cause & { readonly pageId: string; readonly updateDocId: string },
+): Promise<boolean> {
+  const reference = db.doc(COLLECTIONS.pageUpdates.docPath(update.pageId, update.updateDocId));
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(reference);
+    const bytes = snapshot.get("update") as FirestoreBytes | undefined;
+    if (!snapshot.exists || snapshot.get("count") !== 1 || bytes === undefined) return false;
+    if (decodesAsUpdate(bytesOf(bytes))) return false;
+    writeAudit(
+      transaction,
+      {
+        action: "page.updateDiscarded",
+        actor: { kind: "system" },
+        entityType: "page",
+        entityId: update.pageId,
+        changes: [
+          { field: "updateId", before: update.updateDocId },
+          { field: "uid", before: snapshot.get("uid") as unknown },
+        ],
+        context: { depth: 1, correlationId: update.eventId, causationId: update.eventId },
+        idempotencyKey: `page.updateDiscarded:${update.eventId}`,
+        at: update.at,
+      },
+      db,
+    );
+    transaction.delete(reference);
+    return true;
+  });
 }
 
 export const pagesOnUpdateCreated = onDocumentCreated(documentTrigger(COLLECTIONS.pageUpdates.path), async (event) => {
   const authorUid = event.data?.get("uid");
   if (typeof authorUid !== "string") return;
-  await recordPageEdit(firestore(), {
-    pageId: event.params.pageId,
-    authorUid,
-    eventId: event.id,
-    at: new Date(event.time),
-  });
+  const cause = { eventId: event.id, at: new Date(event.time) };
+  if (
+    await discardUndecodableUpdate(firestore(), { ...cause, pageId: event.params.pageId, updateDocId: event.params.id })
+  ) {
+    logger.warn("An update of a page that does not decode was removed.", { pageId: event.params.pageId });
+    return;
+  }
+  await recordPageEdit(firestore(), { ...cause, pageId: event.params.pageId, authorUid });
 });
 
 /** The fields of a page whose change reaches its index entries or the copies of its audience. */
@@ -182,7 +233,7 @@ export async function followPage(db: Firestore, pageId: string, cause: Cause): P
   const page = parsed.data;
   const stamp: WriteStamp = reactionStamp("pageFollow", cause.at, cause.eventId);
   if (page.archivedAt !== null) await removePageIndex(db, pageId);
-  else await indexPage(db, pageId, page, extractPageText(await loadPageDocument(db, pageId, page)), stamp);
+  else await indexPage(db, pageId, extractPageText(await loadPageDocument(db, pageId, page)), stamp);
 
   const audience = { replicationId: page.replicationId, laboratoryId: page.laboratoryId, scopeKeys: page.scopeKeys };
   const threads = await db.collection(COLLECTIONS.threads.collectionPath()).where("targetId", "==", pageId).get();
@@ -201,6 +252,47 @@ export async function followPage(db: Firestore, pageId: string, cause: Cause): P
       writes += 1;
     }
     if (writes > 0) await batch.commit();
+  }
+  await followActivity(db, pageId, audience);
+}
+
+/** How many entries of activity one batch of followActivity rewrites. */
+const ACTIVITY_PAGE = 400;
+
+/**
+ * Brings the audience that the activity of a page copies in line with the page, a batch at a
+ * time, so that those whom a change of sharing shuts out no longer read who edited it and when.
+ */
+async function followActivity(
+  db: Firestore,
+  pageId: string,
+  audience: {
+    readonly replicationId: string | null;
+    readonly laboratoryId: string | null;
+    readonly scopeKeys: string[];
+  },
+): Promise<void> {
+  const base = db
+    .collection(COLLECTIONS.activity.collectionPath())
+    .where("entityId", "==", pageId)
+    .orderBy("__name__")
+    .limit(ACTIVITY_PAGE);
+  let cursor: string | null = null;
+  for (;;) {
+    const found: QuerySnapshot = await (cursor === null ? base : base.startAfter(cursor)).get();
+    const batch = db.batch();
+    let writes = 0;
+    for (const entry of found.docs) {
+      if (entry.get("entityType") !== "page" || !differs(entry.data(), audience, AUDIENCE_FIELDS)) continue;
+      // An entry of activity is append-only and has no fields of change: only its copy of the
+      // audience, which is access maintenance, follows the page.
+      batch.update(entry.ref, { ...audience });
+      writes += 1;
+    }
+    if (writes > 0) await batch.commit();
+    if (found.size < ACTIVITY_PAGE) return;
+    cursor = found.docs[found.size - 1]?.id ?? null;
+    if (cursor === null) return;
   }
 }
 

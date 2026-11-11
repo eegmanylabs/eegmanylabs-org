@@ -109,6 +109,33 @@ export function commentPlainText(body: string): string {
 export const PAGE_FILE_MAX_BYTES = 20 * 1024 * 1024;
 
 /**
+ * The types of image that a page shows as images. A browser never runs one as a document.
+ */
+export const PAGE_IMAGE_CONTENT_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
+
+/**
+ * The types that a file of a page may be stored with, as one pattern. portal/storage.rules
+ * holds the same pattern, which an architecture test compares. A type that a browser runs as a
+ * document (HTML, SVG, XML, XHTML, scripts) is not among them: a file of another type is stored
+ * as `application/octet-stream`, and every file other than an image of PAGE_IMAGE_CONTENT_TYPES
+ * is handed to the reader as a download, never shown at the portal's address.
+ */
+export const PAGE_FILE_CONTENT_TYPE_PATTERN =
+  "^(image/(png|jpeg|gif|webp)|application/pdf|text/plain|text/csv|application/json|application/zip|application/octet-stream|application/msword|application/vnd[.]ms-(excel|powerpoint)|application/vnd[.]openxmlformats-officedocument[.][a-z.]{1,80}|application/vnd[.]oasis[.]opendocument[.][a-z.]{1,40})$";
+
+/** The type a file of a page is stored with: its own where the rules accept it, and otherwise bytes. */
+export function pageFileContentType(type: string): string {
+  const normalised = type.trim().toLowerCase();
+  return new RegExp(PAGE_FILE_CONTENT_TYPE_PATTERN).test(normalised) ? normalised : "application/octet-stream";
+}
+
+/** The type a reader's browser is given for a stored file: an image of PAGE_IMAGE_CONTENT_TYPES as it is, anything else as bytes. */
+export function pageFileServedType(type: string): string {
+  const normalised = type.trim().toLowerCase();
+  return (PAGE_IMAGE_CONTENT_TYPES as readonly string[]).includes(normalised) ? normalised : "application/octet-stream";
+}
+
+/**
  * Where an uploaded file of a page lives in Cloud Storage. The storage rules allow a file there
  * to those who may edit the page and serve it to those who may read it, so the place decides who
  * reads the file and the page body holds this path, never a download address.

@@ -11,6 +11,7 @@ import {
   MEMBERS_SCOPE_KEY,
   pageContentChunkId,
   pagePermissionId,
+  REMOVED_COMMENT_TEXT,
   replicationScopeKey,
   userScopeKey,
   userWriteContext,
@@ -18,6 +19,7 @@ import {
 import type { RulesTestEnvironment } from "@firebase/rules-unit-testing";
 import { Bytes, doc, limit, serverTimestamp, Timestamp, writeBatch } from "firebase/firestore";
 import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
+import { COMMENT_AUTHOR_UID } from "./fixtures";
 import { expectOutcomes, requestsOf } from "./requests";
 import { seedWorld, trusted } from "./seed";
 import { createRulesEnvironment } from "./support";
@@ -380,6 +382,9 @@ describe("a compaction", () => {
   });
 });
 
+/** The author of the stored comment of the world, who may comment on the page. */
+const AUTHOR = "ownLabMember";
+
 describe("a thread and its comments", () => {
   const editComment = (caller: CallerKind, fields: Record<string, unknown> = {}) =>
     update(caller, STORED_COMMENT, { body: "Edited.", editedAt: serverTimestamp(), ...fields });
@@ -421,13 +426,50 @@ describe("a thread and its comments", () => {
       "an administrator edits it": ["denied", editComment("admin")],
       "its author edits it at another time": [
         "denied",
-        editComment("owner", { editedAt: Timestamp.fromMillis(Date.now() - 60_000) }),
+        editComment(AUTHOR, { editedAt: Timestamp.fromMillis(Date.now() - 60_000) }),
       ],
-      "its author moves it to another thread": ["denied", editComment("owner", { threadId: autoId("other thread") })],
-      "its author edits it": ["allowed", editComment("owner")],
-      "its author removes it": ["allowed", editComment("owner", { deletedAt: serverTimestamp() })],
-      "its author edits it once removed": ["denied", editComment("owner")],
-      "anyone deletes the document": ["denied", remove("owner", STORED_COMMENT)],
+      "its author moves it to another thread": ["denied", editComment(AUTHOR, { threadId: autoId("other thread") })],
+      "its author edits it": ["allowed", editComment(AUTHOR)],
+      "its author removes it": ["allowed", editComment(AUTHOR, { deletedAt: serverTimestamp() })],
+      "its author edits it once removed": ["denied", editComment(AUTHOR)],
+      "anyone deletes the document": ["denied", remove(AUTHOR, STORED_COMMENT)],
+    });
+  });
+
+  it("let an author who may no longer comment on the page remove their comment, and nothing more", async () => {
+    // A comment written by `owner`, who reads the page and may no longer comment on it.
+    const path = `threads/${STORED_THREAD}/comments/${autoId("former commenter comment")}`;
+    await trusted(environment, async (db) => {
+      const { setDoc } = await import("firebase/firestore");
+      await setDoc(doc(db, path), {
+        ...stored(),
+        threadId: STORED_THREAD,
+        authorUid: OWNER_UID,
+        body: "A synthetic remark from when the author could comment.",
+        mentionUids: [],
+        editedAt: null,
+        deletedAt: null,
+        ...SCOPE_FIELDS,
+      });
+    });
+    const removal = { mentionUids: [], deletedAt: serverTimestamp() };
+    await expectOutcomes({
+      "the former commenter rewrites it": [
+        "denied",
+        update("owner", path, { body: "Rewritten.", editedAt: serverTimestamp() }),
+      ],
+      "the former commenter mentions a commenter in it": [
+        "denied",
+        update("owner", path, { mentionUids: [COMMENT_AUTHOR_UID], editedAt: serverTimestamp() }),
+      ],
+      "the former commenter removes it with other text": [
+        "denied",
+        update("owner", path, { ...removal, body: "Defaced.", editedAt: serverTimestamp() }),
+      ],
+      "the former commenter removes it": [
+        "allowed",
+        update("owner", path, { ...removal, body: REMOVED_COMMENT_TEXT, editedAt: serverTimestamp() }),
+      ],
     });
   });
 
@@ -448,6 +490,59 @@ describe("a thread and its comments", () => {
         update("ownLabMember", thread, { resolvedAt: serverTimestamp(), resolvedBy: uidOfCaller("ownLabMember") }),
       ],
       "an editor reopens it": ["allowed", update("ownTeam", thread, { resolvedAt: null, resolvedBy: null })],
+    });
+  });
+});
+
+describe("the presence of a page", () => {
+  const TAB = "SyntheticTabAbCdEfGh";
+  const presenceOf = (caller: Exclude<CallerKind, "signedOut">, uid = uidOfCaller(caller), pageId = PAGE_ID) => ({
+    pageId,
+    uid,
+    tab: TAB,
+    clientId: 11,
+    clock: 1,
+    state: JSON.stringify({ user: { name: "A synthetic reader" } }),
+  });
+  const path = (uid: string, pageId = PAGE_ID) => `pages/${pageId}/presence/${uid}__${TAB}`;
+
+  it("is written by each reader of the page in their own document, and read by its readers alone", async () => {
+    const member = uidOfCaller("member");
+    const other = uidOfCaller("ownLabMember");
+    await expectOutcomes({
+      "a reader writes the presence of their tab": ["allowed", createAt("member", path(member), presenceOf("member"))],
+      "a reader writes it under another account's name": [
+        "denied",
+        createAt("member", path(other), presenceOf("member", other)),
+      ],
+      "a reader writes their own under another account's document": [
+        "denied",
+        createAt("member", path(other), presenceOf("member")),
+      ],
+      "a state too long for a document": [
+        "denied",
+        createAt("ownLabMember", path(other), { ...presenceOf("ownLabMember"), state: "x".repeat(4_001) }),
+      ],
+      "an account that cannot read a restricted page writes presence on it": [
+        "denied",
+        createAt("ownLabMember", path(other, RESTRICTED_ID), presenceOf("ownLabMember", other, RESTRICTED_ID)),
+      ],
+      "a reader of the restricted page writes presence on it": [
+        "allowed",
+        createAt("member", path(member, RESTRICTED_ID), presenceOf("member", member, RESTRICTED_ID)),
+      ],
+      "an account that cannot read the restricted page lists who is on it": [
+        "denied",
+        list("ownLabMember", `${RESTRICTED}/presence`, limit(10)),
+      ],
+      "a reader lists who is on the page": ["allowed", list("ownLabMember", `${PAGE}/presence`, limit(10))],
+    });
+    await expectOutcomes({
+      "another account changes the presence": ["denied", update("ownLabMember", path(member), { clock: 2 })],
+      "another account removes the presence": ["denied", remove("ownLabMember", path(member))],
+      "the reader moves it to another tab": ["denied", update("member", path(member), { tab: "OtherTabAbCdEfGhIjKl" })],
+      "the reader writes a heartbeat": ["allowed", update("member", path(member), { clock: 2 })],
+      "the reader removes it": ["allowed", remove("member", path(member))],
     });
   });
 });

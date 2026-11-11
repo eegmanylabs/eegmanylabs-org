@@ -11,6 +11,7 @@ import { PAGE_FRAGMENT_NAME } from "@eegml/shared";
 import { useMemo } from "react";
 import * as Y from "yjs";
 import { pageFileUrl } from "@/data";
+import { portalDictionary } from "./dictionary";
 import { pageSchema } from "./schema";
 
 export function VersionPreview({ state }: { readonly state: Uint8Array }) {
@@ -24,6 +25,7 @@ export function VersionPreview({ state }: { readonly state: Uint8Array }) {
       schema: pageSchema,
       collaboration: { fragment: doc.getXmlFragment(PAGE_FRAGMENT_NAME), user: { name: "", color: "var(--accent)" } },
       resolveFileUrl: pageFileUrl,
+      dictionary: portalDictionary,
       domAttributes: { editor: { "aria-label": "Content of the saved version, read only" } },
       extensions: [syntaxHighlighter],
     }),

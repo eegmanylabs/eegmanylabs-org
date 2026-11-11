@@ -251,20 +251,18 @@ test("a member arranges a personal dashboard with the keyboard, and the layout i
     await dialog.getByRole("button", { name: "Add the widget" }).click();
     await expect(page.getByRole("region", { name: title })).toBeVisible({ timeout: 20_000 });
   }
+  // The second note takes the free place beside the first.
   const second = page.getByRole("region", { name: "Second note" });
-  await expect(second).toHaveAttribute("data-place", "0,4,6,4");
+  await expect(second).toHaveAttribute("data-place", "6,0,6,4");
 
   const handle = page.getByRole("button", { name: "Rearrange Second note" });
   await handle.focus();
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("dashboard-status")).toContainText("Arranging Second note");
-  await page.keyboard.press("ArrowUp");
-  await expect(page.getByTestId("dashboard-status")).toContainText("Saved", { timeout: 20_000 });
-  await page.keyboard.press("ArrowUp");
-  await expect(page.getByTestId("dashboard-status")).toContainText("Saved", { timeout: 20_000 });
-  await page.keyboard.press("ArrowUp");
-  await page.keyboard.press("ArrowUp");
-  await expect(page.getByTestId("dashboard-status")).toContainText("Saved", { timeout: 20_000 });
+  for (let step = 0; step < 6; step += 1) {
+    await page.keyboard.press("ArrowLeft");
+    await expect(page.getByTestId("dashboard-status")).toContainText("Saved", { timeout: 20_000 });
+  }
   await expect(second).toHaveAttribute("data-place", "0,0,6,4");
   await page.keyboard.press("Shift+ArrowRight");
   await expect(page.getByTestId("dashboard-status")).toContainText("7 wide");
@@ -278,4 +276,41 @@ test("a member arranges a personal dashboard with the keyboard, and the layout i
     timeout: 20_000,
   });
   await reviewPage(page, "dashboard-personal");
+});
+
+test("an option property takes its options with Enter, and every kind of view fits a narrow screen", async ({
+  page,
+}) => {
+  await signInAsIvy(page);
+  await databaseOnGammaNotes(page, "Synthetic phases");
+  await addRow(page, "Site Corran");
+
+  await page.getByRole("button", { name: "Properties" }).click();
+  await page.getByRole("button", { name: "Add a property" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add a property" });
+  await dialog.getByLabel("Name").fill("Phase");
+  await dialog.getByLabel("Type").selectOption({ label: "Select" });
+  // Saving with no option is refused, Enter adds an option and stays in the dialog, and an
+  // option still typed when the property is saved is kept.
+  await dialog.getByRole("button", { name: "Save the property" }).click();
+  await expect(dialog.getByRole("alert")).toHaveText("Add at least one option, so that a value can be chosen.");
+  await dialog.getByLabel("New option").fill("Alpha");
+  await dialog.getByLabel("New option").press("Enter");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("textbox", { name: "Option 1" })).toHaveValue("Alpha");
+  await expect(dialog.getByLabel("New option")).toBeFocused();
+  await dialog.getByLabel("New option").fill("Beta");
+  await dialog.getByRole("button", { name: "Save the property" }).click();
+  await expect(dialog).toBeHidden();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: /^Phase of Site Corran:/ }).click();
+  const editor = page.getByRole("dialog", { name: "Change Phase" });
+  await expect(editor.getByLabel("Phase").locator("option")).toHaveText(["None", "Alpha", "Beta"]);
+  await editor.getByRole("button", { name: "Cancel" }).click();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const type of ["Table", "List", "Board", "Calendar", "Timeline", "Gallery"]) {
+    await showAs(page, type);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth), type).toBeLessThanOrEqual(390);
+  }
 });

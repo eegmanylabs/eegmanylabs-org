@@ -39,7 +39,8 @@ export function CellValue({
     return (
       <span className="inline-flex items-center gap-1 text-fg-accent" title={error}>
         <CircleAlert aria-hidden="true" className="size-3.5 shrink-0" strokeWidth={1.8} />
-        <span className="truncate">Error: {error}</span>
+        <span className="truncate">Cannot calculate</span>
+        <span className="sr-only">: {error}</span>
       </span>
     );
   }
@@ -165,6 +166,15 @@ function ChoiceList({
   );
 }
 
+/** What an editor of an option property shows while the property has no options to choose from. */
+function NoOptions() {
+  return (
+    <p className="text-fg-secondary">
+      This property has no options yet. Choose Properties, then Change a property, to add some.
+    </p>
+  );
+}
+
 /** The value as an editor first holds it. */
 function draftOf(property: ViewProperty, value: PropertyValue | undefined): unknown {
   if (value === undefined) return null;
@@ -265,31 +275,37 @@ export function ValueEditor({ property, value, context, people, onCommit, onCanc
       break;
     case "select":
     case "status":
-      control = (
-        <Select
-          id={id}
-          autoFocus
-          value={text(draft)}
-          onChange={(event) => setDraft(event.target.value === "" ? null : event.target.value)}
-        >
-          <option value="">None</option>
-          {options.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.name}
-            </option>
-          ))}
-        </Select>
-      );
+      control =
+        options.length === 0 ? (
+          <NoOptions />
+        ) : (
+          <Select
+            id={id}
+            autoFocus
+            value={text(draft)}
+            onChange={(event) => setDraft(event.target.value === "" ? null : event.target.value)}
+          >
+            <option value="">None</option>
+            {options.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
+              </option>
+            ))}
+          </Select>
+        );
       break;
     case "multiSelect":
-      control = (
-        <ChoiceList
-          label={property.name}
-          choices={options}
-          chosen={Array.isArray(draft) ? (draft as string[]) : []}
-          onChange={setDraft}
-        />
-      );
+      control =
+        options.length === 0 ? (
+          <NoOptions />
+        ) : (
+          <ChoiceList
+            label={property.name}
+            choices={options}
+            chosen={Array.isArray(draft) ? (draft as string[]) : []}
+            onChange={setDraft}
+          />
+        );
       break;
     case "person":
       control = (

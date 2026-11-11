@@ -34,7 +34,7 @@ import {
   isEditableCoreKey,
   readCustomDefinitions,
   readDatabase,
-  readsDatabase,
+  readsDatabaseNow,
   requireDatabaseEditor,
   storedConfig,
 } from "../views/collections";
@@ -64,7 +64,7 @@ async function propertyIdsOf(
   }
   const databaseId = databaseIdOf(collectionKey);
   const database = databaseId === null ? null : await readDatabase(db, transaction, databaseId);
-  if (database === null || !readsDatabase(access, secondFactorVerified, database.data)) {
+  if (database === null || !(await readsDatabaseNow(db, transaction, secondFactorVerified, access, database))) {
     throw new AppError("invalid-argument", "The collection that the property refers to does not exist.");
   }
   return new Set([DATABASE_TITLE_PROPERTY, ...Object.keys(database.data.properties)]);

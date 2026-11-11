@@ -15,6 +15,7 @@ export {
   signInWithGoogle,
   signOut,
 } from "./auth";
+export { namesOfOthers } from "./awareness-wire";
 export { callFunction } from "./callable";
 export { CallableError, type CallableErrorCode } from "./callable-error";
 export { DataShapeError, type RecordOf, type WithId } from "./converter";
@@ -34,13 +35,13 @@ export {
 } from "./live";
 export { discardLocalData } from "./local-data";
 export { PageFileError, pageFileUrl, uploadPageFile } from "./page-files";
+export { PresenceSync, type PresenceSyncMode } from "./page-presence";
 export { type CompactionResult, PageSync, type PageSyncOptions, type SaveState } from "./page-sync";
 export {
   addComment,
   createThread,
   editComment,
   type PageFieldsChange,
-  REMOVED_COMMENT_TEXT,
   readPageVersion,
   removeComment,
   setPageArchived,
@@ -70,7 +71,7 @@ export {
   SUPPORTED_FACTOR_IDS,
   type TotpEnrolment,
 } from "./second-factor-model";
-export type { Live, LiveError } from "./subscription-cache";
+export { isDenied, type Live, type LiveError } from "./subscription-cache";
 export { type CallResult, useCallResult } from "./use-call";
 export {
   type ChecklistChange,

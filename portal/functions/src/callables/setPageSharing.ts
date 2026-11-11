@@ -18,6 +18,7 @@ import {
   writeAudit,
 } from "../framework";
 import {
+  databasesOf,
   descendantsOf,
   inheritedAudience,
   levelOn,
@@ -32,8 +33,9 @@ import {
  * `restricted` opens the page to the listed users and groups alone, at their levels, with the
  * caller at `full` whatever the list says, so that nobody shuts themselves out. Every group must
  * exist. The permissions, the audience of the page and of every page beneath it that inherits,
- * and the audit entry are written in one transaction; the copies of the audience on threads,
- * comments, activity and the search index follow through a trigger.
+ * the copies of the audience on the databases beneath them and the audit entry are written in
+ * one transaction; the copies on threads, comments, activity and the search index follow
+ * through a trigger, and the rules read threads, comments and rows by the page meanwhile.
  */
 export const setPageSharing = defineCallable(setPageSharingContract, {
   handler: async (input, context) => {
@@ -66,6 +68,10 @@ export const setPageSharing = defineCallable(setPageSharingContract, {
       const stored = await transaction.get(db.collection(COLLECTIONS.pagePermissions.collectionPath(page.id)));
       const parent = page.data.parentPageId === null ? null : await readPage(db, transaction, page.data.parentPageId);
       const descendants = await descendantsOf(db, transaction, page.id);
+      const databases = await databasesOf(db, transaction, [
+        page.id,
+        ...descendants.map((descendant) => descendant.id),
+      ]);
       const audience: PageAudience =
         input.accessMode === "restricted"
           ? restrictedPageAudience(page.data, [...principals.values()])
@@ -106,6 +112,7 @@ export const setPageSharing = defineCallable(setPageSharingContract, {
         page,
         { ancestorPageIds: page.data.ancestorPageIds, audience, fields: { accessMode: input.accessMode } },
         descendants,
+        databases,
       );
       return {};
     });

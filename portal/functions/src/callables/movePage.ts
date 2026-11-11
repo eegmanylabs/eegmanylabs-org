@@ -9,12 +9,15 @@ import {
 } from "../framework";
 import {
   audienceOf,
+  databasesOf,
   descendantsOf,
   inheritedAudience,
   levelOn,
   PAGE_NOT_FOUND_MESSAGE,
   readPage,
   rewriteTree,
+  sameAudience,
+  treeAudienceChanges,
 } from "../pages/pages";
 
 /** The deepest a page may sit. */
@@ -22,10 +25,12 @@ const MAX_DEPTH = 50;
 
 /**
  * Moves a page beneath another page, or to the top of the workspace, at the place `order` names.
- * Capability: the level `edit` on the page and on its new parent. The body page of a record
- * stays where it is, and a page never moves beneath itself. A page that inherits takes the
- * audience of its new place, and every page beneath it moves with it and takes its new audience
- * where it inherits, in one transaction with the audit entry.
+ * Capability: the level `edit` on the page and on its new parent, and the level `full` on the
+ * page where the move changes who may read or change it or any page beneath it, because such a
+ * move shares the page as setPageSharing does. The body page of a record stays where it is, and
+ * a page never moves beneath itself. A page that inherits takes the audience of its new place,
+ * and every page beneath it moves with it and takes its new audience where it inherits, in one
+ * transaction with the audit entry.
  */
 export const movePage = defineCallable(movePageContract, {
   handler: async (input, context) => {
@@ -63,6 +68,10 @@ export const movePage = defineCallable(movePageContract, {
         }
       }
       const descendants = await descendantsOf(db, transaction, page.id);
+      const databases = await databasesOf(db, transaction, [
+        page.id,
+        ...descendants.map((descendant) => descendant.id),
+      ]);
       const ancestorPageIds = parent === null ? [] : [...parent.data.ancestorPageIds, parent.id];
       const deepest = Math.max(0, ...descendants.map((descendant) => descendant.data.ancestorPageIds.length));
       if (ancestorPageIds.length + 1 + Math.max(0, deepest - page.data.ancestorPageIds.length - 1) >= MAX_DEPTH) {
@@ -72,6 +81,14 @@ export const movePage = defineCallable(movePageContract, {
         page.data.accessMode === "inherit"
           ? await inheritedAudience(db, transaction, page.data, parent?.data ?? null)
           : audienceOf(page.data);
+      const changesAudience =
+        !sameAudience(audience, audienceOf(page.data)) || treeAudienceChanges(page, audience, descendants);
+      if (changesAudience && !atLeast(levelOn(access, context.secondFactorVerified, page.data), "full")) {
+        throw new AppError(
+          "permission-denied",
+          "Moving this page there would change who may open it. Only those with full access to the page may do that.",
+        );
+      }
       const auditEventId = writeAudit(
         transaction,
         {
@@ -93,6 +110,7 @@ export const movePage = defineCallable(movePageContract, {
         page,
         { ancestorPageIds, audience, fields: { parentPageId: input.parentPageId, order: input.order } },
         descendants,
+        databases,
       );
       return {};
     });

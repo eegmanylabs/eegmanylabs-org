@@ -2470,6 +2470,52 @@ service cloud.firestore {
       allow read: if isMember() && readsPageAt(pageId) && boundedRead();
     }
 
+    // Whether a thread may be read: within the scope it copies and, for a thread on a page, by a
+    // reader of the page as it stands now. The copy follows the page through a trigger, so a
+    // change of sharing that the trigger has not reached yet never lets the shut-out read.
+    // A query names the page in `targetId`, which the rules read the page by.
+    function readsThread(thread) {
+      return core()
+        || (holdsScopeOf(thread) && (thread.targetType != 'page' || readsPageAt(thread.targetId)));
+    }
+
+    // Who has a page open (D-010): one document for each open tab of a reader of the page, under
+    // the identifier `uid__tab`, which that tab writes in its own name and removes. Its fields are
+    // the awareness state of the tab, as JSON, and the counter and client of y-protocols.
+    // Reads: 2 (access, the page).
+    match /pages/{pageId}/presence/{presenceId} {
+      function pagePresenceFields() { return ['pageId', 'uid', 'tab', 'clientId', 'clock', 'state']; }
+      function pagePresenceRequired() { return ['pageId', 'uid', 'tab', 'clientId', 'clock', 'state']; }
+      function pagePresenceEditableBySelf() { return ['clientId', 'clock', 'state']; }
+
+      function validPresence(d) {
+        return d.pageId == pageId
+          && d.uid == request.auth.uid
+          && d.tab is string
+          && d.tab.matches('^[A-Za-z0-9]{20}$')
+          && presenceId == d.uid + '__' + d.tab
+          && d.clientId is int
+          && d.clientId >= 0
+          && d.clock is int
+          && d.clock >= 0
+          && d.state is string
+          && d.state.size() >= 2
+          && d.state.size() <= 4000;
+      }
+
+      allow read: if isMember() && readsPageAt(pageId) && boundedRead();
+      allow create: if isMember()
+        && readsPageAt(pageId)
+        && createdNow(incoming(), pagePresenceFields(), pagePresenceRequired())
+        && validPresence(incoming());
+      allow update: if isMember()
+        && resource.data.uid == request.auth.uid
+        && readsPageAt(pageId)
+        && updatedNow(incoming(), touchFields().concat(pagePresenceEditableBySelf()), pagePresenceRequired())
+        && validPresence(incoming());
+      allow delete: if isMember() && resource.data.uid == request.auth.uid;
+    }
+
     // A thread of comments on a page, anchored to a selection of its text or to the page as a
     // whole. It copies the audience of the page, whose holders of the level comment open and
     // resolve it. The anchor lives here and not in the page body, so commenting writes nothing
@@ -2514,7 +2560,7 @@ service cloud.firestore {
           && d.laboratoryId == pageDocument(d.targetId).data.laboratoryId;
       }
 
-      allow read: if isMember() && (core() || holdsScopeOf(resource.data)) && boundedRead();
+      allow read: if isMember() && readsThread(resource.data) && boundedRead();
       allow create: if isMember()
         && autoId(threadId)
         && createdNow(incoming(), threadsFields(), threadsRequired())
@@ -2532,8 +2578,10 @@ service cloud.firestore {
     }
 
     // A comment of a thread, written by a holder of the level comment on the page of the thread
-    // in their own name, beside the thread or after it. Its author edits it and removes it by
-    // setting `deletedAt`. It copies the audience of the thread.
+    // in their own name, beside the thread or after it. It copies the audience of the page as it
+    // stands, not the copy on the thread, which may lag behind a change of sharing. It is read as
+    // its thread, whose page decides. Its author edits it while they may still comment on the
+    // page, and removes it by setting `deletedAt` at any time.
     // Reads: 3 (access, the thread as it stands after the request, its page).
     match /threads/{threadId}/comments/{commentId} {
       function threadCommentsFields() {
@@ -2560,7 +2608,19 @@ service cloud.firestore {
           && docIds(d.mentionUids);
       }
 
-      allow read: if isMember() && (core() || holdsScopeOf(resource.data)) && boundedRead();
+      function threadNow() {
+        return get(/databases/$(database)/documents/threads/$(threadId));
+      }
+
+      // Only the removal: the text is replaced by REMOVED_COMMENT_TEXT of the shared package, the
+      // mentions are cleared and `deletedAt` is set.
+      function removesOnly(d) {
+        return d.deletedAt == request.time
+          && d.mentionUids.size() == 0
+          && d.body == 'This comment was removed by its author.';
+      }
+
+      allow read: if isMember() && threadNow() != null && readsThread(threadNow().data) && boundedRead();
       allow create: if isMember()
         && autoId(commentId)
         && createdNow(incoming(), threadCommentsFields(), threadCommentsRequired())
@@ -2569,9 +2629,9 @@ service cloud.firestore {
         && threadAfter() != null
         && threadAfter().data.targetType == 'page'
         && holdsLevelAt(threadAfter().data.targetId, 'comment')
-        && incoming().scopeKeys == threadAfter().data.scopeKeys
-        && incoming().replicationId == threadAfter().data.replicationId
-        && incoming().laboratoryId == threadAfter().data.laboratoryId
+        && incoming().scopeKeys == pageDocument(threadAfter().data.targetId).data.scopeKeys
+        && incoming().replicationId == pageDocument(threadAfter().data.targetId).data.replicationId
+        && incoming().laboratoryId == pageDocument(threadAfter().data.targetId).data.laboratoryId
         && incoming().editedAt == null
         && incoming().deletedAt == null
         && validComment(incoming());
@@ -2581,12 +2641,11 @@ service cloud.firestore {
         && updatedNow(incoming(), touchFields().concat(threadCommentsEditableByAuthor()), threadCommentsRequired())
         && incoming().editedAt == request.time
         && (incoming().deletedAt == null || incoming().deletedAt == request.time)
-        && validComment(incoming());
-    }
-
-    // Reads: 1 (access).
-    match /{path=**}/comments/{commentId} {
-      allow read: if isMember() && (core() || holdsScopeOf(resource.data)) && boundedRead();
+        && validComment(incoming())
+        && (removesOnly(incoming())
+          || (threadNow() != null
+            && threadNow().data.targetType == 'page'
+            && holdsLevelAt(threadNow().data.targetId, 'comment')));
     }
 
     // ===== Databases, custom properties, views and dashboards (D-011) =====
@@ -2601,9 +2660,12 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/databases/$(databaseId));
     }
 
-    // Whoever reads a database reads its rows: the readers of its parent page, as copied.
+    // Whoever reads a database reads its rows: the readers of its parent page, as copied and as
+    // the page stands now, so that a copy a trigger has not rewritten yet never opens the rows.
     function readsDatabaseAt(databaseId) {
-      return databaseDocument(databaseId) != null && readsPage(databaseDocument(databaseId).data, access());
+      return databaseDocument(databaseId) != null
+        && readsPage(databaseDocument(databaseId).data, access())
+        && readsPageAt(databaseDocument(databaseId).data.parentPageId);
     }
 
     // A database. Its editors, who hold the level edit on its parent page, rename it, describe
@@ -2663,12 +2725,23 @@ service cloud.firestore {
               || access().contactLaboratoryIds.hasAny(person(personId).laboratoryIds))));
     }
 
-    // A view: its owner reads it alone until it is shared, and every member afterwards. A
-    // callable function saves it, which validates its configuration, and its owner deletes it.
-    // Reads: 1 (access).
+    // Whether a shared view may be read by the caller: a view of a core collection by every
+    // member, and a view of a database by the readers of the database, because its name, its
+    // database and the values of its filters tell of the rows. A query names the collection in
+    // `collectionKey`.
+    function readsSharedView(view) {
+      return view.isShared == true
+        && (!view.collectionKey.matches('^db:.*')
+          || readsDatabaseAt(view.collectionKey.split(':')[1]));
+    }
+
+    // A view: its owner reads it alone until it is shared, and then those who read what it
+    // shows. A callable function saves it, which validates its configuration, and its owner
+    // deletes it.
+    // Reads: 1 (access), and 3 for a shared view of a database (its database and page).
     match /views/{viewId} {
       allow read: if isActive()
-        && (resource.data.ownerUid == request.auth.uid || (member() && resource.data.isShared == true))
+        && (resource.data.ownerUid == request.auth.uid || (member() && readsSharedView(resource.data)))
         && boundedRead();
       allow delete: if isMember() && resource.data.ownerUid == request.auth.uid;
     }

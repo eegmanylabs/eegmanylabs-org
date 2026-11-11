@@ -47,6 +47,7 @@ import {
   PROGRAMME_SCOPE_KEY,
   pageContentChunkId,
   pagePermissionId,
+  pagePresenceId,
   parseScopeKey,
   participationId,
   personEmailIndexId,
@@ -199,6 +200,7 @@ const GOLDEN: { readonly [Name in IdBuilderName]: readonly [actual: string | nul
   pagePermissionId: [pagePermissionId("role", "lab_member"), "role__lab_member"],
   sequenceId: [sequenceId(42), "000042"],
   pageContentChunkId: [pageContentChunkId(3, 12), "000003__000012"],
+  pagePresenceId: [pagePresenceId("uid-synthetic", "AbCdEfGhIjKlMnOpQrSt"), "uid-synthetic__AbCdEfGhIjKlMnOpQrSt"],
   contributorTableId: [contributorTableId("an-invented-file-identifier"), "ctable__231260a4e1fc5c73416f"],
   contributorId: [
     contributorId("an-invented-file-identifier", contributorNameHash("Ada", "Example", SECRET) ?? "", 1),

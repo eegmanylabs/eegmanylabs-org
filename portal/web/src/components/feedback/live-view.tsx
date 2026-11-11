@@ -17,6 +17,11 @@ export interface LiveViewProps<T> {
   errorTitle: string;
   /** Asks for the value again. With it, the error state offers a "Try again" button. */
   onRetry?: () => void;
+  /**
+   * Replaces the error state when the server refused the read, for example a page that the
+   * account no longer has access to, with a way out.
+   */
+  denied?: ReactNode;
   children: (data: T) => ReactNode;
 }
 
@@ -65,13 +70,14 @@ function Loading({ label, custom }: { label: string; custom: ReactNode | undefin
  * Renders a live value with the portal's standard loading and error states, so every data view
  * handles the three cases the same way. Nothing is rendered while there is nothing to watch.
  */
-export function LiveView<T>({ live, loadingLabel, loading, errorTitle, onRetry, children }: LiveViewProps<T>) {
+export function LiveView<T>({ live, loadingLabel, loading, errorTitle, onRetry, denied, children }: LiveViewProps<T>) {
   switch (live.status) {
     case "idle":
       return null;
     case "loading":
       return <Loading label={loadingLabel} custom={loading} />;
     case "error":
+      if (denied !== undefined && live.error.code === "permission-denied") return denied;
       return (
         <ErrorState
           title={errorTitle}

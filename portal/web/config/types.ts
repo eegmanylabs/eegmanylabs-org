@@ -4,6 +4,13 @@
 export const PORTAL_MODES = ["emulator", "staging", "production"] as const;
 export type PortalMode = (typeof PORTAL_MODES)[number];
 
+/**
+ * How a page shows who else has it open (D-010): "cursor" sends the caret of each editor, as
+ * the editor spike recommends; "presence" sends only who is there; "off" sends nothing.
+ */
+export const PRESENCE_MODES = ["cursor", "presence", "off"] as const;
+export type PresenceMode = (typeof PRESENCE_MODES)[number];
+
 export interface FirebaseWebConfig {
   readonly apiKey: string;
   readonly projectId: string;
@@ -29,4 +36,6 @@ export interface PortalBuildConfig {
   readonly functionsRegion: string;
   /** Whether the "Continue with Google" button is built in. */
   readonly googleSignIn: boolean;
+  /** How a page shows who else has it open. */
+  readonly presence: PresenceMode;
 }

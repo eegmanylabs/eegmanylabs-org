@@ -163,3 +163,67 @@
 .bn-thread-mark {
   background: transparent;
 }
+
+/* BlockNote sets its own typeface on the content outright: DM Sans, as everywhere (D-018). */
+.bn-root .bn-default-styles,
+.bn-root .bn-editor,
+.bn-root .bn-editor :where(select, input, button) {
+  font-family: var(--sans);
+}
+
+/*
+ * Headings in the content sit below the title of the page, which is the one level-one heading
+ * of the view, and step down from it.
+ */
+.portal-editor [data-content-type="heading"] {
+  --level: 1.5rem;
+}
+.portal-editor [data-content-type="heading"][data-level="2"] {
+  --level: 1.25rem;
+}
+.portal-editor [data-content-type="heading"][data-level="3"] {
+  --level: 1.1rem;
+}
+.portal-editor [data-content-type="heading"]:where([data-level="4"], [data-level="5"], [data-level="6"]) {
+  --level: 1rem;
+}
+
+/* The checkbox of a checklist item meets the target size of WCAG 2.2: 24 by 24 pixels. */
+.portal-editor [data-content-type="checkListItem"] > div:has(> input[type="checkbox"]),
+.portal-editor [data-content-type="checkListItem"] input[type="checkbox"] {
+  min-width: 24px;
+  min-height: 24px;
+}
+.portal-editor [data-content-type="checkListItem"] input[type="checkbox"] {
+  accent-color: var(--accent-strong);
+}
+
+/*
+ * Colours are not offered, and text that arrives with one, such as a paste, takes the portal's
+ * own, never a colour outside the palette. A coloured background becomes the muted surface.
+ */
+.portal-editor [data-text-color]:not([data-text-color="default"]),
+.portal-editor [data-style-type="textColor"] {
+  color: inherit;
+}
+.portal-editor [data-background-color]:not([data-background-color="default"]),
+.portal-editor [data-style-type="backgroundColor"] {
+  background-color: var(--surface-muted);
+}
+
+/* The handles and the selection of a table in the portal's colours. */
+.portal-editor .ProseMirror .column-resize-handle,
+.bn-table-drop-cursor {
+  background-color: var(--accent);
+}
+.portal-editor .ProseMirror .selectedCell::after {
+  background: var(--surface-accent);
+  opacity: 0.6;
+}
+
+/* The formatting toolbar wraps within the viewport, down to a width of 360 pixels. */
+.bn-root .bn-formatting-toolbar {
+  max-width: calc(100vw - 32px);
+  flex-wrap: wrap;
+  height: auto;
+}

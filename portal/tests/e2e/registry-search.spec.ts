@@ -65,6 +65,8 @@ test("the command palette is used by keyboard alone: records, recent items, dest
   // Another tab of the page, from the palette.
   await page.keyboard.press("Control+k");
   await page.keyboard.type("hypotheses");
+  // The results follow the typing after a moment: Enter acts on the option once it is chosen.
+  await expect(dialog.getByRole("option", { name: `Show the hypotheses of ${ALPHA}`, selected: true })).toBeVisible();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("tab", { name: "Hypotheses" })).toHaveAttribute("aria-selected", "true");
 

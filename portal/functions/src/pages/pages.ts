@@ -170,10 +170,64 @@ export function cascade(
   return resolved;
 }
 
+/** A database beneath one of the pages of a tree, as it copies the audience of its parent page. */
+export interface StoredDatabaseCopy {
+  readonly reference: DocumentReference;
+  readonly parentPageId: string;
+  readonly audience: { readonly scopeKeys: unknown; readonly levelKeys: unknown };
+}
+
+/** How many parent pages one query of databases names, the most an `in` filter takes. */
+const IN_FILTER_MAX = 30;
+
+/**
+ * The databases beneath a set of pages, read in the transaction, so that a move or a change of
+ * sharing rewrites their copy of the audience together with the pages.
+ */
+export async function databasesOf(
+  db: Firestore,
+  transaction: Transaction,
+  pageIds: readonly string[],
+): Promise<StoredDatabaseCopy[]> {
+  const found: StoredDatabaseCopy[] = [];
+  for (let start = 0; start < pageIds.length; start += IN_FILTER_MAX) {
+    const snapshot = await transaction.get(
+      db
+        .collection(COLLECTIONS.databases.collectionPath())
+        .where("parentPageId", "in", pageIds.slice(start, start + IN_FILTER_MAX)),
+    );
+    for (const database of snapshot.docs) {
+      found.push({
+        reference: database.ref,
+        parentPageId: database.get("parentPageId") as string,
+        audience: { scopeKeys: database.get("scopeKeys"), levelKeys: database.get("levelKeys") },
+      });
+    }
+  }
+  return found;
+}
+
+/**
+ * Whether giving a page a new audience changes the audience of any page beneath it: those that
+ * inherit follow it, which is a change of who may open them.
+ */
+export function treeAudienceChanges(
+  page: StoredPage,
+  audience: PageAudience,
+  descendants: readonly StoredPage[],
+): boolean {
+  const resolved = cascade({ id: page.id, ancestors: [...page.data.ancestorPageIds, page.id], audience }, descendants);
+  return descendants.some((descendant) => {
+    const next = resolved.get(descendant.id);
+    return next !== undefined && !sameAudience(next.audience, audienceOf(descendant.data));
+  });
+}
+
 /**
  * Writes the new place and audience of a page, with any other fields that change, and those of
- * every page beneath it whose place or audience changes as a result. Call after the last read
- * of the transaction.
+ * every page beneath it whose place or audience changes as a result, and the copy of the
+ * audience that each database beneath those pages holds. Call after the last read of the
+ * transaction. The trigger that follows pages stays as a backstop for the databases.
  */
 export function rewriteTree(
   transaction: Transaction,
@@ -185,6 +239,7 @@ export function rewriteTree(
     readonly fields?: Readonly<Record<string, unknown>>;
   },
   descendants: readonly StoredPage[],
+  databases: readonly StoredDatabaseCopy[] = [],
 ): void {
   transaction.update(page.reference, {
     ...next.fields,
@@ -206,5 +261,12 @@ export function rewriteTree(
       ...update.audience,
       ...touchedFields(stamp),
     });
+  }
+  for (const database of databases) {
+    const audience = database.parentPageId === page.id ? next.audience : resolved.get(database.parentPageId)?.audience;
+    if (audience === undefined) continue;
+    const copy = { scopeKeys: audience.scopeKeys, levelKeys: audience.levelKeys };
+    if (JSON.stringify(copy) === JSON.stringify(database.audience)) continue;
+    transaction.update(database.reference, { ...copy, ...touchedFields(stamp) });
   }
 }
