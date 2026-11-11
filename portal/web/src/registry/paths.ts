@@ -7,6 +7,10 @@ export const memberPath = (personId: string): string => `/members/${encodeURICom
 
 export const laboratoryPath = (laboratoryId: string): string => `/labs/${encodeURIComponent(laboratoryId)}`;
 
+/** A page of the workspace. A thread of it is opened in its comment panel. */
+export const pagePath = (pageId: string, threadId?: string): string =>
+  `/pages/${encodeURIComponent(pageId)}${threadId === undefined ? "" : `?thread=${encodeURIComponent(threadId)}`}`;
+
 /** The parameter of the laboratories list that opens its dialog to register or create a laboratory. */
 export const LABORATORY_DIALOG_PARAMETER = "dialog";
 
@@ -19,5 +23,6 @@ export function recordPath(entityType: EntityType, entityId: string): string | n
   if (entityType === "replication") return replicationPath(entityId);
   if (entityType === "person") return memberPath(entityId);
   if (entityType === "laboratory") return laboratoryPath(entityId);
+  if (entityType === "page") return pagePath(entityId);
   return null;
 }

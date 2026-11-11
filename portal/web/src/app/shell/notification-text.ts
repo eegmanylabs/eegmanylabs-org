@@ -2,6 +2,7 @@
 // leads only to a page that exists. Pure, so that it is tested by itself.
 import type { Role } from "@eegml/shared";
 import { ROLE_LABELS } from "@/app/labels";
+import { pagePath } from "@/registry/paths";
 
 export interface NotificationText {
   readonly title: string;
@@ -85,6 +86,25 @@ export function describeNotification(payload: Payload): NotificationText {
       return { title: "Your entry in a laboratory was confirmed", detail: null, to: "/" };
     case "replicationMembershipConfirmed":
       return { title: "Your membership of a replication was reviewed", detail: null, to: "/" };
+    case "pageMention":
+      return {
+        title: `${text(payload.authorName) ?? "A member"} mentioned you on a page`,
+        detail: text(payload.title),
+        to: text(payload.pageId) === null ? null : pagePath(String(payload.pageId)),
+      };
+    case "commentMention":
+    case "commentReply": {
+      const pageId = text(payload.pageId);
+      const threadId = text(payload.threadId);
+      return {
+        title:
+          payload.kind === "commentMention"
+            ? `${text(payload.authorName) ?? "A member"} mentioned you in a comment`
+            : `${text(payload.authorName) ?? "A member"} replied in a discussion you took part in`,
+        detail: text(payload.title),
+        to: pageId === null ? null : pagePath(pageId, threadId ?? undefined),
+      };
+    }
     default:
       return { title: "Something changed that concerns you", detail: null, to: null };
   }

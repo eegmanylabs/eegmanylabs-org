@@ -9,12 +9,14 @@ import { grantableCapabilitySchema, roleSchema, roleScopeTypeSchema } from "./ca
 import { entityTypeSchema } from "./entities";
 import { hasValidOrcidCheckDigit } from "./identifiers";
 import { nameFold } from "./ids";
+import { ORDER_KEY_MAX_LENGTH } from "./order";
 import {
   countryCodeSchema,
   idListSchema,
   idSchema,
   keySchema,
   LIMITS,
+  mapKeySchema,
   orcidSchema,
   shortTextSchema,
   uidSchema,
@@ -34,6 +36,15 @@ import { laboratoryMemberRoleSchema, laboratoryMemberStatusSchema } from "./sche
 import { reconciliationStatusSchema } from "./schemas/provenance";
 import { replicationMembershipRoleSchema, reviewStatusSchema, studyKeySchema } from "./schemas/replications";
 import { auditActionSchema, auditActorKindSchema } from "./schemas/system";
+import {
+  pageAccessModeSchema,
+  pageLevelSchema,
+  propertyAudienceSchema,
+  propertyTypeSchema,
+  viewTypeSchema,
+} from "./schemas/workspace";
+import { dashboardWidgetInputSchema } from "./views/dashboard";
+import { propertyConfigSchema, viewCollectionKeySchema, viewConfigSchema, viewScopeSchema } from "./views/model";
 import { z } from "./zod";
 
 export interface CallableContract<Input extends z.ZodType = z.ZodType, Output extends z.ZodType = z.ZodType> {
@@ -908,6 +919,272 @@ export const listAuditEventsContract = {
 } as const satisfies CallableContract;
 export type ListAuditEventsOutput = CallableOutput<typeof listAuditEventsContract>;
 export type ListedAuditEvent = ListAuditEventsOutput["events"][number];
+
+// The workspace (docs/DATA_MODEL.md, section 9). A page is created, moved and shared through
+// these functions, because each resolves the audience of the page, and of every page that
+// inherits from it, in one transaction with its audit entry.
+
+/** A title as a person types it: trimmed and never empty. */
+const pageTitleSchema = z.string().trim().min(1).max(LIMITS.shortText);
+/** An icon of a page: one emoji or short symbol. */
+export const pageIconSchema = z.string().trim().min(1).max(16);
+const orderKeySchema = z
+  .string()
+  .max(ORDER_KEY_MAX_LENGTH)
+  .regex(/^[0-9a-z]*[1-9a-z]$/);
+
+/**
+ * Creates a page: at the top of the programme's workspace (`parentPageId` null), which every
+ * member may, or beneath a page on which the caller holds `edit`. A page made from a template,
+ * which the caller may read, starts with a copy of its content and names it in
+ * `templateSourceId`. The new page goes after its last sibling.
+ */
+export const createPageContract = {
+  name: "createPage",
+  input: z.strictObject({
+    parentPageId: idSchema.nullable(),
+    title: pageTitleSchema,
+    icon: pageIconSchema.optional(),
+    templatePageId: idSchema.optional(),
+  }),
+  output: z.strictObject({ pageId: idSchema }),
+} as const satisfies CallableContract;
+
+/** The records that have a body page with notes. */
+export const ENTITY_PAGE_TYPES = ["replication", "laboratory", "person"] as const;
+export const entityPageTypeSchema = z.enum(ENTITY_PAGE_TYPES);
+export type EntityPageType = z.output<typeof entityPageTypeSchema>;
+
+/**
+ * The body page of a replication, a laboratory or a member, created on first use for any member,
+ * who may read every one of these records. Its identifier is `entityType__entityId` and its
+ * audience follows the record. A repeated call creates nothing.
+ */
+export const openEntityPageContract = {
+  name: "openEntityPage",
+  input: z.strictObject({ entityType: entityPageTypeSchema, entityId: idSchema }),
+  output: z.strictObject({ pageId: idSchema, created: z.boolean() }),
+} as const satisfies CallableContract;
+
+/**
+ * Moves a page beneath another page, or to the top of the workspace, at the place that `order`
+ * names among its new siblings. The caller holds `edit` on the page and on its new parent. A
+ * page that inherits takes the audience of its new parent, and so does every page beneath it
+ * that inherits. The body page of a record stays where it is.
+ */
+export const movePageContract = {
+  name: "movePage",
+  input: z.strictObject({ pageId: idSchema, parentPageId: idSchema.nullable(), order: orderKeySchema }),
+  output: z.strictObject({}),
+} as const satisfies CallableContract;
+
+const pagePermissionInputSchema = z.strictObject({
+  principalType: z.enum(["user", "group"]),
+  principalId: idSchema,
+  level: pageLevelSchema,
+});
+
+/**
+ * Sets who may read and change a page. The caller holds `full` on it. `inherit` follows the page
+ * above it or the record it belongs to, and `restricted` opens the page to the listed users and
+ * groups alone, at their levels, with the caller at `full` whatever the list says. The audience of
+ * the page and of every page beneath it that inherits, and of their threads, comments, activity
+ * and search entries, changes in the same transaction.
+ */
+export const setPageSharingContract = {
+  name: "setPageSharing",
+  input: z.strictObject({
+    pageId: idSchema,
+    accessMode: pageAccessModeSchema,
+    permissions: z.array(pagePermissionInputSchema).max(100),
+  }),
+  output: z.strictObject({}),
+} as const satisfies CallableContract;
+
+/**
+ * What the sharing dialog of a page shows to a holder of `full`: the access mode, the listed
+ * principals with their names, and the groups that may be added.
+ */
+export const getPageSharingContract = {
+  name: "getPageSharing",
+  input: z.strictObject({ pageId: idSchema }),
+  output: z.strictObject({
+    accessMode: pageAccessModeSchema,
+    permissions: z
+      .array(
+        z.strictObject({
+          principalType: z.enum(["user", "group", "role"]),
+          principalId: idSchema,
+          level: pageLevelSchema,
+          /** The name of the person or the group, or null where it is not known. */
+          name: shortTextSchema.nullable(),
+        }),
+      )
+      .max(100),
+    groups: z.array(z.strictObject({ groupKey: keySchema, name: shortTextSchema })).max(500),
+  }),
+} as const satisfies CallableContract;
+
+export const pageVersionRequestKindSchema = z.enum(["manual", "auto", "restore"]);
+
+/**
+ * Saves the content of a page as it is stored now as a version. The caller holds `edit`. A
+ * version of the kind `auto`, which the editor asks for after a quiet spell, is saved only when
+ * the content has changed since the latest version, and `versionId` is null otherwise. A version
+ * of the kind `restore` records the content after an earlier version was restored, which the
+ * editor writes as a new change, and names that version.
+ */
+export const savePageVersionContract = {
+  name: "savePageVersion",
+  input: z.strictObject({
+    pageId: idSchema,
+    kind: pageVersionRequestKindSchema,
+    label: pageTitleSchema.optional(),
+    restoredFromVersionId: idSchema.optional(),
+  }),
+  output: z.strictObject({ versionId: idSchema.nullable() }),
+} as const satisfies CallableContract;
+
+/**
+ * Searches the index of the workspace for every word of a query, and returns only the entries
+ * whose audience includes the caller. Restricted pages are found by their principals alone.
+ */
+export const searchWorkspaceContract = {
+  name: "searchWorkspace",
+  input: z.strictObject({ query: z.string().trim().min(1).max(200) }),
+  output: z.strictObject({
+    results: z
+      .array(
+        z.strictObject({
+          entityType: entityTypeSchema,
+          entityId: idSchema,
+          title: z.string().max(1_000),
+          kind: keySchema,
+        }),
+      )
+      .max(50),
+  }),
+} as const satisfies CallableContract;
+export type WorkspaceSearchResult = CallableOutput<typeof searchWorkspaceContract>["results"][number];
+
+// Databases, custom properties, views and dashboards (D-011, docs/DATA_MODEL.md, section 9). A
+// property definition, a value of a property and a widget may each be a list or a map, which no
+// security rule can check element by element, so these functions validate and write them.
+
+/**
+ * Creates a database beneath a page on which the caller holds `edit`. It copies the audience of
+ * the page and starts with a status property, so that a board can be drawn at once.
+ */
+export const createDatabaseContract = {
+  name: "createDatabase",
+  input: z.strictObject({ parentPageId: idSchema, name: pageTitleSchema, icon: pageIconSchema.optional() }),
+  output: z.strictObject({ databaseId: idSchema }),
+} as const satisfies CallableContract;
+
+/** The name of a property as a person types it. */
+const propertyNameSchema = z.string().trim().min(1).max(100);
+
+/**
+ * Adds a property to a collection, changes one, or archives it. For a database (`db:<id>`) the
+ * caller holds `edit` on its parent page. For a core collection (`core:<name>`) the caller holds
+ * `lookups.manage` for the programme, states the audience of the property, and may never take
+ * the identifier of a core field. The type of a property never changes once it holds values.
+ */
+export const savePropertyContract = {
+  name: "saveProperty",
+  input: z.strictObject({
+    collectionKey: viewCollectionKeySchema,
+    propertyId: mapKeySchema.optional(),
+    name: propertyNameSchema,
+    type: propertyTypeSchema,
+    config: propertyConfigSchema,
+    audience: propertyAudienceSchema.optional(),
+    archived: z.boolean().optional(),
+  }),
+  output: z.strictObject({ propertyId: mapKeySchema }),
+} as const satisfies CallableContract;
+
+/** The most records one call changes, which keeps its transaction within Firestore's limit. */
+export const SAVE_RECORDS_MAX = 100;
+
+/**
+ * Changes the values of records, creates rows of a database and archives them, in one
+ * transaction with an audit entry for each record. A row of a database is changed by the editors
+ * of the database. A core record takes values of its custom properties and of the core fields
+ * that the view registry lets a client change, from those who may change the record; a value of
+ * a restricted property goes to the record's `private/custom`. Every value is checked against
+ * its property, and a computed property takes none.
+ */
+export const saveRecordsContract = {
+  name: "saveRecords",
+  input: z.strictObject({
+    collectionKey: viewCollectionKeySchema,
+    changes: z
+      .array(
+        z.strictObject({
+          /** The record to change, or none for a new row of a database. */
+          recordId: idSchema.optional(),
+          /** The title of a row of a database. */
+          title: z.string().trim().max(LIMITS.shortText).optional(),
+          values: z.record(mapKeySchema, z.json()),
+        }),
+      )
+      .max(SAVE_RECORDS_MAX),
+    /** Rows of a database to archive. */
+    archive: z.array(idSchema).max(SAVE_RECORDS_MAX).optional(),
+  }),
+  output: z.strictObject({ recordIds: z.array(idSchema).max(SAVE_RECORDS_MAX) }),
+} as const satisfies CallableContract;
+
+/**
+ * Saves a view: a new one for the caller, or one the caller owns, or a shared one for programme
+ * administrators and the core team. A view is the caller's own until `isShared` is set.
+ */
+export const saveViewContract = {
+  name: "saveView",
+  input: z.strictObject({
+    viewId: idSchema.optional(),
+    collectionKey: viewCollectionKeySchema,
+    name: pageTitleSchema,
+    type: viewTypeSchema,
+    config: viewConfigSchema,
+    scope: viewScopeSchema.nullable(),
+    isShared: z.boolean(),
+    pageId: idSchema.nullable(),
+  }),
+  output: z.strictObject({ viewId: idSchema }),
+} as const satisfies CallableContract;
+
+/** The scopes that have a dashboard of their own, which a function creates when it is first opened. */
+export const scopeDashboardTypeSchema = z.enum(["programme", "replication", "laboratory"]);
+
+/**
+ * The dashboard of the programme, a replication or a laboratory, created with its default
+ * widgets on first use for any member, who may read every one of them. A repeated call creates
+ * nothing.
+ */
+export const openDashboardContract = {
+  name: "openDashboard",
+  input: z.strictObject({ scopeType: scopeDashboardTypeSchema, scopeId: idSchema }),
+  output: z.strictObject({ dashboardId: idSchema, created: z.boolean() }),
+} as const satisfies CallableContract;
+
+/**
+ * Creates a personal dashboard for the caller, or changes a dashboard: its name, and the widgets
+ * it names, each replaced whole or removed with null, so that two people who change different
+ * widgets at once both keep their change. A personal dashboard is changed by its owner alone, and
+ * any other by holders of `pages.manage` for its scope.
+ */
+export const saveDashboardContract = {
+  name: "saveDashboard",
+  input: z.strictObject({
+    dashboardId: idSchema.optional(),
+    name: pageTitleSchema.optional(),
+    widgets: z.record(mapKeySchema, dashboardWidgetInputSchema.nullable()),
+    archived: z.boolean().optional(),
+  }),
+  output: z.strictObject({ dashboardId: idSchema }),
+} as const satisfies CallableContract;
 
 /**
  * Registry of the reasons a function can give for a refusal, beside its message. The interface

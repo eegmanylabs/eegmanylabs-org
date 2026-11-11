@@ -59,7 +59,7 @@ export function FavouriteButton({
       onClick={toggle}
     >
       <Star aria-hidden="true" strokeWidth={1.8} className={cn(starred && "fill-current text-fg-accent")} />
-      {starred ? "Starred" : "Star"}
+      Star
     </Button>
   );
 }

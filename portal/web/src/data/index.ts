@@ -28,9 +28,27 @@ export {
   useLiveDataDisconnected,
   useLiveDocument,
   useLiveDocuments,
+  useLiveDocumentsAt,
+  useLiveQueries,
   useLiveQuery,
 } from "./live";
 export { discardLocalData } from "./local-data";
+export { PageFileError, pageFileUrl, uploadPageFile } from "./page-files";
+export { type CompactionResult, PageSync, type PageSyncOptions, type SaveState } from "./page-sync";
+export {
+  addComment,
+  createThread,
+  editComment,
+  type PageFieldsChange,
+  REMOVED_COMMENT_TEXT,
+  readPageVersion,
+  removeComment,
+  setPageArchived,
+  setThreadResolved,
+  type ThreadAnchor,
+  type ThreadScope,
+  updatePageFields,
+} from "./page-writes";
 export type { PagedItems } from "./paged";
 export {
   type FieldOf,
@@ -58,6 +76,7 @@ export {
   type ChecklistChange,
   type CorrectionRequestInput,
   createCorrectionRequest,
+  deleteView,
   endLaboratoryMember,
   type FieldPatch,
   markNotificationRead,
@@ -66,6 +85,7 @@ export {
   saveLaboratoryDetail,
   setFavourite,
   updateChecklistItem,
+  updateDatabaseFields,
   updateLaboratoryFields,
   updateOwnPersonLinks,
   updateParticipationDetail,

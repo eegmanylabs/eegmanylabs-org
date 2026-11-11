@@ -26,7 +26,7 @@ import { z } from "./zod";
  * | `task`                   | `tasks/{id}`                                           |
  * | `page`                   | `pages/{pageId}`                                       |
  * | `thread`                 | `threads/{id}`                                         |
- * | `comment`                | `threads/{id}/comments/{id}`                           |
+ * | `comment`                | `threads/{threadId}/comments/{commentId}`              |
  * | `attachment`             | `attachments/{id}`                                     |
  * | `database`               | `databases/{databaseId}`                               |
  * | `databaseRow`            | `databases/{databaseId}/rows/{rowId}`                  |

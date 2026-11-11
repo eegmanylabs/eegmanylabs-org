@@ -21,6 +21,8 @@ const TABS = [
   "Contributors",
   "Documents",
   "Activity",
+  "Notes",
+  "Dashboard",
 ];
 
 test("the replication page shows each section that has content, with every value labelled for what it is", async ({
@@ -94,9 +96,10 @@ test("the replication page shows each section that has content, with every value
   await expect(page).toHaveURL(/tab=activity/);
   await reviewPage(page, "replication-activity");
 
-  // A replication with nothing but its overview shows nothing else, and says what is unknown.
+  // A replication with nothing but its overview shows nothing else but its notes, which every
+  // replication has, and says what is unknown.
   await page.goto("./#/replications/DemoDelta2015");
-  await expect(page.getByRole("tab")).toHaveText(["Overview"]);
+  await expect(page.getByRole("tab")).toHaveText(["Overview", "Notes", "Dashboard"]);
   await expect(page.getByTestId("replication-status")).toContainText("Not recorded");
   await expect(page.getByText("Not on the public website")).toBeVisible();
   await expect(page.getByRole("tabpanel")).toContainText("Citation not found");

@@ -32,11 +32,14 @@ export default defineConfig({
             "web/config/**/*.test.ts",
             "scripts/**/*.test.mjs",
             "tests/architecture/**/*.test.ts",
+            "tests/editor/**/*.test.ts",
           ],
         },
       },
       "web/vitest.config.ts",
-      { test: { ...emulated, name: "rules", include: ["tests/rules/**/*.test.ts"] } },
+      // The Storage emulator reads Firestore in the project it runs for, which the tests of the
+      // storage rules therefore use, and so do the tools: the tools run after the rules.
+      { test: { ...emulated, name: "rules", include: ["tests/rules/**/*.test.ts"], sequence: { groupOrder: 0 } } },
       {
         test: {
           ...emulated,
@@ -46,7 +49,7 @@ export default defineConfig({
           testTimeout: 60_000,
         },
       },
-      { test: { ...emulated, name: "tools", include: ["tests/tools/**/*.test.ts"] } },
+      { test: { ...emulated, name: "tools", include: ["tests/tools/**/*.test.ts"], sequence: { groupOrder: 1 } } },
     ],
   },
 });

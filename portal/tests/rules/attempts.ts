@@ -18,7 +18,7 @@ import {
   where,
 } from "firebase/firestore";
 import type { Fixture } from "./fixtures";
-import { isListable, isReadAcrossParents, type Known, mayRead, mayWrite } from "./policy";
+import { isDecidedByParent, isListable, isReadAcrossParents, type Known, mayRead, mayWrite } from "./policy";
 import { fixtureOf, parametersOf, pathOf, placeholderDocument, placeholderIds } from "./seed";
 import { actingUid, type CallerProfile, createdBy, firestoreOf, updatedBy } from "./world";
 
@@ -33,6 +33,8 @@ export interface Attempt {
   readonly expected: boolean;
   /** The path of the document that a write concerns. */
   readonly path: string | null;
+  /** Other documents that the write changes, which the matrix puts back as well. */
+  readonly touches?: readonly string[];
   run(): Promise<unknown>;
 }
 
@@ -51,10 +53,12 @@ export async function outcomeOf(run: () => Promise<unknown>): Promise<Outcome> {
 
 /**
  * What the path of the collection proves about every document in it. The rules decide a
- * replication or a laboratory from the fields of the document itself, so the only fact a path
- * proves is the user that a subcollection of a user belongs to.
+ * replication or a laboratory from the fields of the document itself, so the facts a path
+ * proves are the user that a subcollection of a user belongs to, and, where the parent decides
+ * who reads, everything that is known of that parent.
  */
-function provenByPath(entry: CollectionEntry, ids: readonly string[]): Known {
+function provenByPath(entry: CollectionEntry, ids: readonly string[], fixture: Fixture | undefined): Known {
+  if (isDecidedByParent(entry)) return fixture?.subject ?? {};
   const ancestors = parametersOf(entry).slice(0, -1);
   const index = ancestors.indexOf("uid");
   const ownerUid = index >= 0 && entry.read.scopeFields.includes("{uid}") ? ids[index] : undefined;
@@ -104,7 +108,7 @@ function readAttempts(
   const attempts = [read("get", mayRead(entry, caller, subject), () => getDoc(doc(db, path)))];
 
   if (isListable(entry)) {
-    const proven = provenByPath(entry, ids);
+    const proven = provenByPath(entry, ids, fixture);
     attempts.push(
       read("list", mayRead(entry, caller, proven), () => getDocs(query(container, limit(LIST_LIMIT)))),
       // A list that does not say how many documents it asks for is refused to everyone.
@@ -187,11 +191,12 @@ function writeAttempts(
       run: () => updateDoc(doc(db, path), { ...(fixture?.update?.(uid) ?? {}), ...updatedBy(uid) }),
     },
     {
-      operation: "delete",
+      operation: fixture?.remove === undefined ? "delete" : `delete ${fixture.remove.how}`,
       kind: "delete",
       expected: mayWrite(entry, "delete", caller, subject),
       path,
-      run: () => deleteDoc(doc(db, path)),
+      ...(fixture?.remove === undefined ? {} : { touches: fixture.remove.touches }),
+      run: () => (fixture?.remove === undefined ? deleteDoc(doc(db, path)) : fixture.remove.run(db, uid)),
     },
   );
   return attempts;

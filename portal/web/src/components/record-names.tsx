@@ -29,6 +29,11 @@ export function ReplicationName({ id }: { id: string }) {
   return <NameOrId live={replication} id={id} name={title === undefined ? undefined : `${title} (${id})`} />;
 }
 
+export function PageTitle({ id }: { id: string }) {
+  const page = useLiveDocument("pages", [id]);
+  return <NameOrId live={page} id={id} name={page.status === "ready" ? page.data?.title : undefined} />;
+}
+
 export function PersonName({ id }: { id: string }) {
   const person = useLiveDocument("persons", [id]);
   return <NameOrId live={person} id={id} name={person.status === "ready" ? person.data?.displayName : undefined} />;

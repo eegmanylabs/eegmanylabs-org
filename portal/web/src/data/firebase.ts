@@ -14,6 +14,7 @@ import {
   persistentMultipleTabManager,
 } from "firebase/firestore";
 import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
+import { connectStorageEmulator, getStorage } from "firebase/storage";
 import { config } from "@/app/config";
 
 export const app = initializeApp(config.firebase);
@@ -32,9 +33,14 @@ export const db = initializeFirestore(app, {
 
 export const functions = getFunctions(app, config.functionsRegion);
 
+// Cloud Storage holds the files of pages. A file is read with the reader's own credentials each
+// time (see page-files.ts), so the storage rules decide every read.
+export const storage = getStorage(app);
+
 if (config.emulators) {
-  const { host, auth: authPort, firestore, functions: functionsPort } = config.emulators;
+  const { host, auth: authPort, firestore, functions: functionsPort, storage: storagePort } = config.emulators;
   connectAuthEmulator(auth, `http://${host}:${authPort}`, { disableWarnings: true });
   connectFirestoreEmulator(db, host, firestore);
   connectFunctionsEmulator(functions, host, functionsPort);
+  connectStorageEmulator(storage, host, storagePort);
 }

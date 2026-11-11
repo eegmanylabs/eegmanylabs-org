@@ -72,6 +72,7 @@ async function disagreements(entry: CollectionEntry, kind: CallerKind): Promise<
     }
     if (allowed && attempt.path !== null) {
       touched.add(attempt.path);
+      for (const other of attempt.touches ?? []) touched.add(other);
       if (attempt.expected && attempt.kind !== "delete") {
         const invalid = await invalidFieldsOf(entry, attempt.path);
         if (invalid !== null) wrong.push(`${attempt.operation}: the rules accepted an invalid document (${invalid})`);

@@ -24,8 +24,10 @@ import {
   useLiveDocument,
   useLiveQuery,
 } from "@/data";
+import { ScopeDashboard } from "@/pages/dashboards/ScopeDashboard";
 import { ParticipationCard } from "@/pages/participations/ParticipationCard";
 import { Section } from "@/pages/replications/tabs/OverviewTab";
+import { NotesTab } from "@/pages/workspace/NotesTab";
 import { combineLive } from "@/registry/combine";
 import { countryName, LABORATORY_STATUS_LABELS, PARTICIPATION_STATUS_LABELS } from "@/registry/labels";
 import { memberPath, replicationPath } from "@/registry/paths";
@@ -44,7 +46,7 @@ import { EquipmentTab } from "./EquipmentTab";
 import { LaboratoryMembersTab } from "./LaboratoryMembersTab";
 import { RepresentDialog } from "./RepresentDialog";
 
-const TAB_IDS = ["profile", "members", "equipment", "participations", "activity"] as const;
+const TAB_IDS = ["profile", "members", "equipment", "participations", "activity", "notes", "dashboard"] as const;
 type TabId = (typeof TAB_IDS)[number];
 
 const TAB_LABELS: Readonly<Record<TabId, string>> = {
@@ -53,6 +55,8 @@ const TAB_LABELS: Readonly<Record<TabId, string>> = {
   equipment: "Equipment",
   participations: "Participations",
   activity: "Activity",
+  notes: "Notes",
+  dashboard: "Dashboard",
 };
 
 const ready = <T,>(live: Live<readonly T[]>): readonly T[] => (live.status === "ready" ? live.data : []);
@@ -424,6 +428,18 @@ function LaboratoryRecord({ laboratory, viewer }: { laboratory: Laboratory; view
       id: "activity",
       live: combineLive([history, configurations] as const, () => activity.length > 0),
       render: () => <ActivityTab entries={activity} />,
+    },
+    // Every laboratory has notes, which every member may read.
+    {
+      id: "notes",
+      live: { status: "ready", data: true, fromCache: false, hasPendingWrites: false },
+      render: () => <NotesTab entityType="laboratory" entityId={laboratory.id} />,
+    },
+    // Every laboratory has a dashboard, which every member may read.
+    {
+      id: "dashboard",
+      live: { status: "ready", data: true, fromCache: false, hasPendingWrites: false },
+      render: () => <ScopeDashboard scopeType="laboratory" scopeId={laboratory.id} />,
     },
   ];
 

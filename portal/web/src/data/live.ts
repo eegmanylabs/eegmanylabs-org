@@ -153,6 +153,98 @@ export function useLiveQuery<K extends ListableCollectionKey>(
   );
 }
 
+/**
+ * Several documents of any registry entry, each named by the identifiers of its path, live and
+ * validated, by the key of each list of identifiers joined with "/". A document that does not
+ * exist, or that the rules refuse, is absent from the map: a refusal is no failure here, because
+ * the caller asks for documents of which it may read only some. Pass an empty list to watch nothing.
+ */
+export function useLiveDocumentsAt<K extends CollectionKey>(
+  key: K,
+  idLists: readonly DocPathIds<K>[],
+): Live<ReadonlyMap<string, RecordOf<K>>> {
+  const wanted = [...new Set(idLists.map((ids) => (ids as readonly string[]).join("/")))].sort();
+  return useSubscription<ReadonlyMap<string, RecordOf<K>>>(
+    cache,
+    wanted.length === 0 ? null : `docsAt:${key}:${JSON.stringify(wanted)}`,
+    (publish) => {
+      const answers = new Map<string, RecordOf<K> | null>();
+      const report = () => {
+        if (answers.size < wanted.length) return;
+        const found = new Map<string, RecordOf<K>>();
+        for (const [path, data] of answers) if (data !== null) found.set(path, data);
+        publish({ status: "ready", data: found, fromCache: false, hasPendingWrites: false });
+      };
+      const stops = wanted.map((joined) =>
+        onSnapshot(
+          documentReference(db, key, ...(joined.split("/") as unknown as DocPathIds<K>)),
+          (snapshot) => {
+            try {
+              answers.set(joined, snapshot.exists() ? snapshot.data() : null);
+            } catch (error) {
+              publish({ status: "error", error: toLiveError(error) });
+              return;
+            }
+            report();
+          },
+          () => {
+            answers.set(joined, null);
+            report();
+          },
+        ),
+      );
+      return () => {
+        for (const stop of stops) stop();
+      };
+    },
+  );
+}
+
+/**
+ * The documents of several queries, live and validated, in the order of the queries. Ready once
+ * every query has answered. For a set of queries that a view decides at run time, such as the
+ * rows of each database that a relation points at. Pass an empty list to watch nothing.
+ */
+export function useLiveQueries<K extends ListableCollectionKey>(
+  descriptions: readonly LiveQuery<K>[],
+): Live<readonly (readonly RecordOf<K>[])[]> {
+  const keys = descriptions.map((description) => liveQueryKey(description));
+  return useSubscription<readonly (readonly RecordOf<K>[])[]>(
+    cache,
+    keys.length === 0 ? null : `queries:${JSON.stringify(keys)}`,
+    (publish, fail) => {
+      const answers = new Map<number, readonly RecordOf<K>[]>();
+      const stops = descriptions.map((description, index) =>
+        onSnapshot(
+          queryReference(db, description),
+          (snapshot) => {
+            try {
+              answers.set(
+                index,
+                snapshot.docs.map((document) => document.data()),
+              );
+            } catch (error) {
+              publish({ status: "error", error: toLiveError(error) });
+              return;
+            }
+            if (answers.size < descriptions.length) return;
+            publish({
+              status: "ready",
+              data: descriptions.map((_description, position) => answers.get(position) ?? []),
+              fromCache: false,
+              hasPendingWrites: false,
+            });
+          },
+          (error) => fail(toLiveError(error)),
+        ),
+      );
+      return () => {
+        for (const stop of stops) stop();
+      };
+    },
+  );
+}
+
 /** The most pages `useLiveCollection` reads, each of the query's limit: ten thousand documents at the most. */
 export const LIVE_COLLECTION_MAX_PAGES = 10;
 

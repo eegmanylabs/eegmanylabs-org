@@ -13,17 +13,30 @@ import {
   labClaimId,
   laboratoryScopeKey,
   MEMBERS_SCOPE_KEY,
+  type PageAccessFacts,
+  pageContentChunkId,
+  pagePermissionId,
   recordGrantId,
   replicationMembershipId,
   replicationScopeKey,
   roleAssignmentId,
+  searchIndexId,
   sequenceId,
   sourceTabKey,
   statusDefinitionId,
   studyAliasId,
   unitScopeKeys,
+  userWriteContext,
 } from "@eegml/shared";
-import { serverTimestamp, Timestamp, type WhereFilterOp } from "firebase/firestore";
+import {
+  Bytes,
+  doc,
+  type Firestore,
+  serverTimestamp,
+  Timestamp,
+  type WhereFilterOp,
+  writeBatch,
+} from "firebase/firestore";
 import type { Known } from "./policy";
 import {
   accessDocuments,
@@ -72,6 +85,20 @@ export interface Fixture {
   readonly create?: CreateCase;
   /** The fields that an update changes, which every writer of the entry may change. */
   readonly update?: (uid: string) => Record<string, unknown>;
+  /**
+   * The delete as the registry allows it, where a plain delete of the stored document is refused
+   * to everyone: the update of a page, which goes only in the transaction of a compaction.
+   */
+  readonly remove?: RemoveCase;
+}
+
+/** A delete that the registry allows only together with other writes. */
+export interface RemoveCase {
+  /** What the delete goes with, in words. */
+  readonly how: string;
+  /** The other documents that the request writes, which the matrix puts back. */
+  readonly touches: readonly string[];
+  run(db: Firestore, uid: string): Promise<unknown>;
 }
 
 const REPLICATION_KEY = replicationScopeKey(OWN_REPLICATION);
@@ -198,6 +225,54 @@ const newEntityReference = { entityType: "laboratory", entityId: OWN_LABORATORY 
  * a fixture names an entry that is not enforced, and when a fixture lacks the write that the
  * registry grants.
  */
+// The workspace: the body page of the owning replication, which the owning laboratory shares.
+// Every member reads it, the replication's team and the laboratory's members comment on it, the
+// team edits it, and the managers of either unit hold full access without being listed.
+const PAGE = entityRefId("replication", OWN_REPLICATION);
+const PAGE_PATH = `pages/${PAGE}`;
+const PAGE_SCOPE = [LABORATORY_KEY, MEMBERS_SCOPE_KEY, REPLICATION_KEY];
+const PAGE_LEVELS = { comment: [LABORATORY_KEY, REPLICATION_KEY], edit: [REPLICATION_KEY], full: [] };
+const PAGE_FACTS: PageAccessFacts = {
+  accessMode: "inherit",
+  replicationId: OWN_REPLICATION,
+  laboratoryId: OWN_LABORATORY,
+  scopeKeys: PAGE_SCOPE,
+  levelKeys: PAGE_LEVELS,
+};
+const ON_PAGE: Known = {
+  replicationId: OWN_REPLICATION,
+  laboratoryId: OWN_LABORATORY,
+  scopeKeys: PAGE_SCOPE,
+  memberVisible: true,
+  page: PAGE_FACTS,
+};
+const PAGE_SCOPE_FIELDS = { replicationId: OWN_REPLICATION, laboratoryId: OWN_LABORATORY, scopeKeys: PAGE_SCOPE };
+const THREAD = autoId("stored thread");
+const VERSION = "version-1";
+/** A Yjs update or snapshot as it is stored: two bytes are enough for the rules. */
+const yjsBytes = () => Bytes.fromUint8Array(new Uint8Array([0, 0]));
+/** The head of the content that the stored page names: generation 1, whose one chunk is a supporting document. */
+const CONTENT_HEAD = {
+  generation: 1,
+  chunkCount: 1,
+  byteLength: 2,
+  stateVector: yjsBytes(),
+  compactedAt: STORED_AT,
+};
+/** The generation that the compaction of the matrix moves the page to, whose chunk is a supporting document. */
+const COMPACTED_GENERATION = 3;
+
+/** The stored database of the workspace, beneath the page, and the definition of its status. */
+const DATABASE = autoId("stored database");
+const STATUS_PROPERTY = {
+  key: "status",
+  name: "Status",
+  type: "status",
+  config: { options: [{ id: "active", name: "Active" }] },
+  order: "i",
+  archivedAt: null,
+};
+
 export const FIXTURES: { readonly [K in CollectionKey]?: Fixture } = {
   // Identity and access.
   users: {
@@ -1290,7 +1365,292 @@ export const FIXTURES: { readonly [K in CollectionKey]?: Fixture } = {
     subject: UNSCOPED,
   },
 
+  // Workspace.
+  pages: {
+    ids: [PAGE],
+    seed: document({
+      parentPageId: null,
+      ancestorPageIds: [],
+      entityType: "replication",
+      entityId: OWN_REPLICATION,
+      kind: "entity",
+      title: "Notes on the synthetic study",
+      order: "i",
+      isTemplate: false,
+      accessMode: "inherit",
+      ...PAGE_SCOPE_FIELDS,
+      levelKeys: PAGE_LEVELS,
+      contentHead: CONTENT_HEAD,
+      mentionUids: [],
+      tagIds: [],
+      lastEditedBy: null,
+    }),
+    subject: ON_PAGE,
+    listBy: [BY_MEMBERS_KEY],
+    update: () => ({ title: "Notes on the synthetic study, renamed", icon: "🧠" }),
+  },
+  pageContent: {
+    ids: [PAGE, pageContentChunkId(0, 0)],
+    // A chunk of a generation before the one the page names, which a compaction removes.
+    seed: appendedDocument({ pageId: PAGE, generation: 0, index: 0, snapshot: yjsBytes() }),
+    subject: ON_PAGE,
+    create: {
+      ids: [PAGE, pageContentChunkId(2, 0)],
+      data: () => ({ pageId: PAGE, generation: 2, index: 0, snapshot: yjsBytes() }),
+    },
+  },
+  pageUpdates: {
+    ids: [PAGE, autoId("stored update")],
+    seed: appendedDocument({
+      pageId: PAGE,
+      updateId: "storedupdate",
+      index: 0,
+      count: 1,
+      update: yjsBytes(),
+      uid: uidOfCaller("ownTeam"),
+      clientId: 7,
+    }),
+    subject: ON_PAGE,
+    create: {
+      ids: [PAGE, autoId("new update")],
+      data: (uid) => ({
+        pageId: PAGE,
+        updateId: "newupdate",
+        index: 0,
+        count: 1,
+        update: yjsBytes(),
+        uid,
+        clientId: 8,
+      }),
+    },
+    remove: {
+      how: "in a compaction that moves the page to a later generation",
+      touches: [PAGE_PATH],
+      run: (db, uid) => {
+        const batch = writeBatch(db);
+        // The delete goes first, so that the rules decide it even where they refuse the move.
+        batch.delete(doc(db, `${PAGE_PATH}/updates/${autoId("stored update")}`));
+        batch.update(doc(db, PAGE_PATH), {
+          contentHead: {
+            generation: COMPACTED_GENERATION,
+            chunkCount: 1,
+            byteLength: 2,
+            stateVector: yjsBytes(),
+            compactedAt: serverTimestamp(),
+          },
+          updatedAt: serverTimestamp(),
+          updatedBy: uid,
+          writeContext: userWriteContext(),
+        });
+        return batch.commit();
+      },
+    },
+  },
+  pageVersions: {
+    ids: [PAGE, VERSION],
+    seed: appendedDocument({
+      pageId: PAGE,
+      label: "Before the data freeze",
+      kind: "manual",
+      chunkCount: 1,
+      byteLength: 2,
+    }),
+    subject: ON_PAGE,
+  },
+  pageVersionChunks: {
+    ids: [PAGE, VERSION, sequenceId(0)],
+    seed: appendedDocument({ pageId: PAGE, versionId: VERSION, index: 0, snapshot: yjsBytes() }),
+    subject: ON_PAGE,
+  },
+  pagePermissions: {
+    ids: [PAGE, pagePermissionId("user", MEMBER_UID)],
+    seed: document({ pageId: PAGE, principalType: "user", principalId: MEMBER_UID, level: "view" }),
+    subject: ON_PAGE,
+  },
+  threads: {
+    ids: [THREAD],
+    seed: document({
+      targetType: "page",
+      targetId: PAGE,
+      anchor: { blockId: "block-1", from: '{"type":null}', to: '{"type":null}', quote: "below ten kilo-ohm" },
+      restricted: false,
+      ...PAGE_SCOPE_FIELDS,
+      resolvedAt: null,
+      resolvedBy: null,
+    }),
+    subject: ON_PAGE,
+    listBy: [BY_MEMBERS_KEY],
+    create: {
+      ids: [autoId("new thread")],
+      data: () => ({
+        targetType: "page",
+        targetId: PAGE,
+        anchor: { blockId: "block-2", quote: "impedance" },
+        restricted: false,
+        ...PAGE_SCOPE_FIELDS,
+        resolvedAt: null,
+        resolvedBy: null,
+      }),
+    },
+    update: (uid) => ({ resolvedAt: serverTimestamp(), resolvedBy: uid }),
+  },
+  threadComments: {
+    ids: [THREAD, autoId("stored comment")],
+    seed: document({
+      threadId: THREAD,
+      authorUid: OWNER_UID,
+      body: "A synthetic comment about the impedance.",
+      mentionUids: [],
+      editedAt: null,
+      deletedAt: null,
+      ...PAGE_SCOPE_FIELDS,
+    }),
+    subject: { ...ON_PAGE, authorUid: OWNER_UID },
+    listBy: [BY_MEMBERS_KEY],
+    create: {
+      ids: [THREAD, autoId("new comment")],
+      data: (uid) => ({
+        threadId: THREAD,
+        authorUid: uid,
+        body: "A second synthetic comment.",
+        mentionUids: [MEMBER_UID],
+        editedAt: null,
+        deletedAt: null,
+        ...PAGE_SCOPE_FIELDS,
+      }),
+    },
+    update: () => ({ body: "The synthetic comment, edited.", editedAt: serverTimestamp() }),
+  },
+
+  // Databases, custom properties, views and dashboards.
+  databases: {
+    ids: [DATABASE],
+    seed: document({
+      name: "Synthetic sites",
+      parentPageId: PAGE,
+      isTemplate: false,
+      properties: { status: STATUS_PROPERTY },
+      scopeKeys: PAGE_SCOPE,
+      levelKeys: PAGE_LEVELS,
+    }),
+    subject: ON_PAGE,
+    listBy: [BY_MEMBERS_KEY],
+    update: () => ({ name: "Synthetic sites, renamed", icon: "🧪", description: "Sites of the synthetic study." }),
+  },
+  databaseRows: {
+    ids: [DATABASE, autoId("stored row")],
+    seed: document({
+      databaseId: DATABASE,
+      title: "Synthetic site one",
+      values: { status: "active" },
+      order: "i",
+      pageId: null,
+      tagIds: [],
+    }),
+    subject: ON_PAGE,
+  },
+  collectionSchemas: {
+    ids: ["core:participations"],
+    seed: document({
+      collectionKey: "core:participations",
+      properties: {
+        siteNote: {
+          ...STATUS_PROPERTY,
+          key: "siteNote",
+          name: "Site note",
+          type: "text",
+          config: {},
+          audience: "member",
+        },
+      },
+    }),
+    subject: UNSCOPED,
+  },
+  replicationCustom: {
+    ids: [OWN_REPLICATION],
+    seed: document({ custom: { budgetCode: "SYN-001" } }),
+    subject: IN_REPLICATION,
+  },
+  laboratoryCustom: {
+    ids: [OWN_LABORATORY],
+    seed: document({ custom: { roomNumber: "B12" } }),
+    subject: IN_LABORATORY,
+  },
+  participationCustom: {
+    ids: [OWN_PARTICIPATION],
+    seed: document({ custom: { ethicsContact: "Synthetic Ethics Office" } }),
+    subject: IN_UNIT,
+  },
+  personCustom: {
+    ids: [OWNER_PERSON],
+    seed: document({ custom: { telephone: "+44 0000 000000" } }),
+    subject: { ownerUid: OWNER_UID, replicationId: OWN_REPLICATION, laboratoryId: OWN_LABORATORY },
+  },
+  views: {
+    ids: [autoId("stored view")],
+    seed: document({
+      collectionKey: "core:participations",
+      name: "My participations",
+      type: "table",
+      config: { sorts: [{ property: "status", direction: "ascending" }] },
+      ownerUid: OWNER_UID,
+      isShared: false,
+      pageId: null,
+      order: "i",
+    }),
+    subject: { ownerUid: OWNER_UID, memberVisible: false },
+    listBy: [
+      { where: ["ownerUid", "==", OWNER_UID], proves: { ownerUid: OWNER_UID } },
+      { where: ["isShared", "==", true], proves: { memberVisible: true } },
+    ],
+  },
+  dashboards: {
+    ids: [autoId("stored dashboard")],
+    seed: document({
+      scopeType: "user",
+      scopeId: OWNER_UID,
+      ownerUid: OWNER_UID,
+      name: "My dashboard",
+      widgets: { notes: { type: "note", config: { title: "Notes", text: "Synthetic note." }, x: 0, y: 0, w: 4, h: 2 } },
+      replicationId: null,
+      laboratoryId: null,
+      scopeKeys: [`user:${OWNER_UID}`],
+    }),
+    subject: { ownerUid: OWNER_UID, memberVisible: false },
+    listBy: [
+      { where: ["ownerUid", "==", OWNER_UID], proves: { ownerUid: OWNER_UID } },
+      { where: ["ownerUid", "==", null], proves: { memberVisible: true } },
+    ],
+  },
+
   // Events, audit, automation, notifications and search.
+  activity: {
+    ids: ["event-activity-1"],
+    seed: appendedDocument({
+      actorUid: uidOfCaller("ownTeam"),
+      action: "page.edited",
+      entityType: "page",
+      entityId: PAGE,
+      title: "Notes on the synthetic study",
+      changedFields: ["content"],
+      ...PAGE_SCOPE_FIELDS,
+    }),
+    subject: ON_PAGE,
+    listBy: [BY_MEMBERS_KEY],
+  },
+  searchIndex: {
+    ids: [searchIndexId("page", PAGE, 0)],
+    seed: document({
+      entityType: "page",
+      entityId: PAGE,
+      part: 0,
+      title: "Notes on the synthetic study",
+      tokens: ["notes", "synthetic", "study"],
+      kind: "entity",
+      ...PAGE_SCOPE_FIELDS,
+    }),
+    subject: UNSCOPED,
+  },
   auditEvents: {
     ids: ["event-1"],
     seed: appendedDocument({
@@ -1359,6 +1719,20 @@ export const FIXTURES: { readonly [K in CollectionKey]?: Fixture } = {
  * the person of the account `member`.
  */
 export const SUPPORTING_DOCUMENTS: Readonly<Record<string, Record<string, unknown>>> = {
+  // The chunk of the generation that the stored page names, and of the generation that the
+  // compaction of the matrix moves it to.
+  [`${PAGE_PATH}/content/${pageContentChunkId(CONTENT_HEAD.generation, 0)}`]: appendedDocument({
+    pageId: PAGE,
+    generation: CONTENT_HEAD.generation,
+    index: 0,
+    snapshot: yjsBytes(),
+  }),
+  [`${PAGE_PATH}/content/${pageContentChunkId(COMPACTED_GENERATION, 0)}`]: appendedDocument({
+    pageId: PAGE,
+    generation: COMPACTED_GENERATION,
+    index: 0,
+    snapshot: yjsBytes(),
+  }),
   [`replications/${OTHER_REPLICATION}`]: replication(OTHER_REPLICATION),
   [`laboratories/${OTHER_LABORATORY}`]: laboratory("Synthetic Laboratory Two", "synthetic-laboratory-two"),
   [`participations/${SECOND_PARTICIPATION}`]: participation(OWN_REPLICATION, OTHER_LABORATORY),

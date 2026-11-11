@@ -18,6 +18,7 @@
   },
   "devDependencies": {
     "@eegml/shared": "0.0.0",
-    "esbuild": "0.28.2"
+    "esbuild": "0.28.2",
+    "yjs": "13.6.33"
   }
 }

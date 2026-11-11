@@ -13,6 +13,7 @@ import {
   DOCUMENT_BASE_FIELDS,
   ENTITY_TYPES,
   notificationTypeSchema,
+  PAGE_FILE_MAX_BYTES,
   PROGRAMME_POWER_SCOPE_KEYS,
   SPECIAL_CATEGORY_FIELDS,
   SPECIAL_CATEGORY_NAME_PARTS,
@@ -156,7 +157,7 @@ describe("the match blocks of firestore.rules", () => {
     const unstated: string[] = [];
     lines.forEach((line, index) => {
       const path = /^\s*match\s+(\/\S*)\s*\{/.exec(line)?.[1];
-      if (path === undefined || path.startsWith("/databases/")) return;
+      if (path === undefined || path === "/databases/{database}/documents") return;
       const comment: string[] = [];
       for (let above = index - 1; above >= 0 && (lines[above] ?? "").trim().startsWith("//"); above -= 1) {
         comment.push(lines[above] ?? "");
@@ -222,7 +223,10 @@ describe("the lists of fields in firestore.rules", () => {
           );
         }
       }
-      if (grants.some((grant) => grant.onlyFields === null || grant.operations.includes("create"))) {
+      // A grant that only deletes writes no field, and asks for no list.
+      const writesFields = (grant: (typeof grants)[number]) =>
+        grant.operations.includes("create") || (grant.onlyFields === null && grant.operations.includes("update"));
+      if (grants.some(writesFields)) {
         compare(`${entry.key}Required`, fields.required);
       }
     }
@@ -324,10 +328,24 @@ describe("the lists of fields in firestore.rules", () => {
 });
 
 describe("portal/storage.rules", () => {
-  it("denies everything, with one statement, until attachments are built", () => {
-    const statements = allowStatements(readRulesFile("storage.rules"));
-    expect(statements.map((statement) => [statement.methods, statement.condition])).toEqual([
-      [["read", "write"], "false"],
+  const storage = readRulesFile("storage.rules");
+
+  it("lets a client read and add the files of a page alone, and denies everything else with one statement", () => {
+    const statements = allowStatements(storage);
+    expect(statements.map((statement) => statement.methods)).toEqual([["get"], ["create"], ["read", "write"]]);
+    expect(statements.at(-1)?.condition).toBe("false");
+    for (const statement of statements.slice(0, -1)) expect(statement.condition).toMatch(/^isMember\(\)\s*&&/);
+    expect(matchBlocks(storage).map((block) => block.path)).toEqual([
+      "/b/{bucket}/o/pages/{pageId}/files/{fileId}/{fileName}",
+      "/b/{bucket}/o/{allPaths=**}",
     ]);
+  });
+
+  it("never lets an upload replace a file, and holds an upload to the size limit of the shared package", () => {
+    const create = allowStatements(storage).find((statement) => statement.methods.includes("create"));
+    expect(create?.condition).toContain("resource == null");
+    expect(create?.condition).toContain(
+      `request.resource.size <= ${PAGE_FILE_MAX_BYTES / (1024 * 1024)} * 1024 * 1024`,
+    );
   });
 });

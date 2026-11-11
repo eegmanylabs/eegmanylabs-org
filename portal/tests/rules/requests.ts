@@ -3,7 +3,7 @@
 // accepted and what is refused.
 // Everything here is synthetic: fictitious accounts on the example.org domain.
 
-import { COLLECTION_ENTRIES, isAutoId } from "@eegml/shared";
+import { COLLECTION_ENTRIES, entryOfDocumentPath, isAutoId } from "@eegml/shared";
 import type { RulesTestEnvironment } from "@firebase/rules-unit-testing";
 import {
   collection,
@@ -99,7 +99,11 @@ export function requestsOf(environment: () => RulesTestEnvironment): Requests {
       assertGeneratedIdentifier(path);
       return () => setDoc(doc(dbOf(actor), path), { ...data, ...createdBy(uidOf(actor), appendOnly) });
     },
-    createAt: (actor, path, data) => () => setDoc(doc(dbOf(actor), path), { ...data, ...createdBy(uidOf(actor)) }),
+    createAt: (actor, path, data) => () =>
+      setDoc(doc(dbOf(actor), path), {
+        ...data,
+        ...createdBy(uidOf(actor), entryOfDocumentPath(path)?.entry.flags.appendOnly ?? false),
+      }),
     update: (actor, path, patch) => () => updateDoc(doc(dbOf(actor), path), { ...patch, ...updatedBy(uidOf(actor)) }),
     remove: (actor, path) => () => deleteDoc(doc(dbOf(actor), path)),
   };

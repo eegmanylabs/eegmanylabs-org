@@ -34,8 +34,13 @@ afterAll(async () => {
   await environment.cleanup();
 });
 
+// A delete carries no document, so an entry that a client may only delete, such as a view, has
+// no envelope to attack. The matrix proves who may delete it.
 const writable = COLLECTION_ENTRIES.filter(
-  (entry) => entry.enforcement === "enforced" && entry.write.mode === "client",
+  (entry) =>
+    entry.enforcement === "enforced" &&
+    entry.write.mode === "client" &&
+    entry.write.grants.some((grant) => grant.operations.includes("create") || grant.operations.includes("update")),
 );
 
 /** A time that a client chose for itself: an hour before the request. */

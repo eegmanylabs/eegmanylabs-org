@@ -66,6 +66,15 @@ import {
  * | `person.merged`                 | Two records of one person are merged into one                       |
  * | `person.created`                | A reviewer admits someone whom no record names, with their account  |
  * | `importBatch.rolledBack`        | An import batch is rolled back from its change log                  |
+ * | `page.created`                  | A page is created, at the top of the workspace, beneath another page, from a template or as the body of a record |
+ * | `page.moved`                    | A page is moved beneath another page, with every page that inherits from it |
+ * | `page.sharingChanged`           | The access mode or the permissions of a page change, with the audience of what inherits it |
+ * | `page.versionSaved`             | A version of a page is saved: by name, after a quiet spell or when an earlier one is restored |
+ * | `database.created`              | A database is created beneath a page                                |
+ * | `property.saved`                | A property of a database or a custom property of a core collection is added, changed or archived |
+ * | `record.saved`                  | Values of a record are changed, or a row of a database is created or archived |
+ * | `view.saved`                    | A view is created or changed                                        |
+ * | `dashboard.saved`               | A dashboard is created or its widgets change                        |
  * | `document.created`              | The audit trigger saw a document created outside a callable function |
  * | `document.updated`              | The audit trigger saw a document changed outside a callable function |
  * | `document.deleted`              | The audit trigger saw a document deleted                           |
@@ -110,6 +119,15 @@ export const AUDIT_ACTIONS = [
   "person.merged",
   "person.created",
   "importBatch.rolledBack",
+  "page.created",
+  "page.moved",
+  "page.sharingChanged",
+  "page.versionSaved",
+  "database.created",
+  "property.saved",
+  "record.saved",
+  "view.saved",
+  "dashboard.saved",
   "document.created",
   "document.updated",
   "document.deleted",

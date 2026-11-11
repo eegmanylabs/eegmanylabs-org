@@ -2,6 +2,7 @@
 // comments, attachments, user-created databases, custom properties, views and dashboards.
 import { bytesSchema } from "../bytes";
 import { entityTypeSchema } from "../entities";
+import { ORDER_KEY_MAX_LENGTH } from "../order";
 import { timestampSchema } from "../timestamp";
 import { z } from "../zod";
 import {
@@ -39,8 +40,11 @@ export const levelKeysSchema = z.strictObject({
   full: scopeKeysSchema,
 });
 
-/** A fractional index, which places an item between two others by writing one document. */
-const orderSchema = z.string().min(1).max(100);
+/** A fractional index, which places an item between two others by writing one document (see order.ts). */
+const orderSchema = z
+  .string()
+  .max(ORDER_KEY_MAX_LENGTH)
+  .regex(/^[0-9a-z]*[1-9a-z]$/, { error: "Expected an order key" });
 const iconSchema = z.string().min(1).max(64);
 
 const chunkCountSchema = z.number().int().min(0).max(10_000);
@@ -150,11 +154,20 @@ export type PagePermissionDoc = z.output<typeof pagePermissionDocSchema>;
 export const threadDocSchema = documentBaseSchema.extend({
   targetType: entityTypeSchema,
   targetId: idSchema,
-  /** Where in the target the thread is anchored: a block of a page, or a field of a record. */
+  /**
+   * Where in the target the thread is anchored: a block of a page, or a field of a record. On a
+   * page, `from` and `to` are the Yjs relative positions of the selected text as JSON text, and
+   * `quote` is the text itself, which finds the place again when the positions are gone. The
+   * anchor lives here and not in the page body, so a member who may only comment writes nothing
+   * into the page (D-010).
+   */
   anchor: z
     .strictObject({
       blockId: z.string().min(1).max(200).exactOptional(),
       field: mapKeySchema.exactOptional(),
+      from: z.string().min(1).max(1_000).exactOptional(),
+      to: z.string().min(1).max(1_000).exactOptional(),
+      quote: z.string().min(1).max(300).exactOptional(),
     })
     .exactOptional(),
   restricted: z.boolean(),
@@ -165,7 +178,7 @@ export const threadDocSchema = documentBaseSchema.extend({
 });
 export type ThreadDoc = z.output<typeof threadDocSchema>;
 
-/** `threads/{id}/comments/{id}`: a comment. Its author edits it, and removes it by setting `deletedAt`. */
+/** `threads/{threadId}/comments/{commentId}`: a comment. Its author edits it, and removes it by setting `deletedAt`. */
 export const threadCommentDocSchema = documentBaseSchema.extend({
   threadId: idSchema,
   /** Absent on an imported comment whose author has no login, whom `sourceAuthor` then names. */

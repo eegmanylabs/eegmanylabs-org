@@ -2,54 +2,54 @@
 
 This checklist restates every distinct, testable requirement of the master build prompt for the #EEGManyLabs Hub, one table per section of that prompt. Each row carries a stable identifier, the delivery phase from section 19 that owns it, and a status. The status vocabulary is fixed: `planned` means the work has not started, `in progress` means work is under way, `implemented` means the feature exists in the codebase, `tested` means it is implemented and covered by a recorded passing test, and `blocked` means the item cannot be completed until a named dependency outside the codebase is supplied. Where a requirement spans several phases, the Phase column names the phase in which it is first delivered and the Notes column says so.
 
-The Evidence column is empty at the start of the project. Once an item reaches `implemented` or `tested`, Evidence will point at the test, source file or document that demonstrates it, so that a reader can verify each claim independently. The seven mandatory sources are referred to by letter and title only: A historical replication coordination workbook, B naming conventions, C community vocabulary, D list of studies, E prediction-market hypotheses, F recruitment and contact workbook, and G membership and contributor workbook. Source locations and identifiers are held in the private source registry and are deliberately absent from this public file.
+Once an item reaches `implemented` or `tested`, Evidence points at the test, source file or document that demonstrates it, so that a reader can verify each claim independently. Paths that begin with `shared/`, `web/`, `functions/`, `tools/` or `tests/`, and the files `firestore.rules` and `firestore.indexes.json`, are relative to `portal/`. Other paths are relative to the repository root. An item is marked `tested` only where an automated test, or a check recorded in `docs/TEST_REPORT.md`, exercises the code. The automated tests cited passed in the independent run of the full suite recorded in section 4 of that report. All of that testing ran on the Firebase emulators with synthetic fixtures or the demonstration world, so `tested` never means verified in a deployed environment. An item that is only partly met stays `in progress`, and its note says what is missing. Statuses were last reviewed on 11 November 2026, at the close of phase 2. The seven mandatory sources are referred to by letter and title only: A historical replication coordination workbook, B naming conventions, C community vocabulary, D list of studies, E prediction-market hypotheses, F recruitment and contact workbook, and G membership and contributor workbook. Source locations and identifiers are held in the private source registry and are deliberately absent from this public file.
 
 ## 1. Role, mission and working rules
 
 | ID | Requirement | Phase | Status | Evidence | Notes |
 |---|---|---|---|---|---|
-| R1.1 | A secure, maintainable, production-ready authenticated portal for the international #EEGManyLabs programme is designed and implemented, built upon the existing eegmanylabs.org website. | 1 | planned | | Spans every phase. |
+| R1.1 | A secure, maintainable, production-ready authenticated portal for the international #EEGManyLabs programme is designed and implemented, built upon the existing eegmanylabs.org website. | 1 | in progress | `portal/` | Spans every phase. Phases 1 and 2 are built and tested on the emulators. Nothing is deployed. |
 | R1.2 | The portal combines Notion-style workspace flexibility, Quire-style hierarchical task management and scientific management tailored to multi-laboratory EEG replications. | 3 | planned | | Delivered across phases 3, 4 and 8. |
 | R1.3 | The portal integrates the programme's existing Google Sheets, Google Docs, Google Drive, Quire records, OSF resources, GitHub repositories and distributed institutional research data servers. | 6 | planned | | Live connections are tracked row by row in sections 5, 11 and 13. |
-| R1.4 | Working, persistent features, real authentication, real relationships, tested integrations, migration tooling, documentation and a staged deployment path are delivered. | 1 | planned | | Applies in every phase. |
-| R1.5 | Every delivered feature is a working implementation, with no mock-up, generic dashboard or disconnected prototype substituted. | 1 | planned | | Applies in every phase. |
-| R1.6 | Work proceeds in tested vertical slices. | 1 | planned | | Applies in every phase. |
-| R1.7 | Persistent implementation notes are maintained. | 0 | planned | | See section 19 documentation rows. |
+| R1.4 | Working, persistent features, real authentication, real relationships, tested integrations, migration tooling, documentation and a staged deployment path are delivered. | 1 | in progress | `portal/README.md`, `docs/TEST_REPORT.md` | Applies in every phase. Authentication, relationships, migration tooling and documentation exist for phases 1 and 2. Tested integrations with live external systems and the staged deployment path are still missing. |
+| R1.5 | Every delivered feature is a working implementation, with no mock-up, generic dashboard or disconnected prototype substituted. | 1 | in progress | `tests/e2e/shell.spec.ts` | Applies in every phase. The shell shows only destinations that exist. |
+| R1.6 | Work proceeds in tested vertical slices. | 1 | in progress | `docs/TEST_REPORT.md` | Applies in every phase. Each slice so far closed with an independent run of the full suite. |
+| R1.7 | Persistent implementation notes are maintained. | 0 | implemented | `docs/IMPLEMENTATION_STATUS.md`, `docs/TEST_REPORT.md`, `docs/DECISIONS.md` | See section 19 documentation rows. |
 | R1.8 | Actual code and sources are inspected before assumptions are made. | 0 | in progress | | |
-| R1.9 | Where external access is unavailable, tested adapters are built and the exact blockers are recorded. | 0 | planned | | Blockers identified so far are recorded in the blocked rows of this checklist. |
-| R1.10 | Live data, imported historical records, demonstrations and projections are distinguished from one another. | 2 | planned | | |
+| R1.9 | Where external access is unavailable, tested adapters are built and the exact blockers are recorded. | 0 | in progress | `tools/src/import/`, `tests/tools/import-coordination.test.ts`, `tests/tools/import-membership.test.ts` | The importers for sources A and G are tested against synthetic fixtures and the blockers are recorded in the blocked rows. Adapters for Google Workspace, mail and the data servers are designed and not yet built. |
+| R1.10 | Live data, imported historical records, demonstrations and projections are distinguished from one another. | 2 | tested | `shared/src/data-origin.ts`, `tests/e2e/registry-records.spec.ts` | Every value carries its data origin (live, imported, demonstration or projected) and the record pages label it. Projections arrive in phase 5. |
 | R1.11 | Source values, scientific findings, integrations, credentials and completed work are never invented. | 0 | planned | | Applies in every phase. |
 | R1.12 | Explicit approval is obtained before production deployment. | 10 | planned | | |
-| R1.13 | Explicit approval is obtained before destructive migrations. | 2 | planned | | |
+| R1.13 | Explicit approval is obtained before destructive migrations. | 2 | in progress | `functions/src/callables/rollbackImportBatch.ts`, `tests/e2e/imports-console.spec.ts` | A rollback shows what it would change and needs an administrator's confirmation. No destructive migration has been run on real data. |
 | R1.14 | Explicit approval is obtained before changing live external documents. | 6 | planned | | |
 | R1.15 | Explicit approval is obtained before contacting users. | 2 | planned | | |
 | R1.16 | Explicit approval is obtained before moving raw research data. | 7 | planned | | |
-| R1.17 | Existing work and unrelated branches are left intact. | 0 | planned | | Applies in every phase. |
+| R1.17 | Existing work and unrelated branches are left intact. | 0 | in progress | | Applies in every phase. The public site's build is unchanged with the portal gate closed (see `docs/TEST_REPORT.md` section 5). |
 | R1.18 | The initial reasoning effort is extra high where the coding environment supports it. | 0 | planned | | Session configuration set by the operator. |
 
 ## 2. The existing website is the foundation
 
 | ID | Requirement | Phase | Status | Evidence | Notes |
 |---|---|---|---|---|---|
-| R2.1 | The primary repository is inspected: README, source files, data, templates, CSS, JavaScript, assets, Docker, Nginx, GitHub Actions and DigitalOcean deployment configuration. | 0 | in progress | | |
+| R2.1 | The primary repository is inspected: README, source files, data, templates, CSS, JavaScript, assets, Docker, Nginx, GitHub Actions and DigitalOcean deployment configuration. | 0 | implemented | `docs/ARCHITECTURE.md` | |
 | R2.2 | The legacy `website` repository is inspected to distinguish the legacy redirect. | 0 | in progress | | |
-| R2.3 | The current state of the primary website (Syrinx, Jinja, Markdown and TSV static site generated into `dist/` and served by Nginx) is confirmed from evidence. | 0 | in progress | | |
-| R2.4 | The existing staging site at eegmanylabs.dev and the branch and deployment rules are reviewed. | 0 | in progress | | |
+| R2.3 | The current state of the primary website (Syrinx, Jinja, Markdown and TSV static site generated into `dist/` and served by Nginx) is confirmed from evidence. | 0 | implemented | `docs/ARCHITECTURE.md` | |
+| R2.4 | The existing staging site at eegmanylabs.dev and the branch and deployment rules are reviewed. | 0 | implemented | `docs/ARCHITECTURE.md` | |
 | R2.5 | Shared review branches and ongoing changes are respected. | 0 | planned | | Applies in every phase. |
-| R2.6 | The authenticated application is built as an extension of the public website, preferably under `/portal` at https://eegmanylabs.org/portal. | 1 | planned | | |
-| R2.7 | Routes are consistent and include `/portal/login`, `/portal/replications/[id]`, `/portal/labs/[id]`, `/portal/members/[id]`, `/portal/tasks/[id]` and `/portal/datasets/[id]`. | 1 | planned | | Task and dataset routes arrive in phases 4 and 7. |
-| R2.8 | A clear members' portal and login entry is added to the existing public navigation. | 1 | planned | | |
-| R2.9 | The public site stays functional and its current publishing process stays intact. | 1 | planned | | |
-| R2.10 | The deployment form is chosen for maintainability; a separately deployed application service reverse-proxied under the existing domain is acceptable. | 0 | planned | | Recorded in the architecture assessment and decision log. |
-| R2.11 | Private data is kept out of static HTML, public TSV files, Git repositories and browser bundles. | 1 | planned | | |
-| R2.12 | The actual design system is reused, including warm graphite `#302a2a`, coral `#d84b4d`, deep coral `#a9353a`, warm-white `#fcf9f7` and white `#ffffff`. | 1 | planned | | |
-| R2.13 | The existing logo, typography and spacing variables are reused. | 1 | planned | | |
-| R2.14 | The design is restrained, accessible, professional, responsive and information-dense. | 1 | planned | | |
-| R2.15 | Subtle borders and spacing are preferred over ornamental shadows. | 1 | planned | | |
+| R2.6 | The authenticated application is built as an extension of the public website, preferably under `/portal` at https://eegmanylabs.org/portal. | 1 | implemented | `theme/templates/settings.jinja2`, `docs/TEST_REPORT.md` section 5 | Under D-002 the portal has its own subdomain and `/portal/` redirects to it. The entry is built with its gate closed and nothing is deployed. |
+| R2.7 | Routes are consistent and include `/portal/login`, `/portal/replications/[id]`, `/portal/labs/[id]`, `/portal/members/[id]`, `/portal/tasks/[id]` and `/portal/datasets/[id]`. | 1 | in progress | `web/src/app/router.tsx`, `tests/e2e/registry-lists.spec.ts` | Routes for sign-in, replications, laboratories and members exist and deep links survive sign-in. Routes are in the address fragment (`#/labs/...`) because GitHub Pages has no rewrites. Task and dataset routes arrive in phases 4 and 7. |
+| R2.8 | A clear members' portal and login entry is added to the existing public navigation. | 1 | tested | `theme/templates/settings.jinja2`, `docs/TEST_REPORT.md` section 5 | Verified with the gate open on a test address. The gate stays closed until a portal address is confirmed. |
+| R2.9 | The public site stays functional and its current publishing process stays intact. | 1 | tested | `docs/TEST_REPORT.md` section 5 | With the gate closed, builds of this branch and of `main` are identical once timestamps are normalised. |
+| R2.10 | The deployment form is chosen for maintainability; a separately deployed application service reverse-proxied under the existing domain is acceptable. | 0 | implemented | `docs/DECISIONS.md` D-001, D-002, `docs/ARCHITECTURE.md` | Recorded in the architecture assessment and decision log. The administrator chose GitHub Pages with Firebase (D-001). |
+| R2.11 | Private data is kept out of static HTML, public TSV files, Git repositories and browser bundles. | 1 | implemented | `firestore.rules`, `tests/rules/matrix.test.ts`, `tests/architecture/production-build.test.ts` | The build holds no data and every read is checked by the security rules. Each commit records a leak check against the real exports. Static HTML and public TSV publishing arrive in phase 9. |
+| R2.12 | The actual design system is reused, including warm graphite `#302a2a`, coral `#d84b4d`, deep coral `#a9353a`, warm-white `#fcf9f7` and white `#ffffff`. | 1 | tested | `web/src/styles/`, `tests/architecture/contrast.test.ts`, `tests/e2e/security.spec.ts` | |
+| R2.13 | The existing logo, typography and spacing variables are reused. | 1 | implemented | `web/src/styles/`, `docs/DECISIONS.md` D-018 | Typography follows the public site as rendered, in DM Sans served from the build. |
+| R2.14 | The design is restrained, accessible, professional, responsive and information-dense. | 1 | tested | `tests/e2e/accessibility.spec.ts`, `tests/e2e/shell.spec.ts`, `tests/e2e/components.spec.ts` | Automated accessibility checks report no serious finding. Manual and screen-reader testing is still to come (see R18.9). |
+| R2.15 | Subtle borders and spacing are preferred over ornamental shadows. | 1 | tested | `tests/e2e/security.spec.ts`, `tests/e2e/components.spec.ts`, `tests/architecture/design-rules.test.ts` | |
 | R2.16 | The established public website style is preserved while the portal behaves like Notion. | 3 | planned | | |
-| R2.17 | An evidence-based architecture assessment covering current hosting, routing, security boundaries, deployment, existing data, public publishing and a recommended application architecture is produced before substantial changes. | 0 | in progress | | |
-| R2.18 | A development branch is used for the work. | 1 | planned | | |
-| R2.19 | A protected staging workflow is used. | 1 | blocked | | No DigitalOcean or GitHub deployment credentials are available and production deployment needs explicit approval. The deployment configuration will still be prepared and exercised in a local integrated stack. |
+| R2.17 | An evidence-based architecture assessment covering current hosting, routing, security boundaries, deployment, existing data, public publishing and a recommended application architecture is produced before substantial changes. | 0 | implemented | `docs/ARCHITECTURE.md` | |
+| R2.18 | A development branch is used for the work. | 1 | implemented | `docs/IMPLEMENTATION_STATUS.md` | All portal work is on a development branch. |
+| R2.19 | A protected staging workflow is used. | 1 | blocked | | No DigitalOcean or GitHub deployment credentials are available and production deployment needs explicit approval. The deployment configuration will still be prepared and exercised in a local integrated stack. Under D-001 and D-017, staging is a second Firebase project and a second Pages site, which need a billing account and an administrator's approval. |
 
 ## 3. Fundamental product model: Notion for research
 
@@ -58,15 +58,15 @@ The Evidence column is empty at the start of the project. Once an item reaches `
 | R3.1 | The portal is one coherent collaborative workspace in which records, pages and views are connected. | 3 | planned | | |
 | R3.2 | Every major entity is a first-class editable page: programme, replication, laboratory, person, replication participation, task, dataset, hypothesis, protocol, manuscript, publication, meeting, progress report, scientific decision, risk, incident and custom page. | 3 | planned | | |
 | R3.3 | Nested pages are supported. | 3 | planned | | |
-| R3.4 | Pages and records have stable URLs. | 3 | planned | | |
-| R3.5 | Breadcrumbs are shown. | 3 | planned | | |
-| R3.6 | Favourites are supported. | 3 | planned | | |
-| R3.7 | Recents are supported. | 3 | planned | | |
-| R3.8 | A persistent, collapsible sidebar is provided. | 3 | planned | | First version arrives with the phase 1 shell. |
-| R3.9 | Global search is provided. | 3 | planned | | See R15.8. |
-| R3.10 | A command palette is provided. | 3 | planned | | |
-| R3.11 | A personalised landing page is provided. | 3 | planned | | First version arrives in phase 2. |
-| R3.12 | Records open as full pages or side panels. | 3 | planned | | |
+| R3.4 | Pages and records have stable URLs. | 3 | in progress | `web/src/registry/paths.ts`, `tests/e2e/registry-lists.spec.ts` | Replication, laboratory and member records have stable addresses. Workspace pages arrive in phase 3. |
+| R3.5 | Breadcrumbs are shown. | 3 | tested | `web/src/app/shell/Breadcrumbs.tsx`, `tests/e2e/shell.spec.ts` | |
+| R3.6 | Favourites are supported. | 3 | tested | `tests/e2e/registry-search.spec.ts` | Favourites cover registry records. Workspace pages follow in phase 3. |
+| R3.7 | Recents are supported. | 3 | tested | `tests/e2e/registry-search.spec.ts`, `tests/e2e/registry-lists.spec.ts` | Recents cover registry records. Workspace pages follow in phase 3. |
+| R3.8 | A persistent, collapsible sidebar is provided. | 3 | tested | `web/src/app/shell/Sidebar.tsx`, `tests/e2e/shell.spec.ts` | Collapses to an icon rail and remembers its state. |
+| R3.9 | Global search is provided. | 3 | in progress | `web/src/app/shell/palette-search.ts`, `tests/e2e/registry-search.spec.ts` | Search covers replications, laboratories and members through the command palette and the lists. Pages, comments and document content are not yet searchable. See R15.8. |
+| R3.10 | A command palette is provided. | 3 | tested | `web/src/app/shell/CommandPalette.tsx`, `tests/e2e/registry-search.spec.ts` | |
+| R3.11 | A personalised landing page is provided. | 3 | in progress | `web/src/pages/home/HomePage.tsx`, `tests/e2e/registry-lists.spec.ts` | Home shows the member's own records, pending items and a programme snapshot. Assigned work and mentions need tasks and pages. |
+| R3.12 | Records open as full pages or side panels. | 3 | tested | `web/src/components/registry/side-panel.test.tsx`, `tests/e2e/registry-lists.spec.ts` | Registry records open in a preview panel beside the list or as full pages. Workspace pages follow in phase 3. |
 | R3.13 | A mature block-based editor is implemented on a proven editor library. | 3 | planned | | |
 | R3.14 | The editor supports paragraphs, headings, ordered and unordered lists, checklists, tables, callouts, quotes, dividers, code blocks, images, attachments, links, embedded documents and linked database views. | 3 | planned | | |
 | R3.15 | Slash commands are supported. | 3 | planned | | |
@@ -81,12 +81,12 @@ The Evidence column is empty at the start of the project. Once an item reaches `
 | R3.24 | Version history and restoration are supported. | 3 | planned | | |
 | R3.25 | Concurrent editing is reliable, with conflict handling. | 3 | planned | | |
 | R3.26 | Configurable relational databases support text, rich text, number, date and date range, email, URL, checkbox, person, status, select, multiselect, file, relation, rollup, formula, created and edited time, and author properties. | 3 | planned | | |
-| R3.27 | Scientific core fields retain strict schemas and validation. | 3 | planned | | |
+| R3.27 | Scientific core fields retain strict schemas and validation. | 3 | tested | `shared/src/schemas/`, `shared/src/schemas/documents.test.ts`, `tests/rules/hardening.test.ts` | Every document type has a strict schema, and the security rules check the same types, enumerations and sizes. |
 | R3.28 | Authorised users can add custom properties and custom databases. | 3 | planned | | |
 | R3.29 | Table, list, Kanban, calendar, timeline or Gantt, gallery and dashboard views are supported. | 3 | planned | | |
-| R3.30 | Every view supports relevant filtering, sorting, grouping, search, property visibility, column sizing and reordering, and bulk editing. | 3 | planned | | |
+| R3.30 | Every view supports relevant filtering, sorting, grouping, search, property visibility, column sizing and reordering, and bulk editing. | 3 | in progress | `web/src/components/record-table.tsx`, `tests/e2e/registry-lists.spec.ts` | The registry lists filter, sort and search, and the address keeps the view. Grouping, property visibility, column sizing and reordering and bulk editing are missing. |
 | R3.31 | View configurations can be saved as personal or shared. | 3 | planned | | |
-| R3.32 | Large tables use virtualisation. | 3 | planned | | |
+| R3.32 | Large tables use virtualisation. | 3 | tested | `web/src/components/record-table.tsx`, `tests/e2e/registry-performance.spec.ts` | The members table with more than a thousand rows scrolls without long tasks. |
 | R3.33 | Linked views of one authoritative database appear on multiple pages and update consistently everywhere (for example, the same recruitment record in the programme dashboard, the replication page and the laboratory page). | 3 | planned | | |
 | R3.34 | Relational rollups and formulas compute targets, completion percentages, remaining participants, active labs, outstanding tasks, datasets awaiting QC and projected dates. | 3 | planned | | |
 | R3.35 | Configurable dashboards offer draggable and resizable linked views, KPI widgets, charts, timelines, calendars, activity feeds, notes and embedded documents. | 3 | planned | | |
@@ -99,25 +99,25 @@ The Evidence column is empty at the start of the project. Once an item reaches `
 
 | ID | Requirement | Phase | Status | Evidence | Notes |
 |---|---|---|---|---|---|
-| R4.1 | Programme, Replication, Study Alias or Identifier, Hypothesis and Protocol or Version are modelled explicitly. | 1 | planned | | |
-| R4.2 | Laboratory, Institution, Person, Affiliation, Replication Membership or Role, Laboratory-Replication Participation and Equipment Configuration are modelled explicitly. | 1 | planned | | |
-| R4.3 | Recruitment Report and Participant Count Category are modelled explicitly. | 1 | planned | | |
-| R4.4 | Dataset, Storage Location, File Manifest, Data Transfer, QC Assessment and Processing or Analysis Run are modelled explicitly. | 1 | planned | | |
-| R4.5 | Manuscript or Publication and Contributor are modelled explicitly. | 1 | planned | | |
-| R4.6 | Task, Milestone, Comment, Workspace Page and Document Link are modelled explicitly. | 1 | planned | | |
-| R4.7 | Integration Mapping, Import Batch, Source Record, Audit Event and Notification are modelled explicitly. | 1 | planned | | |
-| R4.8 | Decision, Risk and Incident are modelled explicitly. | 1 | planned | | |
-| R4.9 | User, Role and Permission are modelled explicitly. | 1 | planned | | |
-| R4.10 | Records carry stable internal IDs, source IDs, provenance, timestamps and relationships. | 1 | planned | | |
-| R4.11 | A laboratory is kept distinct from its participation in one particular replication. | 1 | planned | | |
-| R4.12 | A laboratory may participate in several replications. | 1 | planned | | |
-| R4.13 | A person may have multiple affiliations and project roles. | 1 | planned | | |
-| R4.14 | A dataset may have several verified storage references. | 1 | planned | | |
-| R4.15 | Tasks may link to multiple research entities. | 1 | planned | | |
-| R4.16 | Each replication may have multiple leads, hypotheses, protocols, manuscripts and datasets. | 1 | planned | | |
-| R4.17 | Storage is normalised and relational, with explicit migrations, constraints, indexes and referential integrity (PostgreSQL by default, subject to infrastructure review). | 1 | planned | | |
-| R4.18 | An API is defined. | 1 | planned | | |
-| R4.19 | Frontend, domain logic, persistence, authentication, integrations, background jobs, reporting and public publishing are clearly separated. | 1 | planned | | |
+| R4.1 | Programme, Replication, Study Alias or Identifier, Hypothesis and Protocol or Version are modelled explicitly. | 1 | tested | `shared/src/schemas/replications.ts`, `shared/src/schemas/programme.ts`, `shared/src/schemas/documents.test.ts`, `tests/architecture/data-model.test.ts` | Modelled in code with a strict schema. Collections of later phases stay denied to every client until their feature is built. |
+| R4.2 | Laboratory, Institution, Person, Affiliation, Replication Membership or Role, Laboratory-Replication Participation and Equipment Configuration are modelled explicitly. | 1 | tested | `shared/src/schemas/programme.ts`, `shared/src/schemas/identity.ts`, `shared/src/schemas/participation.ts`, `shared/src/schemas/documents.test.ts`, `tests/architecture/data-model.test.ts` | Modelled in code with a strict schema. Collections of later phases stay denied to every client until their feature is built. |
+| R4.3 | Recruitment Report and Participant Count Category are modelled explicitly. | 1 | tested | `shared/src/schemas/recruitment.ts`, `shared/src/seed/lookups.test.ts`, `shared/src/schemas/documents.test.ts`, `tests/architecture/data-model.test.ts` | Modelled in code with a strict schema. Collections of later phases stay denied to every client until their feature is built. |
+| R4.4 | Dataset, Storage Location, File Manifest, Data Transfer, QC Assessment and Processing or Analysis Run are modelled explicitly. | 1 | tested | `shared/src/schemas/datasets.ts`, `shared/src/schemas/documents.test.ts`, `tests/architecture/data-model.test.ts` | Modelled in code with a strict schema. Collections of later phases stay denied to every client until their feature is built. |
+| R4.5 | Manuscript or Publication and Contributor are modelled explicitly. | 1 | tested | `shared/src/schemas/outputs.ts`, `shared/src/schemas/documents.test.ts`, `tests/architecture/data-model.test.ts` | Modelled in code with a strict schema. Collections of later phases stay denied to every client until their feature is built. |
+| R4.6 | Task, Milestone, Comment, Workspace Page and Document Link are modelled explicitly. | 1 | tested | `shared/src/schemas/tasks.ts`, `shared/src/schemas/workspace.ts`, `shared/src/schemas/documents.test.ts`, `tests/architecture/data-model.test.ts` | Modelled in code with a strict schema. Collections of later phases stay denied to every client until their feature is built. |
+| R4.7 | Integration Mapping, Import Batch, Source Record, Audit Event and Notification are modelled explicitly. | 1 | tested | `shared/src/schemas/provenance.ts`, `shared/src/schemas/system.ts`, `shared/src/schemas/identity.ts`, `shared/src/schemas/documents.test.ts`, `tests/architecture/data-model.test.ts` | Modelled in code with a strict schema. Collections of later phases stay denied to every client until their feature is built. |
+| R4.8 | Decision, Risk and Incident are modelled explicitly. | 1 | tested | `shared/src/schemas/outputs.ts`, `shared/src/schemas/documents.test.ts`, `tests/architecture/data-model.test.ts` | Modelled in code with a strict schema. Collections of later phases stay denied to every client until their feature is built. |
+| R4.9 | User, Role and Permission are modelled explicitly. | 1 | tested | `shared/src/schemas/identity.ts`, `shared/src/capabilities.ts`, `shared/src/access.test.ts`, `shared/src/schemas/documents.test.ts`, `tests/architecture/data-model.test.ts` | Modelled in code with a strict schema. Collections of later phases stay denied to every client until their feature is built. |
+| R4.10 | Records carry stable internal IDs, source IDs, provenance, timestamps and relationships. | 1 | tested | `shared/src/schemas/base.ts`, `shared/src/ids.test.ts`, `shared/src/schemas/schemas.test.ts` | |
+| R4.11 | A laboratory is kept distinct from its participation in one particular replication. | 1 | tested | `shared/src/collections.ts`, `tests/rules/collection-rules.test.ts`, `docs/DECISIONS.md` D-008 | |
+| R4.12 | A laboratory may participate in several replications. | 1 | tested | `tests/functions/participations.test.ts`, `tests/e2e/laboratories.spec.ts` | |
+| R4.13 | A person may have multiple affiliations and project roles. | 1 | implemented | `shared/src/collections.ts` (`personAffiliations`, `roleAssignments`), `shared/src/schemas/identity.ts` | Affiliations are a sub-collection of the person, and roles are separate assignments. |
+| R4.14 | A dataset may have several verified storage references. | 1 | implemented | `shared/src/schemas/datasets.ts` | Modelled. The dataset registry is built in phase 7. |
+| R4.15 | Tasks may link to multiple research entities. | 1 | implemented | `shared/src/schemas/tasks.ts` | Modelled. Tasks are built in phase 4. |
+| R4.16 | Each replication may have multiple leads, hypotheses, protocols, manuscripts and datasets. | 1 | tested | `shared/src/schemas/replications.ts`, `tests/e2e/registry-records.spec.ts` | Multiple leads and hypotheses are shown on the replication page. Protocols, manuscripts and datasets are modelled. |
+| R4.17 | Storage is normalised and relational, with explicit migrations, constraints, indexes and referential integrity (PostgreSQL by default, subject to infrastructure review). | 1 | tested | `firestore.rules`, `firestore.indexes.json`, `shared/src/integrity.test.ts`, `tests/tools/integrity-check.test.ts`, `tests/architecture/indexes.test.ts` | Met in Firestore form under D-001 and D-003 in place of PostgreSQL: references are checked by the rules on write and by a nightly integrity checker. Composite indexes are checked statically only, because the emulator does not enforce them. |
+| R4.18 | An API is defined. | 1 | tested | `shared/src/callables.ts`, `functions/src/framework/callable.test.ts`, `tests/functions/` | Callable functions with typed, validated contracts, plus direct Firestore access under the security rules. |
+| R4.19 | Frontend, domain logic, persistence, authentication, integrations, background jobs, reporting and public publishing are clearly separated. | 1 | in progress | `tests/architecture/boundaries.test.ts` | Interface, shared domain logic, functions and tools are separate packages and the Firebase SDK is confined to one directory, which a test enforces. Integrations, reporting and public publishing layers are not yet built. |
 
 ## 5. Mandatory source inventory and migration
 
@@ -126,17 +126,17 @@ The Evidence column is empty at the start of the project. Once an item reaches `
 | ID | Requirement | Phase | Status | Evidence | Notes |
 |---|---|---|---|---|---|
 | R5.0.1 | All tabs are inspected, including hidden and archived tabs where access permits. | 0 | in progress | | Sources A and G await access (see R5.A.1 and R5.G.1). |
-| R5.0.2 | Original identifiers, source rows, original values, timestamps, formulas, historical context and document links are preserved. | 2 | planned | | |
-| R5.0.3 | Historical snapshots are kept apart from current truth, because some sources contain stale or conflicting information. | 2 | planned | | |
+| R5.0.2 | Original identifiers, source rows, original values, timestamps, formulas, historical context and document links are preserved. | 2 | tested | `tools/src/import/snapshot.ts`, `tests/tools/import-framework.test.ts`, `tests/tools/import-recruitment.test.ts`, `tests/rules/hardening.test.ts` | Imported records keep their source row, verbatim cells and provenance, and the rules keep clients from changing them. |
+| R5.0.3 | Historical snapshots are kept apart from current truth, because some sources contain stale or conflicting information. | 2 | tested | `tests/tools/import-recruitment.test.ts` | Summary figures are stored as historical aggregates, apart from current values, and a changed row keeps the earlier figures as no longer current. |
 | R5.0.4 | Source ownership, field mappings, authority, record counts, update cadence and sync policy are inventoried. | 0 | in progress | | |
-| R5.0.5 | Import previews are provided. | 2 | planned | | |
-| R5.0.6 | Deduplication is provided. | 2 | planned | | |
-| R5.0.7 | Reconciliation and conflict queues are provided. | 2 | planned | | |
-| R5.0.8 | Import logs are kept. | 2 | planned | | |
-| R5.0.9 | Imports are idempotent. | 2 | planned | | |
-| R5.0.10 | Imports can be rolled back safely. | 2 | planned | | |
-| R5.0.11 | A source registry is built. | 2 | planned | | |
-| R5.0.12 | A migration administration UI is built. | 2 | planned | | |
+| R5.0.5 | Import previews are provided. | 2 | tested | `tools/src/import/preview.ts`, `tests/tools/import-cli.test.ts`, `tests/e2e/imports-console.spec.ts` | |
+| R5.0.6 | Deduplication is provided. | 2 | tested | `tools/src/import/reconcile.ts`, `tests/tools/import-framework.test.ts`, `tests/e2e/imports-console.spec.ts` | Possible duplicate people go to the review queue and are merged by an administrator. |
+| R5.0.7 | Reconciliation and conflict queues are provided. | 2 | tested | `web/src/pages/admin/imports/ReviewQueuePage.tsx`, `tests/e2e/imports-console.spec.ts`, `tests/functions/imports-console.test.ts` | |
+| R5.0.8 | Import logs are kept. | 2 | tested | `tests/tools/import-framework.test.ts`, `tests/e2e/imports-console.spec.ts` | |
+| R5.0.9 | Imports are idempotent. | 2 | tested | `tests/tools/import-framework.test.ts`, `docs/TEST_REPORT.md` section 3 | Second and third real runs in a different order wrote nothing but their batch records. |
+| R5.0.10 | Imports can be rolled back safely. | 2 | tested | `shared/src/import-rollback.test.ts`, `functions/src/callables/rollbackImportBatch.ts`, `tests/e2e/imports-console.spec.ts` | |
+| R5.0.11 | A source registry is built. | 2 | tested | `tools/src/import/registry.ts`, `tests/e2e/imports-console.spec.ts` | Sources are registered in the database and shown in the imports console. Their private locations stay outside the repository. |
+| R5.0.12 | A migration administration UI is built. | 2 | tested | `web/src/pages/admin/imports/`, `tests/e2e/imports-console.spec.ts` | |
 
 ### A. Historical replication coordination workbook
 
@@ -144,49 +144,49 @@ The Evidence column is empty at the start of the project. Once an item reaches `
 |---|---|---|---|---|---|
 | R5.A.1 | The workbook is inspected and imported: study leads, laboratory outreach, historical recruitment and the summary fields `StudyID`, `Leader`, `NLabsSigned`, `TotalNSubjectsToBeRun`, `NLabsFinished`, `TotalNMainExpCollected` and `TotalNRest`. | 2 | blocked | | Source A refuses anonymous access and no Google credentials or Google connector exist in this session. The importer will still be built and tested against synthetic, clearly labelled fixtures. |
 | R5.A.2 | The workbook is handled as an Excel file stored in Drive, using Drive file APIs or download where native Sheets APIs do not apply. | 2 | blocked | | Source A refuses anonymous access and no Google credentials or Google connector exist in this session. The adapter will still be built and tested against synthetic, clearly labelled fixtures. |
-| R5.A.3 | Historical snapshots are preserved separately from live counts. | 2 | planned | | The separation is exercised first with the equivalent summary tab of source F. Source A values await access. |
+| R5.A.3 | Historical snapshots are preserved separately from live counts. | 2 | in progress | `tests/tools/import-recruitment.test.ts` | The separation is built and tested with the equivalent summary tab of source F. Source A values await access. |
 
 ### B. Naming conventions
 
 | ID | Requirement | Phase | Status | Evidence | Notes |
 |---|---|---|---|---|---|
-| R5.B.1 | The sheet is inspected, including the fields `Original Name`, `Standardized Name - cloud accounts`, `Explanation`, `Part 1`, `Part 2`, `Standardized Name - BIDS` and `EEGnet name`. | 0 | in progress | | |
-| R5.B.2 | Canonical identifiers and aliases are maintained across programme, BIDS, EEGNet and server or account naming. | 2 | planned | | |
-| R5.B.3 | Existing identifiers are never silently renamed. | 2 | planned | | |
+| R5.B.1 | The sheet is inspected, including the fields `Original Name`, `Standardized Name - cloud accounts`, `Explanation`, `Part 1`, `Part 2`, `Standardized Name - BIDS` and `EEGnet name`. | 0 | implemented | `docs/SOURCE_REGISTRY.md` | |
+| R5.B.2 | Canonical identifiers and aliases are maintained across programme, BIDS, EEGNet and server or account naming. | 2 | tested | `tests/tools/import-naming.test.ts` | |
+| R5.B.3 | Existing identifiers are never silently renamed. | 2 | tested | `shared/src/ids.test.ts`, `tests/tools/import-website.test.ts`, `docs/DECISIONS.md` D-013 | A renamed identifier becomes a question for a reviewer and creates no second record. |
 
 ### C. Community vocabulary
 
 | ID | Requirement | Phase | Status | Evidence | Notes |
 |---|---|---|---|---|---|
-| R5.C.1 | The sheet is inspected, including the fields `id`, `name`, `abbreviation`, `description`, `invalid_reason` and `same_as`. | 0 | in progress | | |
-| R5.C.2 | The vocabulary is used for controlled scientific terminology, questionnaires, exclusions, synonyms and deprecated terms. | 2 | planned | | Used further in phases 5 and 8. |
-| R5.C.3 | Original vocabulary entries are preserved. | 2 | planned | | |
+| R5.C.1 | The sheet is inspected, including the fields `id`, `name`, `abbreviation`, `description`, `invalid_reason` and `same_as`. | 0 | implemented | `docs/SOURCE_REGISTRY.md` | |
+| R5.C.2 | The vocabulary is used for controlled scientific terminology, questionnaires, exclusions, synonyms and deprecated terms. | 2 | in progress | `tests/tools/import-vocabulary.test.ts` | The vocabulary is imported. Its use for questionnaires and exclusions arrives in phases 5 and 8. |
+| R5.C.3 | Original vocabulary entries are preserved. | 2 | tested | `tests/tools/import-vocabulary.test.ts` | |
 
 ### D. List of studies
 
 | ID | Requirement | Phase | Status | Evidence | Notes |
 |---|---|---|---|---|---|
-| R5.D.1 | All tabs are inspected: `list of studies`, `shortlist_archived`, `allranked_archived`, `questionnaires`, `AlphaAsymmetry_RSSubproject` and other hidden sheets. | 0 | in progress | | |
-| R5.D.2 | Study ID, lead, original paper, abstract, effect of interest, plain-language description, original N, statistics, standardised effect size, Bayes factor, duration, sample type, minimum EEG channels, extra equipment, power-based N, questionnaires, study type, outcome and construct are imported. | 2 | planned | | |
-| R5.D.3 | Historical candidate studies and archive flags are retained. | 2 | planned | | |
+| R5.D.1 | All tabs are inspected: `list of studies`, `shortlist_archived`, `allranked_archived`, `questionnaires`, `AlphaAsymmetry_RSSubproject` and other hidden sheets. | 0 | implemented | `docs/SOURCE_REGISTRY.md` | |
+| R5.D.2 | Study ID, lead, original paper, abstract, effect of interest, plain-language description, original N, statistics, standardised effect size, Bayes factor, duration, sample type, minimum EEG channels, extra equipment, power-based N, questionnaires, study type, outcome and construct are imported. | 2 | tested | `tests/tools/import-list-of-studies.test.ts` | |
+| R5.D.3 | Historical candidate studies and archive flags are retained. | 2 | tested | `tests/tools/import-list-of-studies.test.ts` | |
 
 ### E. Prediction-market hypotheses
 
 | ID | Requirement | Phase | Status | Evidence | Notes |
 |---|---|---|---|---|---|
-| R5.E.1 | The tabs `links_hypotheses`, `review` and `questions4MarketsNSurvey` are inspected. | 0 | in progress | | |
-| R5.E.2 | Hypothesis records and links are created from `study_id`, `studyDescr_pdf`, `infosheet_link`, `hypothesis_number`, `hypothesis_text`, `null-sig`, `replicated`, `authors`, `year`, `title` and `citation`. | 2 | planned | | Extended in phase 8. |
-| R5.E.3 | Historical `replicated` and `cancelled` labels are treated as unverified source values pending scientific review, never as definitive conclusions. | 2 | planned | | |
+| R5.E.1 | The tabs `links_hypotheses`, `review` and `questions4MarketsNSurvey` are inspected. | 0 | implemented | `docs/SOURCE_REGISTRY.md` | |
+| R5.E.2 | Hypothesis records and links are created from `study_id`, `studyDescr_pdf`, `infosheet_link`, `hypothesis_number`, `hypothesis_text`, `null-sig`, `replicated`, `authors`, `year`, `title` and `citation`. | 2 | tested | `tests/tools/import-prediction-market.test.ts` | Extended in phase 8. |
+| R5.E.3 | Historical `replicated` and `cancelled` labels are treated as unverified source values pending scientific review, never as definitive conclusions. | 2 | tested | `tests/tools/import-prediction-market.test.ts`, `tests/e2e/registry-records.spec.ts` | Historical labels are stored as source values and shown as unverified. |
 
 ### F. Recruitment and contact workbook
 
 | ID | Requirement | Phase | Status | Evidence | Notes |
 |---|---|---|---|---|---|
-| R5.F.1 | All tabs are inspected, including `numberOfLabsPerReplication`, `leadsEmails`, `Luck1996`, `Onton2005`, `Vidal2000_`, `Boksem2006_labs` and the hidden historical contact sheets. | 0 | in progress | | |
-| R5.F.2 | Outreach and contact history and participation are imported. | 2 | planned | | |
-| R5.F.3 | Imported outreach and contact data has restricted access. | 2 | planned | | |
-| R5.F.4 | The `leadsEmails` tab (`StudyID`, `Old leader`, `Leader`, `Email`) is imported. | 2 | planned | | |
-| R5.F.5 | Conflicting leads are flagged for human review and are never resolved arbitrarily. | 2 | planned | | |
+| R5.F.1 | All tabs are inspected, including `numberOfLabsPerReplication`, `leadsEmails`, `Luck1996`, `Onton2005`, `Vidal2000_`, `Boksem2006_labs` and the hidden historical contact sheets. | 0 | implemented | `docs/SOURCE_REGISTRY.md`, `tests/tools/import-recruitment.test.ts` | |
+| R5.F.2 | Outreach and contact history and participation are imported. | 2 | tested | `tests/tools/import-recruitment.test.ts` | |
+| R5.F.3 | Imported outreach and contact data has restricted access. | 2 | tested | `tests/tools/import-recruitment.test.ts`, `tests/rules/redteam/exfiltration-and-escalation-restricted-records.test.ts` | |
+| R5.F.4 | The `leadsEmails` tab (`StudyID`, `Old leader`, `Leader`, `Email`) is imported. | 2 | tested | `tests/tools/import-recruitment.test.ts` | |
+| R5.F.5 | Conflicting leads are flagged for human review and are never resolved arbitrarily. | 2 | tested | `tests/tools/import-recruitment.test.ts`, `tests/e2e/imports-console.spec.ts` | |
 
 ### G. Membership and contributor workbook
 
@@ -198,16 +198,16 @@ The Evidence column is empty at the start of the project. Once an item reaches `
 | R5.G.4 | Original membership values are retained, with appropriately permissioned analysis and reporting. | 2 | blocked | | Source G refuses anonymous access and no Google credentials or Google connector exist in this session. The importer and the permissioned reporting will still be built and tested against synthetic, clearly labelled fixtures. |
 | R5.G.5 | The `contibutor_tables` fields `ReplicationID`, `TableLink`, `IsOnlySignUpTable`, `IsPublished`, `PubLink` and `PDFLink` are imported. | 2 | blocked | | Source G refuses anonymous access and no Google credentials or Google connector exist in this session. The importer will still be built and tested against synthetic, clearly labelled fixtures. |
 | R5.G.6 | Contributor-table links are followed to discover more spreadsheets, and all additional accessible links are discovered. | 0 | blocked | | The list of contributor tables lives in source G, which refuses anonymous access, and no Google credentials or Google connector exist in this session. Links found in the accessible sources are followed in the meantime, and the importer will still be built and tested against synthetic, clearly labelled fixtures. |
-| R5.G.7 | The known linked contributor sheets for AmodioJost2007, AmodioMaster2008, Boksem2006, BuschVanRullen2010 and DelCul2007 are inspected. | 0 | in progress | | These five sheets are readable in this session. |
-| R5.G.8 | The known linked contributor sheets for AmodioJost2007, AmodioMaster2008, Boksem2006, BuschVanRullen2010 and DelCul2007 are imported. | 2 | planned | | Extended in phase 8. |
+| R5.G.7 | The known linked contributor sheets for AmodioJost2007, AmodioMaster2008, Boksem2006, BuschVanRullen2010 and DelCul2007 are inspected. | 0 | implemented | `docs/SOURCE_REGISTRY.md` | These five sheets are readable in this session. |
+| R5.G.8 | The known linked contributor sheets for AmodioJost2007, AmodioMaster2008, Boksem2006, BuschVanRullen2010 and DelCul2007 are imported. | 2 | tested | `tests/tools/import-contributors.test.ts`, `docs/TEST_REPORT.md` section 3 | Extended in phase 8. |
 
 ### H. Website structured data
 
 | ID | Requirement | Phase | Status | Evidence | Notes |
 |---|---|---|---|---|---|
-| R5.H.1 | The `data/` TSV files and other records in the primary repository are inspected, including Members, Replications, Core Team and Publications. | 0 | in progress | | |
-| R5.H.2 | Website records are reconciled with the seven spreadsheets. | 2 | planned | | Reconciliation against sources A and G follows once access is granted. |
-| R5.H.3 | Public approved data is distinguished from internal records. | 2 | planned | | |
+| R5.H.1 | The `data/` TSV files and other records in the primary repository are inspected, including Members, Replications, Core Team and Publications. | 0 | implemented | `docs/SOURCE_REGISTRY.md`, `tests/tools/import-website.test.ts` | |
+| R5.H.2 | Website records are reconciled with the seven spreadsheets. | 2 | in progress | `tests/tools/import-website.test.ts`, `tools/src/import/reconcile.ts` | Website records are reconciled with sources B to F and the contributor sheets, and differences go to review. Reconciliation against sources A and G follows once access is granted. |
+| R5.H.3 | Public approved data is distinguished from internal records. | 2 | in progress | `tests/tools/import-website.test.ts` | Website imports take only the public fields of each row and label their origin. Approval of fields for publishing arrives in phase 9. |
 
 ### I. Quire
 
@@ -231,50 +231,50 @@ The Evidence column is empty at the start of the project. Once an item reaches `
 
 | ID | Requirement | Phase | Status | Evidence | Notes |
 |---|---|---|---|---|---|
-| R6.1 | All existing member, laboratory and replication profiles are prepopulated from the sources before users are invited. | 2 | planned | | Member contact details and demographics held only in source G follow once access is granted. |
-| R6.2 | Claim my account: a user enters an existing email, verifies ownership securely, reviews the matched person, affiliation, laboratory and replication records, and claims the existing profile. | 2 | planned | | |
-| R6.3 | Claiming supports secondary emails. | 2 | planned | | |
-| R6.4 | Claiming supports multiple affiliations. | 2 | planned | | |
-| R6.5 | Claiming handles ambiguous matches. | 2 | planned | | |
-| R6.6 | Unclaimed records are supported. | 2 | planned | | |
+| R6.1 | All existing member, laboratory and replication profiles are prepopulated from the sources before users are invited. | 2 | in progress | `docs/TEST_REPORT.md` section 3 | Profiles are prepopulated from the website data, sources B to F and the five contributor sheets. Member contact details and demographics held only in source G follow once access is granted. |
+| R6.2 | Claim my account: a user enters an existing email, verifies ownership securely, reviews the matched person, affiliation, laboratory and replication records, and claims the existing profile. | 2 | tested | `functions/src/callables/claimProfile.ts`, `tests/functions/claims.test.ts`, `tests/e2e/identity-claims.spec.ts` | |
+| R6.3 | Claiming supports secondary emails. | 2 | tested | `tests/functions/claims.test.ts` | |
+| R6.4 | Claiming supports multiple affiliations. | 2 | in progress | `shared/src/collections.ts` (`personAffiliations`), `functions/src/callables/claimProfile.ts` | A person holds affiliations as separate documents and a claim links the whole person. No test yet covers a claim by someone with several affiliations. |
+| R6.5 | Claiming handles ambiguous matches. | 2 | tested | `tests/e2e/identity-claims.spec.ts`, `tests/functions/claims.test.ts` | An address that matches several people, or a match that is not clear, goes to administrator review. |
+| R6.6 | Unclaimed records are supported. | 2 | tested | `tests/e2e/registry-lists.spec.ts` | |
 | R6.7 | Invitations are supported. | 2 | planned | | Sending an invitation needs explicit approval (R1.15). |
-| R6.8 | Claim review is supported. | 2 | planned | | |
-| R6.9 | Correction requests are supported. | 2 | planned | | |
-| R6.10 | Duplicate accounts and profiles are prevented. | 2 | planned | | |
-| R6.11 | Claiming resists account enumeration, insecure email matching and account takeover. | 2 | planned | | |
-| R6.12 | A separate, verified laboratory-claiming process with administrator review is provided. | 2 | planned | | |
-| R6.13 | A laboratory can have multiple authorised representatives. | 2 | planned | | |
-| R6.14 | Secure individual email-based authentication is provided. | 1 | planned | | Exercised through a development mailbox until SMTP credentials exist (see R16.6). |
+| R6.8 | Claim review is supported. | 2 | tested | `web/src/pages/admin/ClaimsPage.tsx`, `tests/e2e/identity-claims.spec.ts` | |
+| R6.9 | Correction requests are supported. | 2 | tested | `functions/src/callables/resolveCorrectionRequest.ts`, `tests/e2e/identity-claims.spec.ts` | |
+| R6.10 | Duplicate accounts and profiles are prevented. | 2 | tested | `tests/e2e/identity-claims.spec.ts`, `tests/functions/people.test.ts` | |
+| R6.11 | Claiming resists account enumeration, insecure email matching and account takeover. | 2 | tested | `tests/functions/claims.test.ts`, `tests/functions/redteam/`, `tests/e2e/sign-in.spec.ts` | Claims use verified addresses only and the sign-in confirmation is the same for every address. An independent review's exploits are kept as regression tests. |
+| R6.12 | A separate, verified laboratory-claiming process with administrator review is provided. | 2 | tested | `functions/src/callables/requestLabClaim.ts`, `tests/functions/lab-claims.test.ts`, `tests/e2e/laboratories.spec.ts`, `tests/e2e/identity-admin.spec.ts` | |
+| R6.13 | A laboratory can have multiple authorised representatives. | 2 | tested | `tests/e2e/laboratories.spec.ts` | |
+| R6.14 | Secure individual email-based authentication is provided. | 1 | tested | `tests/e2e/sign-in.spec.ts` | Exercised through the Authentication emulator. Real email delivery awaits a mail provider (see R16.6). |
 | R6.15 | Optional Google or institutional sign-in is provided. | 1 | blocked | | No Google Workspace service account or OAuth client exists, so live Google calls cannot be made. The adapter will still be built and tested against synthetic, clearly labelled fixtures. |
-| R6.16 | MFA is required for privileged accounts. | 1 | planned | | |
-| R6.17 | Session controls are provided. | 1 | planned | | |
-| R6.18 | Account recovery is provided. | 1 | planned | | |
-| R6.19 | Replication-level group workspaces and stable group identifiers let teams operate together without a separate identity for each project. | 2 | planned | | |
-| R6.20 | Individual attribution is preserved for edits and audit trails, with no reliance on shared passwords. | 1 | planned | | |
-| R6.21 | External system account mappings are allowed when needed. | 2 | planned | | |
-| R6.22 | The initial roles exist: programme administrators (Faisal Mushtaq and Yuri Pavlov), core team, replication leads, laboratory coordinators, laboratory members and authorised external collaborators. | 1 | planned | | |
-| R6.23 | Administrators have full operational read and write access. | 1 | planned | | |
-| R6.24 | The core team has broad operational read and write access, with configurable restrictions on sensitive operations. | 1 | planned | | |
-| R6.25 | Replication leads manage their assigned replications. | 2 | planned | | |
-| R6.26 | Laboratory coordinators maintain their laboratory and participation records. | 2 | planned | | |
-| R6.27 | Permissions are enforced server-side at programme, replication, laboratory, page, record and field levels. | 1 | planned | | Page-level rules arrive in phase 3. |
-| R6.28 | Administrator and core-team accounts always have write access and are never treated as read-only. | 1 | planned | | |
-| R6.29 | User suspension, revocation, role changes and permission audit are provided. | 2 | planned | | |
-| R6.30 | Demographic information such as gender and ethnicity is preserved and available for authorised administrative filtering and analysis. | 2 | planned | | The real values are held in source G and follow once access is granted. |
-| R6.31 | Original source terms, optional standardised reporting categories, and missing and self-described values are retained for demographics. | 2 | planned | | |
-| R6.32 | Demographics are protected by field-level access controls, audit, minimisation in exports and appropriate governance. | 2 | planned | | |
-| R6.33 | Sensitive demographics are kept out of public view by default. | 2 | planned | | |
+| R6.16 | MFA is required for privileged accounts. | 1 | implemented | `firestore.rules`, `web/src/pages/account/SecondFactorSection.tsx`, `tests/rules/access-tiers.test.ts`, `tests/e2e/identity-admin.spec.ts` | Privileged access is refused without a second factor, which the rules and functions tests prove with constructed sign-in tokens. Enrolment by authenticator application cannot run on the emulator and is unverified until a staging project exists. |
+| R6.17 | Session controls are provided. | 1 | tested | `functions/src/callables/endAllSessions.ts`, `tests/e2e/sessions.spec.ts` | |
+| R6.18 | Account recovery is provided. | 1 | in progress | `tests/e2e/sign-in.spec.ts` | Sign-in is passwordless (D-015), so a member who can read their mail recovers access by asking for a new link. Recovery for a member who has lost their address is not built. |
+| R6.19 | Replication-level group workspaces and stable group identifiers let teams operate together without a separate identity for each project. | 2 | in progress | `shared/src/schemas/identity.ts`, `tests/functions/roles.test.ts` | Replication memberships and roles are built and each person signs in individually. Group workspaces arrive with phase 3. |
+| R6.20 | Individual attribution is preserved for edits and audit trails, with no reliance on shared passwords. | 1 | tested | `functions/src/triggers/audit.ts`, `tests/functions/audit-trigger.test.ts`, `tests/e2e/laboratories.spec.ts` | The identity that production delivers to the audit trigger is unverified until a staging project exists. |
+| R6.21 | External system account mappings are allowed when needed. | 2 | implemented | `shared/src/collections.ts` (`externalAccounts`), `tests/rules/matrix.test.ts` | Modelled with rules. No interface or integration uses it yet. |
+| R6.22 | The initial roles exist: programme administrators (Faisal Mushtaq and Yuri Pavlov), core team, replication leads, laboratory coordinators, laboratory members and authorised external collaborators. | 1 | tested | `shared/src/capabilities.ts`, `shared/src/bootstrap.test.ts`, `tests/rules/matrix.test.ts`, `tests/functions/bootstrap.test.ts` | The first administrators are bootstrapped by a keyed hash of their address, so no address is in the repository. |
+| R6.23 | Administrators have full operational read and write access. | 1 | tested | `tests/rules/matrix.test.ts` | |
+| R6.24 | The core team has broad operational read and write access, with configurable restrictions on sensitive operations. | 1 | tested | `functions/src/callables/setRoleCapabilityOverride.ts`, `tests/functions/roles.test.ts`, `tests/rules/matrix.test.ts` | |
+| R6.25 | Replication leads manage their assigned replications. | 2 | tested | `tests/e2e/registry-records.spec.ts`, `tests/functions/replication-status.test.ts` | |
+| R6.26 | Laboratory coordinators maintain their laboratory and participation records. | 2 | tested | `tests/e2e/laboratories.spec.ts`, `tests/functions/laboratories.test.ts` | |
+| R6.27 | Permissions are enforced server-side at programme, replication, laboratory, page, record and field levels. | 1 | in progress | `firestore.rules`, `tests/rules/matrix.test.ts`, `tests/rules/access-tiers.test.ts` | Enforced and tested at programme, replication, laboratory, record and field levels. Page-level rules arrive in phase 3. |
+| R6.28 | Administrator and core-team accounts always have write access and are never treated as read-only. | 1 | tested | `tests/rules/matrix.test.ts` | Write access for privileged accounts requires the second factor (R6.16). |
+| R6.29 | User suspension, revocation, role changes and permission audit are provided. | 2 | tested | `functions/src/callables/setUserStatus.ts`, `tests/e2e/identity-admin.spec.ts`, `tests/functions/roles.test.ts` | |
+| R6.30 | Demographic information such as gender and ethnicity is preserved and available for authorised administrative filtering and analysis. | 2 | in progress | `functions/src/callables/getPersonDemographics.ts`, `tests/functions/privacy.test.ts` | Demographics are stored apart and read only through an audited function that needs a named grant and a second factor. Filtering and analysis are not built, and the real values are held in source G, which awaits access. |
+| R6.31 | Original source terms, optional standardised reporting categories, and missing and self-described values are retained for demographics. | 2 | in progress | `shared/src/schemas/identity.ts`, `tests/tools/import-membership.test.ts` | The schema and the source G importer keep the original terms, tested against synthetic fixtures. Standardised reporting categories are not built. |
+| R6.32 | Demographics are protected by field-level access controls, audit, minimisation in exports and appropriate governance. | 2 | in progress | `tests/rules/redteam/exfiltration-and-escalation-special-category.test.ts`, `tests/functions/privacy.test.ts` | Field-level access control and audit are built and tested. Minimisation in exports awaits the exports themselves. |
+| R6.33 | Sensitive demographics are kept out of public view by default. | 2 | tested | `tests/rules/access-tiers.test.ts`, `tests/e2e/registry-records.spec.ts` | |
 
 ## 7. Replication management
 
 | ID | Requirement | Phase | Status | Evidence | Notes |
 |---|---|---|---|---|---|
-| R7.1 | Full replication records hold: permanent identifier, aliases, original paper and verified citation, abstract and rationale, leads and emails, hypotheses, effect of interest, original sample size, statistics, effect size and Bayes factor, power assumptions, target N, required EEG equipment, questionnaires, protocols, Stage 1 and Stage 2 Registered Reports, participating labs, recruitment, datasets, analyses, manuscripts, milestones, tasks, notes and linked folders. | 2 | planned | | Completed across phases 2 to 8. |
-| R7.2 | Each replication has a configurable workspace with Overview, Leadership, Laboratories, Recruitment, Datasets, Protocols, Hypotheses, Tasks, Documents, Analyses, Publications, Activity and Reports. | 3 | planned | | Navigation skeleton arrives in phase 2. |
+| R7.1 | Full replication records hold: permanent identifier, aliases, original paper and verified citation, abstract and rationale, leads and emails, hypotheses, effect of interest, original sample size, statistics, effect size and Bayes factor, power assumptions, target N, required EEG equipment, questionnaires, protocols, Stage 1 and Stage 2 Registered Reports, participating labs, recruitment, datasets, analyses, manuscripts, milestones, tasks, notes and linked folders. | 2 | in progress | `shared/src/schemas/replications.ts`, `tests/e2e/registry-records.spec.ts` | Identifier, aliases, citation, leads, hypotheses, original statistics, required equipment and participating laboratories are shown. Recruitment, datasets, analyses, milestones and tasks arrive in later phases. |
+| R7.2 | Each replication has a configurable workspace with Overview, Leadership, Laboratories, Recruitment, Datasets, Protocols, Hypotheses, Tasks, Documents, Analyses, Publications, Activity and Reports. | 3 | in progress | `web/src/pages/replications/tabs/` | The replication page has tabs for overview, leadership, laboratories, hypotheses, documents, publications, contributors and activity. A configurable workspace arrives with phase 3. |
 | R7.3 | Replications support custom properties, multiple leads and multiple hypotheses. | 3 | planned | | |
-| R7.4 | Statuses are configurable: proposed, planning, recruiting labs, site preparation, collecting, collection complete, processing, analysing, writing, submitted, published, paused and archived. | 2 | planned | | |
-| R7.5 | Status transitions are timestamped, with author, reason and history. | 2 | planned | | |
-| R7.6 | Historical status can be reconstructed for a past date. | 2 | planned | | |
+| R7.4 | Statuses are configurable: proposed, planning, recruiting labs, site preparation, collecting, collection complete, processing, analysing, writing, submitted, published, paused and archived. | 2 | tested | `shared/src/seed/lookups.ts`, `tests/functions/replication-status.test.ts` | |
+| R7.5 | Status transitions are timestamped, with author, reason and history. | 2 | tested | `functions/src/callables/setReplicationStatus.ts`, `tests/functions/replication-status.test.ts`, `tests/e2e/registry-records.spec.ts` | |
+| R7.6 | Historical status can be reconstructed for a past date. | 2 | in progress | `shared/src/schemas/replications.ts` | Every status change is kept as dated history, from which a past status can be read. A query or view for a chosen date is not built. |
 | R7.7 | Project milestones, dependencies and timelines are supported. | 4 | planned | | |
 | R7.8 | Blockers and a risk register are supported. | 4 | planned | | |
 | R7.9 | Decisions are recorded per replication. | 8 | planned | | |
@@ -285,18 +285,18 @@ The Evidence column is empty at the start of the project. Once an item reaches `
 
 | ID | Requirement | Phase | Status | Evidence | Notes |
 |---|---|---|---|---|---|
-| R8.1 | One authoritative laboratory profile exists per laboratory or institutional unit, including institution, department, country, city, appropriate address, contacts, PI, coordinator, members, website and equipment. | 2 | planned | | |
-| R8.2 | EEG amplifiers, caps and electrodes, channel count, sampling rates, triggers, presentation software, stimulus computers, eye trackers and other equipment are tracked. | 2 | planned | | |
-| R8.3 | A laboratory can hold multiple equipment configurations, with historical changes. | 2 | planned | | |
-| R8.4 | Equipment is compared against replication requirements, showing compatibility and missing capabilities. | 2 | planned | | |
-| R8.5 | Justified equipment overrides are supported. | 2 | planned | | |
-| R8.6 | Separate laboratory-replication participation records hold local leads, ethics, training, readiness, target sample size, progress, protocol version, submissions, notes and tasks. | 2 | planned | | |
-| R8.7 | An onboarding checklist covers participation confirmation, verified contacts, equipment confirmation, ethics, protocol review, training, technical checks, pilot and readiness approval. | 2 | planned | | |
-| R8.8 | A lab-by-replication readiness matrix is provided. | 2 | planned | | |
-| R8.9 | A central laboratory dashboard is provided. | 2 | planned | | |
-| R8.10 | Laboratory profile self-service is provided. | 2 | planned | | |
-| R8.11 | An approval workflow with timestamps is provided. | 2 | planned | | |
-| R8.12 | A laboratory's equipment updates propagate to the relevant replication views while project-specific details are left unchanged. | 2 | planned | | |
+| R8.1 | One authoritative laboratory profile exists per laboratory or institutional unit, including institution, department, country, city, appropriate address, contacts, PI, coordinator, members, website and equipment. | 2 | tested | `web/src/pages/laboratories/LaboratoryPage.tsx`, `tests/e2e/laboratories.spec.ts` | |
+| R8.2 | EEG amplifiers, caps and electrodes, channel count, sampling rates, triggers, presentation software, stimulus computers, eye trackers and other equipment are tracked. | 2 | tested | `shared/src/schemas/programme.ts`, `tests/e2e/laboratories.spec.ts` | |
+| R8.3 | A laboratory can hold multiple equipment configurations, with historical changes. | 2 | tested | `functions/src/callables/saveEquipmentConfiguration.ts`, `tests/e2e/laboratories.spec.ts` | |
+| R8.4 | Equipment is compared against replication requirements, showing compatibility and missing capabilities. | 2 | tested | `shared/src/equipment.test.ts`, `tests/e2e/laboratories.spec.ts` | |
+| R8.5 | Justified equipment overrides are supported. | 2 | tested | `web/src/pages/participations/ParticipationDialogs.tsx`, `tests/rules/hardening.test.ts`, `tests/rules/redteam/integrity-and-audit-sign-off.test.ts` | Tested at the rules level. No browser test covers the override dialog. |
+| R8.6 | Separate laboratory-replication participation records hold local leads, ethics, training, readiness, target sample size, progress, protocol version, submissions, notes and tasks. | 2 | tested | `shared/src/schemas/participation.ts`, `tests/functions/participations.test.ts`, `tests/e2e/laboratories.spec.ts` | Progress counts arrive with recruitment in phase 5, and participation tasks in phase 4. |
+| R8.7 | An onboarding checklist covers participation confirmation, verified contacts, equipment confirmation, ethics, protocol review, training, technical checks, pilot and readiness approval. | 2 | tested | `shared/src/seed/lookups.ts`, `tests/e2e/laboratories.spec.ts` | |
+| R8.8 | A lab-by-replication readiness matrix is provided. | 2 | tested | `web/src/pages/readiness/readiness.test.ts`, `tests/e2e/laboratories.spec.ts` | |
+| R8.9 | A central laboratory dashboard is provided. | 2 | in progress | `web/src/pages/laboratories/LaboratoriesPage.tsx`, `tests/e2e/laboratories.spec.ts` | A laboratory list and the readiness matrix exist. A dashboard with recruitment and datasets awaits phases 5 and 7. |
+| R8.10 | Laboratory profile self-service is provided. | 2 | tested | `tests/e2e/laboratories.spec.ts` | |
+| R8.11 | An approval workflow with timestamps is provided. | 2 | tested | `functions/src/callables/reviewLabClaim.ts`, `functions/src/callables/setParticipationStatus.ts`, `tests/functions/participations.test.ts`, `tests/e2e/laboratories.spec.ts` | |
+| R8.12 | A laboratory's equipment updates propagate to the relevant replication views while project-specific details are left unchanged. | 2 | tested | `tests/e2e/laboratories.spec.ts` | |
 
 ## 9. Recruitment and sample-size projections
 
@@ -369,14 +369,14 @@ The Evidence column is empty at the start of the project. Once an item reaches `
 
 | ID | Requirement | Phase | Status | Evidence | Notes |
 |---|---|---|---|---|---|
-| R12.1 | Hypothesis-level records are linked to original studies, expected effects, outcome measures, analysis specifications, preregistration, prediction-market claims, original statistics, analysis status, results and reporting. | 8 | planned | | |
-| R12.2 | Citations are verified against authoritative publication sources before they are presented as confirmed. | 8 | planned | | First verification pass runs with the phase 2 import. |
+| R12.1 | Hypothesis-level records are linked to original studies, expected effects, outcome measures, analysis specifications, preregistration, prediction-market claims, original statistics, analysis status, results and reporting. | 8 | in progress | `tests/tools/import-prediction-market.test.ts`, `tests/e2e/registry-records.spec.ts` | Hypotheses are imported from source E and shown on the replication page. Their links to analyses, preregistration and results arrive in phase 8. |
+| R12.2 | Citations are verified against authoritative publication sources before they are presented as confirmed. | 8 | tested | `tools/src/commands/citations-verify.ts`, `tests/tools/citations-verify.test.ts`, `functions/src/callables/editReplicationCitation.ts` | Tested against a local stand-in for Crossref. Unverified citations are labelled as such on the replication page. |
 | R12.3 | Protocol versions, laboratory acknowledgements, deviations and compliance are tracked. | 8 | planned | | |
 | R12.4 | Stage 1 and Stage 2 Registered Reports, Google Docs and OSF links, drafts, review rounds, decisions, revisions and submission milestones are tracked. | 8 | planned | | |
 | R12.5 | Analysis runs, code and pipeline versions, parameters, inputs and outputs, QC and reproducibility are tracked. | 8 | planned | | |
 | R12.6 | A methodological decision log is maintained. | 8 | planned | | |
 | R12.7 | An incident and corrective-action registry is maintained. | 8 | planned | | |
-| R12.8 | Contributor tables are imported, and roles in data collection, recruitment, analysis and writing are recorded. | 8 | planned | | The five known contributor sheets are readable. Further tables listed only in source G follow once access is granted. |
+| R12.8 | Contributor tables are imported, and roles in data collection, recruitment, analysis and writing are recorded. | 8 | in progress | `tests/tools/import-contributors.test.ts` | The five known contributor sheets are imported. Further tables listed only in source G follow once access is granted. |
 | R12.9 | Authorship and acknowledgement preparation and review are supported. | 8 | planned | | |
 | R12.10 | Manuscripts, preprints, journals, submissions, reviews, revisions, acceptance, publication, DOI, OSF, and software and dataset outputs are tracked. | 8 | planned | | |
 | R12.11 | Reproducibility and provenance exports are provided. | 8 | planned | | |
@@ -419,17 +419,17 @@ The Evidence column is empty at the start of the project. Once an item reaches `
 
 | ID | Requirement | Phase | Status | Evidence | Notes |
 |---|---|---|---|---|---|
-| R15.1 | A programme dashboard shows active replications, labs, members, recruitment targets and usable N, the dataset and QC pipeline, overdue tasks, milestones, stalled projects, pending claims, integration errors and recent activity. | 9 | planned | | |
-| R15.2 | A replication dashboard shows leads, participating labs, readiness, recruitment, forecasts, datasets, tasks, hypotheses, manuscripts and risks. | 9 | planned | | |
-| R15.3 | A laboratory dashboard shows equipment, members, projects, recruitment, datasets, onboarding and tasks. | 9 | planned | | |
-| R15.4 | A personal dashboard shows assigned work, mentions, notifications, deadlines and recent pages. | 9 | planned | | First version arrives in phase 2. |
+| R15.1 | A programme dashboard shows active replications, labs, members, recruitment targets and usable N, the dataset and QC pipeline, overdue tasks, milestones, stalled projects, pending claims, integration errors and recent activity. | 9 | in progress | `web/src/pages/home/ProgrammeSnapshotPanel.tsx`, `tests/e2e/registry-lists.spec.ts` | Home shows a live programme snapshot of replications, laboratories, members and pending claims. Recruitment, datasets, tasks and integration errors arrive in later phases. |
+| R15.2 | A replication dashboard shows leads, participating labs, readiness, recruitment, forecasts, datasets, tasks, hypotheses, manuscripts and risks. | 9 | in progress | `web/src/pages/replications/ReplicationPage.tsx`, `tests/e2e/registry-records.spec.ts` | The replication page shows leads, laboratories, readiness and hypotheses. Recruitment, forecasts, datasets, tasks, manuscripts and risks arrive in later phases. |
+| R15.3 | A laboratory dashboard shows equipment, members, projects, recruitment, datasets, onboarding and tasks. | 9 | in progress | `web/src/pages/laboratories/LaboratoryPage.tsx`, `tests/e2e/laboratories.spec.ts` | The laboratory page shows equipment, members, participations and onboarding. Recruitment, datasets and tasks arrive in later phases. |
+| R15.4 | A personal dashboard shows assigned work, mentions, notifications, deadlines and recent pages. | 9 | in progress | `web/src/pages/home/HomePage.tsx`, `tests/e2e/registry-lists.spec.ts` | Home shows the member's records, pending items and notifications. Assigned work, mentions and deadlines need tasks and pages. |
 | R15.5 | Dashboards are configurable, with drill-down, historical snapshots and charts. | 9 | planned | | |
 | R15.6 | Export to CSV, Excel and PDF is provided where appropriate. | 9 | planned | | |
 | R15.7 | Scheduled reports and controlled email digests are supported. | 9 | planned | | Real email delivery awaits SMTP credentials (see R16.6). |
-| R15.8 | Permission-aware global search covers records, pages, comments and indexed document metadata and content where authorised. | 9 | planned | | First version arrives in phase 3. |
-| R15.9 | Advanced filters, saved searches, command palette and quick navigation are supported. | 9 | planned | | |
+| R15.8 | Permission-aware global search covers records, pages, comments and indexed document metadata and content where authorised. | 9 | in progress | `web/src/app/shell/palette-search.ts`, `tests/e2e/registry-search.spec.ts` | Records are searchable within the reader's permissions. Pages, comments and document metadata are not yet indexed. |
+| R15.9 | Advanced filters, saved searches, command palette and quick navigation are supported. | 9 | in progress | `web/src/registry/url-state.ts`, `tests/e2e/registry-search.spec.ts`, `tests/e2e/registry-lists.spec.ts` | The command palette, quick navigation and filters kept in the address are built. Saved searches are not. |
 | R15.10 | Authorised demographic, geographic, equipment, participation and scientific-progress analysis is available. | 9 | planned | | Demographic analysis on real values follows access to source G. |
-| R15.11 | Observed, imported historical and projected values are clearly labelled. | 9 | planned | | |
+| R15.11 | Observed, imported historical and projected values are clearly labelled. | 9 | in progress | `tests/e2e/registry-records.spec.ts` | Live, imported and demonstration values are labelled. Projected values arrive with forecasts in phase 5. |
 | R15.12 | Optional AI features (natural-language search, summaries, document assistance and stalled-project detection) cite underlying workspace records, respect permissions and avoid unsupported claims. | 9 | planned | | Optional. |
 
 ## 16. Notifications, collaboration and automation
@@ -438,12 +438,12 @@ The Evidence column is empty at the start of the project. Once an item reaches `
 |---|---|---|---|---|---|
 | R16.1 | Page and record subscriptions are provided. | 9 | planned | | |
 | R16.2 | Threaded comments and @mentions are provided. | 3 | planned | | |
-| R16.3 | Assignment alerts, status-change notifications and reminders are provided. | 9 | planned | | |
+| R16.3 | Assignment alerts, status-change notifications and reminders are provided. | 9 | in progress | `functions/src/notifications/notify.ts`, `tests/functions/notifications.test.ts` | Members are notified of claim, role and correction decisions. Assignment alerts and reminders need tasks. |
 | R16.4 | Integration failure alerts, protocol updates and milestone notifications are provided. | 9 | planned | | |
-| R16.5 | In-app notifications are supported. | 9 | planned | | First version arrives in phase 3. |
+| R16.5 | In-app notifications are supported. | 9 | in progress | `web/src/app/shell/NotificationBell.tsx`, `tests/functions/notifications.test.ts` | In-app notifications exist for identity and administration events. |
 | R16.6 | Email notifications are supported. | 9 | blocked | | No SMTP credentials exist, so real email delivery cannot be exercised. The mail adapter will still be built and tested against a development mailbox with synthetic, clearly labelled fixtures. |
 | R16.7 | Digest preferences and quiet settings are supported. | 9 | planned | | |
-| R16.8 | Historical recruitment correspondence is preserved where available, with restricted visibility. | 2 | planned | | |
+| R16.8 | Historical recruitment correspondence is preserved where available, with restricted visibility. | 2 | tested | `tests/tools/import-recruitment.test.ts`, `tests/rules/redteam/exfiltration-and-escalation-restricted-records.test.ts` | The outreach and contact tabs of source F are imported as restricted records. |
 | R16.9 | Configurable actions are supported: create a laboratory onboarding checklist on approval, create a QC task when data arrives, notify leads when recruitment targets are met, generate progress reports and flag overdue updates. | 9 | planned | | |
 | R16.10 | Each automation is logged, loops are prevented, and retry and recovery are supported. | 9 | planned | | |
 
@@ -451,19 +451,19 @@ The Evidence column is empty at the start of the project. Once an item reaches `
 
 | ID | Requirement | Phase | Status | Evidence | Notes |
 |---|---|---|---|---|---|
-| R17.1 | An admin console covers users, claims, labs, replications, roles, custom fields, templates, imports, integrations, sync conflicts, storage endpoints, audit logs, backups and publishing. | 2 | planned | | Grows with each phase. |
-| R17.2 | Established authentication is used. | 1 | planned | | |
-| R17.3 | MFA is used for privileged users. | 1 | planned | | |
-| R17.4 | Sessions are secure. | 1 | planned | | |
-| R17.5 | Authorisation is enforced server-side. | 1 | planned | | |
-| R17.6 | Input is validated. | 1 | planned | | |
+| R17.1 | An admin console covers users, claims, labs, replications, roles, custom fields, templates, imports, integrations, sync conflicts, storage endpoints, audit logs, backups and publishing. | 2 | in progress | `web/src/pages/admin/`, `tests/e2e/identity-admin.spec.ts`, `tests/e2e/imports-console.spec.ts` | Users, claims, laboratory claims, roles, the audit log, correction requests, imports, the review queue and integrity reports are built. Custom fields, templates, integrations, sync conflicts, storage endpoints, backups and publishing grow with later phases. |
+| R17.2 | Established authentication is used. | 1 | tested | `web/src/auth/`, `tests/e2e/sign-in.spec.ts` | Firebase Authentication with email links. Exercised on the emulator. |
+| R17.3 | MFA is used for privileged users. | 1 | implemented | `firestore.rules`, `tests/rules/access-tiers.test.ts`, `tests/e2e/identity-admin.spec.ts` | See R6.16. Enrolment by authenticator application is unverified until a staging project exists. |
+| R17.4 | Sessions are secure. | 1 | tested | `tests/e2e/sessions.spec.ts` | |
+| R17.5 | Authorisation is enforced server-side. | 1 | tested | `firestore.rules`, `tests/rules/matrix.test.ts`, `tests/functions/`, `docs/DECISIONS.md` D-006 | |
+| R17.6 | Input is validated. | 1 | tested | `functions/src/framework/callable.test.ts`, `tests/rules/hardening.test.ts` | |
 | R17.7 | Data is encrypted in transit. | 10 | planned | | |
-| R17.8 | Secrets are managed outside the source tree. | 1 | planned | | |
+| R17.8 | Secrets are managed outside the source tree. | 1 | implemented | `.gitignore`, `web/.env.example` | Configuration is read from ignored local files or the environment. No secret is used by continuous integration. |
 | R17.9 | Rate limits are applied. | 1 | planned | | |
-| R17.10 | Logging is in place. | 1 | planned | | |
-| R17.11 | Appropriate security headers are set. | 1 | planned | | |
+| R17.10 | Logging is in place. | 1 | tested | `functions/src/framework/audit.test.ts`, `tests/functions/audit.test.ts` | Audit events are written by trusted code. Operational logging in production is unverified until a staging project exists. |
+| R17.11 | Appropriate security headers are set. | 1 | tested | `web/config/csp.ts`, `tests/e2e/security.spec.ts` | A Content-Security-Policy meta element and a frame guard, because GitHub Pages cannot send custom headers. Behaviour on real Pages is unverified. |
 | R17.12 | UK GDPR and the programme's approved governance are applied, including retention, subject access, access review, audit and restricted demographic fields. | 10 | planned | | |
-| R17.13 | Personal and participant data are protected from public disclosure. | 1 | planned | | Applies in every phase. |
+| R17.13 | Personal and participant data are protected from public disclosure. | 1 | tested | `tests/rules/matrix.test.ts`, `tests/rules/access-tiers.test.ts`, `tests/rules/redteam/` | Applies in every phase. |
 | R17.14 | Backups are secure and restoration is tested. | 10 | planned | | |
 | R17.15 | Environments are separated. | 10 | planned | | |
 | R17.16 | Service accounts follow least privilege. | 10 | planned | | |
@@ -472,32 +472,32 @@ The Evidence column is empty at the start of the project. Once an item reaches `
 
 | ID | Requirement | Phase | Status | Evidence | Notes |
 |---|---|---|---|---|---|
-| R18.1 | The stack is chosen after the repository review. | 0 | in progress | | |
-| R18.2 | A mature TypeScript frontend and backend with PostgreSQL is preferred if suitable. | 1 | planned | | |
+| R18.1 | The stack is chosen after the repository review. | 0 | implemented | `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` D-001 | |
+| R18.2 | A mature TypeScript frontend and backend with PostgreSQL is preferred if suitable. | 1 | implemented | `portal/`, `docs/DECISIONS.md` D-001, D-003 | TypeScript throughout. Firestore replaces PostgreSQL under the administrator's decision D-001. |
 | R18.3 | A proven rich-text editor is used. | 3 | planned | | |
 | R18.4 | Virtualised grids are used. | 3 | planned | | |
-| R18.5 | Background job processing is in place. | 1 | planned | | |
-| R18.6 | Database migrations are in place. | 1 | planned | | |
-| R18.7 | Typed API contracts are in place. | 1 | planned | | |
+| R18.5 | Background job processing is in place. | 1 | tested | `functions/src/triggers/`, `tests/functions/audit-trigger.test.ts`, `tests/functions/access-maintenance.test.ts` | Background work runs in Cloud Functions triggers and schedules, including the nightly integrity sweep. |
+| R18.6 | Database migrations are in place. | 1 | in progress | `shared/src/seed/lookups.ts`, `tests/tools/seed-lookups.test.ts` | Lookup data is seeded idempotently. A mechanism for migrating existing documents when a schema changes is not yet built. |
+| R18.7 | Typed API contracts are in place. | 1 | tested | `shared/src/callables.ts`, `functions/src/framework/callable.test.ts` | |
 | R18.8 | Adapters are documented. | 6 | planned | | |
-| R18.9 | Accessibility is aligned with WCAG 2.2 AA where practicable. | 10 | planned | | Applies in every phase. |
-| R18.10 | Layouts are responsive on desktop, tablet and mobile. | 1 | planned | | |
-| R18.11 | Keyboard navigation is supported across the portal. | 3 | planned | | |
-| R18.12 | Loading, empty and error states are clear. | 1 | planned | | |
-| R18.13 | Performance and pagination are addressed. | 10 | planned | | |
-| R18.14 | Unit, integration, migration, permission, sync, security and end-to-end tests are implemented. | 10 | planned | | Tests are added with each slice. |
-| R18.15 | Every visible control has a real function. | 1 | planned | | Applies in every phase. |
-| R18.16 | Demo data is labelled. | 1 | planned | | |
-| R18.17 | Actual test results and unresolved limitations are recorded. | 1 | planned | | Applies in every phase. |
+| R18.9 | Accessibility is aligned with WCAG 2.2 AA where practicable. | 10 | in progress | `tests/e2e/accessibility.spec.ts` | Applies in every phase. Automated checks report no serious finding. A full WCAG 2.2 AA review is due in phase 10. |
+| R18.10 | Layouts are responsive on desktop, tablet and mobile. | 1 | tested | `tests/e2e/shell.spec.ts` | |
+| R18.11 | Keyboard navigation is supported across the portal. | 3 | in progress | `tests/e2e/shell.spec.ts`, `tests/e2e/registry-search.spec.ts`, `tests/e2e/identity-claims.spec.ts` | The shell, command palette, lists and claim journey are tested by keyboard alone. The editor arrives in phase 3. |
+| R18.12 | Loading, empty and error states are clear. | 1 | tested | `web/src/app/RouteError.test.ts`, `tests/e2e/sign-in.spec.ts`, `tests/e2e/accessibility.spec.ts` | |
+| R18.13 | Performance and pagination are addressed. | 10 | in progress | `web/src/data/paged.test.ts`, `tests/e2e/registry-performance.spec.ts` | Lists page their reads and large tables are tested for scrolling. A full performance review is due in phase 10. |
+| R18.14 | Unit, integration, migration, permission, sync, security and end-to-end tests are implemented. | 10 | in progress | `docs/TEST_REPORT.md` | Tests are added with each slice. Sync tests await phase 6. |
+| R18.15 | Every visible control has a real function. | 1 | in progress | `tests/e2e/shell.spec.ts` | Applies in every phase. The shell shows only destinations that exist. |
+| R18.16 | Demo data is labelled. | 1 | tested | `tests/tools/seed-demo.test.ts`, `tests/e2e/shell.spec.ts` | Demonstration data carries `dataOrigin: "demo"` and the shell shows a demonstration label. |
+| R18.17 | Actual test results and unresolved limitations are recorded. | 1 | implemented | `docs/TEST_REPORT.md` | Applies in every phase. |
 
 ## 19. Delivery phases and persistent documentation
 
 | ID | Requirement | Phase | Status | Evidence | Notes |
 |---|---|---|---|---|---|
 | R19.1 | Phase 0, discovery: the repository, deployment, public data, all seven Sheets, linked contributor files and Quire export possibilities are inspected, and the architecture, source registry, data model, security and migration plan are documented. | 0 | in progress | | Sources A and G and a Quire export await access. |
-| R19.2 | Phase 1, integrated portal foundation: `/portal`, navigation, login, database, roles and protected staging with visual continuity are implemented. | 1 | planned | | Protected staging is tracked in R2.19. |
-| R19.3 | Phase 2, migration and claims: members, labs, studies, aliases and participation are imported and reconciled, and secure member and laboratory claiming with admin review is implemented. | 2 | planned | | |
-| R19.4 | Phase 3, Notion-style workspace: rich pages, linked relational databases, saved views, templates, collaboration, version history and custom dashboards are implemented. | 3 | planned | | |
+| R19.2 | Phase 1, integrated portal foundation: `/portal`, navigation, login, database, roles and protected staging with visual continuity are implemented. | 1 | in progress | `docs/TEST_REPORT.md` sections 1 and 2 | Built and tested on the emulators. Protected staging is tracked in R2.19. |
+| R19.3 | Phase 2, migration and claims: members, labs, studies, aliases and participation are imported and reconciled, and secure member and laboratory claiming with admin review is implemented. | 2 | in progress | `docs/TEST_REPORT.md` sections 3 and 4 | Built and tested for the accessible sources. Sources A and G await access. |
+| R19.4 | Phase 3, Notion-style workspace: rich pages, linked relational databases, saved views, templates, collaboration, version history and custom dashboards are implemented. | 3 | in progress | | Work on phase 3 has started. No workspace code is in the repository yet. |
 | R19.5 | Phase 4, tasks and Quire migration: nested tasks, dependencies, boards, timelines, reminders, project oversight and import tools are implemented. | 4 | planned | | |
 | R19.6 | Phase 5, recruitment: separate main and resting counts, verified statuses, laboratory updates, projections, historical reporting and public aggregates are implemented. | 5 | planned | | |
 | R19.7 | Phase 6, Google Workspace: Drive links, Sheets field mappings and two-way sync, generated Docs, conflicts, health and retries are implemented. | 6 | planned | | Live verification is tracked in section 13. |
@@ -505,27 +505,27 @@ The Evidence column is empty at the start of the project. Once an item reaches `
 | R19.9 | Phase 8, scientific workflows: hypotheses, protocols, Registered Reports, analysis provenance, contributors and publications are implemented. | 8 | planned | | |
 | R19.10 | Phase 9, reporting and automations: configurable dashboards, notifications, workflows, scheduled reports, optional AI and public publishing are implemented. | 9 | planned | | |
 | R19.11 | Phase 10, hardening: security review, performance, accessibility, migration verification, recovery tests, documentation and deployment readiness are completed. | 10 | planned | | |
-| R19.12 | `docs/ARCHITECTURE.md` is maintained. | 0 | planned | | |
-| R19.13 | `docs/DATA_MODEL.md` is maintained. | 0 | planned | | A first draft exists. |
-| R19.14 | `docs/SOURCE_REGISTRY.md` is maintained. | 0 | planned | | |
-| R19.15 | `docs/MIGRATION_PLAN.md` is maintained. | 0 | planned | | |
-| R19.16 | `docs/INTEGRATIONS.md` is maintained. | 0 | planned | | |
-| R19.17 | `docs/SECURITY.md` is maintained. | 0 | planned | | |
-| R19.18 | `docs/DECISIONS.md` is maintained. | 0 | planned | | |
-| R19.19 | `docs/IMPLEMENTATION_STATUS.md` is maintained. | 0 | planned | | |
-| R19.20 | `docs/TEST_REPORT.md` is maintained. | 0 | planned | | |
-| R19.21 | A comprehensive requirements checklist is maintained. | 0 | planned | | This document. |
-| R19.22 | Each item is tracked as planned, in progress, implemented, tested or blocked. | 0 | planned | | |
-| R19.23 | Decisions, test evidence, blockers, exact next steps and safe resumption instructions are recorded after each session. | 0 | planned | | Applies in every phase. |
-| R19.24 | Completion is declared only after verification. | 10 | planned | | Applies in every phase. |
+| R19.12 | `docs/ARCHITECTURE.md` is maintained. | 0 | implemented | `docs/ARCHITECTURE.md` | |
+| R19.13 | `docs/DATA_MODEL.md` is maintained. | 0 | implemented | `docs/DATA_MODEL.md`, `tests/architecture/data-model.test.ts` | A guard test compares the document with the collection registry in both directions. |
+| R19.14 | `docs/SOURCE_REGISTRY.md` is maintained. | 0 | implemented | `docs/SOURCE_REGISTRY.md` | |
+| R19.15 | `docs/MIGRATION_PLAN.md` is maintained. | 0 | implemented | `docs/MIGRATION_PLAN.md` | |
+| R19.16 | `docs/INTEGRATIONS.md` is maintained. | 0 | implemented | `docs/INTEGRATIONS.md` | |
+| R19.17 | `docs/SECURITY.md` is maintained. | 0 | implemented | `docs/SECURITY.md` | |
+| R19.18 | `docs/DECISIONS.md` is maintained. | 0 | implemented | `docs/DECISIONS.md` | |
+| R19.19 | `docs/IMPLEMENTATION_STATUS.md` is maintained. | 0 | implemented | `docs/IMPLEMENTATION_STATUS.md` | |
+| R19.20 | `docs/TEST_REPORT.md` is maintained. | 0 | implemented | `docs/TEST_REPORT.md` | |
+| R19.21 | A comprehensive requirements checklist is maintained. | 0 | implemented | `docs/REQUIREMENTS_CHECKLIST.md` | This document. |
+| R19.22 | Each item is tracked as planned, in progress, implemented, tested or blocked. | 0 | implemented | `docs/REQUIREMENTS_CHECKLIST.md` | |
+| R19.23 | Decisions, test evidence, blockers, exact next steps and safe resumption instructions are recorded after each session. | 0 | implemented | `docs/IMPLEMENTATION_STATUS.md`, `docs/TEST_REPORT.md`, `docs/DECISIONS.md` | Applies in every phase. |
+| R19.24 | Completion is declared only after verification. | 10 | in progress | `docs/TEST_REPORT.md` | Applies in every phase. Each slice is closed by an independent run of the full suite. |
 
 ## 20. End-to-end acceptance scenarios
 
 | ID | Requirement | Phase | Status | Evidence | Notes |
 |---|---|---|---|---|---|
-| AS-1 | An imported member securely claims their pre-existing profile by verified email and sees correct laboratory and replication associations without duplication. | 2 | planned | | |
-| AS-2 | A laboratory representative claims an existing laboratory through verified affiliation and admin review, and another authorised representative can be added. | 2 | planned | | |
-| AS-3 | A coordinator edits equipment, all linked laboratory and replication views update, and a designated Google Sheet synchronises with an audit entry. | 6 | blocked | | No Google Workspace service account or OAuth client exists, so live Sheets, Docs and Drive calls cannot be made. The in-app propagation is tested directly, and the Sheets adapter will still be built and tested against synthetic, clearly labelled fixtures. |
+| AS-1 | An imported member securely claims their pre-existing profile by verified email and sees correct laboratory and replication associations without duplication. | 2 | tested | `tests/e2e/identity-claims.spec.ts` | Run on the synthetic demonstration world. A second sign-in creates no duplicate account, link or role. |
+| AS-2 | A laboratory representative claims an existing laboratory through verified affiliation and admin review, and another authorised representative can be added. | 2 | tested | `tests/e2e/laboratories.spec.ts`, `tests/e2e/identity-admin.spec.ts` | A request to represent an existing laboratory shows its evidence and is approved in the console, and a second representative is added. Run on the synthetic demonstration world. |
+| AS-3 | A coordinator edits equipment, all linked laboratory and replication views update, and a designated Google Sheet synchronises with an audit entry. | 6 | blocked | `tests/e2e/laboratories.spec.ts` | Partly met: an equipment edit updates the laboratory and replication views without a reload and writes an audit entry, which the browser test proves. Google Sheet synchronisation is blocked because no Google Workspace service account or OAuth client exists, so live Sheets calls cannot be made. |
 | AS-4 | A coordinator reports main experiment and resting-state counts separately, programme and project dashboards update without participant double counting, and verified versus reported counts are preserved. | 5 | planned | | |
 | AS-5 | Forecasts recalculate using documented assumptions, and historical reports reconstruct the actual status at a prior date. | 5 | planned | | |
 | AS-6 | A replication lead creates a nested task with a dependency, a deadline and a dataset link, the assignee receives it, and views update consistently. | 4 | planned | | The dataset link depends on the phase 7 registry. |
@@ -533,8 +533,8 @@ The Evidence column is empty at the start of the project. Once an item reaches `
 | AS-8 | An authorised researcher registers an EEG dataset stored on a Bremen or Munich server, and metadata, paths, BIDS and QC status are visible with no compulsory central transfer and no dependence on ElectroTag. | 7 | planned | | |
 | AS-9 | A generated Google Doc updates its managed sections from application data while manually written text is left untouched. | 6 | blocked | | No Google Workspace service account or OAuth client exists, so live Sheets, Docs and Drive calls cannot be made. The adapter will still be built and tested against synthetic, clearly labelled fixtures. |
 | AS-10 | An external Google Sheet edit updates the mapped application field, and simultaneous conflicting edits are flagged and resolved with an audit trail. | 6 | blocked | | No Google Workspace service account or OAuth client exists, so live Sheets, Docs and Drive calls cannot be made. The adapter will still be built and tested against synthetic, clearly labelled fixtures. |
-| AS-11 | Re-running imports yields stable identities and no duplicates, and conflicting historical leads remain flagged for review. | 2 | planned | | |
-| AS-12 | A programme administrator can manage the full system, the core team can edit their permitted operational records, and laboratory users have no access to unrelated private records or restricted demographics. | 2 | planned | | |
+| AS-11 | Re-running imports yields stable identities and no duplicates, and conflicting historical leads remain flagged for review. | 2 | tested | `tests/tools/import-framework.test.ts`, `tests/tools/import-recruitment.test.ts`, `tests/e2e/imports-console.spec.ts`, `docs/TEST_REPORT.md` section 3 | Repeated real runs on the accessible sources wrote nothing new. Sources A and G await access. |
+| AS-12 | A programme administrator can manage the full system, the core team can edit their permitted operational records, and laboratory users have no access to unrelated private records or restricted demographics. | 2 | tested | `tests/rules/matrix.test.ts`, `tests/e2e/registry-records.spec.ts`, `tests/e2e/identity-admin.spec.ts` | Proven for the collections built so far. Collections of later phases stay denied to every client. |
 | AS-13 | An approved public summary passes through staging and publishes to eegmanylabs.org without exposing private information. | 9 | blocked | | No DigitalOcean or GitHub deployment credentials are available and production deployment needs explicit approval. The publishing adapter will still be built and tested against synthetic, clearly labelled fixtures and a local copy of the site build. |
 | AS-14 | A Quire export migrates available nested tasks, dates and comments with source IDs and an explicit missing-fields report. | 4 | blocked | | No Quire export file or Quire API token is available in this session. The importer will still be built and tested against synthetic, clearly labelled fixtures. |
 | AS-15 | A server outage, a Google API quota error and a failed sync each produce visible, recoverable states without corrupting authoritative records. | 10 | planned | | Faults are simulated against fake services until live credentials are supplied. |
@@ -544,14 +544,14 @@ The Evidence column is empty at the start of the project. Once an item reaches `
 
 | ID | Requirement | Phase | Status | Evidence | Notes |
 |---|---|---|---|---|---|
-| R21.1 | Work starts with inspection of the primary repository's README, architecture, styles, structured data and deployment configuration. | 0 | in progress | | |
+| R21.1 | Work starts with inspection of the primary repository's README, architecture, styles, structured data and deployment configuration. | 0 | implemented | `docs/ARCHITECTURE.md` | |
 | R21.2 | All seven source documents and their linked contributor files are inspected where access is available. | 0 | in progress | | Sources B, C, D, E and F and five contributor sheets are readable. Sources A and G await access. |
-| R21.3 | A concise, evidence-based architecture and migration assessment is reported. | 0 | in progress | | |
-| R21.4 | A development branch is created. | 1 | planned | | |
-| R21.5 | The portal service and database are established. | 1 | planned | | |
-| R21.6 | The first working vertical slice is implemented: existing website integration, secure login, imported member, laboratory and replication registry, account claiming, personalised dashboard, and replication and laboratory navigation. | 2 | planned | | Spans phases 1 and 2. |
-| R21.7 | The first slice is tested and its results are documented before the next stage begins. | 2 | planned | | |
-| R21.8 | Implementation continues in coherent, verified increments beyond planning and mock-up. | 3 | planned | | Applies from phase 3 onwards. |
+| R21.3 | A concise, evidence-based architecture and migration assessment is reported. | 0 | implemented | `docs/ARCHITECTURE.md`, `docs/MIGRATION_PLAN.md` | |
+| R21.4 | A development branch is created. | 1 | implemented | `docs/IMPLEMENTATION_STATUS.md` | |
+| R21.5 | The portal service and database are established. | 1 | in progress | `portal/`, `firestore.rules` | Built and run on the Firebase emulators. No Firebase project exists yet. |
+| R21.6 | The first working vertical slice is implemented: existing website integration, secure login, imported member, laboratory and replication registry, account claiming, personalised dashboard, and replication and laboratory navigation. | 2 | in progress | `docs/TEST_REPORT.md` section 4, `tests/e2e/` | Every part of the slice is built and tested on the emulators, on the synthetic demonstration world. The pages have not been exercised against the real imported data, the public-site entry is gated and nothing is deployed. |
+| R21.7 | The first slice is tested and its results are documented before the next stage begins. | 2 | in progress | `docs/TEST_REPORT.md` | Results are recorded for each step. Testing against the real imported data and on a staging project is still to come. |
+| R21.8 | Implementation continues in coherent, verified increments beyond planning and mock-up. | 3 | in progress | | Applies from phase 3 onwards. |
 | R21.9 | Explicit approval is requested before production deployment, destructive migration or live external writes. | 10 | planned | | See R1.12 to R1.16. |
 | R21.10 | Success criterion: one cohesive, authenticated extension of eegmanylabs.org with Notion-like workspace behaviour, Quire-quality project management, faithful migration of existing records including demographics, independent and synchronised Google Workspace documents, distributed EEG dataset tracking, scientific provenance, historical reporting and permissioned collaboration across the entire programme. | 10 | planned | | Migration of demographics and live Google synchronisation depend on the blocked items above. |
 
@@ -559,9 +559,9 @@ The Evidence column is empty at the start of the project. Once an item reaches `
 
 | Status | Items |
 |---|---|
-| planned | 344 |
-| in progress | 21 |
-| implemented | 0 |
-| tested | 0 |
+| planned | 158 |
+| in progress | 62 |
+| implemented | 42 |
+| tested | 103 |
 | blocked | 29 |
 | Total | 394 |

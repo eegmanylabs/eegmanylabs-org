@@ -1,6 +1,6 @@
 import { NavLink } from "react-router";
 import { useAuth } from "@/auth/AuthProvider";
-import { LaboratoryName, PersonName } from "@/components/record-names";
+import { LaboratoryName, PageTitle, PersonName } from "@/components/record-names";
 import { type RecordOf, useLiveQuery } from "@/data";
 import { recordPath } from "@/registry/paths";
 import { favouritesOf, recentsOf } from "@/registry/queries";
@@ -45,6 +45,8 @@ function ShortcutList({
                   <PersonName id={entry.entityId} />
                 ) : entry.entityType === "laboratory" ? (
                   <LaboratoryName id={entry.entityId} />
+                ) : entry.entityType === "page" ? (
+                  <PageTitle id={entry.entityId} />
                 ) : (
                   entry.entityId
                 )}

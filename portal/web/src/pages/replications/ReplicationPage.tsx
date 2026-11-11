@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type Live, type RecordOf, retryFailedLiveData, useLiveDocument, useLiveQuery } from "@/data";
+import { ScopeDashboard } from "@/pages/dashboards/ScopeDashboard";
+import { NotesTab } from "@/pages/workspace/NotesTab";
 import { combineLive, orEmpty } from "@/registry/combine";
 import {
   ALL_PERSONS,
@@ -58,6 +60,8 @@ const TAB_IDS = [
   "contributors",
   "documents",
   "activity",
+  "notes",
+  "dashboard",
 ] as const;
 type TabId = (typeof TAB_IDS)[number];
 
@@ -70,6 +74,8 @@ const TAB_LABELS: Readonly<Record<TabId, string>> = {
   contributors: "Contributors",
   documents: "Documents",
   activity: "Activity",
+  notes: "Notes",
+  dashboard: "Dashboard",
 };
 
 interface TabSpec {
@@ -86,6 +92,9 @@ const hasAny = <T,>(live: Live<readonly T[]>): Live<boolean> =>
     : live;
 
 const NO_PERSON_NAMES: ReadonlyMap<string, string> = new Map();
+
+/** A tab that every reader of the record has. */
+const ALWAYS: Live<boolean> = { status: "ready", data: true, fromCache: false, hasPendingWrites: false };
 
 function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"replications">; viewer: Viewer }) {
   const { studyKey } = replication;
@@ -247,6 +256,10 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
       live: hasAny(history),
       render: () => <ActivityTab entries={ready(history)} statusLabel={statusLabel} />,
     },
+    // Every replication has notes, which every member may read.
+    { id: "notes", live: ALWAYS, render: () => <NotesTab entityType="replication" entityId={studyKey} /> },
+    // Every replication has a dashboard, which every member may read.
+    { id: "dashboard", live: ALWAYS, render: () => <ScopeDashboard scopeType="replication" scopeId={studyKey} /> },
   ];
 
   // The page waits for every section once, so that no tab appears or disappears as data arrives.

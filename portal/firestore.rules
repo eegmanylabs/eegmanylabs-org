@@ -2287,6 +2287,401 @@ service cloud.firestore {
         && validCategory(incoming());
     }
 
+    // ===== Workspace (section 9) =====
+    //
+    // A page carries its resolved audience: `scopeKeys` names who reads it, and `levelKeys`
+    // names, for each of the levels comment, edit and full, the keys that hold at least that
+    // level. The rules read those two fields and never walk the parents or the permissions:
+    // callable functions create, move and share pages and resolve both fields as they do, and
+    // `pageLevelFor` of portal/shared/src/page-access.ts makes the decision of these helpers.
+    // The documents beneath a page are decided by the page, whose path the request gives.
+
+    function pageDocument(pageId) {
+      return get(/databases/$(database)/documents/pages/$(pageId));
+    }
+
+    // Programme administrators and the core team read every page, and every holder of one of
+    // its scope keys reads it.
+    function readsPage(page, a) {
+      return coreWith(a) || page.scopeKeys.hasAny(sessionKeys(a));
+    }
+
+    // `managesPage` of the shared package: pages.manage for the programme, or for the
+    // replication or the laboratory of a page that inherits.
+    function managesPage(page, a) {
+      return programmeWide(a, 'pagesManage')
+        || (page.accessMode == 'inherit'
+          && ((page.replicationId != null && ('rep:' + page.replicationId) in a.capabilities.get('pagesManage', []))
+            || (page.laboratoryId != null && ('lab:' + page.laboratoryId) in a.capabilities.get('pagesManage', []))));
+    }
+
+    // Whether a session holds at least a level on a page: comment, edit or full. Each level
+    // lists the keys of the levels above it, and a manager of the page holds every level.
+    function holdsLevel(page, a, level) {
+      return readsPage(page, a) && (page.levelKeys[level].hasAny(sessionKeys(a)) || managesPage(page, a));
+    }
+
+    // The same two decisions for the page a path names, which must exist: a document beneath a
+    // page that does not exist belongs to nobody.
+    function readsPageAt(pageId) {
+      return pageDocument(pageId) != null && readsPage(pageDocument(pageId).data, access());
+    }
+
+    function holdsLevelAt(pageId, level) {
+      return pageDocument(pageId) != null && holdsLevel(pageDocument(pageId).data, access(), level);
+    }
+
+    // The generation of the content that a page names, or -1 before its first compaction.
+    function headGeneration(page) {
+      return page.contentHead == null ? -1 : page.contentHead.generation;
+    }
+
+    // A number of a series with six digits, as `sequenceId` of the shared package writes it.
+    function sixDigits(n) {
+      return ('00000' + string(n))[string(n).size() - 1:string(n).size() + 5];
+    }
+
+    // A page is created, moved beneath another page and shared by callable functions alone.
+    // Its editors rename it, give it an icon, place it among its siblings, mark it as a template
+    // and archive it. An editor who compacts its content moves it to a later generation in the
+    // transaction that removes the merged updates (D-010): the chunks of that generation are
+    // written first, so the page names a generation only once its last chunk exists.
+    // Reads: 2 (access, and the last chunk of the generation that a compaction names).
+    match /pages/{pageId} {
+      function pagesRequired() {
+        return [
+          'parentPageId', 'ancestorPageIds', 'kind', 'title', 'order', 'isTemplate', 'accessMode', 'replicationId',
+          'laboratoryId', 'scopeKeys', 'levelKeys', 'contentHead', 'mentionUids', 'tagIds', 'lastEditedBy'
+        ];
+      }
+      function pagesEditable() { return ['title', 'icon', 'order', 'isTemplate', 'contentHead']; }
+
+      // An order key of portal/shared/src/order.ts: digits and small letters, not ending in 0.
+      function validPage(d) {
+        return shortText(d.title)
+          && (!('icon' in d) || (d.icon is string && d.icon.matches('(?s)^.{1,16}$')))
+          && d.order.matches('^[0-9a-z]{0,99}[1-9a-z]$')
+          && d.isTemplate is bool;
+      }
+
+      // A compaction changes the head of the content and nothing else: a later generation, at
+      // the request time, whose last chunk exists.
+      function compacted(d) {
+        return changed().hasOnly(touchFields().concat(['contentHead']))
+          && d.contentHead.keys().hasOnly(['generation', 'chunkCount', 'byteLength', 'stateVector', 'compactedAt'])
+          && d.contentHead.keys().hasAll(['generation', 'chunkCount', 'byteLength', 'stateVector', 'compactedAt'])
+          && d.contentHead.generation is int
+          && d.contentHead.generation > headGeneration(resource.data)
+          && d.contentHead.generation <= 999999
+          && d.contentHead.chunkCount is int
+          && d.contentHead.chunkCount >= 1
+          && d.contentHead.chunkCount <= 10000
+          && d.contentHead.byteLength is int
+          && d.contentHead.byteLength >= 0
+          && d.contentHead.stateVector is bytes
+          && d.contentHead.stateVector.size() <= 102400
+          && d.contentHead.compactedAt == request.time
+          && exists(/databases/$(database)/documents/pages/$(pageId)/content/$(sixDigits(d.contentHead.generation) + '__' + sixDigits(d.contentHead.chunkCount - 1)));
+      }
+
+      allow read: if isMember() && readsPage(resource.data, access()) && boundedRead();
+      allow update: if isMember()
+        && holdsLevel(resource.data, access(), 'edit')
+        && updatedNow(incoming(), stampFields().concat(pagesEditable()), pagesRequired())
+        && validPage(incoming())
+        && (incoming().contentHead == resource.data.contentHead || compacted(incoming()));
+    }
+
+    // The merged snapshot of a page, in chunks of one generation. The editor who compacts the
+    // page writes the chunks of a later generation before the page names it, and removes the
+    // chunks of an earlier one after. No chunk is ever changed.
+    // Reads: 2 (access, the page).
+    match /pages/{pageId}/content/{chunkId} {
+      function pageContentFields() { return ['pageId', 'generation', 'index', 'snapshot']; }
+      function pageContentRequired() { return ['pageId', 'generation', 'index', 'snapshot']; }
+
+      allow read: if isMember() && readsPageAt(pageId) && boundedRead();
+      allow create: if isMember()
+        && holdsLevelAt(pageId, 'edit')
+        && appendedNow(incoming(), pageContentFields(), pageContentRequired())
+        && incoming().pageId == pageId
+        && incoming().generation is int
+        && incoming().generation <= 999999
+        && incoming().generation > headGeneration(pageDocument(pageId).data)
+        && incoming().index is int
+        && incoming().index >= 0
+        && incoming().index < 10000
+        && chunkId == sixDigits(incoming().generation) + '__' + sixDigits(incoming().index)
+        && incoming().snapshot is bytes
+        && incoming().snapshot.size() <= 1000000;
+      allow delete: if isMember()
+        && holdsLevelAt(pageId, 'edit')
+        && resource.data.generation < headGeneration(pageDocument(pageId).data);
+    }
+
+    // The Yjs updates of a page that await compaction. Its editors append them, each in their
+    // own name. No update is ever changed, and one is removed only by the compaction that merged
+    // it, in the transaction that moves the page to a later generation: a plain delete, and a
+    // delete beside any other change of the page, are refused.
+    // Reads: 2 (access, the page, which is read before and after the request).
+    match /pages/{pageId}/updates/{updateId} {
+      function pageUpdatesFields() { return ['pageId', 'updateId', 'index', 'count', 'update', 'uid', 'clientId']; }
+      function pageUpdatesRequired() { return ['pageId', 'updateId', 'index', 'count', 'update', 'uid', 'clientId']; }
+
+      allow read: if isMember() && readsPageAt(pageId) && boundedRead();
+      allow create: if isMember()
+        && holdsLevelAt(pageId, 'edit')
+        && autoId(updateId)
+        && appendedNow(incoming(), pageUpdatesFields(), pageUpdatesRequired())
+        && incoming().pageId == pageId
+        && incoming().uid == request.auth.uid
+        && incoming().updateId is string
+        && incoming().updateId.matches('^[A-Za-z0-9]{1,40}$')
+        && incoming().count is int
+        && incoming().count >= 1
+        && incoming().count <= 1000
+        && incoming().index is int
+        && incoming().index >= 0
+        && incoming().index < incoming().count
+        && incoming().update is bytes
+        && incoming().update.size() <= 1000000
+        && incoming().clientId is int
+        && incoming().clientId >= 0;
+      allow delete: if isMember()
+        && holdsLevelAt(pageId, 'edit')
+        && headGeneration(getAfter(/databases/$(database)/documents/pages/$(pageId)).data) > headGeneration(pageDocument(pageId).data);
+    }
+
+    // Versions are saved by a callable function for editors, which reads the stored content.
+    // Reads: 2 (access, the page).
+    match /pages/{pageId}/versions/{versionId} {
+      allow read: if isMember() && readsPageAt(pageId) && boundedRead();
+    }
+
+    // Reads: 2 (access, the page).
+    match /pages/{pageId}/versions/{versionId}/chunks/{chunkId} {
+      allow read: if isMember() && readsPageAt(pageId) && boundedRead();
+    }
+
+    // The permissions of a restricted page are set by the callable function setPageSharing,
+    // which resolves the audience of the page and of what inherits it in the same transaction.
+    // Reads: 2 (access, the page).
+    match /pages/{pageId}/permissions/{permissionId} {
+      allow read: if isMember() && readsPageAt(pageId) && boundedRead();
+    }
+
+    // A thread of comments on a page, anchored to a selection of its text or to the page as a
+    // whole. It copies the audience of the page, whose holders of the level comment open and
+    // resolve it. The anchor lives here and not in the page body, so commenting writes nothing
+    // into the page (D-010). Trusted code rewrites the copy when the audience of the page changes.
+    // Reads: 2 (access, the page).
+    match /threads/{threadId} {
+      function threadsFields() {
+        return [
+          'targetType', 'targetId', 'anchor', 'restricted', 'replicationId', 'laboratoryId', 'scopeKeys',
+          'resolvedAt', 'resolvedBy'
+        ];
+      }
+      function threadsRequired() {
+        return [
+          'targetType', 'targetId', 'restricted', 'replicationId', 'laboratoryId', 'scopeKeys', 'resolvedAt',
+          'resolvedBy'
+        ];
+      }
+      function threadsEditableByCommenter() { return ['resolvedAt', 'resolvedBy']; }
+
+      function validAnchor(anchor) {
+        return anchor.keys().hasOnly(['blockId', 'field', 'from', 'to', 'quote'])
+          && anchor.get('blockId', 'x') is string
+          && anchor.get('blockId', 'x').matches('(?s)^.{1,200}$')
+          && anchor.get('field', 'x') is string
+          && anchor.get('field', 'x').matches('^[^./]{1,300}$')
+          && anchor.get('from', 'x') is string
+          && anchor.get('from', 'x').matches('(?s)^.{1,1000}$')
+          && anchor.get('to', 'x') is string
+          && anchor.get('to', 'x').matches('(?s)^.{1,1000}$')
+          && anchor.get('quote', 'x') is string
+          && anchor.get('quote', 'x').matches('(?s)^.{1,300}$');
+      }
+
+      // The page exists, the caller may comment on it, and the thread copies its audience.
+      function onPageItCopies(d) {
+        return d.targetType == 'page'
+          && docId(d.targetId)
+          && holdsLevelAt(d.targetId, 'comment')
+          && d.scopeKeys == pageDocument(d.targetId).data.scopeKeys
+          && d.replicationId == pageDocument(d.targetId).data.replicationId
+          && d.laboratoryId == pageDocument(d.targetId).data.laboratoryId;
+      }
+
+      allow read: if isMember() && (core() || holdsScopeOf(resource.data)) && boundedRead();
+      allow create: if isMember()
+        && autoId(threadId)
+        && createdNow(incoming(), threadsFields(), threadsRequired())
+        && onPageItCopies(incoming())
+        && incoming().restricted == false
+        && incoming().resolvedAt == null
+        && incoming().resolvedBy == null
+        && (!('anchor' in incoming()) || validAnchor(incoming().anchor));
+      // Resolving names the caller at the request time, and reopening clears both.
+      allow update: if isMember()
+        && resource.data.targetType == 'page'
+        && holdsLevelAt(resource.data.targetId, 'comment')
+        && updatedNow(incoming(), touchFields().concat(threadsEditableByCommenter()), threadsRequired())
+        && signedNowOrNot(incoming().resolvedBy, incoming().resolvedAt);
+    }
+
+    // A comment of a thread, written by a holder of the level comment on the page of the thread
+    // in their own name, beside the thread or after it. Its author edits it and removes it by
+    // setting `deletedAt`. It copies the audience of the thread.
+    // Reads: 3 (access, the thread as it stands after the request, its page).
+    match /threads/{threadId}/comments/{commentId} {
+      function threadCommentsFields() {
+        return [
+          'threadId', 'authorUid', 'body', 'mentionUids', 'editedAt', 'deletedAt', 'replicationId', 'laboratoryId',
+          'scopeKeys'
+        ];
+      }
+      function threadCommentsRequired() {
+        return ['threadId', 'body', 'mentionUids', 'editedAt', 'deletedAt', 'replicationId', 'laboratoryId', 'scopeKeys'];
+      }
+      function threadCommentsEditableByAuthor() { return ['body', 'mentionUids', 'editedAt', 'deletedAt']; }
+
+      function threadAfter() {
+        return getAfter(/databases/$(database)/documents/threads/$(threadId));
+      }
+
+      function validComment(d) {
+        return d.body is string
+          && d.body.size() >= 1
+          && richText(d.body)
+          && d.mentionUids is list
+          && d.mentionUids.size() <= 50
+          && docIds(d.mentionUids);
+      }
+
+      allow read: if isMember() && (core() || holdsScopeOf(resource.data)) && boundedRead();
+      allow create: if isMember()
+        && autoId(commentId)
+        && createdNow(incoming(), threadCommentsFields(), threadCommentsRequired())
+        && incoming().threadId == threadId
+        && incoming().authorUid == request.auth.uid
+        && threadAfter() != null
+        && threadAfter().data.targetType == 'page'
+        && holdsLevelAt(threadAfter().data.targetId, 'comment')
+        && incoming().scopeKeys == threadAfter().data.scopeKeys
+        && incoming().replicationId == threadAfter().data.replicationId
+        && incoming().laboratoryId == threadAfter().data.laboratoryId
+        && incoming().editedAt == null
+        && incoming().deletedAt == null
+        && validComment(incoming());
+      allow update: if isMember()
+        && resource.data.get('authorUid', null) == request.auth.uid
+        && resource.data.deletedAt == null
+        && updatedNow(incoming(), touchFields().concat(threadCommentsEditableByAuthor()), threadCommentsRequired())
+        && incoming().editedAt == request.time
+        && (incoming().deletedAt == null || incoming().deletedAt == request.time)
+        && validComment(incoming());
+    }
+
+    // Reads: 1 (access).
+    match /{path=**}/comments/{commentId} {
+      allow read: if isMember() && (core() || holdsScopeOf(resource.data)) && boundedRead();
+    }
+
+    // ===== Databases, custom properties, views and dashboards (D-011) =====
+    //
+    // A database beneath a page copies the audience of the page in `scopeKeys` and `levelKeys`,
+    // which trusted code keeps current, and its level is decided on the page itself. Property
+    // definitions, the values of rows and of restricted custom properties, and the widgets of a
+    // dashboard may each be a list or a map, which no rule can check element by element, so
+    // callable functions validate and write them. The browser computes every view (section 15).
+
+    function databaseDocument(databaseId) {
+      return get(/databases/$(database)/documents/databases/$(databaseId));
+    }
+
+    // Whoever reads a database reads its rows: the readers of its parent page, as copied.
+    function readsDatabaseAt(databaseId) {
+      return databaseDocument(databaseId) != null && readsPage(databaseDocument(databaseId).data, access());
+    }
+
+    // A database. Its editors, who hold the level edit on its parent page, rename it, describe
+    // it, give it an icon and archive it. It is created and given properties by functions.
+    // Reads: 2 (access, and the parent page for an update).
+    match /databases/{databaseId} {
+      function databasesEditableByEditor() { return ['name', 'description', 'icon', 'archivedAt']; }
+
+      allow read: if isMember() && readsPage(resource.data, access()) && boundedRead();
+      allow update: if isMember()
+        && holdsLevelAt(resource.data.parentPageId, 'edit')
+        && updatedNow(incoming(), stampFields().concat(databasesEditableByEditor()), ['name'])
+        && shortText(incoming().name)
+        && (!('description' in incoming()) || (incoming().description is string && longText(incoming().description)))
+        && (!('icon' in incoming()) || (incoming().icon is string && incoming().icon.matches('(?s)^.{1,16}$')));
+    }
+
+    // The rows of a database, read as the database. A callable function writes them for its
+    // editors and checks each value against its property.
+    // Reads: 2 (access, the database).
+    match /databases/{databaseId}/rows/{rowId} {
+      allow read: if isMember() && readsDatabaseAt(databaseId) && boundedRead();
+    }
+
+    // The custom properties of a core collection, which every member reads. A callable function
+    // defines them for holders of lookups.manage.
+    // Reads: 1 (access).
+    match /collectionSchemas/{collectionKey} {
+      allow read: if isMember() && boundedRead();
+    }
+
+    // The values of the restricted custom properties of a core record, read within its scope.
+    // A callable function writes them for those who may change the record.
+    // Reads: 1 (access).
+    match /replications/{studyKey}/private/custom {
+      allow get: if isMember() && (core() || onTeam(studyKey));
+    }
+
+    // Reads: 1 (access).
+    match /laboratories/{laboratoryId}/private/custom {
+      allow get: if isMember() && (core() || inLaboratory(laboratoryId));
+    }
+
+    // Reads: 2 (access, the participation).
+    match /participations/{participationId}/private/custom {
+      allow get: if isMember() && (core() || withinUnit(participation(participationId)));
+    }
+
+    // Read as the contact document of the person.
+    // Reads: 2 (access, the person).
+    match /persons/{personId}/private/custom {
+      allow get: if isActive()
+        && (person(personId).userId == request.auth.uid
+          || (member()
+            && (canForProgramme('peopleContactRead')
+              || access().contactReplicationIds.hasAny(person(personId).replicationIds)
+              || access().contactLaboratoryIds.hasAny(person(personId).laboratoryIds))));
+    }
+
+    // A view: its owner reads it alone until it is shared, and every member afterwards. A
+    // callable function saves it, which validates its configuration, and its owner deletes it.
+    // Reads: 1 (access).
+    match /views/{viewId} {
+      allow read: if isActive()
+        && (resource.data.ownerUid == request.auth.uid || (member() && resource.data.isShared == true))
+        && boundedRead();
+      allow delete: if isMember() && resource.data.ownerUid == request.auth.uid;
+    }
+
+    // A dashboard: a user's own is read by that user alone, and every other by every member. A
+    // callable function saves it, which validates each widget.
+    // Reads: 1 (access).
+    match /dashboards/{dashboardId} {
+      allow read: if isActive()
+        && (resource.data.ownerUid == request.auth.uid || (member() && resource.data.ownerUid == null))
+        && boundedRead();
+    }
+
     // ===== Scientific outputs and governance (section 11) =====
 
     // The scope fields of an output that names a replication are that replication's key, and
@@ -2723,6 +3118,13 @@ service cloud.firestore {
 
     // The audit trail and the outbound mail are written by trusted code and have no rule: no
     // client reads or writes them. An administrator consults the trail through a function.
+
+    // An entry of activity is read by the audience of the record it is about, which it copies:
+    // for a page, the editors and the time of each spell of editing, without the content.
+    // Reads: 1 (access).
+    match /activity/{eventId} {
+      allow read: if isMember() && (core() || holdsScopeOf(resource.data)) && boundedRead();
+    }
 
     // Reads: 1 (access).
     match /integrityReports/{runId} {

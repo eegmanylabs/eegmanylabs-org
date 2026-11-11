@@ -6,11 +6,12 @@
 // must declare, so that a query, its rule and its index are added together.
 // Everything here is synthetic: fictitious accounts, people and studies on the example.org domain.
 import type { ListableCollectionKey } from "@eegml/shared";
-import { COLLECTIONS, MEMBERS_SCOPE_KEY } from "@eegml/shared";
+import { COLLECTIONS, entityRefId, MEMBERS_SCOPE_KEY } from "@eegml/shared";
 import type { DocumentData, Firestore, Query } from "firebase/firestore";
 import type { LiveQuery, QueryOperator, QueryValue } from "../../web/src/data/query-spec";
 import { queryReference } from "../../web/src/data/refs";
 import {
+  autoId,
   CALLERS,
   type CallerKind,
   OWN_LABORATORY,
@@ -70,6 +71,9 @@ function catalogued<K extends ListableCollectionKey>(
 
 const heldBy = (kind: CallerKind): readonly string[] => CALLERS[kind].access?.scopeKeys ?? [];
 const LIMIT = 200;
+/** The page and the thread of the world (fixtures.ts). */
+const PAGE = entityRefId("replication", OWN_REPLICATION);
+const THREAD = autoId("stored thread");
 
 export const QUERY_CATALOGUE: readonly CataloguedQuery[] = [
   // What sits beneath participations, read across them within a scope.
@@ -344,6 +348,146 @@ export const QUERY_CATALOGUE: readonly CataloguedQuery[] = [
     within: [],
     where: [["status", "==", "open"]],
     limit: LIMIT,
+  }),
+
+  // The workspace. Programme administrators and the core team read every page, so their
+  // queries name no scope, and every other reader names the keys of the session.
+  catalogued("the pages of the workspace that a member reads", "member", "scopeKeys", {
+    collection: "pages",
+    within: [],
+    where: [
+      ["kind", "==", "custom"],
+      ["scopeKeys", "array-contains-any", heldBy("member")],
+    ],
+    limit: 1_000,
+  }),
+  catalogued("every page of the workspace, for the programme", "admin", null, {
+    collection: "pages",
+    within: [],
+    where: [["kind", "==", "custom"]],
+    limit: 1_000,
+  }),
+  catalogued("the threads of a page", "ownLabMember", "scopeKeys", {
+    collection: "threads",
+    within: [],
+    where: [
+      ["targetId", "==", PAGE],
+      ["scopeKeys", "array-contains-any", heldBy("ownLabMember")],
+    ],
+    limit: LIMIT,
+  }),
+  catalogued("the threads of a page, for the programme", "admin", null, {
+    collection: "threads",
+    within: [],
+    where: [["targetId", "==", PAGE]],
+    limit: LIMIT,
+  }),
+  catalogued("the comments of a thread", "ownLabMember", "scopeKeys", {
+    collection: "threadComments",
+    within: [THREAD],
+    where: [["scopeKeys", "array-contains-any", heldBy("ownLabMember")]],
+    limit: LIMIT,
+  }),
+  catalogued("the versions of a page, newest first", "member", null, {
+    collection: "pageVersions",
+    within: [PAGE],
+    orderBy: [["createdAt", "desc"]],
+    limit: 50,
+  }),
+  catalogued("the updates of a page that other editors wrote", "ownTeam", null, {
+    collection: "pageUpdates",
+    within: [PAGE],
+    where: [["clientId", "!=", 42]],
+    limit: 1_000,
+  }),
+  catalogued("the activity of a page, newest first", "member", "scopeKeys", {
+    collection: "activity",
+    within: [],
+    where: [
+      ["entityId", "==", PAGE],
+      ["scopeKeys", "array-contains-any", heldBy("member")],
+    ],
+    orderBy: [["createdAt", "desc"]],
+    limit: 50,
+  }),
+  catalogued("the activity of a page, newest first, for the programme", "admin", null, {
+    collection: "activity",
+    within: [],
+    where: [["entityId", "==", PAGE]],
+    orderBy: [["createdAt", "desc"]],
+    limit: 50,
+  }),
+  // Databases, views and dashboards (D-011). A database copies the audience of its page.
+  catalogued("the databases beneath a page that a member reads", "member", "scopeKeys", {
+    collection: "databases",
+    within: [],
+    where: [
+      ["parentPageId", "==", PAGE],
+      ["scopeKeys", "array-contains-any", heldBy("member")],
+    ],
+    limit: LIMIT,
+  }),
+  catalogued("the databases beneath a page, for the programme", "admin", null, {
+    collection: "databases",
+    within: [],
+    where: [["parentPageId", "==", PAGE]],
+    limit: LIMIT,
+  }),
+  catalogued("every database that a member reads", "member", "scopeKeys", {
+    collection: "databases",
+    within: [],
+    where: [["scopeKeys", "array-contains-any", heldBy("member")]],
+    limit: 1_000,
+  }),
+  catalogued("the views of a collection that the caller owns", "owner", "ownerUid", {
+    collection: "views",
+    within: [],
+    where: [
+      ["collectionKey", "==", "core:participations"],
+      ["ownerUid", "==", OWNER_UID],
+    ],
+    limit: LIMIT,
+  }),
+  catalogued("the shared views of a collection", "member", "isShared", {
+    collection: "views",
+    within: [],
+    where: [
+      ["collectionKey", "==", "core:participations"],
+      ["isShared", "==", true],
+    ],
+    limit: LIMIT,
+  }),
+  catalogued("the personal dashboards of the caller", "owner", "ownerUid", {
+    collection: "dashboards",
+    within: [],
+    where: [["ownerUid", "==", OWNER_UID]],
+    limit: LIMIT,
+  }),
+  catalogued("the dashboards of the programme, the replications and the laboratories", "member", "ownerUid", {
+    collection: "dashboards",
+    within: [],
+    where: [["ownerUid", "==", null]],
+    limit: LIMIT,
+  }),
+
+  catalogued("the latest activity that a member reads, for a dashboard", "member", "scopeKeys", {
+    collection: "activity",
+    within: [],
+    where: [["scopeKeys", "array-contains-any", heldBy("member")]],
+    orderBy: [["createdAt", "desc"]],
+    limit: 20,
+  }),
+
+  // Made by the trigger that records a spell of editing, with the Admin SDK.
+  catalogued("the latest spell of editing of one account on a page", null, null, {
+    collection: "activity",
+    within: [],
+    where: [
+      ["entityId", "==", PAGE],
+      ["actorUid", "==", "uid-own-team"],
+      ["createdAt", ">=", new Date("2026-01-01T00:00:00Z")],
+    ],
+    limit: 1,
   }),
 
   // Made by the merge of two records of a person, with the Admin SDK.

@@ -22,13 +22,14 @@ describe("the navigation registry", () => {
     }
   });
 
-  it("shows Home, the directory and the account page to a signed-in account and nothing to anyone else", () => {
+  it("shows Home, the directory, the dashboards and the account page to a signed-in account and nothing to anyone else", () => {
     expect(visibleNavigation(new Set<Capability>(["portal.use"])).map((item) => item.label)).toEqual([
       "Home",
       "Replications",
       "Laboratories",
       "Members",
       "Readiness",
+      "Dashboards",
       "Account and security",
     ]);
     expect(visibleNavigation(new Set())).toEqual([]);
@@ -44,6 +45,7 @@ describe("the navigation registry", () => {
       "/labs",
       "/members",
       "/readiness",
+      "/dashboards",
       "/account",
     ]);
   });
@@ -68,6 +70,7 @@ describe("the navigation registry", () => {
       "laboratories",
       "members",
       "readiness",
+      "dashboards",
       "account",
       "admin-audit",
       "admin-integrity",

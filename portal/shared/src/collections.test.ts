@@ -148,11 +148,8 @@ describe("the enforcement of an entry", () => {
       [
         // The review queue for affiliation strings, which waits for the reconciliation pages.
         "institutionCandidates",
-        // Restricted custom values, which wait for custom properties.
-        "personCustom",
-        "laboratoryCustom",
-        "replicationCustom",
-        "participationCustom",
+        // Restricted custom values of the collections whose features are not built yet. Those of
+        // persons, laboratories, replications and participations are built with custom properties.
         "taskCustom",
         "datasetCustom",
         "manuscriptCustom",
@@ -165,21 +162,9 @@ describe("the enforcement of an entry", () => {
         "tasks",
         "tags",
         "reminders",
-        // Pages, threads, attachments, databases, views and dashboards.
-        "pages",
-        "pageContent",
-        "pageUpdates",
-        "pageVersions",
-        "pageVersionChunks",
-        "pagePermissions",
-        "threads",
-        "threadComments",
+        // Attachments. Pages and their threads are built (D-010), and so are databases, custom
+        // properties, views and dashboards (D-011).
         "attachments",
-        "databases",
-        "databaseRows",
-        "collectionSchemas",
-        "views",
-        "dashboards",
         // Storage endpoints, datasets and processing runs.
         "storageEndpoints",
         "storageEndpointConnection",
@@ -212,13 +197,11 @@ describe("the enforcement of an entry", () => {
         "automationRules",
         "automationRuns",
         "scheduledReports",
-        "searchIndex",
         // Written by triggers of the first slice, and read by features that come later.
-        "activity",
         "eventFailures",
       ].sort(),
     );
-    expect(COLLECTION_ENTRIES.filter((entry) => entry.enforcement === "enforced")).toHaveLength(82);
+    expect(COLLECTION_ENTRIES.filter((entry) => entry.enforcement === "enforced")).toHaveLength(101);
   });
 
   it("never opens a document beneath a parent that is still closed", () => {
@@ -270,6 +253,8 @@ describe("the identifier rule of an entry", () => {
       "contributorTableId",
       "contributorId",
       "documentLinkSlotId",
+      // The dashboard of a scope, which the registry calls opaque beside personal dashboards.
+      "scopeDashboardId",
     ]);
   });
 });
@@ -351,20 +336,27 @@ describe("the access rules of an entry", () => {
     }
   });
 
-  it("never let a client update or delete an append-only document", () => {
+  it("never let a client update an append-only document, and delete one only in the compaction of a page", () => {
+    // The editor who compacts a page removes the updates it merged and the chunks of the
+    // generation it replaced (D-010). Nothing else that is append-only is ever removed.
+    const compacted = ["pageContent", "pageUpdates"];
     for (const entry of COLLECTION_ENTRIES) {
       if (!entry.flags.appendOnly || entry.write.mode !== "client") continue;
-      for (const grant of entry.write.grants) expect(grant.operations, entry.key).toEqual(["create"]);
+      for (const grant of entry.write.grants) {
+        expect(grant.operations, entry.key).toEqual(
+          compacted.includes(entry.key) && grant.operations.includes("delete") ? ["delete"] : ["create"],
+        );
+      }
     }
   });
 
-  it("let a client delete only what is a convenience of one user, or a permission on a page", () => {
+  it("let a client delete only what is a convenience of one user, or what the compaction of a page replaces", () => {
     const deletable = COLLECTION_ENTRIES.filter(
       (entry) =>
         entry.write.mode === "client" && entry.write.grants.some((grant) => grant.operations.includes("delete")),
     ).map((entry) => entry.key);
     expect(deletable.sort()).toEqual(
-      ["pagePermissions", "reminders", "userFavourites", "userRecents", "userSubscriptions", "views"].sort(),
+      ["pageContent", "pageUpdates", "reminders", "userFavourites", "userRecents", "userSubscriptions", "views"].sort(),
     );
   });
 
@@ -410,9 +402,9 @@ describe("the access rules of an entry", () => {
       "outreachContacts",
       "recruitmentReports",
       "forecastRuns",
-      "pageContent",
       "pageVersions",
       "pageVersionChunks",
+      "pagePermissions",
       "storageEndpointConnection",
       "datasetStorageRefLocation",
       "datasetAccessEvents",
@@ -447,7 +439,20 @@ describe("the access rules of an entry", () => {
       "systemSettings",
     ];
     const actual = COLLECTION_ENTRIES.filter((entry) => entry.write.mode === "function").map((entry) => entry.key);
-    expect(actual.sort()).toEqual([...functionOnly, "personCustom"].sort());
+    // Custom properties: the restricted values of every core collection, the rows of databases
+    // and the definitions of core collections are written by callable functions that check each
+    // value against its property, and dashboards by one that checks each widget.
+    const customValues = [
+      "personCustom",
+      "laboratoryCustom",
+      "replicationCustom",
+      "participationCustom",
+      "taskCustom",
+      "datasetCustom",
+      "manuscriptCustom",
+    ];
+    const workspace = ["databaseRows", "collectionSchemas", "dashboards"];
+    expect(actual.sort()).toEqual([...functionOnly, ...customValues, ...workspace].sort());
   });
 
   it("let the owner of a notification set readAt and nothing else", () => {

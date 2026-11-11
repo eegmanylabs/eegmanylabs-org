@@ -3,7 +3,15 @@
 // built from the directory documents the account may load, which hold no restricted field.
 import { searchFold as fold, searchWords } from "@eegml/shared";
 
-export const PALETTE_KINDS = ["recent", "action", "destination", "replication", "member", "laboratory"] as const;
+export const PALETTE_KINDS = [
+  "recent",
+  "action",
+  "destination",
+  "replication",
+  "member",
+  "laboratory",
+  "page",
+] as const;
 export type PaletteKind = (typeof PALETTE_KINDS)[number];
 
 export const PALETTE_KIND_LABELS: Readonly<Record<PaletteKind, string>> = {
@@ -13,6 +21,7 @@ export const PALETTE_KIND_LABELS: Readonly<Record<PaletteKind, string>> = {
   replication: "Replications",
   member: "Members",
   laboratory: "Laboratories",
+  page: "Pages",
 };
 
 export interface PaletteItem {

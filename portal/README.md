@@ -183,6 +183,8 @@ The wrapper also works around one defect. When an outbound proxy is configured t
 | `web/src/components/ui/` | Interface primitives built on Radix with the design tokens |
 | `web/src/components/feedback/` | The standard loading and error states, and `LiveView`, which applies them to live data |
 | `web/src/data/` | The data layer, and the only directory that may import the Firebase SDK |
+| `web/src/views/` | The view of a collection: the data it reads, the toolbar, the six layouts, the editors of values and properties, saved views, dashboards and their widgets |
+| `web/src/editor/` | The page editor: the BlockNote schema with the callout, mention and linked view, the guards, comment anchors, keyboard access and the version preview. It is loaded on demand: outside it, `host.tsx` is loaded lazily, `shortcuts.ts` is imported, and the rest only for its types |
 | `web/src/pages/` | One directory per page. `pages/dev/` holds the page of interface components, which exists in emulator builds only and is what the browser tests check the primitives on |
 | `web/src/styles/tokens.css` | The single source of design tokens |
 | `functions/` | `@eegml/functions`. Cloud Functions, second generation, in `europe-west2` |
@@ -197,6 +199,7 @@ The wrapper also works around one defect. When an outbound proxy is configured t
 | `tests/tools/` | Integration tests of the tools |
 | `tests/e2e/` | Playwright tests of the built application |
 | `tests/architecture/` | Tests that read the source tree: import boundaries, design rules, the contrast of every colour pair in use, the standard fields of every document schema, the agreement of the collection registry with `docs/DATA_MODEL.md`, the agreement of the rules file and the index file with the registry, rules about what may be committed, and a production build whose output is read for anything that belongs to the emulators only |
+| `tests/editor/` | Tests that need BlockNote's types, compiled by `tsconfig.editor.json`: the text extraction of the functions against `@blocknote/server-util` |
 | `tests/support/` | Helpers shared by the suites that use the emulators |
 | `scripts/` | Port derivation, the emulator launcher, the stopping of whole process groups, the `firebase` wrapper, the development launcher and the preview server |
 | `firestore.rules`, `storage.rules`, `firestore.indexes.json` | Security rules and indexes |
@@ -233,6 +236,7 @@ Each kind of change has one place where it starts. The registries below are that
 | A read of live data | Nothing new: `useLiveDocument` and `useLiveQuery` in `web/src/data/live.ts` serve every entry of the collection registry, with the converter built from its schema. A query is described as data (`web/src/data/query-spec.ts`), which is also its key in the subscription cache |
 | An interface primitive | `web/src/components/ui/`, and in the same change the page of interface components in `web/src/pages/dev/`, so the browser tests see it |
 | A colour, or a new combination of two colours | `web/src/styles/tokens.css`, and the table of pairs in `tests/architecture/contrast.test.ts` |
+| A collection that views can show, or a built-in property of one | `shared/src/views/sources.ts` |
 | A command-line tool | A file in `tools/src/commands/` and an entry in the registry in `tools/src/cli.ts` |
 | A port | The offsets in `scripts/ports.mjs` |
 
@@ -298,7 +302,7 @@ The registry pages read the directory collections as a whole, which every member
 | Page | Shows | Writes |
 |---|---|---|
 | `#/replications` | Every replication in a sortable table with search, filters for status, public stage, theme, listing on the public website and the status of a publication, a count, and a preview beside the list. The state of the list, the open preview included, is in the address | Nothing |
-| `#/replications/:studyKey` | The header and the tabs Overview, Leadership, Laboratories, Hypotheses, Publications, Contributors, Documents and Activity, each present only when it has content. Imported historical figures sit in a panel of their own, with main experiment and resting state side by side and never added. The historical labels of hypotheses are shown as unverified source values, and the "replicated" label only to the team and the programme | Descriptive fields in place, for the leads, the core team and administrators, checked against the shared schema; the status through `setReplicationStatus`; a correction request for an extraction field |
+| `#/replications/:studyKey` | The header and the tabs Overview, Leadership, Laboratories, Hypotheses, Publications, Contributors, Documents and Activity, each present only when it has content, and Notes and Dashboard, which every replication has. Imported historical figures sit in a panel of their own, with main experiment and resting state side by side and never added. The historical labels of hypotheses are shown as unverified source values, and the "replicated" label only to the team and the programme | Descriptive fields in place, for the leads, the core team and administrators, checked against the shared schema; the status through `setReplicationStatus`; a correction request for an extraction field |
 | `#/members` | Every person in a virtualised table with search across name and affiliation, filters for country, replication, laboratory and core team, a count and a preview. Whether a profile is claimed is shown to holders of `claims.review` or `people.manage` | Nothing |
 | `#/members/:personId` | Directory fields, affiliations, replications with roles and laboratories. The contact document is read only where the rules allow it, and a refusal shows nothing. Demographic details are asked of `getPersonDemographics` on request, by the person or a holder of `demographics.read` | The profile addresses for the person and `people.manage`; the ORCID iD through `setPersonOrcid`; a correction request |
 | `#/admin/memberships` | The memberships that wait for review, such as leads on which the sources disagree | `confirmReplicationMembership` |
@@ -326,6 +330,69 @@ Home shows the member's laboratories and, for a coordinator, what needs attentio
 
 `seed:demo` adds to its world three equipment configurations, one of which replaced another, equipment requirements for three replications, the checklist and restricted detail of each participation, two sources, one applied batch with its changes and log, and three items of the review queue. The functions tests are `tests/functions/laboratories.test.ts`, `participations.test.ts` and `imports-console.test.ts`, the rules tests `tests/rules/laboratory-features.test.ts`, and the browser tests `tests/e2e/laboratories.spec.ts` and `imports-console.spec.ts`.
 
+## The workspace
+
+The workspace holds the pages of the programme (D-010, D-011, `docs/DATA_MODEL.md` section 9). A page lives at `#/pages/:pageId`, with breadcrumbs through the pages that contain it, and `#/pages` lists the pages at the top of the workspace, its templates and the archived pages. The sidebar shows the same tree under Workspace; which branches are folded, and whether the whole group is folded, is remembered in `localStorage`. Every replication, laboratory and member has one page for its notes, on the tab Notes of its record, which `openEntityPage` creates the first time anyone opens it, with the audience of the record.
+
+| Action | Where it is decided |
+|---|---|
+| Create a page, inside another or from a template | `createPage`, which copies the template's content and resolves the audience of the parent |
+| Rename, give an icon, reorder among siblings | The rules, as a client update by an editor: `title`, `icon`, `order` (an order key between its neighbours, `shared/src/order.ts`) and `isTemplate` |
+| Move to another parent | `movePage`, which rewrites the audience of the page and of every page inside it |
+| Archive and restore | The rules, as a client update by an editor of `archivedAt` |
+| Share: inherit, or restricted with view, comment, edit and full access for named members, laboratories or teams | `setPageSharing` and `getPageSharing`, for holders of full access. `pageLevelFor` of `shared/src/page-access.ts` is the one statement of the levels, and the helpers `readsPage`, `holdsLevel` and their `At` forms in `firestore.rules` mirror it |
+
+The editor is BlockNote 0.57 with its MPL packages only (`@blocknote/core`, `react`, `mantine`, `code-block`), never `@blocknote/xl-*`. It is loaded on demand: `web/src/editor/` is a chunk of its own, and the rest of the application does not grow with it. It offers paragraphs, headings, bulleted, numbered and check lists, tables, quotes, dividers, code with highlighting, callouts, images and files, the slash menu, the Markdown shortcuts of BlockNote, drag handles, undo and redo, and mentions of members. The slash menu also offers a linked view, which shows a live view of a collection inside the page (see the next section). Images and files are stored under `pages/{pageId}/files/` in Cloud Storage: the Storage rules let the readers of the page read them and its editors add them, 20 MB at most, never replace them.
+
+The content is one Yjs document per page. `web/src/data/page-sync.ts` is the provider that the spike verified: changes are merged and written every two seconds at most (ten while typing goes on) as update documents, every editor follows the updates of the others, applying an update twice changes nothing, and after fifty updates, or a quiet spell, an editor compacts them into chunks of a later generation in one transaction that the rules check step by step. The page shows Saving, Saved, Not saved or Read only. Offline, changes stay in the browser and are sent when the connection is back; the convergence of two editors, a reload and an offline edit are tested in `tests/e2e/workspace.spec.ts`. The two guards of `web/src/editor/guards.ts` work around two defects of BlockNote 0.57 that the spike found: a code block whose language is unknown, and a position that a remote change moved.
+
+Comments are threads anchored to a selection of the text, by Yjs relative positions, or about the page as a whole, with replies, mentions, resolve and reopen, in the panel beside the page. Those with comment access write there and never in the page body. Version history saves a version automatically after a quiet spell of editing when the content changed, and by name on request; a version is shown read only, and restoring it writes a new change that every collaborator receives. Activity lists who edited the page and when, one entry for each spell of editing, from the update documents, with no content.
+
+Three triggers work from the stored documents, and each is idempotent. `pagesOnUpdateCreated` notifies the members newly mentioned in the page who may read it, records the spell of editing and indexes the text. `pagesOnPageWritten` keeps the index and the scope of the threads in line with the page. `threadsOnCommentWritten` notifies the members mentioned in a comment and those who wrote earlier in the thread. The index (`searchIndex`) is scoped like the page, and `searchWorkspace` answers the command palette and the search of the workspace with the pages the account may read. The text is extracted on the server by walking the Yjs document; `tests/editor/page-text.test.ts` proves it gives the same text as the converter of `@blocknote/server-util`.
+
+BlockNote's types do not compile under `exactOptionalPropertyTypes`, so the web package and `tsconfig.editor.json`, which covers `tests/editor/`, leave that option off; every other package keeps it on.
+
+The keyboard reaches everything in the editor except dragging a block with the side menu, which BlockNote offers to the pointer only. The equivalents are Control Shift Up and Down to move a block, Tab and Shift Tab to nest it, Alt F10 to move into the formatting toolbar (the arrow keys move within it and Escape returns to the text), and Control Alt M to comment on the selection. The page lists them under More actions, Keyboard shortcuts. Two further limits remain: the tree and the list of archived pages are not virtualised, which matters only beyond a few hundred pages, and the cursors of others are shown only while they type in the same browser session, because presence is not stored in Firestore. Pages are for members: an external collaborator cannot be given access to one.
+
+The tests are `tests/rules/workspace-features.test.ts` and the matrix for every collection of the workspace, the page files in `tests/rules/storage.rules.test.ts`, `tests/functions/workspace.test.ts` for the callables and triggers, `tests/editor/page-text.test.ts`, and `tests/e2e/workspace.spec.ts` for acceptance scenario AS-7, convergence, offline editing, the keyboard and axe on the page view.
+
+## Databases, views and dashboards
+
+Views are computed in the browser over one authoritative set of documents (D-011, `docs/DATA_MODEL.md` sections 9 and 15). The engine is pure TypeScript in `shared/src/views/`, unit tested beside its code, and the browser applies it to the documents the account may read. The same participation is therefore one document on the programme's dashboard, on the tab Dashboard of its replication and of its laboratory, and in any linked view, and an edit made in one reaches the others through the shared listeners of `web/src/data/live.ts`.
+
+| Part | Where | What it does |
+|---|---|---|
+| Model | `shared/src/views/model.ts` | Values of each property type, the configuration of a property and of a view (filter tree, sorts, grouping, order, hidden properties, widths, search, board, calendar and timeline properties), and the fixed scope of a view |
+| Filters | `shared/src/views/filter.ts` | `and`, `or` and `not` to six levels, operators for each type including empty and not empty, dates relative to today and windows such as the next month. A negated condition holds for an unknown value, and no unknown value counts as zero |
+| Sorting, grouping, rollups, the pipeline | `shared/src/views/compute.ts` | Several sort keys with empty values last, groups in option order with folded groups, rollups through a relation or a backlink (count, count values, sum, average, smallest, largest, percentage ticked, earliest, latest, show values), formulas, search, and the figures of dashboards |
+| Formulas | `shared/src/views/formula.ts` | A tokenizer, a Pratt parser and an evaluator: arithmetic, comparison, `and`, `or`, `not`, `if`, and functions on texts, numbers, lists and dates, referring to a property as `prop("Name")`. No `eval`. An expression holds 2,000 characters and nests 40 deep at most, and an evaluation takes 10,000 steps and 50 milliseconds at most; a failure is the error of that cell |
+| Collections | `shared/src/views/sources.ts` | The registry of collections that views read: `core:replications`, `core:persons` (Members), `core:laboratories`, `core:participations` with the rollup of checklist completion, and `db:<id>` for every database. A custom property never takes the place of a core field |
+| Dashboards | `shared/src/views/dashboard.ts` | The widgets (view, figure, chart, activity, note), the twelve-column grid with moving, resizing and compaction, and the default widgets of the programme, a replication and a laboratory |
+
+Every value that a view writes goes through a callable function, because a value of a property may be a list or a map that no security rule can check element by element.
+
+| Function | Who may call it | What it writes |
+|---|---|---|
+| `createDatabase` | An editor of the parent page | The database, with the audience of the page and a status property |
+| `saveProperty` | An editor of the database; for a core collection, holders of `lookups.manage`, who say whether the values are for every member or restricted to the scope of the record | One property definition, checked: unique options, a relation to a collection that exists, a rollup of a property that exists and a formula that parses. Its type and audience do not change |
+| `saveRecords` | An editor of the database; for a core record, whoever may change it (`replications.manage`, `labs.manage`, `participations.manage` or `people.manage` in its scope) | Rows and their values, custom values in `custom`, restricted ones in `private/custom`, and the core fields that the registry lets a client change, all checked against their property and the strict schema of the record, up to 100 records in one transaction with an audit entry for each |
+| `saveView` | The owner of a view; programme administrators and the core team for a shared one | A personal or shared view |
+| `openDashboard` | Any member | The dashboard of the programme, a replication or a laboratory, created on first use under `scopeType__scopeId` |
+| `saveDashboard` | The owner of a personal dashboard; holders of `pages.manage` in the scope of any other | The widgets that changed, each replaced or removed whole |
+
+The rules read databases as their page (a copy of its audience, which `pagesOnPageWritten` keeps current), rows through their database, collection schemas by every member, restricted custom values within the scope of the record, a view by its owner until it is shared, and a dashboard of a user by that user. The tests are `tests/rules/views-features.test.ts` and the matrix, `tests/functions/views.test.ts`, `tests/e2e/views.spec.ts`, and `tests/e2e/workspace.table-performance.spec.ts`, which runs last because its 5,000 rows queue ten thousand runs of the audit trigger.
+
+| Page | Shows | Writes |
+|---|---|---|
+| `#/databases/:databaseId` | A database in a table, a list, a board, a calendar, a timeline or a gallery, with search, filter, sorts, grouping, the properties shown and saved views | Rows and values in place and in bulk, properties, the name, archiving |
+| `#/dashboards` | The programme's dashboard, the dashboards of replications and laboratories that were opened, and the member's own | A personal dashboard |
+| `#/dashboards/:dashboardId`, the tab Dashboard of a replication and of a laboratory | The widgets on the grid | Widgets added, removed, moved and resized |
+| A page of the workspace | Its databases, and linked view blocks | A database beneath the page; the records and the view of a linked view block, kept in the block |
+
+The table renders only the rows in view (`ROW_HEIGHT` 36 pixels), so 5,000 rows scroll without a long task above 200 milliseconds, which the browser tests measure. Its columns are resized with the pointer or with the arrow keys on their handle and reordered by dragging their header or with Move left and Move right in its menu. A board moves a card by dragging it or with its Move to control, and a dashboard moves and resizes a widget by dragging its handle or, with the handle focused, with Enter, the arrow keys and Shift with the arrow keys. A value of the type `file` is a list of links, each a name and a web address: files of pages stay in Cloud Storage.
+
+What is left out: a relation or a rollup to a database is read for the databases that the viewed database points at, one level deep; a rollup reads the stored values of the related records and not their formulas; the timeline draws 300 records at most, the list 500 and the gallery 300, each saying so; and the widgets for embedded content, calendars and timelines of the data model are views of the type calendar or timeline.
+
 ## Sessions, tabs and what stays in the browser
 
 Firestore keeps a copy of the documents an account has read in IndexedDB, shared between the tabs of one browser. One tab at a time talks to the server for all of them. Three rules follow from that, and `web/src/auth/AuthProvider.tsx` and `web/src/data/local-data.ts` implement them.
@@ -344,7 +411,9 @@ Some things cannot be proven with the emulators and wait for a staging project. 
 
 Three further behaviours are verified on the emulators only. The Firestore emulator ends an open listener as soon as the rules refuse its account. Whether production does the same, or goes on delivering until the listener reconnects, is not known, and the page handles both: the second case is covered by unit tests alone. Callable functions accept browser calls only from the origins in the parameter `PORTAL_ORIGINS`, which is empty by default so that a deployment that forgets it fails closed. The emulator accepts every origin, so the restriction itself has not been exercised. The lifetime of six hours for a remembered sign-in request is a conservative reading of how long a link lasts. When it is too short, a link that still works asks for the address again, and nothing worse.
 
-The web application is currently one JavaScript file of about 1.3 MB, most of which is the Firestore SDK, so Vite prints a warning about its size. Splitting it by route becomes worthwhile when more pages exist.
+The web application's main file is about 1.3 MB, most of which is the Firestore SDK, and the editor is a separate chunk loaded with the first page, so Vite prints warnings about their size.
+
+Two behaviours of the workspace wait for staging too. The browser reads images and files of pages with `getBlob`, which needs a CORS configuration on the production bucket that allows the portal's origin; the Storage emulator needs none. The list queries of the editor's synchronisation are limited to 1,000 documents, as the rules require of every list; compaction keeps far fewer updates than that, and a page whose updates outgrew it would be complete again after the next compaction.
 
 ## Known advisories
 

@@ -60,6 +60,7 @@ import {
   replicationScopeKey,
   roleAssignmentId,
   roleScopeKey,
+  scopeDashboardId,
   searchFold,
   searchIndexId,
   sequenceId,
@@ -233,6 +234,7 @@ const GOLDEN: { readonly [Name in IdBuilderName]: readonly [actual: string | nul
   mailId: [mailId("synthetic.person@example.org", "claimDecision", "event-1", SECRET), "fe02e91bf82aeebfc6dc"],
   eventFailureId: [eventFailureId("searchIndexer", "0a1b2c3d-event"), "searchIndexer__0a1b2c3d-event"],
   searchIndexId: [searchIndexId("page", "replication__AmodioJost2007", 0), "page__replication__AmodioJost2007__000000"],
+  scopeDashboardId: [scopeDashboardId("laboratory", "lab__0f3a"), "laboratory__lab__0f3a"],
 };
 
 describe("the identifier builders", () => {

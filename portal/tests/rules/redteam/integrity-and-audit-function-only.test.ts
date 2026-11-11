@@ -75,13 +75,14 @@ describe("every collection that only trusted code writes, and every collection t
     for (const key of [
       "recruitmentReports",
       "statusHistory",
-      "pageUpdates",
+      "pageVersions",
+      "pagePermissions",
       "auditEvents",
       "access",
       "roleAssignments",
       "personDemographics",
       "personContact",
-      "threadComments",
+      "searchIndex",
       "mail",
     ]) {
       expect(keys, key).toContain(key);

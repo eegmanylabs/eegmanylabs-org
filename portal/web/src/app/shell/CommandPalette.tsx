@@ -1,7 +1,7 @@
 // Global search and commands, opened with Control or Command and K or from the search control of
 // the top bar. It follows the combobox pattern of WAI-ARIA: the text field keeps focus, the
 // arrow keys move the active option of the list below it, Enter chooses it and Escape closes.
-import type { EntityType } from "@eegml/shared";
+import { type EntityType, searchWorkspaceContract, type WorkspaceSearchResult } from "@eegml/shared";
 import { Search } from "lucide-react";
 import { Dialog as RadixDialog } from "radix-ui";
 import { type KeyboardEvent, useEffect, useId, useMemo, useState } from "react";
@@ -10,10 +10,10 @@ import { visibleNavigation } from "@/app/navigation";
 import { useAuth } from "@/auth/AuthProvider";
 import { useNavigableCapabilities } from "@/auth/use-privilege";
 import { Button } from "@/components/ui/button";
-import { recordRecentVisit, useLiveQuery } from "@/data";
+import { callFunction, recordRecentVisit, useLiveDocuments, useLiveQuery } from "@/data";
 import { orEmpty } from "@/registry/combine";
 import { countOf } from "@/registry/labels";
-import { laboratoryPath, memberPath, recordPath, replicationPath } from "@/registry/paths";
+import { laboratoryPath, memberPath, pagePath, recordPath, replicationPath } from "@/registry/paths";
 import {
   ALL_ALIASES,
   ALL_LABORATORIES,
@@ -39,7 +39,40 @@ export function isPaletteShortcut(event: Pick<globalThis.KeyboardEvent, "key" | 
   return event.key.toLowerCase() === "k" && (event.ctrlKey || event.metaKey) && !event.altKey;
 }
 
-function usePaletteChoices(open: boolean): readonly Choice[] {
+/** How long the palette waits after the last key before it searches the pages. */
+const PAGE_SEARCH_DELAY_MS = 250;
+
+/**
+ * The pages whose title or text holds every word of the query, which the function
+ * searchWorkspace finds among those the reader may read. The palette asks once typing pauses.
+ */
+function usePageSearch(
+  query: string,
+  enabled: boolean,
+): { readonly query: string; readonly results: readonly WorkspaceSearchResult[] } {
+  const [found, setFound] = useState<{ readonly query: string; readonly results: readonly WorkspaceSearchResult[] }>({
+    query: "",
+    results: [],
+  });
+  useEffect(() => {
+    const typed = query.trim();
+    if (!enabled || typed.length < 2) return;
+    let current = true;
+    const timer = setTimeout(() => {
+      callFunction(searchWorkspaceContract, { query: typed }).then(
+        ({ results }) => current && setFound({ query: typed, results }),
+        () => current && setFound({ query: typed, results: [] }),
+      );
+    }, PAGE_SEARCH_DELAY_MS);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+  }, [query, enabled]);
+  return found;
+}
+
+function usePaletteChoices(open: boolean, query: string): readonly Choice[] {
   const { session, access } = useAuth();
   const capabilities = useNavigableCapabilities();
   const actions = useRegisteredActions();
@@ -53,6 +86,13 @@ function usePaletteChoices(open: boolean): readonly Choice[] {
   const persons = orEmpty(useDirectoryItems(load ? ALL_PERSONS : null));
   const laboratories = orEmpty(useDirectoryItems(load ? ALL_LABORATORIES : null));
   const recents = orEmpty(useLiveQuery(load && uid !== null ? recentsOf(uid) : null));
+  const pages = usePageSearch(query, load);
+  // The titles of the pages among the recent items, read one document each.
+  const recentPageIds =
+    recents.status === "ready"
+      ? recents.data.filter((recent) => recent.entityType === "page").map((recent) => recent.entityId)
+      : [];
+  const recentPages = useLiveDocuments("pages", load ? recentPageIds : null);
 
   return useMemo(() => {
     const list = <T,>(live: { status: string; data?: readonly T[] }): readonly T[] =>
@@ -62,6 +102,7 @@ function usePaletteChoices(open: boolean): readonly Choice[] {
       aliasesOf.set(alias.replicationId, [...(aliasesOf.get(alias.replicationId) ?? []), alias.alias]);
     const personNames = new Map(list(persons).map((person) => [person.id, person.displayName]));
     const laboratoryNames = new Map(list(laboratories).map((laboratory) => [laboratory.id, laboratory.name]));
+    const pageTitles = recentPages.status === "ready" ? recentPages.data : new Map();
     const choices: Choice[] = [
       ...actions.map((action) => ({
         id: `action:${action.id}`,
@@ -115,6 +156,15 @@ function usePaletteChoices(open: boolean): readonly Choice[] {
           path: laboratoryPath(laboratory.id),
           record: { entityType: "laboratory" as const, entityId: laboratory.id },
         })),
+      // The pages that the search found for the query, which matches them by their text as well.
+      ...pages.results.map((result) => ({
+        id: `page:${result.entityId}`,
+        kind: "page" as const,
+        label: result.title,
+        keywords: [pages.query],
+        path: pagePath(result.entityId),
+        record: { entityType: result.entityType, entityId: result.entityId },
+      })),
       ...list(recents).flatMap((recent) => {
         const path = recordPath(recent.entityType, recent.entityId);
         if (path === null) return [];
@@ -123,7 +173,9 @@ function usePaletteChoices(open: boolean): readonly Choice[] {
             ? (personNames.get(recent.entityId) ?? recent.entityId)
             : recent.entityType === "laboratory"
               ? (laboratoryNames.get(recent.entityId) ?? recent.entityId)
-              : recent.entityId;
+              : recent.entityType === "page"
+                ? (pageTitles.get(recent.entityId)?.title ?? "A page")
+                : recent.entityId;
         return [
           {
             id: `recent:${recent.id}`,
@@ -137,7 +189,7 @@ function usePaletteChoices(open: boolean): readonly Choice[] {
       }),
     ];
     return choices;
-  }, [actions, capabilities, linked, replications, aliases, persons, laboratories, recents]);
+  }, [actions, capabilities, linked, replications, aliases, persons, laboratories, recents, pages, recentPages]);
 }
 
 export function CommandPalette() {
@@ -148,7 +200,7 @@ export function CommandPalette() {
   const { session } = useAuth();
   const uid = session.status === "signed-in" ? session.user.uid : null;
   const listboxId = useId();
-  const choices = usePaletteChoices(open);
+  const choices = usePaletteChoices(open, query);
   const groups = useMemo(() => searchPalette(choices, query), [choices, query]);
   const flat = groups.flatMap((group) => group.items);
   const activeIndex = Math.min(active, Math.max(0, flat.length - 1));

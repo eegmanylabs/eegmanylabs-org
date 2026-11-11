@@ -260,3 +260,31 @@ export async function updateParticipationDetail(
     ...touched(uid),
   });
 }
+
+/** Deletes a view of the signed-in account, which the rules let its owner alone do. */
+export async function deleteView(viewId: string): Promise<void> {
+  await deleteDoc(doc(db, COLLECTIONS.views.docPath(viewId)));
+}
+
+/**
+ * Renames, describes or archives a database, which the rules let the editors of its parent page
+ * do. Null removes the description or the icon; `archived` sets or clears `archivedAt`.
+ */
+export async function updateDatabaseFields(
+  uid: string,
+  databaseId: string,
+  patch: {
+    readonly name?: string;
+    readonly description?: string | null;
+    readonly icon?: string | null;
+    readonly archived?: boolean;
+  },
+): Promise<void> {
+  await updateDoc(doc(db, COLLECTIONS.databases.docPath(databaseId)), {
+    ...(patch.name === undefined ? {} : { name: patch.name }),
+    ...(patch.description === undefined ? {} : { description: patch.description ?? deleteField() }),
+    ...(patch.icon === undefined ? {} : { icon: patch.icon ?? deleteField() }),
+    ...(patch.archived === undefined ? {} : { archivedAt: patch.archived ? serverTimestamp() : null }),
+    ...touched(uid),
+  });
+}

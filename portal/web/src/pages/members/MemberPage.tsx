@@ -1,6 +1,6 @@
 import { getPersonDemographicsContract, personDocSchema } from "@eegml/shared";
 import { type ReactNode, useMemo, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 import { formatDate } from "@/app/labels";
 import { ErrorState } from "@/components/feedback/error-state";
 import { LiveView } from "@/components/feedback/live-view";
@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   type RecordOf,
   retryFailedLiveData,
@@ -25,6 +26,7 @@ import {
 import { CORRECTABLE_PERSON_FIELDS, CorrectionRequestDialog } from "@/pages/home/CorrectionRequestDialog";
 import { replicationPath } from "@/pages/replications/replication-display";
 import { Section } from "@/pages/replications/tabs/OverviewTab";
+import { NotesTab } from "@/pages/workspace/NotesTab";
 import {
   countryName,
   LABORATORY_ENTRY_STATUS_LABELS,
@@ -159,6 +161,18 @@ function DemographicsSection({ personId, own }: { personId: string; own: boolean
 }
 
 function PersonRecord({ person, viewer }: { person: Person; viewer: Viewer }) {
+  const [params, setParams] = useSearchParams();
+  const tab = params.get("tab") === "notes" ? "notes" : "profile";
+  const showTab = (value: string) =>
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        if (value === "notes") next.set("tab", "notes");
+        else next.delete("tab");
+        return next;
+      },
+      { replace: true },
+    );
   const affiliations = useLiveQuery(affiliationsOfPerson(person.id));
   const memberships = useLiveQuery(confirmedMembershipsOfPerson(person.id));
   const entries = useLiveQuery(laboratoryEntriesOfPerson(person.id));
@@ -237,167 +251,181 @@ function PersonRecord({ person, viewer }: { person: Person; viewer: Viewer }) {
           ) : null}
         </div>
       </header>
-      <div className="grid gap-4">
-        <Section title="Directory">
-          <Details>
-            <Detail term="Given name">{person.givenName ?? <Unknown />}</Detail>
-            {person.middleName === undefined ? null : <Detail term="Middle name">{person.middleName}</Detail>}
-            <Detail term="Family name">{person.familyName ?? <Unknown />}</Detail>
-            <Detail term="Country">
-              {person.countryCode === undefined ? <Unknown /> : countryName(person.countryCode)}
-            </Detail>
-            <Detail term="ORCID iD">
-              <span className="flex flex-wrap items-center gap-2">
-                {person.orcid === undefined ? (
-                  <Unknown />
-                ) : (
-                  <a
-                    href={`https://orcid.org/${person.orcid}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-fg-accent underline"
-                  >
-                    {person.orcid}
-                  </a>
-                )}
-                {editsLinks ? <OrcidDialog personId={person.id} current={person.orcid ?? null} own={own} /> : null}
-              </span>
-            </Detail>
-            {person.isCoreTeam ? (
-              <Detail term="Core-team roles">{person.coreRoles.join(", ") || <Unknown />}</Detail>
-            ) : null}
-            {LINK_FIELDS.map(linkField)}
-          </Details>
-        </Section>
-        <Section title="Affiliations">
-          <LiveView
-            live={affiliations}
-            loadingLabel="Loading the affiliations"
-            errorTitle="The affiliations could not be loaded."
-            onRetry={retryFailedLiveData}
-          >
-            {(list) => {
-              const current = list.filter((affiliation) => affiliation.archivedAt === null);
-              return current.length === 0 ? (
-                <Unknown>No affiliation is recorded.</Unknown>
-              ) : (
-                <ul className="grid gap-2">
-                  {current.map((affiliation) => (
-                    <li key={affiliation.id} className="flex flex-wrap items-center gap-2">
-                      <span>{affiliation.affiliationSource ?? <Unknown>Affiliation not named</Unknown>}</span>
-                      {affiliation.roleTitle === undefined ? null : (
-                        <span className="text-fg-secondary">{affiliation.roleTitle}</span>
-                      )}
-                      {affiliation.isPrimary ? <Badge tone="outline">Primary</Badge> : null}
-                      {affiliation.endDate === undefined ? null : (
-                        <span className="text-fg-muted">Until {affiliation.endDate}</span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              );
-            }}
-          </LiveView>
-        </Section>
-        <Section title="Replications">
-          <LiveView
-            live={memberships}
-            loadingLabel="Loading the replications"
-            errorTitle="The replications could not be loaded."
-            onRetry={retryFailedLiveData}
-          >
-            {(list) => {
-              const current = list.filter((membership) => membership.archivedAt === null);
-              return current.length === 0 ? (
-                <Unknown>No confirmed membership of a replication.</Unknown>
-              ) : (
-                <Table caption="Replications of this person">
-                  <TableHead>
-                    <TableRow>
-                      <TableHeaderCell>Replication</TableHeaderCell>
-                      <TableHeaderCell>Role</TableHeaderCell>
-                      <TableHeaderCell>Current or former</TableHeaderCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {current.map((membership) => (
-                      <TableRow key={membership.id}>
-                        <TableCell>
-                          <Link
-                            to={replicationPath(membership.replicationId)}
-                            className="text-fg-strong hover:text-fg-accent"
-                          >
-                            {membership.replicationId}
-                          </Link>
-                          {titles.get(membership.replicationId) === undefined ? null : (
-                            <span className="text-fg-secondary"> {titles.get(membership.replicationId)}</span>
+      <Tabs value={tab} onValueChange={showTab}>
+        <TabsList aria-label="Sections of the member">
+          <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsTrigger value="notes">Notes</TabsTrigger>
+        </TabsList>
+        <TabsContent value="profile">
+          <div className="grid gap-4">
+            <Section title="Directory">
+              <Details>
+                <Detail term="Given name">{person.givenName ?? <Unknown />}</Detail>
+                {person.middleName === undefined ? null : <Detail term="Middle name">{person.middleName}</Detail>}
+                <Detail term="Family name">{person.familyName ?? <Unknown />}</Detail>
+                <Detail term="Country">
+                  {person.countryCode === undefined ? <Unknown /> : countryName(person.countryCode)}
+                </Detail>
+                <Detail term="ORCID iD">
+                  <span className="flex flex-wrap items-center gap-2">
+                    {person.orcid === undefined ? (
+                      <Unknown />
+                    ) : (
+                      <a
+                        href={`https://orcid.org/${person.orcid}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-fg-accent underline"
+                      >
+                        {person.orcid}
+                      </a>
+                    )}
+                    {editsLinks ? <OrcidDialog personId={person.id} current={person.orcid ?? null} own={own} /> : null}
+                  </span>
+                </Detail>
+                {person.isCoreTeam ? (
+                  <Detail term="Core-team roles">{person.coreRoles.join(", ") || <Unknown />}</Detail>
+                ) : null}
+                {LINK_FIELDS.map(linkField)}
+              </Details>
+            </Section>
+            <Section title="Affiliations">
+              <LiveView
+                live={affiliations}
+                loadingLabel="Loading the affiliations"
+                errorTitle="The affiliations could not be loaded."
+                onRetry={retryFailedLiveData}
+              >
+                {(list) => {
+                  const current = list.filter((affiliation) => affiliation.archivedAt === null);
+                  return current.length === 0 ? (
+                    <Unknown>No affiliation is recorded.</Unknown>
+                  ) : (
+                    <ul className="grid gap-2">
+                      {current.map((affiliation) => (
+                        <li key={affiliation.id} className="flex flex-wrap items-center gap-2">
+                          <span>{affiliation.affiliationSource ?? <Unknown>Affiliation not named</Unknown>}</span>
+                          {affiliation.roleTitle === undefined ? null : (
+                            <span className="text-fg-secondary">{affiliation.roleTitle}</span>
                           )}
-                        </TableCell>
-                        <TableCell>{MEMBERSHIP_ROLE_LABELS[membership.role]}</TableCell>
-                        <TableCell>{membership.isCurrent ? "Current" : "Former"}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              );
-            }}
-          </LiveView>
-        </Section>
-        <Section title="Laboratories">
-          <LiveView
-            live={entries}
-            loadingLabel="Loading the laboratories"
-            errorTitle="The laboratories could not be loaded."
-            onRetry={retryFailedLiveData}
-          >
-            {(list) => {
-              const current = list.filter((entry) => entry.archivedAt === null);
-              return current.length === 0 ? (
-                <Unknown>
-                  No laboratory lists this person yet. Laboratories are added when they register in the portal.
-                </Unknown>
-              ) : (
-                <ul className="grid gap-2">
-                  {current.map((entry) => (
-                    <li key={entry.id} className="flex flex-wrap items-center gap-2">
-                      <Link to={laboratoryPath(entry.laboratoryId)} className="font-medium text-fg-accent underline">
-                        {laboratoryNames.get(entry.laboratoryId) ?? entry.laboratoryId}
-                      </Link>
-                      <span className="text-fg-secondary">{LABORATORY_ROLE_LABELS[entry.role]}</span>
-                      <Badge tone={entry.status === "confirmed" ? "neutral" : "outline"}>
-                        {LABORATORY_ENTRY_STATUS_LABELS[entry.status]}
-                      </Badge>
-                    </li>
-                  ))}
-                </ul>
-              );
-            }}
-          </LiveView>
-        </Section>
-        {readsContactOf(viewer, person) ? <ContactSection personId={person.id} /> : null}
-        {offersDemographicsOf(viewer, person) ? <DemographicsSection personId={person.id} own={own} /> : null}
-        {seesLinkState ? (
-          <Section title="Account link" testId="link-state">
-            <p>
-              {person.userId === null
-                ? "No account has claimed this profile yet."
-                : `Claimed by an account${person.claimedAt === null ? "" : ` on ${formatDate(person.claimedAt.toDate())}`}.`}
-            </p>
-            <p className="flex flex-wrap gap-3">
-              {viewer.can("claims.review", "programme") ? (
-                <Link to="/admin/claims" className="text-fg-accent underline">
-                  Account claims
-                </Link>
-              ) : null}
-              {viewer.can("users.suspend", "programme") ? (
-                <Link to="/admin/users" className="text-fg-accent underline">
-                  Users
-                </Link>
-              ) : null}
-            </p>
-          </Section>
-        ) : null}
-      </div>
+                          {affiliation.isPrimary ? <Badge tone="outline">Primary</Badge> : null}
+                          {affiliation.endDate === undefined ? null : (
+                            <span className="text-fg-muted">Until {affiliation.endDate}</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  );
+                }}
+              </LiveView>
+            </Section>
+            <Section title="Replications">
+              <LiveView
+                live={memberships}
+                loadingLabel="Loading the replications"
+                errorTitle="The replications could not be loaded."
+                onRetry={retryFailedLiveData}
+              >
+                {(list) => {
+                  const current = list.filter((membership) => membership.archivedAt === null);
+                  return current.length === 0 ? (
+                    <Unknown>No confirmed membership of a replication.</Unknown>
+                  ) : (
+                    <Table caption="Replications of this person">
+                      <TableHead>
+                        <TableRow>
+                          <TableHeaderCell>Replication</TableHeaderCell>
+                          <TableHeaderCell>Role</TableHeaderCell>
+                          <TableHeaderCell>Current or former</TableHeaderCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {current.map((membership) => (
+                          <TableRow key={membership.id}>
+                            <TableCell>
+                              <Link
+                                to={replicationPath(membership.replicationId)}
+                                className="text-fg-strong hover:text-fg-accent"
+                              >
+                                {membership.replicationId}
+                              </Link>
+                              {titles.get(membership.replicationId) === undefined ? null : (
+                                <span className="text-fg-secondary"> {titles.get(membership.replicationId)}</span>
+                              )}
+                            </TableCell>
+                            <TableCell>{MEMBERSHIP_ROLE_LABELS[membership.role]}</TableCell>
+                            <TableCell>{membership.isCurrent ? "Current" : "Former"}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  );
+                }}
+              </LiveView>
+            </Section>
+            <Section title="Laboratories">
+              <LiveView
+                live={entries}
+                loadingLabel="Loading the laboratories"
+                errorTitle="The laboratories could not be loaded."
+                onRetry={retryFailedLiveData}
+              >
+                {(list) => {
+                  const current = list.filter((entry) => entry.archivedAt === null);
+                  return current.length === 0 ? (
+                    <Unknown>
+                      No laboratory lists this person yet. Laboratories are added when they register in the portal.
+                    </Unknown>
+                  ) : (
+                    <ul className="grid gap-2">
+                      {current.map((entry) => (
+                        <li key={entry.id} className="flex flex-wrap items-center gap-2">
+                          <Link
+                            to={laboratoryPath(entry.laboratoryId)}
+                            className="font-medium text-fg-accent underline"
+                          >
+                            {laboratoryNames.get(entry.laboratoryId) ?? entry.laboratoryId}
+                          </Link>
+                          <span className="text-fg-secondary">{LABORATORY_ROLE_LABELS[entry.role]}</span>
+                          <Badge tone={entry.status === "confirmed" ? "neutral" : "outline"}>
+                            {LABORATORY_ENTRY_STATUS_LABELS[entry.status]}
+                          </Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  );
+                }}
+              </LiveView>
+            </Section>
+            {readsContactOf(viewer, person) ? <ContactSection personId={person.id} /> : null}
+            {offersDemographicsOf(viewer, person) ? <DemographicsSection personId={person.id} own={own} /> : null}
+            {seesLinkState ? (
+              <Section title="Account link" testId="link-state">
+                <p>
+                  {person.userId === null
+                    ? "No account has claimed this profile yet."
+                    : `Claimed by an account${person.claimedAt === null ? "" : ` on ${formatDate(person.claimedAt.toDate())}`}.`}
+                </p>
+                <p className="flex flex-wrap gap-3">
+                  {viewer.can("claims.review", "programme") ? (
+                    <Link to="/admin/claims" className="text-fg-accent underline">
+                      Account claims
+                    </Link>
+                  ) : null}
+                  {viewer.can("users.suspend", "programme") ? (
+                    <Link to="/admin/users" className="text-fg-accent underline">
+                      Users
+                    </Link>
+                  ) : null}
+                </p>
+              </Section>
+            ) : null}
+          </div>
+        </TabsContent>
+        <TabsContent value="notes">
+          <NotesTab entityType="person" entityId={person.id} />
+        </TabsContent>
+      </Tabs>
     </>
   );
 }

@@ -741,6 +741,15 @@ export function searchIndexId(entityType: EntityType, entityId: string, part: nu
 }
 
 /**
+ * `scopeType__scopeId`: the identifier of the dashboard of the programme, a replication or a
+ * laboratory, which a function creates when it is first opened. A personal dashboard takes an
+ * identifier that Firestore generates. The scope identifier may contain the separator.
+ */
+export function scopeDashboardId(scopeType: "programme" | "replication" | "laboratory", scopeId: string): string {
+  return compose([scopeType, scopeId], 1);
+}
+
+/**
  * Every builder of a natural key, by name. The collection registry names the builder of each
  * collection whose identifier is derived, and the integrity checker rebuilds identifiers with it.
  */
@@ -790,5 +799,6 @@ export const ID_BUILDERS = {
   mailId,
   eventFailureId,
   searchIndexId,
+  scopeDashboardId,
 } as const;
 export type IdBuilderName = keyof typeof ID_BUILDERS;

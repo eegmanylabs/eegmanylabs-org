@@ -77,8 +77,9 @@ export function matchBlocks(source: string): MatchBlock[] {
       const path = matchAt.get(index);
       if (path !== undefined) {
         // The block of the database itself is the root: its path is no part of a document path.
+        // A block inside it may match a collection named `databases`, which is no root.
         const parent = open.at(-1);
-        const isRoot = path.startsWith("/databases/");
+        const isRoot = parent === undefined && path.startsWith("/databases/");
         open.push({ path: isRoot ? "" : `${parent?.path ?? ""}${path}`, depth, start: index });
       }
       depth += 1;

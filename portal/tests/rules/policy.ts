@@ -11,7 +11,11 @@ import {
   capabilityField,
   type GrantableCapability,
   laboratoryScopeKey,
+  type PageAccessFacts,
+  type PageLevel,
   PROGRAMME_SCOPE_KEY,
+  atLeast as pageLevelAtLeast,
+  pageLevelFor,
   programmePowersInEffect,
   replicationScopeKey,
   sessionScopeKeys,
@@ -34,6 +38,13 @@ export interface Known {
   readonly scopeKeys?: readonly string[];
   /** Whether every member reads the record, for an entry that opens only some records to every member. */
   readonly memberVisible?: boolean;
+  /**
+   * The page that the levels of the workspace writers are decided on: the record itself for a
+   * page, the parent page for its subcollections, and the target page for a thread or a comment.
+   */
+  readonly page?: PageAccessFacts;
+  /** The account that wrote the record: the writer `author`. */
+  readonly authorUid?: string;
 }
 
 /** Whether the account may act at all: signed in and not suspended. */
@@ -100,13 +111,25 @@ function satisfiesTier(entry: CollectionEntry, tier: AccessTier, caller: CallerP
       // The owner reads before the account is a member, which is what the claim flow needs.
       return known.ownerUid !== undefined && known.ownerUid === caller.uid;
     case "MEMBER":
-      // Beside the tier SCOPED, MEMBER covers only the records that are open to every member.
-      return isMember(caller) && (!tiers.includes("SCOPED") || known.memberVisible === true);
+      // Beside the tier SCOPED or SELF, MEMBER covers only the records that are open to every
+      // member: a shared view, a dashboard that is not a user's own.
+      return (
+        isMember(caller) && ((!tiers.includes("SCOPED") && !tiers.includes("SELF")) || known.memberVisible === true)
+      );
     case "ADMIN":
       return capability !== null && holds(caller, capability, {});
     case "SCOPED":
       return capability !== null ? holds(caller, capability, known) : isStaff(caller) || holdsScope(caller, known);
   }
+}
+
+/** Whether the caller holds at least a level on the page that is known for the record. */
+function holdsPageLevel(caller: CallerProfile, known: Known, level: PageLevel): boolean {
+  if (known.page === undefined) return false;
+  return pageLevelAtLeast(
+    pageLevelFor(caller.access, { secondFactorVerified: caller.secondFactor }, known.page),
+    level,
+  );
 }
 
 /** Whether the registry lets the caller read a record of the entry, given what is known of the record. */
@@ -153,9 +176,18 @@ function satisfiesWriter(
       return known.ownerUid !== undefined && known.ownerUid === caller.uid;
     case "member":
       return true;
-    default:
-      // The writers of the workspace (authors, participants and holders of a page level) belong
-      // to collections whose rules are not written yet. Model them when those rules are.
+    case "commenter":
+      return holdsPageLevel(caller, known, "comment");
+    case "editor":
+      return holdsPageLevel(caller, known, "edit");
+    case "fullAccess":
+      return holdsPageLevel(caller, known, "full");
+    case "author":
+      return known.authorUid !== undefined && known.authorUid === caller.uid;
+    case "participant":
+    case "external_collaborator":
+      // The participants of a record, and external collaborators as writers, belong to
+      // collections whose rules are not written yet. Model them when those rules are.
       throw new Error(`The policy model does not know the writer "${writer}".`);
   }
 }
@@ -201,15 +233,30 @@ export function isListable(entry: CollectionEntry): boolean {
 }
 
 /**
+ * Whether the parent document alone decides who reads the documents of an entry: every field
+ * its read rule compares is a field of the parent. The rules then read the parent, whose path
+ * the request gives, and a list beneath one parent is decided by that parent.
+ */
+export function isDecidedByParent(entry: CollectionEntry): boolean {
+  return (
+    entry.parent !== null &&
+    entry.read.scopeFields.length > 0 &&
+    entry.read.scopeFields.every((field) => field.startsWith("parent."))
+  );
+}
+
+/**
  * Whether the collection of an entry is also read beneath every parent at once. A subcollection
  * that members, scoped roles or administrators read is. A subcollection of a user is read
- * beneath its own user only, and `private` and `special` documents are read by path alone.
+ * beneath its own user only, `private` and `special` documents are read by path alone, and so
+ * is a subcollection whose parent decides who reads it, such as the content of a page.
  */
 export function isReadAcrossParents(entry: CollectionEntry): boolean {
   return (
     entry.enforcement === "enforced" &&
     entry.parent !== null &&
     isListable(entry) &&
+    !isDecidedByParent(entry) &&
     !entry.read.tiers.includes("SELF") &&
     !entry.read.tiers.includes("FUNCTION")
   );

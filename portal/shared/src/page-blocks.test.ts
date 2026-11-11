@@ -1,0 +1,42 @@
+// Fixtures are synthetic: invented names and accounts.
+import { describe, expect, it } from "vitest";
+import {
+  COMMENT_MENTIONS_MAX,
+  commentMention,
+  commentMentionUids,
+  commentPlainText,
+  commentSegments,
+  pageFilePath,
+} from "./page-blocks";
+
+describe("a comment body", () => {
+  it("holds mentions that are found again, in order and once each", () => {
+    const body = `Thanks ${commentMention("uid-ada", "Ada Example")}, and ${commentMention("uid-ben", "Ben Sample")} and ${commentMention("uid-ada", "Ada Example")}.`;
+    expect(commentMentionUids(body)).toEqual(["uid-ada", "uid-ben"]);
+    expect(commentPlainText(body)).toBe("Thanks @Ada Example, and @Ben Sample and @Ada Example.");
+    expect(commentSegments(body)[1]).toEqual({ kind: "mention", uid: "uid-ada", label: "Ada Example" });
+  });
+
+  it("keeps a name with brackets from breaking the mention, and reads text without mentions as text", () => {
+    expect(commentMention("uid-x", "Odd [Name]")).toBe("@[Odd  Name](uid-x)");
+    expect(commentSegments("Plain text only")).toEqual([{ kind: "text", text: "Plain text only" }]);
+    expect(commentMentionUids("@[Name](has spaces)")).toEqual([]);
+  });
+
+  it("names at most the cap of mentions", () => {
+    const body = Array.from({ length: COMMENT_MENTIONS_MAX + 5 }, (_, index) =>
+      commentMention(`uid-${index}`, `Person ${index}`),
+    ).join(" ");
+    expect(commentMentionUids(body)).toHaveLength(COMMENT_MENTIONS_MAX);
+  });
+});
+
+describe("pageFilePath", () => {
+  it("puts a file beneath its page, with a name that holds no separator", () => {
+    expect(pageFilePath("pageOne", "AbCdEfGhIjKlMnOpQrSt", "results/figure 1.png")).toBe(
+      "pages/pageOne/files/AbCdEfGhIjKlMnOpQrSt/results-figure 1.png",
+    );
+    expect(() => pageFilePath("page/one", "AbCdEfGhIjKlMnOpQrSt", "a.png")).toThrow(RangeError);
+    expect(() => pageFilePath("pageOne", "short", "a.png")).toThrow(RangeError);
+  });
+});

@@ -32,6 +32,19 @@ describe("describeNotification", () => {
     }
   });
 
+  it("leads a mention and a reply to their page, and to the thread of a comment", () => {
+    expect(
+      describeNotification({ kind: "pageMention", pageId: "pageOne", title: "Minutes", authorName: "Ada Example" }),
+    ).toEqual({ title: "Ada Example mentioned you on a page", detail: "Minutes", to: "/pages/pageOne" });
+    expect(
+      describeNotification({ kind: "commentMention", pageId: "pageOne", threadId: "threadOne", title: "Minutes" }).to,
+    ).toBe("/pages/pageOne?thread=threadOne");
+    expect(describeNotification({ kind: "commentReply", pageId: "pageOne", authorName: "Ben Sample" }).title).toBe(
+      "Ben Sample replied in a discussion you took part in",
+    );
+    expect(describeNotification({ kind: "pageMention" }).to).toBeNull();
+  });
+
   it("names roles and counts in words", () => {
     expect(describeNotification({ kind: "roleGranted", role: "replication_lead" }).title).toBe(
       "You now hold the role Replication lead",

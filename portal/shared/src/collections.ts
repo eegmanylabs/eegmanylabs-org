@@ -324,12 +324,15 @@ const DENIED = "deniedUntilBuilt";
 /** The path under which the data model lists the restricted custom values of every core collection. */
 const CUSTOM_VALUES_PATH = "{coreCollection}/{id}/private/custom";
 
-/** The restricted custom values of a core document: read within its scope, and written by those who manage it. */
+/**
+ * The restricted custom values of a core document: read within its scope, and written by a
+ * callable function for those who may change the record, because a value of a custom property
+ * may be a list or a map, which no rule can check element by element.
+ */
 function customValues<const Template extends string>(
   path: Template,
-  writers: readonly Writer[],
   readScope: readonly string[],
-  writeScope: readonly string[] = readScope,
+  enforcement: Enforcement = DENIED,
 ) {
   return define({
     path,
@@ -337,9 +340,9 @@ function customValues<const Template extends string>(
     schema: workspace.privateCustomDocSchema,
     id: fixed("custom"),
     read: read(["SCOPED"], readScope),
-    write: client([grant(writers, WRITE)], writeScope),
+    write: FUNCTION_ONLY,
     dataClass: "restricted",
-    enforcement: DENIED,
+    enforcement,
   });
 }
 
@@ -650,10 +653,11 @@ const DEFINITIONS = {
       ["SELF", "ADMIN", "SCOPED"],
       ["parent.userId", "parent.replicationIds", "parent.laboratoryIds"],
       "As the contact document of the person.",
+      "people.contact.read",
     ),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
-    enforcement: DENIED,
+    enforcement: ENFORCED,
   }),
   personEmailIndex: define({
     path: "personEmailIndex/{emailHash}",
@@ -768,7 +772,7 @@ const DEFINITIONS = {
     dataClass: "member",
     enforcement: ENFORCED,
   }),
-  laboratoryCustom: customValues("laboratories/{laboratoryId}/private/custom", COORDINATORS, ["{laboratoryId}"]),
+  laboratoryCustom: customValues("laboratories/{laboratoryId}/private/custom", ["{laboratoryId}"], ENFORCED),
 
   // Replications and scientific definition (section 5).
   replications: define({
@@ -957,7 +961,7 @@ const DEFINITIONS = {
     dataClass: "member",
     enforcement: ENFORCED,
   }),
-  replicationCustom: customValues("replications/{studyKey}/private/custom", LEADS, ["{studyKey}"]),
+  replicationCustom: customValues("replications/{studyKey}/private/custom", ["{studyKey}"], ENFORCED),
   statusHistory: define({
     path: "statusHistory/{id}",
     schema: replications.statusHistoryDocSchema,
@@ -1155,12 +1159,7 @@ const DEFINITIONS = {
     dataClass: "member",
     enforcement: ENFORCED,
   }),
-  participationCustom: customValues(
-    "participations/{participationId}/private/custom",
-    MANAGERS,
-    ["parent.scopeKeys"],
-    ["parent.replicationId", "parent.laboratoryId"],
-  ),
+  participationCustom: customValues("participations/{participationId}/private/custom", ["parent.scopeKeys"], ENFORCED),
   checklistTemplates: define({
     path: "checklistTemplates/{key}",
     schema: participation.checklistTemplateDocSchema,
@@ -1286,7 +1285,7 @@ const DEFINITIONS = {
     dataClass: "member",
     enforcement: DENIED,
   }),
-  taskCustom: customValues("tasks/{id}/private/custom", MANAGERS, ["parent.scopeKeys"]),
+  taskCustom: customValues("tasks/{id}/private/custom", ["parent.scopeKeys"]),
 
   // Workspace (section 9).
   pages: define({
@@ -1294,34 +1293,71 @@ const DEFINITIONS = {
     schema: workspace.pageDocSchema,
     id: { kind: "auto", note: "The body page of an entity takes the identifier that entityRefId builds." },
     read: read(["SCOPED"], ["scopeKeys"], "By page access, as resolved onto the page."),
+    // A page is created, moved and shared through callable functions, which resolve its audience.
+    // Editors change its title, icon, order and template mark, archive it, and move it to the next
+    // generation of its content in a compaction.
     write: client(
-      [grant(["editor", "fullAccess"], WRITE)],
+      [
+        grant(["editor"], ["update"], {
+          condition:
+            "contentHead changes only to a later generation whose last chunk exists, at the request time, and with nothing else.",
+        }),
+      ],
       ["levelKeys"],
-      ["scopeKeys", "levelKeys", "ancestorPageIds", "contentHead"],
+      [
+        "parentPageId",
+        "ancestorPageIds",
+        "entityType",
+        "entityId",
+        "kind",
+        "templateSourceId",
+        "accessMode",
+        "levelKeys",
+        "plainTextExcerpt",
+        "mentionUids",
+        "tagIds",
+        "lastEditedBy",
+      ],
     ),
     dataClass: "member",
     flags: { searchable: true },
-    enforcement: DENIED,
+    enforcement: ENFORCED,
   }),
   pageContent: define({
     path: "pages/{pageId}/content/{generation__n}",
     schema: workspace.pageContentChunkDocSchema,
     id: built("pageContentChunkId", ["generation", "index"]),
     read: read(["SCOPED"], ["parent.scopeKeys"]),
-    write: FUNCTION_ONLY,
+    // The chunks of the next generation are written by the editor who compacts the page (D-010),
+    // before the page names them, and the chunks of an earlier generation are removed after.
+    write: client(
+      [
+        grant(["editor"], ["create"], { condition: "Only for a generation later than the page names." }),
+        grant(["editor"], ["delete"], { condition: "Only for a generation earlier than the page names." }),
+      ],
+      ["parent.levelKeys"],
+    ),
     dataClass: "member",
     flags: { appendOnly: true, audited: false },
-    enforcement: DENIED,
+    enforcement: ENFORCED,
   }),
   pageUpdates: define({
     path: "pages/{pageId}/updates/{id}",
     schema: workspace.pageUpdateDocSchema,
     id: auto,
     read: read(["SCOPED"], ["parent.scopeKeys"]),
-    write: client([grant(["editor"], ["create"])], ["parent.levelKeys"]),
+    write: client(
+      [
+        grant(["editor"], ["create"]),
+        grant(["editor"], ["delete"], {
+          condition: "Only in the transaction of a compaction, which moves the page to a later generation.",
+        }),
+      ],
+      ["parent.levelKeys"],
+    ),
     dataClass: "member",
     flags: { appendOnly: true, audited: false },
-    enforcement: DENIED,
+    enforcement: ENFORCED,
   }),
   pageVersions: define({
     path: "pages/{pageId}/versions/{id}",
@@ -1331,7 +1367,7 @@ const DEFINITIONS = {
     write: FUNCTION_ONLY,
     dataClass: "member",
     flags: { appendOnly: true },
-    enforcement: DENIED,
+    enforcement: ENFORCED,
   }),
   pageVersionChunks: define({
     path: "pages/{pageId}/versions/{id}/chunks/{n}",
@@ -1341,29 +1377,40 @@ const DEFINITIONS = {
     write: FUNCTION_ONLY,
     dataClass: "member",
     flags: { appendOnly: true, audited: false },
-    enforcement: DENIED,
+    enforcement: ENFORCED,
   }),
   pagePermissions: define({
     path: "pages/{pageId}/permissions/{principalType__principalId}",
     schema: workspace.pagePermissionDocSchema,
     id: built("pagePermissionId", ["principalType", "principalId"]),
     read: read(["SCOPED"], ["parent.scopeKeys"]),
-    write: client([grant(["fullAccess"], ["create", "update", "delete"])], ["parent.levelKeys"]),
+    // Holders of full access share a page through a callable function, which resolves the
+    // audience of the page and of every page that inherits from it in the same transaction.
+    write: FUNCTION_ONLY,
     dataClass: "member",
-    enforcement: DENIED,
+    enforcement: ENFORCED,
   }),
   threads: define({
     path: "threads/{id}",
     schema: workspace.threadDocSchema,
     id: auto,
     read: read(["MEMBER", "SCOPED"], ["scopeKeys"], "As the target record."),
-    write: client([grant(["commenter"], WRITE)], ["scopeKeys"]),
+    write: client(
+      [
+        grant(["commenter"], ["create"], { condition: "The target is a page, whose audience the thread copies." }),
+        grant(["commenter"], ["update"], {
+          onlyFields: ["resolvedAt", "resolvedBy"],
+          condition: "Resolving names the caller at the request time, and reopening clears both.",
+        }),
+      ],
+      ["scopeKeys"],
+    ),
     dataClass: "member",
     flags: { importable: true },
-    enforcement: DENIED,
+    enforcement: ENFORCED,
   }),
   threadComments: define({
-    path: "threads/{id}/comments/{id}",
+    path: "threads/{threadId}/comments/{commentId}",
     schema: workspace.threadCommentDocSchema,
     id: auto,
     read: read(["MEMBER", "SCOPED"], ["scopeKeys"], "As the thread."),
@@ -1371,6 +1418,7 @@ const DEFINITIONS = {
       [
         grant(["commenter"], ["create"]),
         grant(["author"], ["update"], {
+          onlyFields: ["body", "mentionUids", "editedAt", "deletedAt"],
           condition: "An author edits their own comment and removes it by setting deletedAt.",
         }),
       ],
@@ -1378,7 +1426,7 @@ const DEFINITIONS = {
     ),
     dataClass: "member",
     flags: { importable: true },
-    enforcement: DENIED,
+    enforcement: ENFORCED,
   }),
   attachments: define({
     path: "attachments/{id}",
@@ -1394,30 +1442,46 @@ const DEFINITIONS = {
     path: "databases/{databaseId}",
     schema: workspace.databaseDocSchema,
     id: auto,
-    read: read(["SCOPED"], ["scopeKeys"], "As the parent page."),
-    write: client([grant(["editor"], WRITE)], ["levelKeys"], ["scopeKeys", "levelKeys"]),
+    read: read(["SCOPED"], ["scopeKeys"], "As the parent page, whose audience the database copies."),
+    // A database is created and its properties are defined through callable functions, which copy
+    // the audience of its parent page and validate each definition. Its editors rename it,
+    // describe it, give it an icon and archive it.
+    write: client(
+      [
+        grant(["editor"], ["update"], {
+          onlyFields: ["name", "description", "icon", "archivedAt"],
+          condition: "The level is decided on the parent page.",
+        }),
+      ],
+      ["parentPageId"],
+      ["parentPageId", "isTemplate", "templateSourceId", "properties", "scopeKeys", "levelKeys"],
+    ),
     dataClass: "member",
     flags: { searchable: true },
-    enforcement: DENIED,
+    enforcement: ENFORCED,
   }),
   databaseRows: define({
     path: "databases/{databaseId}/rows/{rowId}",
     schema: workspace.databaseRowDocSchema,
     id: auto,
     read: read(["SCOPED"], ["parent.scopeKeys"]),
-    write: client([grant(["editor"], WRITE)], ["parent.levelKeys"]),
+    // Rows are written through a callable function for the editors of the database, which checks
+    // every value against the type of its property: a value may be a list or a map.
+    write: FUNCTION_ONLY,
     dataClass: "member",
     flags: { searchable: true },
-    enforcement: DENIED,
+    enforcement: ENFORCED,
   }),
   collectionSchemas: define({
     path: "collectionSchemas/{collectionKey}",
     schema: workspace.collectionSchemaDocSchema,
     id: key("collection key", "collectionKey"),
     read: read(["MEMBER"]),
-    write: client([grant(STAFF, WRITE, { capability: "lookups.manage" })]),
+    // Defined through a callable function for holders of lookups.manage, which keeps a custom
+    // property from taking the identifier of a core field.
+    write: FUNCTION_ONLY,
     dataClass: "member",
-    enforcement: DENIED,
+    enforcement: ENFORCED,
   }),
   views: define({
     path: "views/{viewId}",
@@ -1428,25 +1492,27 @@ const DEFINITIONS = {
       ["ownerUid", "isShared"],
       "The owner alone until isShared is set, and every member afterwards.",
     ),
-    write: client(
-      [grant(["self"], ["create", "update", "delete"]), grant(STAFF, ["update"], { condition: "A shared view." })],
-      ["ownerUid"],
-    ),
+    // A view is saved through a callable function, which validates its configuration, for its
+    // owner, and for programme administrators and the core team where it is shared. Its owner
+    // deletes it.
+    write: client([grant(["self"], ["delete"])], ["ownerUid"]),
     dataClass: "member",
-    enforcement: DENIED,
+    enforcement: ENFORCED,
   }),
   dashboards: define({
     path: "dashboards/{id}",
     schema: workspace.dashboardDocSchema,
-    id: auto,
+    id: { kind: "auto", note: "The dashboard of a scope takes the identifier that scopeDashboardId builds." },
     read: read(
       ["SELF", "MEMBER"],
       ["ownerUid"],
       "The owner for the dashboard of a user, and every member for any other.",
     ),
-    write: client([grant(["self"], WRITE), grant(MANAGERS, WRITE)], ["ownerUid", "scopeKeys"]),
+    // Saved through a callable function, which validates every widget, for the owner of a
+    // user's dashboard and for holders of pages.manage for the scope of any other.
+    write: FUNCTION_ONLY,
     dataClass: "member",
-    enforcement: DENIED,
+    enforcement: ENFORCED,
   }),
 
   // Datasets (section 10).
@@ -1581,12 +1647,7 @@ const DEFINITIONS = {
     dataClass: "restricted",
     enforcement: DENIED,
   }),
-  datasetCustom: customValues(
-    "datasets/{datasetKey}/private/custom",
-    MANAGERS,
-    ["parent.scopeKeys"],
-    ["parent.replicationId", "parent.laboratoryId"],
-  ),
+  datasetCustom: customValues("datasets/{datasetKey}/private/custom", ["parent.scopeKeys"]),
   processingRuns: define({
     path: "processingRuns/{id}",
     schema: datasets.processingRunDocSchema,
@@ -1624,7 +1685,7 @@ const DEFINITIONS = {
     dataClass: "member",
     enforcement: ENFORCED,
   }),
-  manuscriptCustom: customValues("manuscripts/{id}/private/custom", LEADS, ["parent.scopeKeys"]),
+  manuscriptCustom: customValues("manuscripts/{id}/private/custom", ["parent.scopeKeys"]),
   contributorTables: define({
     path: "contributorTables/{id}",
     schema: outputs.contributorTableDocSchema,
@@ -1950,7 +2011,7 @@ const DEFINITIONS = {
     write: FUNCTION_ONLY,
     dataClass: "member",
     flags: { appendOnly: true, audited: false },
-    enforcement: DENIED,
+    enforcement: ENFORCED,
   }),
   automationRules: define({
     path: "automationRules/{id}",
@@ -2008,7 +2069,7 @@ const DEFINITIONS = {
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     flags: { audited: false },
-    enforcement: DENIED,
+    enforcement: ENFORCED,
   }),
   integrityReports: define({
     path: "integrityReports/{runId}",

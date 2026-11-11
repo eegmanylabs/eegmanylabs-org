@@ -8,7 +8,7 @@ import { createHashRouter, type Params, type RouteObject } from "react-router";
 import { RequireAuth } from "@/auth/RequireAuth";
 import { RequireLinked } from "@/auth/RequireLinked";
 import { LoadingState } from "@/components/feedback/loading-state";
-import { LaboratoryName, PersonName } from "@/components/record-names";
+import { LaboratoryName, PageTitle, PersonName } from "@/components/record-names";
 import { ClaimPage } from "@/pages/claim/ClaimPage";
 import { HomePage } from "@/pages/home/HomePage";
 import { LoginPage } from "@/pages/login/LoginPage";
@@ -48,6 +48,11 @@ const emulatorRoutes: RouteObject[] =
 /** The breadcrumb of a member page: the person's name, read live, with the identifier standing in until it is. */
 function PersonCrumb({ params }: { readonly params: Readonly<Params> }) {
   return <PersonName id={params.personId ?? ""} />;
+}
+
+/** The breadcrumb of a page of the workspace: its title, read live. */
+function PageCrumb({ params }: { readonly params: Readonly<Params> }) {
+  return <PageTitle id={params.pageId ?? ""} />;
 }
 
 /** The breadcrumb of a laboratory page: its name, read live. */
@@ -126,6 +131,41 @@ export function portalRoutes(signInLink: string | null): RouteObject[] {
                       path: "/readiness",
                       ...lazyPage(async () => (await import("@/pages/readiness/ReadinessPage")).ReadinessPage),
                       ...titled("Readiness"),
+                    },
+                    {
+                      path: "/pages",
+                      ...titled("Workspace"),
+                      children: [
+                        {
+                          index: true,
+                          ...lazyPage(async () => (await import("@/pages/workspace/WorkspacePage")).WorkspacePage),
+                        },
+                        {
+                          path: ":pageId",
+                          ...lazyPage(async () => (await import("@/pages/workspace/WorkspacePage")).PageRoute),
+                          handle: { title: "Page", crumb: PageCrumb } satisfies RouteHandle,
+                        },
+                      ],
+                    },
+                    {
+                      path: "/databases/:databaseId",
+                      ...lazyPage(async () => (await import("@/pages/databases/DatabasePage")).DatabasePage),
+                      ...titled("Database"),
+                    },
+                    {
+                      path: "/dashboards",
+                      ...titled("Dashboards"),
+                      children: [
+                        {
+                          index: true,
+                          ...lazyPage(async () => (await import("@/pages/dashboards/DashboardsPage")).DashboardsPage),
+                        },
+                        {
+                          path: ":dashboardId",
+                          ...lazyPage(async () => (await import("@/pages/dashboards/DashboardsPage")).DashboardPage),
+                          ...titled("Dashboard"),
+                        },
+                      ],
                     },
                     {
                       path: "/members",
