@@ -86,7 +86,22 @@ Run on 11 November 2026 by the orchestrating session, independently of the engin
 
 Two independent reviews examined this work. A permissions review attacked it through the client SDK and the functions emulator and wrote its attempts as tests, and a journeys review drove the built application as a new member, a lead, a coordinator, the core team and an administrator at three screen widths. They reported 27 findings, all fixed. The red-team directories now hold 730 tests across 27 files. The browser tests run only on the synthetic demonstration world, so the pages have not yet been exercised against the real imported data.
 
-## 5. Public-site entry
+## 5. Workspace: pages, editor, databases, views and dashboards
+
+Run on 11 November 2026 by the orchestrating session, independently of the engineers, from `portal/` with port base 9300 on the tree committed as "Workspace databases, views and dashboards; review fixes for pages and databases". `npm run typecheck` and `npm run lint` exited 0, with 700 files checked and no findings.
+
+| Suite | Files | Tests passed | Tests failed |
+|---|---|---|---|
+| Unit and component tests | 117 | 1,971 | 0 |
+| Emulator-backed rules and tools tests | 55 | 3,898 | 0 |
+| Emulator-backed functions tests | 24 | 247 | 0 |
+| Browser tests (Playwright, Chromium) | | 110 | 0 |
+
+The figures above needed more than one run, and both failures are recorded here. In the first full run one unit test of the test harness failed: after an interrupted run it found the freed port listening again, most likely because another test had taken the same temporary port. It passed in five runs of its file on its own and in the second full run. In the second full run one functions test timed out after 30 seconds waiting for a background trigger, which is plausible now that the functions emulator also runs the workspace triggers. Both are reported as intermittent and have been given to the next engineer to make deterministic. The functions and browser suites were then run again together and passed in full, so every count in the table was observed in a passing run, though not all in a single one.
+
+Two independent reviews examined the workspace. A permissions review attacked it through the client SDK and the functions emulator, and a journeys review drove the built application at three screen widths. Among their findings were that moving a page could widen or narrow who can read it without the right to share it, that comments kept a stale and wider audience after a page was restricted, that an undecodable editor update could break a page for everyone, that a file of a type a browser runs as a document could be attached, and that a member who lost access to a page saw it load forever. All were fixed with tests. The red-team tests of the workspace (eight across two files) remain in the run as regressions.
+
+## 6. Public-site entry
 
 The gated Members' portal entry was verified by building the public site in scratch copies, never inside the repository.
 
@@ -100,7 +115,7 @@ The gated Members' portal entry was verified by building the public site in scra
 
 The comparison with `main` was run twice by the orchestrating session, before the first commit of the entry and again after the review fixes, and independently by the reviewer.
 
-## 6. Architecture spikes
+## 7. Architecture spikes
 
 Two throwaway spikes were run before the build to prove the architecture. Their code is not in the repository. Their results are summarised in `docs/ARCHITECTURE.md` section 10 and `docs/DECISIONS.md` D-010.
 
@@ -109,7 +124,7 @@ Two throwaway spikes were run before the build to prove the architecture. Their 
 | Application stack | 177 emulator-backed tests and 15 browser tests passed |
 | Collaborative editor on Firestore | All suites passed: security rules 28, provider 15, two-browser collaboration 10, editor features 18, versions 9, comments 11, presence 7 |
 
-## 7. Not yet verified
+## 8. Not yet verified
 
 | Item | Why it is unverified | What will verify it |
 |---|---|---|
@@ -123,4 +138,5 @@ Two throwaway spikes were run before the build to prove the architecture. Their 
 | Composite indexes | The emulator does not enforce them | Deployment of the indexes to the staging project |
 | The test suite on Node 24 | Node 24 was not available on the development machine | Continuous integration once a Node 24 job is added |
 | Firefox, Safari, touch devices and screen readers | Browser tests run in Chromium only | Manual and cross-browser testing before rollout |
+| Collaborative editing, file storage and presence on production Firebase, including cross-origin access to the storage bucket and the 1,000-document cap on page sync queries under load | Run on the emulators only | The staging project |
 | Any import of sources A, G or Quire | No access | Access as described in `docs/IMPLEMENTATION_STATUS.md` |
