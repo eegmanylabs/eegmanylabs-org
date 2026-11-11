@@ -14,8 +14,8 @@ import {
   COLLECTIONS,
   identityKeyId,
   importedPersonId,
-  lookupFold,
   normaliseEmail,
+  organisationKey,
   personEvidenceKey,
 } from "@eegml/shared";
 import type { Firestore } from "firebase-admin/firestore";
@@ -219,7 +219,9 @@ export class IdentityResolver {
    * importer never creates an institution: an affiliation string becomes an institution candidate.
    */
   async resolveInstitution(name: string, countryCode: string): Promise<string | null> {
-    const entry = await this.#entry("institution", "nameAffiliation", `${lookupFold(name)}#${countryCode}`);
+    const key = organisationKey.institution(name, countryCode);
+    if (key === null) return null;
+    const entry = await this.#entry("institution", "nameAffiliation", key);
     return entry !== null && entry.status === "active" && entry.entityIds.length === 1
       ? (entry.entityIds[0] ?? null)
       : null;
@@ -230,7 +232,9 @@ export class IdentityResolver {
    * by a reviewer or through a confirmed laboratory claim, and never by an importer.
    */
   async resolveLaboratory(institutionId: string, name: string): Promise<string | null> {
-    const entry = await this.#entry("laboratory", "nameAffiliation", `${institutionId}#${lookupFold(name)}`);
+    const key = organisationKey.laboratory(institutionId, name);
+    if (key === null) return null;
+    const entry = await this.#entry("laboratory", "nameAffiliation", key);
     return entry !== null && entry.status === "active" && entry.entityIds.length === 1
       ? (entry.entityIds[0] ?? null)
       : null;

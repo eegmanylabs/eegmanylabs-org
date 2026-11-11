@@ -18,11 +18,13 @@ import {
   type DocumentData,
   type DocumentReference,
   doc,
+  documentId,
   type Firestore,
   limit,
   orderBy,
   type Query,
   query,
+  startAfter,
   Timestamp,
   where,
 } from "firebase/firestore";
@@ -73,6 +75,7 @@ export function queryReference<K extends ListableCollectionKey>(
     base,
     ...(description.where ?? []).map(([field, operator, value]) => where(field, operator, stored(value))),
     ...(description.orderBy ?? []).map(([field, direction]) => orderBy(field, direction)),
+    ...(description.startAfterId === undefined ? [] : [orderBy(documentId()), startAfter(description.startAfterId)]),
     limit(description.limit),
   );
 }

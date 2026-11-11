@@ -15,16 +15,16 @@ function JustLinkedPanel() {
   return (
     <section
       aria-labelledby="just-linked-heading"
-      className="grid gap-2 rounded-card border border-accent bg-surface-accent px-5 py-4"
+      className="grid gap-2 rounded-card border border-border-strong bg-surface px-5 py-4"
       data-testid="just-linked"
     >
       <h2 id="just-linked-heading" className="text-lg font-medium tracking-title text-fg-strong">
         Account linked
       </h2>
       <p className="text-fg-secondary">
-        Your account is now linked to the member profile the programme holds for you. Below is the profile the programme
-        holds for you. If a detail is wrong, report it from your profile. Roles that the programme's records give you
-        wait for an administrator before they give you any rights.
+        Your account is now linked to the member profile the programme holds for you, which is shown below. If a detail
+        is wrong, report it from your profile. Roles that the programme's records give you wait for an administrator
+        before they give you any rights.
       </p>
     </section>
   );

@@ -1,9 +1,13 @@
+import { Link } from "react-router";
 import { formatDate } from "@/app/labels";
 import { useAuth, useSignedInUser } from "@/auth/AuthProvider";
 import { LiveView } from "@/components/feedback/live-view";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { type RecordOf, retryFailedLiveData, useLiveDocument, useLiveQuery } from "@/data";
-import { CORRECTABLE_FIELD_LABELS, CorrectionRequestDialog } from "./CorrectionRequestDialog";
+import { memberPath } from "@/registry/paths";
+import { CORRECTABLE_FIELD_LABELS } from "./CorrectionRequestDialog";
+import { OwnProfileCorrection } from "./OwnProfileCorrection";
 import { ProfileSummary } from "./ProfileSummary";
 
 const STATUS_LABELS = { open: "Open", accepted: "Accepted", rejected: "Not accepted", withdrawn: "Withdrawn" } as const;
@@ -87,7 +91,14 @@ export function ProfilePanel() {
         <h2 id="profile-panel-heading" className="text-lg font-medium tracking-title text-fg-strong">
           Your profile
         </h2>
-        {member ? <CorrectionRequestDialog uid={user.uid} personId={personId} /> : null}
+        <div className="flex flex-wrap gap-2">
+          {member ? (
+            <Button asChild size="sm">
+              <Link to={memberPath(personId)}>Open your profile</Link>
+            </Button>
+          ) : null}
+          {member ? <OwnProfileCorrection uid={user.uid} personId={personId} /> : null}
+        </div>
       </div>
       <ProfileSummary personId={personId} />
       {member ? <OwnCorrectionRequests uid={user.uid} personId={personId} /> : null}

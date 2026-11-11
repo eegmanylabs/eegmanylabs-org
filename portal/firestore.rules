@@ -1053,8 +1053,11 @@ service cloud.firestore {
       }
 
       allow read: if isMember() && boundedRead();
+      // Whether a laboratory is verified, active or inactive is the programme's decision, so
+      // its coordinators edit everything else.
       allow update: if isMember() && canForLaboratory('labsManage', laboratoryId)
         && updatedNow(incoming(), stampFields().concat(laboratoriesEditable()), laboratoriesRequired())
+        && (!changed().hasAny(['status']) || canForProgramme('labsManage'))
         && validLaboratory(incoming())
         && laboratoryReferencesExist(incoming(), resource.data);
 
@@ -1272,9 +1275,14 @@ service cloud.firestore {
         && incoming().dataOrigin == 'live'
         && docId(incoming().programmeId)
         && exists(/databases/$(database)/documents/programmes/$(incoming().programmeId));
+      // A citation that has been checked describes the citation as it was checked: while
+      // `citationStatus` is anything but unverified, its fields change only through the
+      // function editReplicationCitation, which returns the status to unverified.
       allow update: if isMember() && canForReplication('replicationsManage', studyKey)
         && updatedNow(incoming(), stampFields().concat(replicationsEditable()), replicationsRequired())
         && sourceValuesKept(replicationsVerbatim())
+        && (resource.data.citationStatus == 'unverified'
+          || !changed().hasAny(['originalAuthors', 'originalYear', 'originalTitle', 'originalReference', 'originalDoi']))
         && validReplication(incoming());
 
       // Restricted notes. A client writes `internalNotes` alone: the verbatim notes of a
@@ -1891,26 +1899,9 @@ service cloud.firestore {
       }
 
       allow read: if isMember() && boundedRead();
-      // The identifier joins the replication and the laboratory, so the pair exists once. A
-      // study identifier holds letters and digits only, which keeps the join unambiguous. A
-      // participation starts as invited, which the replication says, or as interested, which
-      // the laboratory says, with no status history and with its readiness not started.
-      allow create: if isMember()
-        && ((incoming().status == 'invited' && forReplication(incoming().replicationId))
-          || (incoming().status == 'interested'
-            && canForLaboratory('participationsManage', incoming().laboratoryId)))
-        && createdNow(incoming(), participationsFields(), participationsRequired())
-        && incoming().replicationId.matches('^[A-Za-z][A-Za-z0-9]{0,99}$')
-        && docId(incoming().laboratoryId)
-        && participationId == incoming().replicationId + '__' + incoming().laboratoryId
-        && incoming().scopeKeys == ['rep:' + incoming().replicationId, 'lab:' + incoming().laboratoryId]
-        && incoming().statusHistoryId == null
-        && incoming().readinessStatus == 'notStarted'
-        && incoming().dataOrigin == 'live'
-        && validParticipation(incoming())
-        && replicationExists(incoming().replicationId)
-        && laboratoryExists(incoming().laboratoryId)
-        && participationReferencesExist(incoming(), {});
+      // A participation is created by the callable function createParticipation alone, which
+      // writes its checklist, its restricted detail and the first entry of its status history
+      // in the same transaction, so no client creates one.
       // Readiness becomes approved, and stops being approved, through the replication alone.
       allow update: if isMember()
         && canForUnit('participationsManage', resource.data.replicationId, resource.data.laboratoryId)
@@ -2003,7 +1994,8 @@ service cloud.firestore {
       // update its status, its evidence and its note. The completion of an item is a
       // signature: an item is done exactly while it names who completed it and when. Whoever
       // changes a completed item signs it anew, or reopens it, and a member of the laboratory
-      // reopens only what that member completed.
+      // reopens only what that member completed. The item of readiness approval speaks for the
+      // replication, so only its leads, programme administrators and the core team change it.
       // Reads: 1 (access).
       match /checklist/{itemKey} {
         function participationChecklistRequired() {
@@ -2050,6 +2042,7 @@ service cloud.firestore {
               )
               && completionKept(incoming(), resource.data, false)))
           && incoming().participationId == participationId
+          && (itemKey != 'readinessApproval' || forReplication(resource.data.replicationId))
           && validChecklistItem(incoming(), resource.data);
       }
 
@@ -2346,9 +2339,13 @@ service cloud.firestore {
         && incoming().statusHistoryId == null
         && !incoming().keys().hasAny(['websitePublicationId', 'citationStatus', 'citationMetadata'])
         && validManuscript(incoming());
+      // A citation that has been checked describes the manuscript as it was checked, so what
+      // the check covers stays as it is while the check says anything but unverified.
       allow update: if isMember()
         && canManageOutputsOf(resource.data.get('replicationId', null))
         && updatedNow(incoming(), stampFields().concat(manuscriptsEditable()), manuscriptsRequired())
+        && (resource.data.get('citationStatus', 'unverified') == 'unverified'
+          || !changed().hasAny(['title', 'journal', 'doi', 'preprintDoi', 'authorsShort']))
         && validManuscript(incoming());
 
       // A review round, a decision, a revision or a submission. Its scope fields are those of

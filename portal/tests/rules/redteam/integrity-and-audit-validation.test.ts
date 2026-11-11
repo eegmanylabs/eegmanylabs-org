@@ -475,8 +475,8 @@ describe("a participation that a coordinator of laboratory A creates", () => {
     () =>
       lab.create("ownCoordinator", at, { ...fields, ...changes });
 
-  it("is allowed where it is well formed", async () => {
-    await assertSucceeds(create({ targetNMain: 40 })());
+  it("is refused even where it is well formed, because only createParticipation creates one", async () => {
+    await assertFails(create({ targetNMain: 40 })());
   });
 
   refuses({

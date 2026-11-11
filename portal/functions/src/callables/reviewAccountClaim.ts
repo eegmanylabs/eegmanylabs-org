@@ -1,10 +1,20 @@
-import { reviewAccountClaimContract } from "@eegml/shared";
+import {
+  COLLECTIONS,
+  personContactDocSchema,
+  personDocSchema,
+  personEmailIndexDocSchema,
+  personEmailIndexId,
+  reviewAccountClaimContract,
+} from "@eegml/shared";
+import { Timestamp } from "firebase-admin/firestore";
 import { linkObstacle, readLink, writeLink } from "../claims/link";
 import { readClaim, writeClaim } from "../claims/records";
 import {
   AppError,
   callerStamp,
+  createdFields,
   defineCallable,
+  identityHashKey,
   readAccessDocument,
   requireCapability,
   requireProgrammeAdministrator,
@@ -34,6 +44,13 @@ const NO_EVIDENCE_MESSAGE =
  * the account the person concerned, with sight of the person's contact and special-category
  * data, so it is for programme administrators only. `evidence.candidate` records which kind
  * of link an approval made.
+ *
+ * `approveAsNewMember` admits someone whom no record of the programme names, which a match
+ * can never do. It needs `people.manage` for the programme besides `claims.review`, and the
+ * claimant's own statement of who they are. In one transaction it creates the person, `live`,
+ * with the name and affiliation the reviewer confirms, its contact document with the account's
+ * verified address as the primary one, the entry of that address in `personEmailIndex`, and the
+ * link, with an audit entry for the person and one for the claim.
  *
  * The claimant is notified of the decision and never of the note. A decision that has been
  * recorded already is answered again without a second change.
@@ -97,6 +114,131 @@ export const reviewAccountClaim = defineCallable(reviewAccountClaimContract, {
           stamp,
         );
         return { status: "rejected" as const, personId: null };
+      }
+
+      if (input.decision === "approveAsNewMember") {
+        if (claim.status !== "pendingReview") throw new AppError("failed-precondition", NOT_PENDING_MESSAGE);
+        requireCapability(context, access, "people.manage", "programme");
+        if (typeof review.evidence.statedName !== "string") {
+          throw new AppError(
+            "failed-precondition",
+            "This person has not said who they are, so no profile can be made from their request. Ask them to send a request for access first.",
+          );
+        }
+        const personReference = db.collection(COLLECTIONS.persons.collectionPath()).doc();
+        const personId = personReference.id;
+        const link = await readLink(db, transaction, input.uid, personId, at);
+        const emailLower = link.user?.emailLower;
+        if (link.user === null || link.access === null || typeof emailLower !== "string") {
+          throw new AppError("failed-precondition", "This account has not started the portal yet.");
+        }
+        const indexReference = db.doc(
+          COLLECTIONS.personEmailIndex.docPath(personEmailIndexId(emailLower, identityHashKey())),
+        );
+        const index = await transaction.get(indexReference);
+
+        const created = writeAudit(
+          transaction,
+          {
+            action: "person.created",
+            actor: { kind: "user", uid: reviewer },
+            entityType: "person",
+            entityId: personId,
+            changes: [
+              { field: "displayName", after: input.displayName },
+              { field: "affiliationSummary", after: input.affiliation ?? null },
+              { field: "dataOrigin", after: "live" },
+              ...withheldChanges(["emails"]),
+            ],
+            at,
+          },
+          db,
+        );
+        const auditEventId = writeAudit(
+          transaction,
+          {
+            action: "claim.approved",
+            actor: { kind: "user", uid: reviewer },
+            entityType: "person",
+            entityId: personId,
+            changes: [{ field: "userId", before: null, after: input.uid }],
+            at,
+            context: { causationId: created },
+          },
+          db,
+        );
+        const stamp = callerStamp(reviewer, at, auditEventId);
+        const person = personDocSchema.parse({
+          ...createdFields("persons", stamp),
+          slug: `member-${personId}`,
+          displayName: input.displayName,
+          ...(input.affiliation === undefined ? {} : { affiliationSummary: input.affiliation }),
+          laboratoryIds: [],
+          replicationIds: [],
+          isCoreTeam: false,
+          publicListing: "none",
+          coreRoles: [],
+          userId: null,
+          claimedAt: null,
+          custom: {},
+          dataOrigin: "live",
+        });
+        transaction.create(personReference, person);
+        transaction.create(
+          db.doc(COLLECTIONS.personContact.docPath(personId)),
+          personContactDocSchema.parse({
+            ...createdFields("personContact", stamp),
+            emails: [{ email: emailLower, kind: "primary", verifiedAt: Timestamp.fromDate(at), claimEligible: true }],
+          }),
+        );
+        const stored = index.exists ? personEmailIndexDocSchema.safeParse(index.data()) : null;
+        transaction.set(
+          indexReference,
+          personEmailIndexDocSchema.parse({
+            ...createdFields("personEmailIndex", stamp),
+            ...(stored?.success === true ? { createdAt: stored.data.createdAt, createdBy: stored.data.createdBy } : {}),
+            personIds: [...new Set([...(stored?.success === true ? stored.data.personIds : []), personId])].sort(),
+            claimEligiblePersonIds: [
+              ...new Set([...(stored?.success === true ? stored.data.claimEligiblePersonIds : []), personId]),
+            ].sort(),
+          }),
+        );
+        const linked = writeLink(db, transaction, { ...link, person }, stamp);
+        writeClaim(
+          transaction,
+          records,
+          "decision",
+          {
+            status: "approved",
+            personId,
+            candidatePersonIds: [...review.candidatePersonIds, personId],
+            matchBasis: review.matchBasis,
+            evidence: {
+              ...review.evidence,
+              automatic: false,
+              candidate: false,
+              createdPerson: true,
+              createdRoleAssignmentIds: linked.createdAssignmentIds,
+            },
+            reviewedBy: reviewer,
+            decisionNote: input.note,
+          },
+          stamp,
+        );
+        writeNotification(
+          db,
+          transaction,
+          {
+            uid: input.uid,
+            type: "claimDecision",
+            entityType: "person",
+            entityId: personId,
+            eventId: auditEventId,
+            payload: { kind: "accountClaimApproved" },
+          },
+          stamp,
+        );
+        return { status: "approved" as const, personId };
       }
 
       if (claim.status === "approved" && claim.personId === input.personId) {

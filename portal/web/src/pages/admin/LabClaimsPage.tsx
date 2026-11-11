@@ -1,7 +1,8 @@
 import { reviewLabClaimContract } from "@eegml/shared";
 import { useState } from "react";
+import { Link } from "react-router";
 import { formatDateTime } from "@/app/labels";
-import { useAuth } from "@/auth/AuthProvider";
+import { useAuth, useSignedInUser } from "@/auth/AuthProvider";
 import { LiveView } from "@/components/feedback/live-view";
 import { LaboratoryName } from "@/components/record-names";
 import { byText, type TableSpec, useTableControls } from "@/components/table-controls";
@@ -15,6 +16,8 @@ import { SortHeader } from "@/components/ui/sort-header";
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
 import { callFunction, type RecordOf, retryFailedLiveData, useLiveDataDisconnected, useLiveDocument } from "@/data";
+import { countryName } from "@/registry/labels";
+import { laboratoryPath } from "@/registry/paths";
 import { AdminPage } from "./AdminPage";
 import { PersonOfAccount } from "./people";
 import { usePendingLabClaims } from "./queues";
@@ -29,7 +32,7 @@ const ROLE_LABELS: Readonly<Record<LabClaim["requestedRole"], string>> = {
 };
 
 const SPEC: TableSpec<LabClaim, SortKey> = {
-  searchText: (claim) => [claim.laboratoryId, ROLE_LABELS[claim.requestedRole]],
+  searchText: (claim) => [claim.laboratoryId, claim.proposal?.name, ROLE_LABELS[claim.requestedRole]],
   sorters: {
     submitted: (a, b) => a.submittedAt.toMillis() - b.submittedAt.toMillis(),
     laboratory: (a, b) => byText(a.laboratoryId, b.laboratoryId),
@@ -42,8 +45,92 @@ const SPEC: TableSpec<LabClaim, SortKey> = {
 const yesNo = (value: unknown, yes: string, no: string, unknown: string) =>
   value === true ? <Badge tone="accent">{yes}</Badge> : value === false ? <Badge tone="neutral">{no}</Badge> : unknown;
 
+type Proposal = NonNullable<LabClaim["proposal"]>;
+
+/** A laboratory that a member proposes, as the member entered it. */
+function ProposedLaboratory({ proposal }: { proposal: Proposal }) {
+  return (
+    <dl className="grid gap-0.5">
+      <dt className="sr-only">Name</dt>
+      <dd className="font-medium text-fg-strong">{proposal.name}</dd>
+      <dt className="sr-only">Institution</dt>
+      <dd className="text-fg-secondary">
+        {proposal.newInstitution === undefined ? (
+          <InstitutionName id={proposal.institutionId} />
+        ) : (
+          `${proposal.newInstitution.name}, ${proposal.newInstitution.city}, ${countryName(proposal.newInstitution.countryCode)} (a new institution)`
+        )}
+      </dd>
+      {proposal.department === undefined ? null : (
+        <>
+          <dt className="sr-only">Department</dt>
+          <dd className="text-fg-secondary">{proposal.department}</dd>
+        </>
+      )}
+      {proposal.website === undefined ? null : (
+        <>
+          <dt className="sr-only">Website</dt>
+          <dd className="break-all text-fg-secondary">{proposal.website}</dd>
+        </>
+      )}
+    </dl>
+  );
+}
+
+function InstitutionName({ id }: { id: string }) {
+  const institution = useLiveDocument("institutions", [id]);
+  return <>{institution.status === "ready" && institution.data !== null ? institution.data.name : id}</>;
+}
+
+/** The laboratory in the portal that a registration duplicates, beside what the member proposed. */
+function DuplicateComparison({ laboratoryId, proposal }: { laboratoryId: string; proposal: Proposal }) {
+  const existing = useLiveDocument("laboratories", [laboratoryId]);
+  return (
+    <div
+      className="grid gap-2 rounded-control border border-accent bg-surface-accent p-2"
+      data-testid="duplicate-comparison"
+    >
+      <p className="font-medium text-fg-strong">This laboratory is in the portal already</p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div>
+          <p className="text-xs text-fg-muted">Proposed</p>
+          <ProposedLaboratory proposal={proposal} />
+        </div>
+        <div>
+          <p className="text-xs text-fg-muted">In the portal</p>
+          {existing.status === "ready" && existing.data !== null ? (
+            <dl className="grid gap-0.5">
+              <dt className="sr-only">Name</dt>
+              <dd className="font-medium">
+                <Link to={laboratoryPath(laboratoryId)} className="text-fg-accent underline">
+                  {existing.data.name}
+                </Link>
+              </dd>
+              <dt className="sr-only">Institution</dt>
+              <dd className="text-fg-secondary">
+                {existing.data.institutionId === undefined ? (
+                  "No institution recorded"
+                ) : (
+                  <InstitutionName id={existing.data.institutionId} />
+                )}
+              </dd>
+              <dt className="sr-only">Department</dt>
+              <dd className="text-fg-secondary">{existing.data.department ?? "No department recorded"}</dd>
+            </dl>
+          ) : (
+            <span className="text-fg-secondary">Loading the laboratory</span>
+          )}
+        </div>
+      </div>
+      <p className="text-xs text-fg-muted">
+        Approving gives the member the role in the laboratory that exists. Nothing is created twice.
+      </p>
+    </div>
+  );
+}
+
 /** The evidence that the server computed for a request, which only deciders may read. */
-function Evidence({ claimId }: { claimId: string }) {
+function Evidence({ claimId, proposal }: { claimId: string; proposal: Proposal | undefined }) {
   const review = useLiveDocument("labClaimReview", [claimId]);
   return (
     <LiveView
@@ -56,8 +143,15 @@ function Evidence({ claimId }: { claimId: string }) {
         if (record === null) return <span className="text-fg-secondary">No evidence recorded</span>;
         const { evidence } = record;
         const entry = evidence.memberEntry as { status?: unknown; role?: unknown } | null | undefined;
+        const duplicateOf =
+          typeof evidence.duplicateOfLaboratoryId === "string" ? evidence.duplicateOfLaboratoryId : null;
         return (
           <ul className="grid gap-1">
+            {proposal !== undefined && duplicateOf !== null ? (
+              <li>
+                <DuplicateComparison laboratoryId={duplicateOf} proposal={proposal} />
+              </li>
+            ) : null}
             <li>
               {yesNo(
                 evidence.personListsLaboratory,
@@ -93,6 +187,11 @@ function Decision({ claim }: { claim: LabClaim }) {
   const toast = useToast();
   const offline = useLiveDataDisconnected();
   const [deciding, setDeciding] = useState<"approve" | "reject" | null>(null);
+  const own = claim.uid === useSignedInUser().uid;
+  // Nobody decides their own request, which the function refuses as well.
+  if (own) {
+    return <span className="text-fg-secondary">Your own request: another reviewer decides it</span>;
+  }
   return (
     <>
       <div className="flex flex-wrap gap-2">
@@ -109,7 +208,9 @@ function Decision({ claim }: { claim: LabClaim }) {
         title={deciding === "approve" ? "Approve this request?" : "Reject this request?"}
         description={
           deciding === "approve"
-            ? "The member becomes an authorised representative of the laboratory, with the role they asked for."
+            ? claim.proposal === undefined
+              ? "The member becomes an authorised representative of the laboratory, with the role they asked for."
+              : "The laboratory is created, with its institution where that is new, and the member represents it with the role they asked for. If it is in the portal already, nothing is created twice."
             : "The member is told that the request was not approved."
         }
         label="Note"
@@ -179,14 +280,21 @@ function LabClaimTable({ claims }: { claims: readonly LabClaim[] }) {
             {table.page.map((claim) => (
               <TableRow key={claim.id} className="align-top">
                 <TableCell>
-                  <LaboratoryName id={claim.laboratoryId} />
+                  {claim.proposal === undefined ? (
+                    <LaboratoryName id={claim.laboratoryId} />
+                  ) : (
+                    <div className="grid gap-1">
+                      <Badge tone="outline">New laboratory</Badge>
+                      <ProposedLaboratory proposal={claim.proposal} />
+                    </div>
+                  )}
                 </TableCell>
                 <TableCell>
                   <PersonOfAccount uid={claim.uid} />
                 </TableCell>
                 <TableCell>{ROLE_LABELS[claim.requestedRole]}</TableCell>
                 <TableCell>
-                  <Evidence claimId={claim.id} />
+                  <Evidence claimId={claim.id} proposal={claim.proposal} />
                 </TableCell>
                 <TableCell>
                   <time dateTime={claim.submittedAt.toDate().toISOString()}>

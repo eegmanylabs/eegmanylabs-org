@@ -16,7 +16,7 @@ import { expectOutcomes, requestsOf } from "../requests";
 import { seedWorld } from "../seed";
 import { createRulesEnvironment } from "../support";
 import { OTHER_LABORATORY, OTHER_REPLICATION, OWN_LABORATORY, OWN_PARTICIPATION, uidOfCaller } from "../world";
-import { newRecord } from "./exfiltration-and-escalation-support";
+import { newParticipation } from "./exfiltration-and-escalation-support";
 
 let environment: RulesTestEnvironment;
 const { create, update } = requestsOf(() => environment);
@@ -54,9 +54,10 @@ describe("the readiness of a participation", () => {
           readinessApprovedAt: serverTimestamp(),
         }),
       ],
-      "ownCoordinator: signs its laboratory up to another replication, not started": [
-        "allowed",
-        create("ownCoordinator", NEW_PARTICIPATION, newRecord("participations", uidOfCaller("ownCoordinator"))),
+      // Signing up goes through createParticipation, which writes the checklist and the history.
+      "ownCoordinator: signs its laboratory up to another replication directly": [
+        "denied",
+        create("ownCoordinator", NEW_PARTICIPATION, newParticipation()),
       ],
     });
   });
@@ -82,14 +83,14 @@ describe("the readiness of a participation", () => {
       "ownCoordinator: creates a participation that is approved already": [
         "denied",
         create("ownCoordinator", NEW_PARTICIPATION, {
-          ...newRecord("participations", uidOfCaller("ownCoordinator")),
+          ...newParticipation(),
           readinessStatus: "approved",
         }),
       ],
       "otherCoordinator: creates a participation that is approved already": [
         "denied",
         create("otherCoordinator", OTHER_PARTICIPATION, {
-          ...newRecord("participations", uidOfCaller("otherCoordinator")),
+          ...newParticipation(),
           replicationId: OTHER_REPLICATION,
           laboratoryId: OTHER_LABORATORY,
           scopeKeys: [`rep:${OTHER_REPLICATION}`, `lab:${OTHER_LABORATORY}`],

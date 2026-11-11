@@ -4,19 +4,21 @@
 import {
   type Capability,
   can,
+  laboratoryScopeKey,
   MEMBERS_SCOPE_KEY,
   PROGRAMME_POWER_SCOPE_KEYS,
   type RecordScope,
+  type ResolvedAccess,
+  replicationScopeKey,
 } from "@eegml/shared";
 import { useAuth } from "@/auth/AuthProvider";
 import { programmePowersWithheld } from "@/auth/privilege";
 import { usePrivilegeFacts } from "@/auth/use-privilege";
-import type { AccessRecord } from "@/data";
 
 export interface Viewer {
   readonly uid: string;
   readonly personId: string | null;
-  readonly access: AccessRecord;
+  readonly access: ResolvedAccess;
   /** Whether the powers of a programme role are in effect in this session. */
   readonly staff: boolean;
   /** Whether the account is a programme administrator whose powers are in effect. */
@@ -27,13 +29,21 @@ export interface Viewer {
   readsTeamOf(studyKey: string): boolean;
   /** The scope keys a list query may name for this session, at most as many as Firestore accepts. */
   readonly queryScopeKeys: readonly string[];
+  /** Whether the account may read the restricted detail of a laboratory: its address and internal notes. */
+  readsLaboratoryDetail(laboratoryId: string): boolean;
+  /**
+   * How the account may read what is scoped to a participation (its checklist, team and
+   * restricted detail): `all` for programme staff, the keys it holds of the participation's
+   * scope, or null where it holds none.
+   */
+  participationScope(participation: { replicationId: string; laboratoryId: string }): "all" | readonly string[] | null;
 }
 
 /** The most values Firestore accepts in one array-membership clause. */
 const MAX_CLAUSE_VALUES = 30;
 
 /** The facts of a viewer, pure, so that the decisions are tested by themselves. */
-export function viewerOf(uid: string, access: AccessRecord, sessionSecondFactor: boolean): Viewer {
+export function viewerOf(uid: string, access: ResolvedAccess, sessionSecondFactor: boolean): Viewer {
   const withheld = programmePowersWithheld({ access, sessionSecondFactor, enrolledFactors: 0 });
   const staff = !access.suspended && access.programmeRoles.length > 0 && !withheld;
   const sessionKeys = withheld
@@ -69,6 +79,20 @@ export function viewerOf(uid: string, access: AccessRecord, sessionSecondFactor:
       return staff || access.leadReplicationIds.includes(studyKey) || access.teamReplicationIds.includes(studyKey);
     },
     queryScopeKeys: ordered.slice(0, MAX_CLAUSE_VALUES),
+    readsLaboratoryDetail(laboratoryId) {
+      return (
+        staff ||
+        access.coordinatorLaboratoryIds.includes(laboratoryId) ||
+        access.memberLaboratoryIds.includes(laboratoryId)
+      );
+    },
+    participationScope({ replicationId, laboratoryId }) {
+      if (staff) return "all";
+      const held = [replicationScopeKey(replicationId), laboratoryScopeKey(laboratoryId)].filter((key) =>
+        sessionKeys.includes(key),
+      );
+      return held.length === 0 ? null : held;
+    },
   };
 }
 

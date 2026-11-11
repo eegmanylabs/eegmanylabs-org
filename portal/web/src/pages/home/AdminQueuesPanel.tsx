@@ -15,6 +15,7 @@ import {
   usePendingAccountClaims,
   usePendingLabClaims,
 } from "@/pages/admin/queues";
+import { MEMBERSHIPS_TO_REVIEW } from "@/registry/queries";
 
 /** The size of a queue, or what stands in for it while it is loading or could not be read. */
 function Count({ live }: { live: Live<number> }) {
@@ -64,6 +65,9 @@ export function AdminQueuesPanel() {
   const labClaims = usePendingLabClaims(open("labs.claims.review") ? record : null);
   const corrections = useLiveQuery(open("reconciliation.resolve") ? OPEN_CORRECTION_REQUESTS : null);
   const roles = useLiveQuery(open("roles.manage") ? PENDING_ROLE_ASSIGNMENTS : null);
+  // Listing the memberships that wait for review across replications takes the powers of a programme role.
+  const staff = access.status === "ready" && (access.data?.programmeRoles.length ?? 0) > 0;
+  const memberships = useLiveQuery(open("reconciliation.resolve") && staff ? MEMBERSHIPS_TO_REVIEW : null);
 
   const rows = [
     open("claims.review") ? (
@@ -83,6 +87,11 @@ export function AdminQueuesPanel() {
     corrections.status === "idle" ? null : (
       <QueueRow key="corrections" entryId="admin-corrections" live={sizeOf(corrections)}>
         Reports of wrong details
+      </QueueRow>
+    ),
+    memberships.status === "idle" ? null : (
+      <QueueRow key="memberships" entryId="admin-memberships" live={sizeOf(memberships)}>
+        Memberships of replications to review, such as disputed leads
       </QueueRow>
     ),
     roles.status === "idle" ? null : (

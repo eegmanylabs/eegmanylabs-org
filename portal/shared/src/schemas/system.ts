@@ -48,12 +48,24 @@ import {
  * | `labClaim.requested`            | A member asks to represent a laboratory                            |
  * | `labClaim.approved`             | A reviewer approves such a request                                 |
  * | `labClaim.rejected`             | A reviewer rejects such a request                                  |
+ * | `labClaim.withdrawn`            | The member withdraws their own request while it waits for review    |
  * | `correction.resolved`           | A correction request is accepted or rejected                       |
  * | `demographics.read`             | Special-category data of a person is served to a caller            |
  * | `person.orcidChanged`           | The ORCID iD of a person is set, changed or removed                |
  * | `laboratoryMember.confirmed`    | A member entry of a laboratory is confirmed                        |
  * | `replicationMembership.confirmed` | A membership of a replication is confirmed                       |
  * | `replication.statusChanged`     | The status of a replication is changed, with its history entry      |
+ * | `replication.citationEdited`    | A checked citation is changed and returns to unverified            |
+ * | `institution.created`           | An institution is created with a laboratory that is registered or created |
+ * | `laboratory.created`            | A laboratory is created, on approval of a registration or by an administrator |
+ * | `equipment.saved`               | An equipment configuration is opened, or replaces the current one   |
+ * | `participation.created`         | A participation is created with its checklist and status history    |
+ * | `participation.statusChanged`   | The status of a participation is changed, with its history entry    |
+ * | `reconciliation.resolved`       | A reviewer decides an item of the reconciliation queue              |
+ * | `reconciliation.dismissed`      | A reviewer dismisses an item of the reconciliation queue            |
+ * | `person.merged`                 | Two records of one person are merged into one                       |
+ * | `person.created`                | A reviewer admits someone whom no record names, with their account  |
+ * | `importBatch.rolledBack`        | An import batch is rolled back from its change log                  |
  * | `document.created`              | The audit trigger saw a document created outside a callable function |
  * | `document.updated`              | The audit trigger saw a document changed outside a callable function |
  * | `document.deleted`              | The audit trigger saw a document deleted                           |
@@ -80,12 +92,24 @@ export const AUDIT_ACTIONS = [
   "labClaim.requested",
   "labClaim.approved",
   "labClaim.rejected",
+  "labClaim.withdrawn",
   "correction.resolved",
   "demographics.read",
   "person.orcidChanged",
   "laboratoryMember.confirmed",
   "replicationMembership.confirmed",
   "replication.statusChanged",
+  "replication.citationEdited",
+  "institution.created",
+  "laboratory.created",
+  "equipment.saved",
+  "participation.created",
+  "participation.statusChanged",
+  "reconciliation.resolved",
+  "reconciliation.dismissed",
+  "person.merged",
+  "person.created",
+  "importBatch.rolledBack",
   "document.created",
   "document.updated",
   "document.deleted",

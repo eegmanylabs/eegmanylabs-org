@@ -36,9 +36,11 @@ import {
   lookupFold,
   MEMBERS_SCOPE_KEY,
   mailId,
+  nameFold,
   nestedEntityId,
   notificationId,
   opaquePersonSlug,
+  organisationKey,
   outreachContactId,
   outreachGroupKey,
   outreachNameHash,
@@ -52,10 +54,13 @@ import {
   predictionMarketItemId,
   reconciliationFingerprint,
   recordGrantId,
+  registeredInstitutionId,
+  registeredLaboratoryId,
   replicationMembershipId,
   replicationScopeKey,
   roleAssignmentId,
   roleScopeKey,
+  searchFold,
   searchIndexId,
   sequenceId,
   sha256Hex,
@@ -164,6 +169,8 @@ const GOLDEN: { readonly [Name in IdBuilderName]: readonly [actual: string | nul
   personEmailIndexId: [personEmailIndexId("synthetic.person@example.org", SECRET), "2582f190c9c2f5731bad"],
   identityKeyId: [identityKeyId("person", "orcid", "0000-0002-1825-0097", SECRET), "9b44cbde2a75cbca2951"],
   importedPersonId: [importedPersonId(personEvidenceKey.websitePeople("sperson"), SECRET), "p__5e2af6801cca31cdd33b"],
+  registeredInstitutionId: [registeredInstitutionId("Example University", "gb"), "inst__008123e1ea36c201a864"],
+  registeredLaboratoryId: [registeredLaboratoryId("inst__0f3a", "Sample EEG Laboratory"), "lab__d33e231e7011c59722e3"],
   importedAffiliationId: [importedAffiliationId("h", "people", 1), "h__people__a1"],
   institutionCandidateId: [institutionCandidateId("Example University, Sample City"), "instcand__359afef6134bad95183e"],
   studyAliasId: [studyAliasId("bids", "AmodioJost2007_"), "bids__cddb6bc0be97edc28b39"],
@@ -292,6 +299,48 @@ describe("the identifiers that importers derive", () => {
     expect(personEvidenceKey.nameAffiliation("Sámple Person", "Example University")).toBe(
       "name:sampleperson@exampleuniversity",
     );
+  });
+
+  it("builds the name keys of an institution and a laboratory, which fold spellings alike", () => {
+    expect(organisationKey.institution(" Exámple University ", "gb")).toBe("exampleuniversity#GB");
+    expect(organisationKey.laboratory("inst__0f3a", "Sample EEG-Laboratory")).toBe("inst__0f3a#sampleeeglaboratory");
+    expect(registeredLaboratoryId("inst__0f3a", "sample eeg laboratory")).toBe(
+      registeredLaboratoryId("inst__0f3a", "Sample EEG Laboratory"),
+    );
+    expect(registeredLaboratoryId("inst__0f3b", "Sample EEG Laboratory")).not.toBe(
+      registeredLaboratoryId("inst__0f3a", "Sample EEG Laboratory"),
+    );
+    expect(organisationKey.laboratory("inst__0f3a", " - ")).toBeNull();
+    expect(() => registeredInstitutionId("!!", "GB")).toThrow(RangeError);
+  });
+
+  it("keys the names of organisations in every script, and keeps names apart that differ outside Latin", () => {
+    // Synthetic names in Arabic, Hebrew, Cyrillic, Greek, Chinese, Japanese and Korean.
+    for (const name of [
+      "جامعة المثال للعلوم العصبية",
+      "אוניברסיטת דוגמה",
+      "Пример университет",
+      "Πανεπιστήμιο Παράδειγμα",
+      "示例大学",
+      "サンプル大学",
+      "예시 대학교",
+    ]) {
+      expect(organisationKey.institution(name, "GB"), name).not.toBeNull();
+      expect(() => registeredInstitutionId(name, "GB")).not.toThrow();
+    }
+    expect(organisationKey.institution("جامعة المثال", "EG")).toBe("جامعةالمثال#EG");
+    // Mixed scripts no longer fold to their Latin part alone.
+    expect(registeredLaboratoryId("inst__0f3a", "ЭЭГ Lab")).not.toBe(registeredLaboratoryId("inst__0f3a", "МРТ Lab"));
+    expect(registeredLaboratoryId("inst__0f3a", "ЭЭГ Lab")).toBe(registeredLaboratoryId("inst__0f3a", "ээг-lab"));
+    expect(registeredLaboratoryId("inst__0f3a", "示例实验室")).not.toBe(
+      registeredLaboratoryId("inst__0f3a", "示例研究室"),
+    );
+    // Latin names fold as before, diacritics included, so the identifiers of earlier registrations hold.
+    expect(nameFold("Exámple-University")).toBe(lookupFold("Exámple-University"));
+    expect(searchFold("São  Paulo!")).toBe("sao-paulo");
+    // Marks of other scripts carry the word and stay.
+    expect(nameFold("किताब")).not.toBe(nameFold("कताब"));
+    expect(nameFold(" - !! ")).toBe("");
   });
 
   it("gives no name-and-affiliation key when either part folds to nothing", () => {

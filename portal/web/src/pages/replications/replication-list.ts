@@ -2,7 +2,7 @@
 // sorted, and how that state is written into the address so that a filtered view can be shared
 // and survives a reload. Pure, so that it is tested by itself.
 import type { DataOrigin } from "@eegml/shared";
-import { fold } from "@eegml/shared";
+import { matchesSearch, searchWords } from "@eegml/shared";
 import type { SortDirection } from "@/components/ui/sort-header";
 
 /** What a row needs from the documents behind it. */
@@ -57,6 +57,8 @@ export interface ReplicationRow {
   readonly leadState: LeadState;
   readonly laboratoryCount: number;
   readonly publicationCount: number;
+  /** The statuses of the publications of the replication, one for each publication. */
+  readonly publicationStatuses: readonly string[];
   readonly withdrawn: boolean;
   readonly dataOrigin: DataOrigin;
   /** Other spellings of the identifier, which the search also looks in. */
@@ -72,7 +74,8 @@ export interface RowInputs {
   readonly leadsToReview: ReadonlySet<string>;
   /** The number of laboratories that take part in each replication. */
   readonly laboratoryCounts: ReadonlyMap<string, number>;
-  readonly publicationCounts: ReadonlyMap<string, number>;
+  /** The status of each publication of each replication. */
+  readonly publicationStatuses: ReadonlyMap<string, readonly string[]>;
   readonly aliases: ReadonlyMap<string, readonly string[]>;
 }
 
@@ -100,7 +103,8 @@ export function buildReplicationRows(inputs: RowInputs): ReplicationRow[] {
         leadState:
           leadNames.length > 0 ? "confirmed" : inputs.leadsToReview.has(replication.studyKey) ? "needsReview" : "none",
         laboratoryCount: inputs.laboratoryCounts.get(replication.studyKey) ?? 0,
-        publicationCount: inputs.publicationCounts.get(replication.studyKey) ?? 0,
+        publicationCount: inputs.publicationStatuses.get(replication.studyKey)?.length ?? 0,
+        publicationStatuses: inputs.publicationStatuses.get(replication.studyKey) ?? [],
         withdrawn: replication.selectionStatus === "withdrawn",
         dataOrigin: replication.dataOrigin,
         aliases: inputs.aliases.get(replication.studyKey) ?? [],
@@ -136,6 +140,8 @@ export interface ReplicationListState {
   readonly stage: string | null;
   readonly theme: string | null;
   readonly listing: Listing;
+  /** A status of publications: the replications that have a publication in it. Null for every replication. */
+  readonly publication: string | null;
   readonly sort: ReplicationSortKey;
   readonly direction: SortDirection;
   /** The study identifier shown in the side panel, or null. */
@@ -148,6 +154,7 @@ export const DEFAULT_REPLICATION_STATE: ReplicationListState = {
   stage: null,
   theme: null,
   listing: "all",
+  publication: null,
   sort: "studyKey",
   direction: "asc",
   open: null,
@@ -166,6 +173,7 @@ export function parseReplicationState(params: URLSearchParams): ReplicationListS
     stage: text(params.get("stage")),
     theme: text(params.get("theme")),
     listing: oneOf(LISTINGS, params.get("listing"), DEFAULT_REPLICATION_STATE.listing),
+    publication: text(params.get("publication")),
     sort: oneOf(REPLICATION_SORT_KEYS, params.get("sort"), DEFAULT_REPLICATION_STATE.sort),
     direction: params.get("dir") === "desc" ? "desc" : "asc",
     open: text(params.get("open")),
@@ -180,6 +188,7 @@ export function serialiseReplicationState(state: ReplicationListState): URLSearc
   if (state.stage !== null) params.set("stage", state.stage);
   if (state.theme !== null) params.set("theme", state.theme);
   if (state.listing !== DEFAULT_REPLICATION_STATE.listing) params.set("listing", state.listing);
+  if (state.publication !== null) params.set("publication", state.publication);
   if (state.sort !== DEFAULT_REPLICATION_STATE.sort) params.set("sort", state.sort);
   if (state.direction !== DEFAULT_REPLICATION_STATE.direction) params.set("dir", state.direction);
   if (state.open !== null) params.set("open", state.open);
@@ -188,17 +197,19 @@ export function serialiseReplicationState(state: ReplicationListState): URLSearc
 
 /** Whether a row matches the search: the identifier, the aliases, the titles and the authors. */
 export function matchesReplicationQuery(row: ReplicationRow, query: string): boolean {
-  const folded = fold(query);
-  if (folded === "") return true;
-  return [row.studyKey, ...row.aliases, row.title, row.originalAuthors, row.originalYear?.toString()].some(
-    (value) => value != null && fold(value).includes(folded),
-  );
+  return matchesSearch(searchWords(query), [
+    row.studyKey,
+    ...row.aliases,
+    row.title,
+    row.originalAuthors,
+    row.originalYear?.toString(),
+  ]);
 }
 
 /** Applies the search and the filters. */
 export function filterReplications(
   rows: readonly ReplicationRow[],
-  state: Pick<ReplicationListState, "query" | "status" | "stage" | "theme" | "listing">,
+  state: Pick<ReplicationListState, "query" | "status" | "stage" | "theme" | "listing" | "publication">,
 ): ReplicationRow[] {
   return rows.filter(
     (row) =>
@@ -208,7 +219,8 @@ export function filterReplications(
       (state.stage === null ||
         (state.stage === NO_STATUS ? row.stageNumber === null : String(row.stageNumber) === state.stage)) &&
       (state.theme === null || row.theme === state.theme) &&
-      (state.listing === "all" || (state.listing === "withdrawn") === row.withdrawn),
+      (state.listing === "all" || (state.listing === "withdrawn") === row.withdrawn) &&
+      (state.publication === null || row.publicationStatuses.includes(state.publication)),
   );
 }
 

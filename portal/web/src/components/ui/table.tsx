@@ -8,7 +8,8 @@ export interface TableProps extends ComponentProps<"table"> {
 
 /**
  * The frame of a data table: a bordered, horizontally scrollable region with hairline row
- * dividers and no striping.
+ * dividers and no striping. The region is positioned, so that text for assistive technology,
+ * which is positioned absolutely, scrolls with the table and never widens the page.
  */
 export function Table({ caption, className, children, ...props }: TableProps) {
   return (
@@ -16,7 +17,7 @@ export function Table({ caption, className, children, ...props }: TableProps) {
       aria-label={caption}
       // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
       tabIndex={0}
-      className="overflow-x-auto rounded-tile border border-border bg-surface"
+      className="relative overflow-x-auto rounded-tile border border-border bg-surface"
     >
       <table className={cn("w-full border-collapse text-left text-sm", className)} {...props}>
         <caption className="sr-only">{caption}</caption>

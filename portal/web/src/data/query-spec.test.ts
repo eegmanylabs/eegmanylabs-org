@@ -129,3 +129,22 @@ describe("the types of a live query", () => {
     expect([valid, wrongField, wrongParents, fixedName]).toHaveLength(4);
   });
 });
+
+describe("a page of a longer list", () => {
+  const persons: LiveQuery<"persons"> = { collection: "persons", within: [], limit: 1_000 };
+
+  it("is a query of its own, after the document it starts after", () => {
+    expect(liveQueryKey({ ...persons, startAfterId: "person-a" })).not.toBe(liveQueryKey(persons));
+    expect(liveQueryKey({ ...persons, startAfterId: "person-a" })).not.toBe(
+      liveQueryKey({ ...persons, startAfterId: "person-b" }),
+    );
+    expect(() => assertValidLiveQuery({ ...persons, startAfterId: "person-a" })).not.toThrow();
+  });
+
+  it("is refused for a query in another order, or across the parents of a collection", () => {
+    expect(() => assertValidLiveQuery({ ...participations, startAfterId: "x" })).toThrow(LiveQueryError);
+    expect(() =>
+      assertValidLiveQuery({ collection: "laboratoryMembers", within: "group", limit: 10, startAfterId: "x" }),
+    ).toThrow(LiveQueryError);
+  });
+});

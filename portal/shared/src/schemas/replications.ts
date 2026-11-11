@@ -360,7 +360,8 @@ export const historicalAggregateDocSchema = documentBaseSchema.extend({
   snapshotDate: isoDateSchema.exactOptional(),
   sourceRecordId: idSchema,
   isCurrent: z.boolean(),
-  dataOrigin: z.literal("importedHistorical"),
+  /** Imported historical figures, or the invented figures of the demonstration world. */
+  dataOrigin: z.enum(["importedHistorical", "demo"]),
   ...provenanceShape,
 });
 export type HistoricalAggregateDoc = z.output<typeof historicalAggregateDocSchema>;

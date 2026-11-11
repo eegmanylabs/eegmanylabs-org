@@ -85,6 +85,8 @@ test.describe
       baseURL,
     }) => {
       // The member, as a client of the database: a lead may edit the replication's definition.
+      // The abstract is edited, because the citation of this replication has been checked and
+      // changes only through editReplicationCitation.
       const client = createTestClient();
       try {
         const user = await signInWithEmailLinkFromEmulator(client, BEN.email);
@@ -92,7 +94,7 @@ test.describe
         connectFirestoreEmulator(db, HOST, PORTS.firestore);
         const editAsLead = () =>
           updateDoc(doc(db, "replications/DemoAlpha2001"), {
-            originalTitle: "Synthetic original title, edited in a test",
+            abstract: "A synthetic abstract, edited in a test.",
             updatedAt: serverTimestamp(),
             updatedBy: user.uid,
             writeContext: userWriteContext(),

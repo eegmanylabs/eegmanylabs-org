@@ -1,9 +1,9 @@
 import { can, correctionCanBeApplied, resolveCorrectionRequestContract } from "@eegml/shared";
 import { useState } from "react";
 import { formatDateTime } from "@/app/labels";
-import { useAuth } from "@/auth/AuthProvider";
+import { useAuth, useSignedInUser } from "@/auth/AuthProvider";
 import { LiveView } from "@/components/feedback/live-view";
-import { PersonName } from "@/components/record-names";
+import { PersonName, ReplicationName } from "@/components/record-names";
 import { byText, type TableSpec, useTableControls } from "@/components/table-controls";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -55,6 +55,9 @@ function Resolve({ request }: { request: Request }) {
   const [open, setOpen] = useState(false);
   const [decision, setDecision] = useState<Decision>(applicable ? "apply" : "accepted");
   const label = CORRECTABLE_FIELD_LABELS[request.field] ?? request.field;
+  // Nobody decides their own report, which the function refuses as well.
+  const own = request.uid === useSignedInUser().uid;
+  if (own) return <span className="text-fg-secondary">Your own report: another administrator decides it</span>;
   return (
     <>
       <Button size="sm" disabled={offline} onClick={() => setOpen(true)}>
@@ -159,6 +162,8 @@ function RequestTable({ requests, canResolve }: { requests: readonly Request[]; 
                 <TableCell>
                   {request.entityType === "person" ? (
                     <PersonName id={request.entityId} />
+                  ) : request.entityType === "replication" ? (
+                    <ReplicationName id={request.entityId} />
                   ) : (
                     `${request.entityType} ${request.entityId}`
                   )}

@@ -50,6 +50,12 @@ export interface LiveQuery<K extends ListableCollectionKey> {
   readonly orderBy?: readonly QueryOrder<K>[];
   /** The most documents to read. Every list is bounded. */
   readonly limit: number;
+  /**
+   * Reads the documents after this identifier, in the order of their identifiers: a page of a
+   * longer list. Only for a query of one collection without `orderBy`, which is in that order
+   * already.
+   */
+  readonly startAfterId?: string;
 }
 
 /** The most values Firestore accepts in one `in`, `not-in` or `array-contains-any` clause. */
@@ -70,6 +76,11 @@ export class LiveQueryError extends Error {
 export function assertValidLiveQuery<K extends ListableCollectionKey>(query: LiveQuery<K>): void {
   if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > LIVE_QUERY_MAX_LIMIT) {
     throw new LiveQueryError(`A live query reads between 1 and ${LIVE_QUERY_MAX_LIMIT} documents.`);
+  }
+  if (query.startAfterId !== undefined && ((query.orderBy ?? []).length > 0 || query.within === "group")) {
+    throw new LiveQueryError(
+      "A query that starts after a document reads one collection and is ordered by identifier alone.",
+    );
   }
   const filters = query.where ?? [];
   if (filters.filter(([, operator]) => ARRAY_OPERATORS.includes(operator)).length > 1) {
@@ -100,5 +111,6 @@ export function liveQueryKey<K extends ListableCollectionKey>(query: LiveQuery<K
     (query.where ?? []).map(([field, operator, value]) => [field, operator, plain(value)]),
     query.orderBy ?? [],
     query.limit,
+    ...(query.startAfterId === undefined ? [] : [query.startAfterId]),
   ])}`;
 }

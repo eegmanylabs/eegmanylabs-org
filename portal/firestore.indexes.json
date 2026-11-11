@@ -169,6 +169,24 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "statusHistory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "laboratoryId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scopeKeys",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "effectiveAt",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [
@@ -369,6 +387,28 @@
       ]
     },
     {
+      "collectionGroup": "equipment",
+      "fieldPath": "isCurrent",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    },
+    {
       "collectionGroup": "laboratories",
       "fieldPath": "custom",
       "indexes": []
@@ -400,6 +440,28 @@
     },
     {
       "collectionGroup": "members",
+      "fieldPath": "personId",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "memberships",
       "fieldPath": "personId",
       "indexes": [
         {
@@ -532,6 +594,28 @@
     {
       "collectionGroup": "teamMembers",
       "fieldPath": "laboratoryId",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "teamMembers",
+      "fieldPath": "personId",
       "indexes": [
         {
           "order": "ASCENDING",

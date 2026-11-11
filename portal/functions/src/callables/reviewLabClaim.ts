@@ -15,12 +15,14 @@ import {
   callerStamp,
   createdFields,
   defineCallable,
+  identityHashKey,
   readAccessDocument,
   requireCapability,
   touchedFields,
   withheldChanges,
   writeAudit,
 } from "../framework";
+import { readRegistration, writeRegistration } from "../laboratories/registration";
 import { writeNotification } from "../notifications/notify";
 import { assignmentIdOf, nextAssignment, readAssignments } from "../roles/assignments";
 
@@ -43,8 +45,15 @@ const NOT_PENDING_MESSAGE = "This request is not waiting for review any more. Re
  * person as principal investigator keeps that role. The request was made by the person
  * concerned, so the entry is confirmed, and the laboratory is put on the directory document of
  * the person in the same transaction.
+ *
+ * A request that proposes a new laboratory is decided for the programme only: its approval also
+ * creates the laboratory, and the institution where that is new, with their identity keys and
+ * an audit entry for each (`laboratories/registration.ts`). Where a laboratory exists under the
+ * same name at the same institution by then, nothing is created twice: the approval gives the
+ * member the role in the laboratory that exists.
  */
 export const reviewLabClaim = defineCallable(reviewLabClaimContract, {
+  usesIdentityHashKey: true,
   handler: async (input, context) => {
     const { db } = context;
     const reviewer = context.uid;
@@ -64,8 +73,22 @@ export const reviewLabClaim = defineCallable(reviewLabClaimContract, {
         requireCapability(context, access, "labs.claims.review", "programme");
         throw new AppError("not-found", "This request does not exist.");
       }
-      const { laboratoryId, uid: claimant, requestedRole, status } = claim.data;
-      requireCapability(context, access, "labs.claims.review", { laboratoryId });
+      const { uid: claimant, requestedRole, status, proposal } = claim.data;
+      // A proposed laboratory is decided for the programme, because its approval creates a record.
+      requireCapability(
+        context,
+        access,
+        "labs.claims.review",
+        proposal === undefined ? { laboratoryId: claim.data.laboratoryId } : "programme",
+      );
+      const registration =
+        proposal === undefined || status !== "pendingReview" || input.decision !== "approve"
+          ? null
+          : await readRegistration(db, transaction, proposal, identityHashKey());
+      // The laboratory the role is in: the one of the request, or for a proposal the one that
+      // exists under its name key by now, which is never created a second time.
+      const laboratoryId = registration?.existingLaboratoryId ?? claim.data.laboratoryId;
+      const creates = registration !== null && registration.existingLaboratoryId === null;
       if (claimant === reviewer) {
         throw new AppError("permission-denied", "You cannot decide your own request. Ask another reviewer.");
       }
@@ -97,7 +120,7 @@ export const reviewLabClaim = defineCallable(reviewLabClaimContract, {
                 personReference,
                 entryReference,
               );
-              if (laboratory?.exists !== true || person?.exists !== true) {
+              if ((!creates && laboratory?.exists !== true) || person?.exists !== true) {
                 throw new AppError(
                   "failed-precondition",
                   "The laboratory or the person of this request no longer exists.",
@@ -122,6 +145,41 @@ export const reviewLabClaim = defineCallable(reviewLabClaimContract, {
       );
       const stamp = callerStamp(reviewer, at, auditEventId);
       const now = Timestamp.fromDate(at);
+      if (creates && registration !== null) {
+        const { institutionCreated } = writeRegistration(transaction, registration, stamp, "active");
+        writeAudit(
+          transaction,
+          {
+            action: "laboratory.created",
+            actor: { kind: "user", uid: reviewer },
+            entityType: "laboratory",
+            entityId: laboratoryId,
+            changes: [
+              { field: "name", after: registration.proposal.name },
+              { field: "institutionId", after: registration.proposal.institutionId },
+              { field: "registeredBy", after: claimant },
+            ],
+            at,
+            context: { causationId: auditEventId },
+          },
+          db,
+        );
+        if (institutionCreated) {
+          writeAudit(
+            transaction,
+            {
+              action: "institution.created",
+              actor: { kind: "user", uid: reviewer },
+              entityType: "institution",
+              entityId: registration.proposal.institutionId,
+              changes: [{ field: "name", after: registration.proposal.newInstitution?.name ?? null }],
+              at,
+              context: { causationId: auditEventId },
+            },
+            db,
+          );
+        }
+      }
       transaction.update(claimReference, { status: decided, ...touchedFields(stamp) });
       transaction.update(reviewReference, {
         reviewedBy: reviewer,

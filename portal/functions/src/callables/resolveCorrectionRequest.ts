@@ -26,7 +26,7 @@ import { writeNotification } from "../notifications/notify";
  * `people.manage`, with the second factor wherever the caller's access document requires one.
  *
  * Members create correction requests directly, under the security rules, and may withdraw one
- * that is still open. The rules reserve `resolvedBy` and `resolvedAt` for this function, which
+ * that is still open. Nobody decides their own request. The rules reserve `resolvedBy` and `resolvedAt` for this function, which
  * sets them with the status in one transaction with the audit entry.
  *
  * With `apply`, an accepted request about a field that programme staff edit directly
@@ -49,6 +49,10 @@ export const resolveCorrectionRequest = defineCallable(resolveCorrectionRequestC
       const request = snapshot.exists ? parseStoredDocument(correctionRequestDocSchema, snapshot.data()) : null;
       if (request === null) throw new AppError("not-found", "This correction request does not exist.");
       if (!request.success) throw request.error;
+      // Nobody decides their own report, as nobody decides their own claim.
+      if (request.data.uid === actor) {
+        throw new AppError("permission-denied", "You cannot decide your own report. Ask another administrator.");
+      }
       if (request.data.status === input.outcome) {
         return { requestId: input.requestId, status: input.outcome, applied: false };
       }

@@ -1,6 +1,6 @@
 // Search, sort and paging of a list that the browser holds in full. Every list of the
 // administration console goes through this, so they all behave the same way.
-import { fold } from "@eegml/shared";
+import { matchesSearch, searchWords } from "@eegml/shared";
 import { useMemo, useState } from "react";
 import type { SortDirection } from "@/components/ui/sort-header";
 
@@ -27,11 +27,8 @@ export function viewOf<T, K extends string>(
   spec: TableSpec<T, K>,
   state: { readonly query: string; readonly sortKey: K; readonly direction: SortDirection; readonly offset: number },
 ): TableView<T> {
-  const query = fold(state.query);
-  const matching =
-    query === ""
-      ? [...items]
-      : items.filter((item) => spec.searchText(item).some((text) => text != null && fold(text).includes(query)));
+  const words = searchWords(state.query);
+  const matching = words === null ? [...items] : items.filter((item) => matchesSearch(words, spec.searchText(item)));
   const compare = spec.sorters[state.sortKey];
   matching.sort((a, b) => (state.direction === "asc" ? compare(a, b) : compare(b, a)));
   // A search that shrinks the list never leaves the view on a page that no longer exists.

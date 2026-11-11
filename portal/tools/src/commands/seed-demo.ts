@@ -4,17 +4,20 @@ import {
   bootstrapAdminPath,
   bootstrapAdminRecordSchema,
   COLLECTIONS,
-  historicalAggregateId,
-  hypothesisId,
-  lookupFold,
-  MEMBERS_SCOPE_KEY,
   type CollectionKey,
   distinctRoles,
+  historicalAggregateId,
+  hypothesisId,
   type ImpliedRole,
   identityKeyId,
+  importBatchId,
+  lookupFold,
+  MEMBERS_SCOPE_KEY,
   memberEntryCounts,
   membershipCounts,
   normaliseEmail,
+  ONBOARDING_CHECKLIST_TEMPLATE,
+  organisationKey,
   PROGRAMME_KEY,
   participationId,
   personEmailIndexId,
@@ -26,6 +29,8 @@ import {
   rolesOfMemberEntry,
   rolesOfMembership,
   rolesOfPerson,
+  sequenceId,
+  sha256Hex,
   studyAliasId,
   systemActor,
   systemWriteContext,
@@ -38,10 +43,12 @@ import type { Command } from "../command";
 import { requireEmulatorTarget, requireRunningEmulators } from "../environment";
 import { DEMO_ACCOUNTS } from "../fixtures/demo-accounts";
 import {
+  DEMO_BATCH_STARTED_AT,
   DEMO_BOOTSTRAP_ADMIN_EMAIL,
   DEMO_CONTRIBUTOR_TABLE,
   DEMO_CONTRIBUTORS,
   DEMO_DOCUMENT_LINKS,
+  DEMO_EQUIPMENT,
   DEMO_HISTORICAL_AGGREGATES,
   DEMO_HYPOTHESES,
   DEMO_INSTITUTIONS,
@@ -52,7 +59,10 @@ import {
   DEMO_PARTICIPATIONS,
   DEMO_PERSONS,
   DEMO_REPLICATIONS,
+  DEMO_REQUIREMENTS,
+  DEMO_SOURCES,
   DEMO_STATUS_HISTORY,
+  DEMO_TARGETS,
 } from "../fixtures/demo-world";
 import { emulatorHashKey } from "../hash-key";
 import { seedLookups } from "./seed-lookups";
@@ -77,6 +87,15 @@ export interface DemoDocument {
 }
 
 const displayNameOf = (person: { givenName: string; familyName: string }) => `${person.givenName} ${person.familyName}`;
+
+/** The targets of a participation, where the world states them. An unknown target stays absent. */
+function targetsOf(id: string): { targetNMain?: number; targetNRest?: number } {
+  const target = DEMO_TARGETS[id];
+  return {
+    ...(target?.main === undefined ? {} : { targetNMain: target.main }),
+    ...(target?.rest === undefined ? {} : { targetNRest: target.rest }),
+  };
+}
 
 /** A member entry and a membership of the fixtures as the stored documents state them. */
 const entryState = (entry: (typeof DEMO_LABORATORY_MEMBERS)[number]) => ({
@@ -397,7 +416,7 @@ export function demoDocuments(now: Date, hashKey: string): DemoDocument[] {
         ...(aggregate.valueNumeric === undefined ? {} : { valueNumeric: aggregate.valueNumeric }),
         sourceRecordId,
         isCurrent: true,
-        dataOrigin: "importedHistorical",
+        dataOrigin: "demo",
       },
     );
   }
@@ -445,12 +464,223 @@ export function demoDocuments(now: Date, hashKey: string): DemoDocument[] {
         scopeKeys: unitScopeKeys(participation.replicationId, participation.laboratoryId),
         status: participation.status,
         statusHistoryId: null,
+        ...targetsOf(participationId(participation.replicationId, participation.laboratoryId)),
         readinessStatus: participation.readinessStatus,
         custom: {},
         dataOrigin: "demo",
       },
     );
   }
+
+  // The name keys by which a registration finds a laboratory or an institution that exists.
+  for (const institution of DEMO_INSTITUTIONS) {
+    const key = organisationKey.institution(institution.name, institution.countryCode);
+    if (key === null) continue;
+    add(
+      "identityKeys",
+      COLLECTIONS.identityKeys.docPath(identityKeyId("institution", "nameAffiliation", key, hashKey)),
+      {
+        entityType: "institution",
+        keyKind: "nameAffiliation",
+        entityIds: [institution.id],
+        status: "active",
+        mergedIntoId: null,
+      },
+    );
+  }
+  for (const laboratory of DEMO_LABORATORIES) {
+    const key = organisationKey.laboratory(laboratory.institutionId, laboratory.name);
+    if (key === null) continue;
+    add(
+      "identityKeys",
+      COLLECTIONS.identityKeys.docPath(identityKeyId("laboratory", "nameAffiliation", key, hashKey)),
+      {
+        entityType: "laboratory",
+        keyKind: "nameAffiliation",
+        entityIds: [laboratory.id],
+        status: "active",
+        mergedIntoId: null,
+      },
+    );
+  }
+
+  for (const configuration of DEMO_EQUIPMENT) {
+    const { id, laboratoryId, isCurrent, supersedesId, ...stated } = configuration;
+    add("laboratoryEquipment", COLLECTIONS.laboratoryEquipment.docPath(laboratoryId, id), {
+      laboratoryId,
+      ...stated,
+      ...(stated.samplingRatesHz === undefined ? {} : { samplingRatesHz: [...stated.samplingRatesHz] }),
+      isCurrent,
+      validFrom: timestamp,
+      validTo: isCurrent ? null : timestamp,
+      supersedesId,
+    });
+  }
+  for (const requirement of DEMO_REQUIREMENTS) {
+    add(
+      "replicationEquipmentRequirements",
+      COLLECTIONS.replicationEquipmentRequirements.docPath(requirement.replicationId, requirement.requirementKey),
+      {
+        replicationId: requirement.replicationId,
+        requirementKey: requirement.requirementKey,
+        operator: requirement.operator,
+        ...(requirement.value === undefined ? {} : { value: requirement.value }),
+        isMandatory: requirement.isMandatory,
+      },
+    );
+  }
+
+  // The checklist and the restricted detail of each participation, as `createParticipation`
+  // would have made them, advanced as far as its readiness says.
+  for (const participation of DEMO_PARTICIPATIONS) {
+    const id = participationId(participation.replicationId, participation.laboratoryId);
+    const approved = participation.readinessStatus === "approved";
+    const done = approved
+      ? ONBOARDING_CHECKLIST_TEMPLATE.items.length
+      : participation.readinessStatus === "inProgress"
+        ? 3
+        : 0;
+    ONBOARDING_CHECKLIST_TEMPLATE.items.forEach((item, position) => {
+      add("participationChecklist", COLLECTIONS.participationChecklist.docPath(id, item.key), {
+        participationId: id,
+        templateKey: ONBOARDING_CHECKLIST_TEMPLATE.key,
+        templateItemKey: item.key,
+        label: item.label,
+        status: position < done ? "done" : "notStarted",
+        completedBy: position < done ? SEED_DEMO_ACTOR : null,
+        completedAt: position < done ? timestamp : null,
+        position,
+        replicationId: participation.replicationId,
+        laboratoryId: participation.laboratoryId,
+        scopeKeys: unitScopeKeys(participation.replicationId, participation.laboratoryId),
+      });
+    });
+    add("participationDetail", COLLECTIONS.participationDetail.docPath(id), {
+      ethicsStatus: approved ? "approved" : participation.readinessStatus === "inProgress" ? "submitted" : "unknown",
+      ...(approved ? { ethicsReference: `DEMO-ETHICS-${participation.laboratoryId.slice(9).toUpperCase()}` } : {}),
+      trainingStatus: approved ? "completed" : "unknown",
+      readinessApprovedBy: approved ? SEED_DEMO_ACTOR : null,
+      readinessApprovedAt: approved ? timestamp : null,
+    });
+  }
+
+  for (const source of DEMO_SOURCES) {
+    add("sources", COLLECTIONS.sources.docPath(source.key), {
+      ...source,
+      lastFetchedAt: Timestamp.fromDate(new Date(DEMO_BATCH_STARTED_AT)),
+    });
+  }
+
+  // One applied import batch of the first source: it created a historical figure, matched the
+  // contact document of a person without changing it, and raised the items of the review queue.
+  const batchStartedAt = new Date(DEMO_BATCH_STARTED_AT);
+  const batchId = importBatchId(batchStartedAt, sha256Hex("synthetic demonstration batch"));
+  const items = [
+    {
+      id: "demo-item-gamma-lead",
+      kind: "conflictingLead",
+      entityRefs: [
+        { entityType: "replication", entityId: "DemoGamma2010" },
+        { entityType: "person", entityId: "demo-person-dev" },
+      ],
+      field: "leadPersonIds",
+      candidates: [
+        { key: "demo-a/leads:dev", valueSource: "Dev Fictional", sourceRecordId: "demo-source-gamma-leads-a" },
+        { key: "demo-b/leads:none", valueSource: "No lead named", sourceRecordId: "demo-source-gamma-leads-b" },
+      ],
+    },
+    {
+      id: "demo-item-beta-title",
+      kind: "valueConflict",
+      entityRefs: [{ entityType: "replication", entityId: "DemoBeta2005" }],
+      field: "originalTitle",
+      candidates: [
+        {
+          key: "demo-a/title:1",
+          valueSource: "A made-up account of memory and an imagined rhythm",
+          sourceRecordId: "demo-source-beta-title-a",
+        },
+        {
+          key: "demo-b/title:2",
+          valueSource: "A made up account of memory, and of an imagined rhythm",
+          sourceRecordId: "demo-source-beta-title-b",
+        },
+      ],
+    },
+    {
+      id: "demo-item-mock-duplicate",
+      kind: "duplicatePerson",
+      entityRefs: [
+        { entityType: "person", entityId: "demo-person-hana" },
+        { entityType: "person", entityId: "demo-person-hugo" },
+      ],
+      candidates: [],
+    },
+  ] as const;
+  for (const item of items) {
+    const { id, ...fields } = item;
+    add("reconciliationItems", COLLECTIONS.reconciliationItems.docPath(id), {
+      ...fields,
+      entityRefs: fields.entityRefs.map((ref) => ({ ...ref })),
+      candidates: fields.candidates.map((candidate) => ({ ...candidate })),
+      sourceKey: "demo-a",
+      status: "open",
+      resolvedBy: null,
+      resolvedAt: null,
+      batchId,
+    });
+  }
+  const startedAt = Timestamp.fromDate(batchStartedAt);
+  add("importBatches", COLLECTIONS.importBatches.docPath(batchId), {
+    sourceKey: "demo-a",
+    mode: "apply",
+    status: "applied",
+    contentHash: sha256Hex("synthetic demonstration batch"),
+    startedBy: "system:import",
+    startedAt,
+    finishedAt: Timestamp.fromDate(new Date(batchStartedAt.getTime() + 42_000)),
+    stats: { rowsRead: 14, created: 1, updated: 0, matched: 1, itemsRaised: items.length },
+    observedOn: DEMO_BATCH_STARTED_AT.slice(0, 10),
+  });
+  const stored = (path: string) => documents.find((document) => document.path === path)?.data ?? null;
+  const aggregatePath = COLLECTIONS.historicalAggregates.docPath(
+    historicalAggregateId("nLabsSigned", "demo-source-demoalpha2001"),
+  );
+  const contactPath = COLLECTIONS.personContact.docPath("demo-person-ben");
+  const changes = [
+    {
+      documentPath: aggregatePath,
+      operation: "create",
+      relation: "created",
+      before: null,
+      after: stored(aggregatePath),
+    },
+    {
+      documentPath: contactPath,
+      operation: "update",
+      relation: "matched",
+      before: stored(contactPath),
+      after: stored(contactPath),
+    },
+    ...items.map((item) => {
+      const path = COLLECTIONS.reconciliationItems.docPath(item.id);
+      return { documentPath: path, operation: "create", relation: "created", before: null, after: stored(path) };
+    }),
+  ];
+  changes.forEach((change, index) => {
+    append("importBatchChanges", COLLECTIONS.importBatchChanges.docPath(batchId, sequenceId(index + 1)), {
+      batchId,
+      ...change,
+      sourceRecordIds: ["demo-source-demoalpha2001"],
+    });
+  });
+  const log = [
+    { level: "info", message: `Applied: 1 created, 0 updated, 1 matched, ${items.length} items raised.` },
+    { level: "warning", message: "1 row could not be read mechanically and waits in the review queue." },
+  ] as const;
+  log.forEach((entry, index) => {
+    append("importBatchLog", COLLECTIONS.importBatchLog.docPath(batchId, sequenceId(index + 1)), { batchId, ...entry });
+  });
 
   for (const account of DEMO_ACCOUNTS) {
     add("users", COLLECTIONS.users.docPath(account.uid), {

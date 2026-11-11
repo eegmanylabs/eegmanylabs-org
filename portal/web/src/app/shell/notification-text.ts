@@ -32,6 +32,8 @@ export function describeNotification(payload: Payload): NotificationText {
     }
     case "labClaimAwaitsReview":
       return { title: "A request to represent a laboratory waits for review", detail: null, to: "/admin/lab-claims" };
+    case "laboratoryRegistrationAwaitsReview":
+      return { title: "A new laboratory waits for review", detail: null, to: "/admin/lab-claims" };
     case "accountClaimApproved":
       return { title: "Your account is linked to your profile", detail: null, to: "/" };
     case "accountClaimRejected":
@@ -73,6 +75,16 @@ export function describeNotification(payload: Payload): NotificationText {
         detail: text(payload.message),
         to: "/",
       };
+    case "personMerged":
+      return {
+        title: "Another record of you was merged into your profile",
+        detail: "Its laboratory and replication entries wait for confirmation before they give you any role.",
+        to: "/",
+      };
+    case "laboratoryMembershipConfirmed":
+      return { title: "Your entry in a laboratory was confirmed", detail: null, to: "/" };
+    case "replicationMembershipConfirmed":
+      return { title: "Your membership of a replication was reviewed", detail: null, to: "/" };
     default:
       return { title: "Something changed that concerns you", detail: null, to: null };
   }

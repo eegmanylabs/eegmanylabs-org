@@ -255,12 +255,15 @@ describe("the identifier rule of an entry", () => {
       COLLECTION_ENTRIES.flatMap((entry) => (entry.identifier.kind === "builder" ? [entry.identifier.builder] : [])),
     );
     // nestedEntityId builds the entityId of a reference, which is no document identifier. The other
-    // seven derive the identifier that an importer gives a record of a collection whose identifiers
-    // the data model calls opaque: a person, an affiliation, a prediction-market item, an outreach
-    // contact, a contributor table, a contributor and a document link.
+    // nine derive the identifier that an importer or a registration gives a record of a collection
+    // whose identifiers the data model calls opaque: a person, an institution and a laboratory
+    // registered in the portal, an affiliation, a prediction-market item, an outreach contact, a
+    // contributor table, a contributor and a document link.
     expect(Object.keys(ID_BUILDERS).filter((name) => !used.has(name as keyof typeof ID_BUILDERS))).toEqual([
       "nestedEntityId",
       "importedPersonId",
+      "registeredInstitutionId",
+      "registeredLaboratoryId",
       "importedAffiliationId",
       "predictionMarketItemId",
       "outreachContactId",

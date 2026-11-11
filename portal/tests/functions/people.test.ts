@@ -91,6 +91,15 @@ describe("resolveCorrectionRequest", () => {
     expect(await dataOf("correctionRequests/request-1")).toMatchObject({ status: "open", resolvedBy: null });
   });
 
+  it("is not decided by the reviewer who made the request", async () => {
+    await openRequest();
+    const core = await coreTeamMember("uid-requester");
+    expect(await codeOf(call(core, resolveCorrectionRequestContract, { ...resolution, apply: true }))).toBe(
+      "permission-denied",
+    );
+    expect(await dataOf("correctionRequests/request-1")).toMatchObject({ status: "open", resolvedBy: null });
+  });
+
   it("records the outcome, notifies the requester and is not audited a second time by the trigger", async () => {
     // A request of this test alone, so that no deletion of an earlier test is among its audit entries.
     const resolution = { requestId: "request-audited", outcome: "accepted" } as const;

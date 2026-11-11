@@ -1,8 +1,9 @@
 import { claimProfileContract, type PendingRole } from "@eegml/shared";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { formatDateTime } from "@/app/labels";
 import { useAuth, useSignedInUser } from "@/auth/AuthProvider";
+import { DEFAULT_RETURN_PATH, safeReturnPath } from "@/auth/return-path";
 import { ErrorState } from "@/components/feedback/error-state";
 import { LoadingState } from "@/components/feedback/loading-state";
 import { PageHeader } from "@/components/page-header";
@@ -105,13 +106,16 @@ export function ClaimPage() {
   const view = claimView({ personId, claimStatus, call });
   // Once the server says the account is linked, by a match here, by a reviewer's approval that
   // arrived while the page was open, or because it was linked already, the member goes on to
-  // Home, which says once that the account is now linked. Until the server has answered, a
-  // linked access document shows the linked outcome here.
+  // Home, which says once that the account is now linked, or back to the page that sent it
+  // here. Until the server has answered, a linked access document shows the linked outcome here.
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const next = safeReturnPath(params.get("next"));
   const linked = view === "linked" && call.status === "done" && call.result.status === "linked";
   useEffect(() => {
-    if (linked) navigate("/", { replace: true, state: { justLinked: true } });
-  }, [linked, navigate]);
+    if (linked)
+      navigate(next, { replace: true, ...(next === DEFAULT_RETURN_PATH ? { state: { justLinked: true } } : {}) });
+  }, [linked, navigate, next]);
   if (view !== "checking" && firstView.current === null) firstView.current = view;
   const moved = firstView.current !== null && firstView.current !== view;
 

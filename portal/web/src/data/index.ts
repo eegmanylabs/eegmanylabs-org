@@ -19,14 +19,17 @@ export { callFunction } from "./callable";
 export { CallableError, type CallableErrorCode } from "./callable-error";
 export { DataShapeError, type RecordOf, type WithId } from "./converter";
 export {
+  LIVE_COLLECTION_MAX_PAGES,
   liveListenerCount,
   reconnectLiveData,
   retryFailedLiveData,
+  useLiveCollection,
   useLiveDataDisconnected,
   useLiveDocument,
   useLiveQuery,
 } from "./live";
 export { discardLocalData } from "./local-data";
+export type { PagedItems } from "./paged";
 export {
   type FieldOf,
   type LiveQuery,
@@ -50,12 +53,19 @@ export {
 export type { Live, LiveError } from "./subscription-cache";
 export { type CallResult, useCallResult } from "./use-call";
 export {
+  type ChecklistChange,
   type CorrectionRequestInput,
   createCorrectionRequest,
+  endLaboratoryMember,
   type FieldPatch,
   markNotificationRead,
+  proposeLaboratoryMember,
   recordRecentVisit,
+  saveLaboratoryDetail,
   setFavourite,
+  updateChecklistItem,
+  updateLaboratoryFields,
   updateOwnPersonLinks,
+  updateParticipationDetail,
   updateReplicationFields,
 } from "./writes";

@@ -10,6 +10,7 @@ import {
   requestLabClaimContract,
   reviewLabClaimContract,
   roleAssignmentDocSchema,
+  withdrawLabClaimContract,
 } from "@eegml/shared";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { addressInDomains } from "../../functions/src/callables/requestLabClaim";
@@ -105,7 +106,9 @@ describe("requestLabClaim", () => {
       await call(caller, requestLabClaimContract, { ...request, message: "I run the laboratory since March." }),
     ).toEqual({
       claimId: CLAIM,
+      laboratoryId: "lab-a",
       status: "pendingReview",
+      duplicate: false,
     });
 
     expect(await claimOf()).toMatchObject({
@@ -330,5 +333,44 @@ describe("reviewLabClaim", () => {
         decisionNote: "The laboratory has a coordinator.",
       },
     ]);
+  });
+});
+
+describe("withdrawLabClaim", () => {
+  it("lets the member withdraw their own request while it waits, and nobody else, with an audit entry", async () => {
+    const caller = await member();
+    await call(caller, requestLabClaimContract, { laboratoryId: "lab-a", requestedRole: "coordinator" });
+    const coordinator = await coordinatorOf("lab-a", "uid-coordinator");
+    const admin = await administrator("uid-admin");
+    expect(await codeOf(call(coordinator, withdrawLabClaimContract, { claimId: CLAIM }))).toBe("permission-denied");
+    expect(await codeOf(call(admin, withdrawLabClaimContract, { claimId: CLAIM }))).toBe("permission-denied");
+    expect(await codeOf(call(null, withdrawLabClaimContract, { claimId: CLAIM }))).toBe("unauthenticated");
+    // A request that does not exist is answered as one that is not the caller's.
+    expect(await codeOf(call(caller, withdrawLabClaimContract, { claimId: "uid-member__lab-missing" }))).toBe(
+      "permission-denied",
+    );
+    expect((await claimOf()).status).toBe("pendingReview");
+
+    expect(await call(caller, withdrawLabClaimContract, { claimId: CLAIM })).toEqual({
+      claimId: CLAIM,
+      status: "withdrawn",
+    });
+    expect((await claimOf()).status).toBe("withdrawn");
+    expect(await auditOf("labClaim.withdrawn", "lab-a")).toHaveLength(1);
+    // A reviewer can no longer decide it, and the member may ask again.
+    expect(await codeOf(call(admin, reviewLabClaimContract, { claimId: CLAIM, decision: "approve" }))).toBe(
+      "failed-precondition",
+    );
+    await call(caller, requestLabClaimContract, { laboratoryId: "lab-a", requestedRole: "coordinator" });
+    expect((await claimOf()).status).toBe("pendingReview");
+  });
+
+  it("leaves a decided request as it was decided", async () => {
+    const caller = await member();
+    await call(caller, requestLabClaimContract, { laboratoryId: "lab-a", requestedRole: "coordinator" });
+    const admin = await administrator("uid-admin");
+    await call(admin, reviewLabClaimContract, { claimId: CLAIM, decision: "reject", note: "Synthetic note." });
+    expect(await codeOf(call(caller, withdrawLabClaimContract, { claimId: CLAIM }))).toBe("failed-precondition");
+    expect((await claimOf()).status).toBe("rejected");
   });
 });

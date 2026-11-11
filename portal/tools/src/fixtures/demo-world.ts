@@ -626,3 +626,128 @@ export const DEMO_PARTICIPATIONS: readonly DemoParticipation[] = [
   },
   { replicationId: "DemoGamma2010", laboratoryId: "demo-lab-cognition", status: "ready", readinessStatus: "approved" },
 ];
+
+export interface DemoEquipment {
+  readonly id: string;
+  readonly laboratoryId: string;
+  readonly name: string;
+  readonly isCurrent: boolean;
+  readonly supersedesId: string | null;
+  readonly amplifierManufacturer?: string;
+  readonly capType?: string;
+  readonly channelCount?: number;
+  readonly samplingRatesHz?: readonly number[];
+  readonly triggerMethod?: string;
+  readonly eyeTracker?: string;
+}
+
+/**
+ * Equipment configurations, with one chain that has history: the cognition laboratory replaced
+ * its first configuration. The signal and memory laboratories have none, so their compatibility
+ * is unknown.
+ */
+export const DEMO_EQUIPMENT: readonly DemoEquipment[] = [
+  {
+    id: "demo-equipment-cognition-1",
+    laboratoryId: "demo-lab-cognition",
+    name: "Booth A, first set-up",
+    isCurrent: false,
+    supersedesId: null,
+    amplifierManufacturer: "Example Amplifiers",
+    channelCount: 32,
+    samplingRatesHz: [250, 500],
+    triggerMethod: "Parallel port",
+  },
+  {
+    id: "demo-equipment-cognition-2",
+    laboratoryId: "demo-lab-cognition",
+    name: "Booth A",
+    isCurrent: true,
+    supersedesId: "demo-equipment-cognition-1",
+    amplifierManufacturer: "Example Amplifiers",
+    channelCount: 64,
+    samplingRatesHz: [250, 500, 1000],
+    triggerMethod: "Parallel port",
+  },
+  {
+    id: "demo-equipment-attention-1",
+    laboratoryId: "demo-lab-attention",
+    name: "Main recording room",
+    isCurrent: true,
+    supersedesId: null,
+    amplifierManufacturer: "Sample Systems",
+    capType: "Gel cap",
+    channelCount: 128,
+    samplingRatesHz: [500, 1000, 2000],
+    triggerMethod: "USB trigger box",
+    eyeTracker: "Example tracker",
+  },
+];
+
+export interface DemoRequirement {
+  readonly replicationId: string;
+  readonly requirementKey: string;
+  readonly operator: "equals" | "atLeast" | "atMost" | "includes" | "present";
+  readonly value?: string | number;
+  readonly isMandatory: boolean;
+}
+
+export const DEMO_REQUIREMENTS: readonly DemoRequirement[] = [
+  { replicationId: "DemoAlpha2001", requirementKey: "channelCount", operator: "atLeast", value: 64, isMandatory: true },
+  {
+    replicationId: "DemoAlpha2001",
+    requirementKey: "samplingRatesHz",
+    operator: "includes",
+    value: 500,
+    isMandatory: true,
+  },
+  { replicationId: "DemoAlpha2001", requirementKey: "eyeTracker", operator: "present", isMandatory: false },
+  { replicationId: "DemoBeta2005", requirementKey: "channelCount", operator: "atLeast", value: 32, isMandatory: true },
+  { replicationId: "DemoBeta2005", requirementKey: "capType", operator: "equals", value: "Gel cap", isMandatory: true },
+  { replicationId: "DemoGamma2010", requirementKey: "channelCount", operator: "atLeast", value: 64, isMandatory: true },
+  {
+    replicationId: "DemoGamma2010",
+    requirementKey: "triggerMethod",
+    operator: "includes",
+    value: "parallel",
+    isMandatory: true,
+  },
+];
+
+/** The targets of some participations: main experiment and resting state, which are never added. */
+export const DEMO_TARGETS: Readonly<Record<string, { readonly main?: number; readonly rest?: number }>> = {
+  "DemoAlpha2001__demo-lab-attention": { main: 40, rest: 40 },
+  "DemoGamma2010__demo-lab-cognition": { main: 30 },
+};
+
+export interface DemoSource {
+  readonly key: string;
+  readonly title: string;
+  readonly kind: "googleSheet" | "repositoryTsv";
+  readonly authority: "historical" | "reference";
+  readonly syncPolicy: "oneOff" | "repeatable";
+  readonly accessStatus: "public" | "restricted";
+}
+
+/** Sources of the imports console, by key and title only, as the repository names sources. */
+export const DEMO_SOURCES: readonly DemoSource[] = [
+  {
+    key: "demo-a",
+    title: "Synthetic coordination workbook",
+    kind: "googleSheet",
+    authority: "historical",
+    syncPolicy: "oneOff",
+    accessStatus: "restricted",
+  },
+  {
+    key: "demo-b",
+    title: "Synthetic website data",
+    kind: "repositoryTsv",
+    authority: "reference",
+    syncPolicy: "repeatable",
+    accessStatus: "public",
+  },
+];
+
+/** The instant of the demonstration import batch, fixed so that a second seed writes the same batch. */
+export const DEMO_BATCH_STARTED_AT = "2026-10-01T09:00:00.000Z";

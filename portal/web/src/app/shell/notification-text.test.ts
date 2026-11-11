@@ -7,6 +7,7 @@ const KINDS = [
   "accessRequestAwaitsReview",
   "rolesAwaitApproval",
   "labClaimAwaitsReview",
+  "laboratoryRegistrationAwaitsReview",
   "accountClaimApproved",
   "accountClaimRejected",
   "accountUnlinked",
@@ -17,6 +18,9 @@ const KINDS = [
   "capabilityGranted",
   "capabilityRevoked",
   "correctionResolved",
+  "personMerged",
+  "laboratoryMembershipConfirmed",
+  "replicationMembershipConfirmed",
 ];
 
 describe("describeNotification", () => {

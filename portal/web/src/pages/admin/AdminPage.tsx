@@ -21,7 +21,7 @@ export function AdminPage({
   return (
     <RequireCapability capability={entry.requires} title={entry.label}>
       <PageHeader title={entry.label} description={description} />
-      <div className="grid gap-6">{children}</div>
+      <div className="grid gap-6 *:min-w-0">{children}</div>
     </RequireCapability>
   );
 }

@@ -1,4 +1,6 @@
-// Rollback of a batch from its change log (docs/MIGRATION_PLAN.md, section 6).
+// Rollback of a batch from its change log (docs/MIGRATION_PLAN.md, section 6). What happens to
+// each document is decided by `planBatchRollback` of the shared package, which the callable
+// function `rollbackImportBatch` uses as well; this file reads and writes for the command line.
 //
 // The entries of the batch are walked in reverse order. A document that still is what the batch
 // wrote gets its earlier state back, is removed if the batch created it, or is written again if
@@ -12,10 +14,9 @@
 // in its earlier state counts as reversed and is skipped. The states of special-category
 // documents, which the change log keeps where no client reads them, are removed once the batch
 // is reversed, because nothing needs them any more.
-import { COLLECTIONS, sequenceId } from "@eegml/shared";
+import { COLLECTIONS, planBatchRollback, sequenceId } from "@eegml/shared";
 import { FieldValue, type Firestore, Timestamp } from "firebase-admin/firestore";
 import { appendOnlyFields, chunked, IMPORT_ACTOR, readDocuments, updatedFields } from "./context";
-import { changedTopLevelFields } from "./preview";
 import { sameValue } from "./values";
 
 export type RollbackResult =
@@ -72,66 +73,57 @@ export async function rollbackBatch(db: Firestore, batchId: string, at: Date = n
     db,
     states.map((state) => state.path),
   );
+  const plan = planBatchRollback({
+    states,
+    current: new Map([...current].map(([path, stored]) => [path, stored?.data ?? null])),
+    equal: sameValue,
+    itemsPrefix: ITEMS_PREFIX,
+  });
+  if (plan.status === "refused") return { status: "refused", changedDocuments: plan.changedDocuments };
 
-  const isItem = (path: string) => path.startsWith(ITEMS_PREFIX);
-  const holds = (state: (typeof states)[number], wanted: Record<string, unknown> | null) =>
-    sameValue(current.get(state.path)?.data ?? null, wanted);
-  const unchangedSince = (state: (typeof states)[number]) => holds(state, state.after);
-  /** A document that an earlier attempt of this rollback has reversed already: it is in its earlier state, or withdrawn. */
-  const reversed = (state: (typeof states)[number]) =>
-    !unchangedSince(state) &&
-    (holds(state, state.before) ||
-      (isItem(state.path) && state.before === null && current.get(state.path)?.data.status === "withdrawn"));
-  const changedDocuments = states
-    .filter((state) => !isItem(state.path) && !unchangedSince(state) && !reversed(state))
-    .map((state) => state.path);
-  if (changedDocuments.length > 0) return { status: "refused", changedDocuments: changedDocuments.sort() };
-
-  let restored = 0;
-  let removed = 0;
-  let itemsWithdrawn = 0;
-  const itemsLeft: string[] = [];
-  for (const piece of chunked(states, 200)) {
+  for (const piece of chunked(plan.steps, 200)) {
     const write = db.batch();
-    for (const state of piece) {
-      const reference = db.doc(state.path);
-      const stored = current.get(state.path) ?? null;
+    for (const step of piece) {
+      const reference = db.doc(step.path);
+      const stored = current.get(step.path) ?? null;
       const precondition = stored === null ? {} : { lastUpdateTime: stored.updateTime };
-      if (reversed(state)) continue;
-      if (isItem(state.path)) {
-        if (stored === null) continue;
-        if (!unchangedSince(state)) {
-          // A reviewer has decided the item, or a later batch has closed it. The decision stands.
-          itemsLeft.push(state.path);
-        } else if (state.before === null) {
+      switch (step.kind) {
+        case "skip":
+        case "keep":
+          break;
+        case "withdraw":
           write.update(
             reference,
             { status: "withdrawn", resolvedBy: IMPORT_ACTOR, resolvedAt: now, ...updatedFields(now) },
             precondition,
           );
-          itemsWithdrawn += 1;
-        } else {
-          write.update(reference, { ...state.before }, precondition);
-          restored += 1;
-        }
-      } else if (state.before === null) {
-        write.delete(reference, precondition);
-        removed += 1;
-      } else if (state.after === null) {
-        // The batch removed the document. It is written again as it was.
-        write.create(reference, state.before);
-        restored += 1;
-      } else {
-        const patch: Record<string, unknown> = {};
-        for (const [field, value] of changedTopLevelFields(state.after ?? {}, state.before)) {
-          patch[field] = value === undefined ? FieldValue.delete() : value;
-        }
-        write.update(reference, patch, precondition);
-        restored += 1;
+          break;
+        case "restoreItem":
+          write.update(reference, { ...step.data }, precondition);
+          break;
+        case "remove":
+          write.delete(reference, precondition);
+          break;
+        case "recreate":
+          // The batch removed the document. It is written again as it was.
+          write.create(reference, step.data);
+          break;
+        case "restore":
+          write.update(
+            reference,
+            {
+              ...step.set,
+              ...Object.fromEntries(step.remove.map((field) => [field, FieldValue.delete()])),
+            },
+            precondition,
+          );
+          break;
       }
     }
     await write.commit();
   }
+  const { restored, removed, itemsWithdrawn } = plan.counts;
+  const itemsLeft = plan.steps.filter((step) => step.kind === "keep").map((step) => step.path);
 
   const logEntries = await db.collection(COLLECTIONS.importBatchLog.collectionPath(batchId)).count().get();
   const finish = db.batch();

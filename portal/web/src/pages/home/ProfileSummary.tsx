@@ -1,11 +1,13 @@
 import type { PendingRole } from "@eegml/shared";
 import type { ReactNode } from "react";
+import { Link } from "react-router";
 import { ROLE_LABELS } from "@/app/labels";
 import { LiveView } from "@/components/feedback/live-view";
 import { LaboratoryName, ReplicationName, ScopeName } from "@/components/record-names";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type RecordOf, retryFailedLiveData, useLiveDocument } from "@/data";
+import { replicationPath } from "@/registry/paths";
 
 function Row({ term, children }: { term: string; children: ReactNode }) {
   return (
@@ -70,6 +72,15 @@ function SummarySkeleton() {
   );
 }
 
+/** A replication of the person, linked to its page. */
+function ReplicationLink({ id }: { id: string }) {
+  return (
+    <Link to={replicationPath(id)} className="text-fg-accent underline">
+      <ReplicationName id={id} />
+    </Link>
+  );
+}
+
 export function PersonDetails({ person }: { person: RecordOf<"persons"> }) {
   return (
     <dl className="-my-3" data-testid="profile-summary">
@@ -86,7 +97,7 @@ export function PersonDetails({ person }: { person: RecordOf<"persons"> }) {
         <Units ids={person.laboratoryIds} none="No laboratory recorded" Name={LaboratoryName} />
       </Row>
       <Row term="Replications">
-        <Units ids={person.replicationIds} none="No replication recorded" Name={ReplicationName} />
+        <Units ids={person.replicationIds} none="No replication recorded" Name={ReplicationLink} />
       </Row>
     </dl>
   );

@@ -4,8 +4,8 @@ import { spawnSync } from "node:child_process";
 import { createServer } from "node:net";
 import path from "node:path";
 import {
-  accessDocSchema,
   APPEND_ONLY_BASE_FIELDS,
+  accessDocSchema,
   bootstrapAdminId,
   DEMO_IDENTITY_HASH_KEY,
   emptyAccess,
@@ -37,7 +37,7 @@ function runCli(args: string[], environment: Record<string, string | undefined>)
 const withEmulators = emulatorEnvironment(PORTS, PROJECT_ID);
 
 /** What a first run creates: every document of the world, and an account and an access document for each demonstration account. */
-const WORLD_SIZE = 120;
+const WORLD_SIZE = 210;
 
 /** Every document names the command as its author, as trusted code acting by itself. */
 const STANDARD = {
@@ -195,13 +195,9 @@ describe("seed:demo", () => {
       if (matched === null) expect(path.startsWith("bootstrapAdmins/")).toBe(true);
       else {
         expect(matched.entry.schema.safeParse(stored).success, path).toBe(true);
-        // Every fact-like document is labelled as demonstration data, apart from the historical
-        // aggregates, which the data model always labels as imported historical figures.
-        if ("dataOrigin" in matched.entry.schema.shape) {
-          expect(stored?.dataOrigin, path).toBe(
-            matched.entry.key === "historicalAggregates" ? "importedHistorical" : "demo",
-          );
-        }
+        // Every fact-like document is labelled as demonstration data, the historical aggregates
+        // included, so that no invented figure is shown as one of the programme's records.
+        if ("dataOrigin" in matched.entry.schema.shape) expect(stored?.dataOrigin, path).toBe("demo");
       }
     }
 
@@ -220,6 +216,15 @@ describe("seed:demo", () => {
     expect(await sizeOf("historicalAggregates")).toBe(5);
     expect(await sizeOf("documentLinks")).toBe(2);
     expect(await sizeOf("statusHistory")).toBe(1);
+    // Laboratory management and the imports console have something to show: equipment with
+    // history, requirements, a checklist for every participation, a source, a batch and its queue.
+    expect((await adminDb.collectionGroup("equipment").get()).size).toBe(3);
+    expect((await adminDb.collectionGroup("equipment").where("isCurrent", "==", true).get()).size).toBe(2);
+    expect((await adminDb.collectionGroup("equipmentRequirements").get()).size).toBe(7);
+    expect((await adminDb.collectionGroup("checklist").get()).size).toBe(6 * 9);
+    expect(await sizeOf("sources")).toBe(2);
+    expect(await sizeOf("importBatches")).toBe(1);
+    expect(await sizeOf("reconciliationItems")).toBe(3);
     // The statuses that the replications name exist, because the lookup data is seeded with the world.
     const withStatus = DEMO_REPLICATIONS.filter((replication) => replication.statusKey !== null);
     expect(withStatus).toHaveLength(3);

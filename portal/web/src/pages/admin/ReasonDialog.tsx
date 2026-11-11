@@ -20,6 +20,8 @@ export interface ReasonDialogProps {
   confirmLabel: string;
   /** Controls shown above the text field, such as a choice of outcome. */
   children?: ReactNode;
+  /** False while those controls hold a value that cannot be sent; they say why themselves. */
+  canConfirm?: boolean;
   /** Carries the action out. A rejection is shown in the dialog, which stays open. */
   onConfirm: (text: string) => Promise<void>;
 }
@@ -39,6 +41,7 @@ export function ReasonDialog({
   maxLength = 2_000,
   confirmLabel,
   children,
+  canConfirm = true,
   onConfirm,
 }: ReasonDialogProps) {
   const [text, setText] = useState("");
@@ -58,6 +61,7 @@ export function ReasonDialog({
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     const trimmed = text.trim();
+    if (!canConfirm) return;
     if ((!optional && trimmed === "") || trimmed.length > maxLength) {
       setError(`Enter a ${label.toLowerCase()}, up to ${maxLength.toLocaleString("en-GB")} characters.`);
       return;
@@ -96,7 +100,7 @@ export function ReasonDialog({
           </FormField>
           <div className="flex flex-wrap gap-2">
             <Button type="submit" variant="primary" disabled={busy}>
-              {confirmLabel}
+              {busy ? "Working on it…" : confirmLabel}
             </Button>
             <DialogClose asChild>
               <Button>Cancel</Button>

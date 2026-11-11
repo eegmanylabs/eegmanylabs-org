@@ -1,6 +1,7 @@
 import { ChevronRight } from "lucide-react";
 import { Link } from "react-router";
 import { useCrumbs } from "@/app/route-meta";
+import { rememberedListPath } from "@/registry/url-state";
 
 /** Where the current page sits, from the titles of the matched routes. */
 export function Breadcrumbs() {
@@ -18,11 +19,15 @@ export function Breadcrumbs() {
               ) : null}
               {current ? (
                 <span aria-current="page" className="truncate font-medium text-fg">
-                  {crumb.title}
+                  {crumb.Label === undefined ? crumb.title : <crumb.Label params={crumb.params} />}
                 </span>
               ) : (
-                <Link to={crumb.path} className="truncate rounded-control text-fg-secondary hover:text-fg-accent">
-                  {crumb.title}
+                // A list is reached again with the search and filters it had in this session.
+                <Link
+                  to={rememberedListPath(crumb.path)}
+                  className="truncate rounded-control text-fg-secondary hover:text-fg-accent"
+                >
+                  {crumb.Label === undefined ? crumb.title : <crumb.Label params={crumb.params} />}
                 </Link>
               )}
             </li>

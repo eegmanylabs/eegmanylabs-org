@@ -27,6 +27,10 @@ export const GENERAL_MESSAGES: Readonly<Record<CallableErrorCode, string>> = {
   internal: "Something went wrong on our side. Try again in a moment.",
 };
 
+/** What the person is told when the server did not answer in time: the change may have been made or not. */
+export const NO_ANSWER_MESSAGE =
+  "The server did not answer in time. Nothing may have changed, or the change may have been made. Check the record and its activity before trying again.";
+
 const isCode = (value: string): value is CallableErrorCode => Object.hasOwn(GENERAL_MESSAGES, value);
 
 export class CallableError extends Error {
@@ -54,7 +58,8 @@ export class CallableError extends Error {
 export function toCallableError(error: unknown): CallableError {
   const { code: rawCode, details } = (error ?? {}) as { code?: unknown; details?: unknown };
   const named = typeof rawCode === "string" ? rawCode.replace(/^functions\//, "") : "";
-  const code: CallableErrorCode = named === "deadline-exceeded" ? "unavailable" : isCode(named) ? named : "internal";
+  if (named === "deadline-exceeded") return new CallableError("unavailable", NO_ANSWER_MESSAGE);
+  const code: CallableErrorCode = isCode(named) ? named : "internal";
   if (isPublicErrorDetails(details) && error instanceof Error) {
     // The SDK appends the HTTP status, for example " [400]", to the server's message.
     const message = error.message.replace(/\s*\[\d{3}\]$/, "").trim();

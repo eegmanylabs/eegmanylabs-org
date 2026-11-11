@@ -22,9 +22,13 @@ describe("the navigation registry", () => {
     }
   });
 
-  it("shows Home and the account page to a signed-in account and nothing to anyone else", () => {
+  it("shows Home, the directory and the account page to a signed-in account and nothing to anyone else", () => {
     expect(visibleNavigation(new Set<Capability>(["portal.use"])).map((item) => item.label)).toEqual([
       "Home",
+      "Replications",
+      "Laboratories",
+      "Members",
+      "Readiness",
       "Account and security",
     ]);
     expect(visibleNavigation(new Set())).toEqual([]);
@@ -34,7 +38,14 @@ describe("the navigation registry", () => {
     const held = new Set<Capability>(["portal.use"]);
     // Home sends an account that is not linked to the claim page, so it is not offered.
     expect(visibleNavigation(held, NAVIGATION, false).map((item) => item.to)).toEqual(["/claim", "/account"]);
-    expect(visibleNavigation(held, NAVIGATION, true).map((item) => item.to)).toEqual(["/", "/account"]);
+    expect(visibleNavigation(held, NAVIGATION, true).map((item) => item.to)).toEqual([
+      "/",
+      "/replications",
+      "/labs",
+      "/members",
+      "/readiness",
+      "/account",
+    ]);
   });
 
   it("puts every administration page behind the capability its data and actions need", () => {
@@ -43,14 +54,23 @@ describe("the navigation registry", () => {
       "/admin/claims": "claims.review",
       "/admin/lab-claims": "labs.claims.review",
       "/admin/corrections": "reconciliation.resolve",
+      "/admin/memberships": "reconciliation.resolve",
       "/admin/users": "users.suspend",
       "/admin/roles": "roles.manage",
       "/admin/audit": "audit.read",
+      "/admin/imports": "imports.run",
+      "/admin/review-queue": "reconciliation.resolve",
+      "/admin/integrity": "audit.read",
     });
     expect(visibleNavigation(new Set<Capability>(["portal.use", "audit.read"])).map((item) => item.id)).toEqual([
       "home",
+      "replications",
+      "laboratories",
+      "members",
+      "readiness",
       "account",
       "admin-audit",
+      "admin-integrity",
     ]);
   });
 

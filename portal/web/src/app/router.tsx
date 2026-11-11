@@ -4,9 +4,11 @@
 // To add a page: add its route here with a `handle.title`, and, if it belongs in the sidebar,
 // one entry in navigation.ts.
 import type { ComponentType } from "react";
-import { createHashRouter, type RouteObject } from "react-router";
+import { createHashRouter, type Params, type RouteObject } from "react-router";
 import { RequireAuth } from "@/auth/RequireAuth";
+import { RequireLinked } from "@/auth/RequireLinked";
 import { LoadingState } from "@/components/feedback/loading-state";
+import { LaboratoryName, PersonName } from "@/components/record-names";
 import { ClaimPage } from "@/pages/claim/ClaimPage";
 import { HomePage } from "@/pages/home/HomePage";
 import { LoginPage } from "@/pages/login/LoginPage";
@@ -43,6 +45,16 @@ const emulatorRoutes: RouteObject[] =
       ]
     : [];
 
+/** The breadcrumb of a member page: the person's name, read live, with the identifier standing in until it is. */
+function PersonCrumb({ params }: { readonly params: Readonly<Params> }) {
+  return <PersonName id={params.personId ?? ""} />;
+}
+
+/** The breadcrumb of a laboratory page: its name, read live. */
+function LaboratoryCrumb({ params }: { readonly params: Readonly<Params> }) {
+  return <LaboratoryName id={params.laboratoryId ?? ""} />;
+}
+
 export function portalRoutes(signInLink: string | null): RouteObject[] {
   return [
     {
@@ -68,6 +80,71 @@ export function portalRoutes(signInLink: string | null): RouteObject[] {
                 { index: true, element: <HomePage />, ...titled("Home") },
                 { path: "/claim", element: <ClaimPage />, ...titled("Your member profile") },
                 {
+                  // The registry, which the navigation lists for an account linked to a member
+                  // profile only, asks any other account to link itself first.
+                  element: <RequireLinked />,
+                  children: [
+                    {
+                      path: "/replications",
+                      ...titled("Replications"),
+                      children: [
+                        {
+                          index: true,
+                          ...lazyPage(
+                            async () => (await import("@/pages/replications/ReplicationsPage")).ReplicationsPage,
+                          ),
+                        },
+                        {
+                          path: ":studyKey",
+                          ...lazyPage(
+                            async () => (await import("@/pages/replications/ReplicationPage")).ReplicationPage,
+                          ),
+                          handle: {
+                            title: (params: Readonly<Params>) => params.studyKey ?? "Replication",
+                          } satisfies RouteHandle,
+                        },
+                      ],
+                    },
+                    {
+                      path: "/labs",
+                      ...titled("Laboratories"),
+                      children: [
+                        {
+                          index: true,
+                          ...lazyPage(
+                            async () => (await import("@/pages/laboratories/LaboratoriesPage")).LaboratoriesPage,
+                          ),
+                        },
+                        {
+                          path: ":laboratoryId",
+                          ...lazyPage(async () => (await import("@/pages/laboratories/LaboratoryPage")).LaboratoryPage),
+                          handle: { title: "Laboratory", crumb: LaboratoryCrumb } satisfies RouteHandle,
+                        },
+                      ],
+                    },
+                    {
+                      path: "/readiness",
+                      ...lazyPage(async () => (await import("@/pages/readiness/ReadinessPage")).ReadinessPage),
+                      ...titled("Readiness"),
+                    },
+                    {
+                      path: "/members",
+                      ...titled("Members"),
+                      children: [
+                        {
+                          index: true,
+                          ...lazyPage(async () => (await import("@/pages/members/MembersPage")).MembersPage),
+                        },
+                        {
+                          path: ":personId",
+                          ...lazyPage(async () => (await import("@/pages/members/MemberPage")).MemberPage),
+                          handle: { title: "Member", crumb: PersonCrumb } satisfies RouteHandle,
+                        },
+                      ],
+                    },
+                  ],
+                },
+                {
                   path: "/account",
                   ...lazyPage(async () => (await import("@/pages/account/AccountPage")).AccountPage),
                   ...titled("Account and security"),
@@ -90,6 +167,11 @@ export function portalRoutes(signInLink: string | null): RouteObject[] {
                   ...titled("Correction requests"),
                 },
                 {
+                  path: "/admin/memberships",
+                  ...lazyPage(async () => (await import("@/pages/admin/MembershipsReviewPage")).MembershipsReviewPage),
+                  ...titled("Memberships to review"),
+                },
+                {
                   path: "/admin/users",
                   ...lazyPage(async () => (await import("@/pages/admin/UsersPage")).UsersPage),
                   ...titled("Users"),
@@ -103,6 +185,31 @@ export function portalRoutes(signInLink: string | null): RouteObject[] {
                   path: "/admin/audit",
                   ...lazyPage(async () => (await import("@/pages/admin/AuditPage")).AuditPage),
                   ...titled("Audit log"),
+                },
+                {
+                  path: "/admin/imports",
+                  ...titled("Imports"),
+                  children: [
+                    {
+                      index: true,
+                      ...lazyPage(async () => (await import("@/pages/admin/imports/ImportsPage")).ImportsPage),
+                    },
+                    {
+                      path: "batches/:batchId",
+                      ...lazyPage(async () => (await import("@/pages/admin/imports/BatchPage")).BatchPage),
+                      handle: { title: (params: Readonly<Params>) => params.batchId ?? "Batch" } satisfies RouteHandle,
+                    },
+                  ],
+                },
+                {
+                  path: "/admin/review-queue",
+                  ...lazyPage(async () => (await import("@/pages/admin/imports/ReviewQueuePage")).ReviewQueuePage),
+                  ...titled("Review queue"),
+                },
+                {
+                  path: "/admin/integrity",
+                  ...lazyPage(async () => (await import("@/pages/admin/IntegrityPage")).IntegrityPage),
+                  ...titled("Integrity"),
                 },
               ],
             },

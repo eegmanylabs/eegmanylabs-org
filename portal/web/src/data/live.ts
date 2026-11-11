@@ -13,6 +13,7 @@ import {
 import { useSyncExternalStore } from "react";
 import { DataShapeError, type RecordOf } from "./converter";
 import { db } from "./firebase";
+import { type PagedItems, startPagedSubscription } from "./paged";
 import { type LiveQuery, liveQueryKey } from "./query-spec";
 import { documentReference, queryReference } from "./refs";
 import { type Live, type LiveError, type Publish, SubscriptionCache } from "./subscription-cache";
@@ -92,6 +93,51 @@ export function useLiveQuery<K extends ListableCollectionKey>(
         (snapshot) =>
           publishSnapshot(publish, snapshot.metadata, () => snapshot.docs.map((document) => document.data())),
         (error) => fail(toLiveError(error)),
+      );
+    },
+  );
+}
+
+/** The most pages `useLiveCollection` reads, each of the query's limit: ten thousand documents at the most. */
+export const LIVE_COLLECTION_MAX_PAGES = 10;
+
+/**
+ * Every document that a query describes, read in pages of its limit, each page after the last
+ * document of the page before, so that a collection longer than one query may read is read
+ * whole. `truncated` says that the last page that may be opened came back full. Only for a
+ * query of one collection without `orderBy`. Pass null to watch nothing.
+ */
+export function useLiveCollection<K extends ListableCollectionKey>(
+  description: LiveQuery<K> | null,
+): Live<PagedItems<RecordOf<K>>> {
+  return useSubscription<PagedItems<RecordOf<K>>>(
+    cache,
+    description ? `pages:${liveQueryKey(description)}` : null,
+    (publish, fail) => {
+      if (!description) return () => {};
+      return startPagedSubscription<RecordOf<K>>(
+        description.limit,
+        LIVE_COLLECTION_MAX_PAGES,
+        (startAfterId, onPage, onError) =>
+          onSnapshot(
+            queryReference(db, startAfterId === undefined ? description : { ...description, startAfterId }),
+            { includeMetadataChanges: true },
+            (snapshot) => {
+              try {
+                onPage({
+                  items: snapshot.docs.map((document) => document.data()),
+                  lastId: snapshot.docs.at(-1)?.id ?? null,
+                  fromCache: snapshot.metadata.fromCache,
+                  hasPendingWrites: snapshot.metadata.hasPendingWrites,
+                });
+              } catch (error) {
+                publish({ status: "error", error: toLiveError(error) });
+              }
+            },
+            (error) => onError(toLiveError(error)),
+          ),
+        publish,
+        fail,
       );
     },
   );

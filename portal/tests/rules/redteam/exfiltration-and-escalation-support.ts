@@ -3,7 +3,7 @@
 // client SDK alone, and trusted code is used only to put documents in place beforehand.
 // Everything here is synthetic: fictitious accounts, people, studies and laboratories on the
 // example.org domain.
-import { COLLECTIONS, type CollectionKey } from "@eegml/shared";
+import { COLLECTIONS, type CollectionKey, unitScopeKeys } from "@eegml/shared";
 import type { RulesTestEnvironment } from "@firebase/rules-unit-testing";
 import { doc, setDoc } from "firebase/firestore";
 import type { Outcome } from "../attempts";
@@ -15,6 +15,8 @@ import {
   type CallerKind,
   type CallerProfile,
   firestoreWithToken,
+  OTHER_REPLICATION,
+  OWN_LABORATORY,
   resolveSyntheticAccess,
   stored,
   tokenOf,
@@ -75,6 +77,25 @@ export function newRecord(key: CollectionKey, uid: string): Record<string, unkno
   const creation = FIXTURES[key]?.create;
   if (creation === undefined) throw new Error(`The fixture of "${key}" creates no document.`);
   return creation.data(uid);
+}
+
+/**
+ * A well-formed participation of the owning laboratory in the other replication, as a client
+ * would write it, without the standard fields. No client may create one: createParticipation does, with its checklist and its
+ * history, so every attempt with this document is refused.
+ */
+export function newParticipation(): Record<string, unknown> {
+  return {
+    replicationId: OTHER_REPLICATION,
+    laboratoryId: OWN_LABORATORY,
+    scopeKeys: unitScopeKeys(OTHER_REPLICATION, OWN_LABORATORY),
+    status: "interested",
+    statusHistoryId: null,
+    targetNMain: 40,
+    readinessStatus: "notStarted",
+    custom: {},
+    dataOrigin: "live",
+  };
 }
 
 /** One row of a table for each caller: the same request, with the same answer. */

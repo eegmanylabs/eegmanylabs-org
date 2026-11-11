@@ -1,3 +1,4 @@
+import type { EntityType } from "@eegml/shared";
 import { type FormEvent, useState } from "react";
 import { ErrorState } from "@/components/feedback/error-state";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { createCorrectionRequest } from "@/data";
+import { EXTRACTION_FIELDS } from "@/pages/replications/replication-fields";
 
 /** The details of a profile that a member can report as wrong, by the field that holds each. */
 export const CORRECTABLE_PERSON_FIELDS = [
@@ -21,17 +23,46 @@ export const CORRECTABLE_PERSON_FIELDS = [
   { field: "orcid", label: "ORCID iD" },
 ] as const;
 
+export interface CorrectableField {
+  readonly field: string;
+  readonly label: string;
+}
+
+/** The extraction fields of a replication, which are kept verbatim and corrected through a request. */
+const [firstExtraction, ...otherExtractions] = EXTRACTION_FIELDS;
+export const CORRECTABLE_REPLICATION_FIELDS: readonly [CorrectableField, ...CorrectableField[]] = [
+  { field: firstExtraction[0], label: firstExtraction[1] },
+  ...otherExtractions.map(([field, label]) => ({ field, label })),
+];
+
 export const CORRECTABLE_FIELD_LABELS: Readonly<Record<string, string>> = Object.fromEntries(
-  CORRECTABLE_PERSON_FIELDS.map((entry) => [entry.field, entry.label]),
+  [...CORRECTABLE_PERSON_FIELDS, ...CORRECTABLE_REPLICATION_FIELDS].map((entry) => [entry.field, entry.label]),
 );
 
 const VALUE_MAX = 2_000;
 
-/** A form, in a dialog, that reports one wrong detail of the member's own profile to the administrators. */
-export function CorrectionRequestDialog({ uid, personId }: { uid: string; personId: string }) {
+export interface CorrectionRequestDialogProps {
+  uid: string;
+  /** The record that holds the wrong detail. */
+  entityType: EntityType;
+  entityId: string;
+  /** The details that may be reported, the first chosen at the start. */
+  fields: readonly [CorrectableField, ...CorrectableField[]];
+  /** What the dialog says it is for. */
+  description: string;
+}
+
+/** A form, in a dialog, that reports one wrong detail of a record to the administrators. */
+export function CorrectionRequestDialog({
+  uid,
+  entityType,
+  entityId,
+  fields,
+  description,
+}: CorrectionRequestDialogProps) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
-  const [field, setField] = useState<string>(CORRECTABLE_PERSON_FIELDS[0].field);
+  const [field, setField] = useState<string>(fields[0].field);
   const [value, setValue] = useState("");
   const [message, setMessage] = useState("");
   const [valueError, setValueError] = useState<string | null>(null);
@@ -39,7 +70,7 @@ export function CorrectionRequestDialog({ uid, personId }: { uid: string; person
   const [busy, setBusy] = useState(false);
 
   const reset = () => {
-    setField(CORRECTABLE_PERSON_FIELDS[0].field);
+    setField(fields[0].field);
     setValue("");
     setMessage("");
     setValueError(null);
@@ -57,8 +88,8 @@ export function CorrectionRequestDialog({ uid, personId }: { uid: string; person
     setFailure(null);
     try {
       await createCorrectionRequest(uid, {
-        entityType: "person",
-        entityId: personId,
+        entityType,
+        entityId,
         field,
         proposedValue: proposed,
         ...(message.trim() === "" ? {} : { message: message.trim() }),
@@ -87,16 +118,13 @@ export function CorrectionRequestDialog({ uid, personId }: { uid: string; person
       <DialogTrigger asChild>
         <Button size="sm">Report a wrong detail</Button>
       </DialogTrigger>
-      <DialogContent
-        title="Report a wrong detail"
-        description="Tell the administrators which detail of your profile is wrong and what it should say. They correct the record."
-      >
+      <DialogContent title="Report a wrong detail" description={description}>
         <form noValidate onSubmit={submit} className="mt-5 grid gap-4">
           {failure ? <ErrorState title="Your report was not sent." description={failure} /> : null}
           <FormField label="Which detail is wrong">
             {(control) => (
               <Select {...control} name="field" value={field} onChange={(event) => setField(event.target.value)}>
-                {CORRECTABLE_PERSON_FIELDS.map((entry) => (
+                {fields.map((entry) => (
                   <option key={entry.field} value={entry.field}>
                     {entry.label}
                   </option>

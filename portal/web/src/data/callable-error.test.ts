@@ -1,6 +1,6 @@
 import { PUBLIC_ERROR_DETAILS } from "@eegml/shared";
 import { describe, expect, it } from "vitest";
-import { CallableError, GENERAL_MESSAGES, toCallableError } from "./callable-error";
+import { CallableError, GENERAL_MESSAGES, NO_ANSWER_MESSAGE, toCallableError } from "./callable-error";
 
 /** An error in the shape the Functions SDK rejects with. */
 function sdkError(code: string, message: string, details?: unknown): Error {
@@ -50,6 +50,12 @@ describe("toCallableError", () => {
       expect(error.message).toBe(GENERAL_MESSAGES[code]);
       expect(error.message).not.toContain(platformText);
     }
+  });
+
+  it("says that a call the server did not answer in time may or may not have changed something", () => {
+    const error = toCallableError(sdkError("functions/deadline-exceeded", "deadline-exceeded"));
+    expect(error.code).toBe("unavailable");
+    expect(error.message).toBe(NO_ANSWER_MESSAGE);
   });
 
   it("uses the general text when a marked error carries no message", () => {

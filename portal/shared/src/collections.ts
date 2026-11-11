@@ -715,7 +715,16 @@ const DEFINITIONS = {
     schema: programme.laboratoryDocSchema,
     id: auto,
     read: read(["MEMBER"]),
-    write: client([grant(COORDINATORS, ["update"], { capability: "labs.manage" })], ["{laboratoryId}"], ["slug"]),
+    write: client(
+      [
+        grant(COORDINATORS, ["update"], {
+          capability: "labs.manage",
+          condition: "The status of the laboratory is changed by holders of the capability for the programme alone.",
+        }),
+      ],
+      ["{laboratoryId}"],
+      ["slug"],
+    ),
     dataClass: "member",
     flags: { importable: true, searchable: true },
     enforcement: ENFORCED,
@@ -1044,15 +1053,8 @@ const DEFINITIONS = {
     read: read(["MEMBER"]),
     write: client(
       [
-        grant(LEADS, ["create"], {
-          capability: "participations.manage",
-          condition: "The replication invites the laboratory: status is invited, and readiness has not started.",
-        }),
-        grant(COORDINATORS, ["create"], {
-          capability: "participations.manage",
-          condition:
-            "The laboratory registers its interest: status is interested, and readiness has not started. Programme administrators and the core team record either.",
-        }),
+        // A participation is created by createParticipation alone, with its checklist, its
+        // restricted detail and the first entry of its status history.
         grant(MANAGERS, ["update"], {
           capability: "participations.manage",
           condition:
@@ -1094,7 +1096,7 @@ const DEFINITIONS = {
         grant(MANAGERS, ["update"], {
           capability: "participations.manage",
           condition:
-            "An item is done exactly while it names who completed it. A change to a completed item is signed anew by the caller, or reopens the item.",
+            "An item is done exactly while it names who completed it. A change to a completed item is signed anew by the caller, or reopens the item. The item readinessApproval is changed by the leads of the replication, programme administrators and the core team alone.",
         }),
         grant(["lab_member"], ["update"], {
           onlyFields: ["status", "completedBy", "completedAt", "evidenceUrl", "note"],

@@ -4,6 +4,7 @@ import logo from "@/assets/logo.png";
 import { IconButton } from "@/components/ui/icon-button";
 import { cn } from "@/utils/cn";
 import { SidebarNav } from "./SidebarNav";
+import { SidebarShortcuts } from "./SidebarShortcuts";
 
 export const SIDEBAR_ID = "portal-sidebar";
 
@@ -43,7 +44,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           )}
         </IconButton>
       </div>
-      <SidebarNav collapsed={collapsed} />
+      <div className="grid min-h-0 content-start gap-0 overflow-y-auto">
+        <SidebarNav collapsed={collapsed} />
+        {collapsed ? null : <SidebarShortcuts />}
+      </div>
     </aside>
   );
 }

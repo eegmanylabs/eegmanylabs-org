@@ -388,13 +388,40 @@ export type AccountClaimReviewDoc = z.output<typeof accountClaimReviewDocSchema>
 
 export const labClaimRoleSchema = z.enum(["coordinator", "representative"]);
 
-/** `labClaims/{uid__laboratoryId}`: a request by a claimed member to represent a laboratory. */
+/** An institution that a member enters as new when registering a laboratory. */
+export const newInstitutionSchema = z.strictObject({
+  name: shortTextSchema,
+  countryCode: countryCodeSchema,
+  city: shortTextSchema,
+});
+export type NewInstitution = z.output<typeof newInstitutionSchema>;
+
+/**
+ * A laboratory that a member registers. It exists only once a reviewer approves the request.
+ * `institutionId` names an existing institution, or the identifier that `newInstitution` takes
+ * once it is created (`registeredInstitutionId`).
+ */
+export const laboratoryProposalSchema = z.strictObject({
+  name: shortTextSchema,
+  institutionId: idSchema,
+  newInstitution: newInstitutionSchema.exactOptional(),
+  department: shortTextSchema.exactOptional(),
+  website: urlSchema.exactOptional(),
+});
+export type LaboratoryProposal = z.output<typeof laboratoryProposalSchema>;
+
+/**
+ * `labClaims/{uid__laboratoryId}`: a request by a claimed member to represent a laboratory, or
+ * to register one with `proposal`, in which case `laboratoryId` is the identifier the proposed
+ * laboratory takes (`registeredLaboratoryId`).
+ */
 export const labClaimDocSchema = documentBaseSchema.extend({
   laboratoryId: idSchema,
   uid: uidSchema,
   requestedRole: labClaimRoleSchema,
   status: claimStatusSchema,
   submittedAt: timestampSchema,
+  proposal: laboratoryProposalSchema.exactOptional(),
 });
 export type LabClaimDoc = z.output<typeof labClaimDocSchema>;
 

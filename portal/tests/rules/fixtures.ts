@@ -13,7 +13,6 @@ import {
   labClaimId,
   laboratoryScopeKey,
   MEMBERS_SCOPE_KEY,
-  participationId,
   recordGrantId,
   replicationMembershipId,
   replicationScopeKey,
@@ -879,22 +878,7 @@ export const FIXTURES: { readonly [K in CollectionKey]?: Fixture } = {
     ids: [OWN_PARTICIPATION],
     seed: participation(OWN_REPLICATION, OWN_LABORATORY),
     subject: IN_UNIT,
-    create: {
-      ids: [participationId(OTHER_REPLICATION, OWN_LABORATORY)],
-      subject: { replicationId: OTHER_REPLICATION, laboratoryId: OWN_LABORATORY },
-      // The laboratory registers its interest, and the lead of the replication invites it.
-      data: (uid) => ({
-        replicationId: OTHER_REPLICATION,
-        laboratoryId: OWN_LABORATORY,
-        scopeKeys: unitScopeKeys(OTHER_REPLICATION, OWN_LABORATORY),
-        status: uid === uidOfCaller("otherLead") ? "invited" : "interested",
-        statusHistoryId: null,
-        targetNMain: 40,
-        readinessStatus: "notStarted",
-        custom: {},
-        dataOrigin: "live",
-      }),
-    },
+    // No client creates a participation: createParticipation writes it with its checklist.
     update: () => ({ targetNMain: 48, readinessStatus: "inProgress" }),
   },
   participationDetail: {

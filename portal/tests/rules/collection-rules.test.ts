@@ -422,9 +422,21 @@ describe("a laboratory", () => {
           city: "Example Town",
           website: "https://example.org/laboratory",
           piPersonId: OWNER_PERSON,
-          status: "inactive",
           description: text(10_000),
           custom: { note: "A value of a custom property." },
+        }),
+      ],
+      // Whether the laboratory is verified, active or inactive is the programme's decision.
+      "a status set by the coordinator": ["denied", update("ownCoordinator", LABORATORY, { status: "inactive" })],
+      "a full profile with its status, by an administrator": [
+        "allowed",
+        update("admin", LABORATORY, {
+          name: text(300),
+          institutionId: "institution-1",
+          countryCode: "GB",
+          piPersonId: OWNER_PERSON,
+          status: "inactive",
+          description: text(10_000),
         }),
       ],
       "the same references again, which need no second look": [
@@ -1178,34 +1190,44 @@ describe("a participation", () => {
     });
   });
 
-  it("accepts every reference at once, which is the most documents a rule reads", async () => {
+  it("accepts every reference at once in an edit, which is the most documents a rule reads", async () => {
     await trusted(environment, async (db) => {
-      const protocol = { ...stored(), ...fieldsOf("replicationProtocols"), replicationId: OTHER_REPLICATION };
-      const version = { ...stored(), ...fieldsOf("replicationProtocolVersions"), replicationId: OTHER_REPLICATION };
-      await setDoc(doc(db, `replications/${OTHER_REPLICATION}/protocols/protocol-1`), protocol);
-      await setDoc(doc(db, `replications/${OTHER_REPLICATION}/protocolVersions/version-1`), version);
+      const protocol = { ...stored(), ...fieldsOf("replicationProtocols"), replicationId: OWN_REPLICATION };
+      const version = { ...stored(), ...fieldsOf("replicationProtocolVersions"), replicationId: OWN_REPLICATION };
+      await setDoc(doc(db, `replications/${OWN_REPLICATION}/protocols/protocol-own`), protocol);
+      await setDoc(doc(db, `replications/${OWN_REPLICATION}/protocolVersions/version-own`), {
+        ...version,
+        protocolId: "protocol-own",
+      });
     });
-    const complete = {
-      ...fresh(),
-      localLeadPersonId: OWNER_PERSON,
-      protocolId: "protocol-1",
-      protocolVersionId: "version-1",
-      equipmentConfigurationId: "configuration-1",
-      targetNMain: 1_000_000,
-      targetNRest: 0,
-      signedUpAt: serverTimestamp(),
-      custom: { room: "B12", booths: 2, shielded: true },
-    };
     await expectOutcomes({
-      "a participation with all four references": [
+      "a participation that gains all four references": [
         "allowed",
-        create("ownCoordinator", at(NEW_PARTICIPATION), complete),
-      ],
-      "a second participation of the same pair, which is the same document": [
-        "denied",
-        create("ownCoordinator", at(NEW_PARTICIPATION), complete),
+        update("ownCoordinator", PARTICIPATION, {
+          localLeadPersonId: OWNER_PERSON,
+          protocolId: "protocol-own",
+          protocolVersionId: "version-own",
+          equipmentConfigurationId: "configuration-1",
+          targetNMain: 1_000_000,
+          targetNRest: 0,
+          signedUpAt: serverTimestamp(),
+          custom: { room: "B12", booths: 2, shielded: true },
+        }),
       ],
     });
+  });
+
+  it("is created by no client, however well formed, because only the function writes its checklist and history", async () => {
+    await expectOutcomes(
+      refused({
+        "the interest of the laboratory, by its coordinator": create("ownCoordinator", at(NEW_PARTICIPATION), fresh()),
+        "an invitation, by the lead of the replication": create("otherLead", at(NEW_PARTICIPATION), {
+          ...fresh(),
+          status: "invited",
+        }),
+        "an invitation, by an administrator": create("admin", at(NEW_PARTICIPATION), { ...fresh(), status: "invited" }),
+      }),
+    );
   });
 
   it("keeps its status for the function that writes the history, and checks the references an edit introduces", async () => {

@@ -40,29 +40,46 @@ const participation = (replicationId: string, laboratoryId: string) => ({
   dataOrigin: "live",
 });
 
+/** Many laboratories, each with a participation in the lead's replication. */
 async function plantLaboratories(): Promise<void> {
-  await lab.plant(
-    Object.fromEntries(
-      Array.from({ length: MANY }, (_, index) => [
-        `laboratories/${batchLaboratory(index)}`,
-        {
-          ...stored(),
-          slug: batchLaboratory(index),
-          name: `Synthetic batch laboratory ${index}`,
-          status: "active",
-          custom: {},
-          dataOrigin: "demo",
-        },
-      ]),
-    ),
-  );
+  const documents: Record<string, Record<string, unknown>> = {};
+  for (let index = 0; index < MANY; index += 1) {
+    documents[`laboratories/${batchLaboratory(index)}`] = {
+      ...stored(),
+      slug: batchLaboratory(index),
+      name: `Synthetic batch laboratory ${index}`,
+      status: "active",
+      custom: {},
+      dataOrigin: "demo",
+    };
+    documents[`participations/${participationId(OWN_REPLICATION, batchLaboratory(index))}`] = {
+      ...stored(),
+      ...participation(OWN_REPLICATION, batchLaboratory(index)),
+      dataOrigin: "demo",
+    };
+  }
+  await lab.plant(documents);
 }
 
-async function writtenParticipations(): Promise<number> {
+/** The path of the team entry of the member beneath the participation of one batch laboratory. */
+const teamEntryPath = (index: number) =>
+  `participations/${participationId(OWN_REPLICATION, batchLaboratory(index))}/teamMembers/${MEMBER_PERSON}`;
+
+/** A team entry that the lead of the replication may create beneath a participation. */
+const teamEntry = (index: number, uid: string) => ({
+  participationId: participationId(OWN_REPLICATION, batchLaboratory(index)),
+  personId: MEMBER_PERSON,
+  role: "analyst",
+  replicationId: OWN_REPLICATION,
+  laboratoryId: batchLaboratory(index),
+  scopeKeys: unitScopeKeys(OWN_REPLICATION, batchLaboratory(index)),
+  ...createdBy(uid),
+});
+
+async function writtenTeamEntries(): Promise<number> {
   let written = 0;
   for (let index = 0; index < MANY; index += 1) {
-    const path = `participations/${participationId(OWN_REPLICATION, batchLaboratory(index))}`;
-    if ((await lab.stored(path)) !== null) written += 1;
+    if ((await lab.stored(teamEntryPath(index))) !== null) written += 1;
   }
   return written;
 }
@@ -191,33 +208,28 @@ describe("a transaction", () => {
 });
 
 describe("a batch whose rules read more documents than one request may", () => {
-  const manyParticipations = (count: number) => {
+  // No client creates a participation, so the batch adds a member to the team of many
+  // participations, whose rule reads the participation beneath which each entry is written.
+  const manyTeamEntries = (count: number) => {
     const db = lab.db("ownLead");
     const uid = lab.uid("ownLead");
     const batch = writeBatch(db);
-    for (let index = 0; index < count; index += 1) {
-      const laboratoryId = batchLaboratory(index);
-      batch.set(doc(db, `participations/${participationId(OWN_REPLICATION, laboratoryId)}`), {
-        ...participation(OWN_REPLICATION, laboratoryId),
-        ...createdBy(uid),
-      });
-    }
+    for (let index = 0; index < count; index += 1) batch.set(doc(db, teamEntryPath(index)), teamEntry(index, uid));
     return batch;
   };
 
   it("is refused as a whole, although every write in it is one the lead may make", async () => {
-    // The rules read the access document, the replication and one laboratory for each
-    // participation: thirty-two documents, where a batch may read twenty. The rule errors, and
-    // an error refuses.
+    // The rules read the access document, the person and one participation for each entry:
+    // thirty-two documents, where a batch may read twenty. The rule errors, and an error refuses.
     await plantLaboratories();
-    await assertFails(manyParticipations(MANY).commit());
-    expect(await writtenParticipations()).toBe(0);
+    await assertFails(manyTeamEntries(MANY).commit());
+    expect(await writtenTeamEntries()).toBe(0);
   });
 
   it("is accepted as a whole at the limit of twenty documents", async () => {
     await plantLaboratories();
-    await assertSucceeds(manyParticipations(18).commit());
-    expect(await writtenParticipations()).toBe(18);
+    await assertSucceeds(manyTeamEntries(18).commit());
+    expect(await writtenTeamEntries()).toBe(18);
   });
 
   it.each([
@@ -252,15 +264,11 @@ describe("a batch whose rules read more documents than one request may", () => {
     });
     for (let index = 0; index < MANY; index += 1) {
       if (index === position) forbidden();
-      const laboratoryId = batchLaboratory(index);
-      batch.set(doc(db, `participations/${participationId(OWN_REPLICATION, laboratoryId)}`), {
-        ...participation(OWN_REPLICATION, laboratoryId),
-        ...createdBy(uid),
-      });
+      batch.set(doc(db, teamEntryPath(index)), teamEntry(index, uid));
     }
     if (position === MANY) forbidden();
     await assertFails(batch.commit());
-    expect(await writtenParticipations()).toBe(0);
+    expect(await writtenTeamEntries()).toBe(0);
     expect(
       await lab.stored(
         `participations/${participationId(OTHER_REPLICATION, OTHER_LABORATORY)}/teamMembers/${MEMBER_PERSON}`,
@@ -273,16 +281,10 @@ describe("a batch whose rules read more documents than one request may", () => {
     const db = lab.db("ownLead");
     const uid = lab.uid("ownLead");
     const batch = writeBatch(db);
-    for (let index = 0; index < MANY; index += 1) {
-      const laboratoryId = batchLaboratory(index);
-      batch.set(doc(db, `participations/${participationId(OWN_REPLICATION, laboratoryId)}`), {
-        ...participation(OWN_REPLICATION, laboratoryId),
-        ...createdBy(uid),
-      });
-    }
+    for (let index = 0; index < MANY; index += 1) batch.set(doc(db, teamEntryPath(index)), teamEntry(index, uid));
     batch.update(doc(db, REPLICATION), { statusKey: "published", ...updatedBy(uid) });
     await assertFails(batch.commit());
-    expect(await writtenParticipations()).toBe(0);
+    expect(await writtenTeamEntries()).toBe(0);
     expect((await lab.stored(REPLICATION))?.statusKey).toBe("planning");
   });
 });

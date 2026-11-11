@@ -10,7 +10,15 @@ import { COLLECTIONS, MEMBERS_SCOPE_KEY } from "@eegml/shared";
 import type { DocumentData, Firestore, Query } from "firebase/firestore";
 import type { LiveQuery, QueryOperator, QueryValue } from "../../web/src/data/query-spec";
 import { queryReference } from "../../web/src/data/refs";
-import { CALLERS, type CallerKind, OWN_LABORATORY, OWN_REPLICATION, OWNER_PERSON, OWNER_UID } from "./world";
+import {
+  CALLERS,
+  type CallerKind,
+  OWN_LABORATORY,
+  OWN_PARTICIPATION,
+  OWN_REPLICATION,
+  OWNER_PERSON,
+  OWNER_UID,
+} from "./world";
 
 /** A query without the type of its collection, for code that treats every query alike. */
 export interface QueryShape {
@@ -148,6 +156,14 @@ export const QUERY_CATALOGUE: readonly CataloguedQuery[] = [
     limit: LIMIT,
   }),
 
+  // Made by the list of replications and the review queue of memberships, for the programme.
+  catalogued("the memberships that wait for review, across replications", "coreTeam", null, {
+    collection: "replicationMemberships",
+    within: "group",
+    where: [["reviewStatus", "==", "needsReview"]],
+    limit: LIMIT,
+  }),
+
   // Records that carry the audience of their target.
   catalogued("the status history of a record, latest first", "member", "scopeKeys", {
     collection: "statusHistory",
@@ -247,6 +263,12 @@ export const QUERY_CATALOGUE: readonly CataloguedQuery[] = [
     orderBy: [["submittedAt", "asc"]],
     limit: LIMIT,
   }),
+  catalogued("a member's own requests to represent or register a laboratory", "owner", "uid", {
+    collection: "labClaims",
+    within: [],
+    where: [["uid", "==", OWNER_UID]],
+    limit: LIMIT,
+  }),
   catalogued("a user's unread notifications, newest first", "owner", null, {
     collection: "userNotifications",
     within: [OWNER_UID],
@@ -274,6 +296,69 @@ export const QUERY_CATALOGUE: readonly CataloguedQuery[] = [
       limit: LIMIT,
     }),
   ),
+
+  // Made by the member page and by Home, for any member.
+  catalogued("the laboratories that list one person, for the member page", "member", null, {
+    collection: "laboratoryMembers",
+    within: "group",
+    where: [["personId", "==", OWNER_PERSON]],
+    limit: LIMIT,
+  }),
+  catalogued("the status history of a replication, which every member reads", "member", "scopeKeys", {
+    collection: "statusHistory",
+    within: [],
+    where: [
+      ["entityType", "==", "replication"],
+      ["entityId", "==", OWN_REPLICATION],
+      ["scopeKeys", "array-contains-any", [MEMBERS_SCOPE_KEY]],
+    ],
+    orderBy: [["effectiveAt", "desc"]],
+    limit: LIMIT,
+  }),
+
+  // Made by the laboratory page, the replication page and the readiness matrix.
+  catalogued("the current equipment configurations of every laboratory", "member", null, {
+    collection: "laboratoryEquipment",
+    within: "group",
+    where: [["isCurrent", "==", true]],
+    limit: LIMIT,
+  }),
+  catalogued("the checklist of one participation, for a caller in its scope", "ownLabMember", "scopeKeys", {
+    collection: "participationChecklist",
+    within: [OWN_PARTICIPATION],
+    where: [["scopeKeys", "array-contains-any", heldBy("ownLabMember")]],
+    limit: LIMIT,
+  }),
+  catalogued("the status history of the participations of a laboratory, latest first", "member", "scopeKeys", {
+    collection: "statusHistory",
+    within: [],
+    where: [
+      ["laboratoryId", "==", OWN_LABORATORY],
+      ["scopeKeys", "array-contains-any", [MEMBERS_SCOPE_KEY]],
+    ],
+    orderBy: [["effectiveAt", "desc"]],
+    limit: LIMIT,
+  }),
+  catalogued("the open items of the reconciliation queue", "admin", null, {
+    collection: "reconciliationItems",
+    within: [],
+    where: [["status", "==", "open"]],
+    limit: LIMIT,
+  }),
+
+  // Made by the merge of two records of a person, with the Admin SDK.
+  catalogued("the memberships of one person, across replications", null, null, {
+    collection: "replicationMemberships",
+    within: "group",
+    where: [["personId", "==", OWNER_PERSON]],
+    limit: LIMIT,
+  }),
+  catalogued("the team entries of one person, across participations", null, null, {
+    collection: "participationTeamMembers",
+    within: "group",
+    where: [["personId", "==", OWNER_PERSON]],
+    limit: LIMIT,
+  }),
 
   // Made by the claim functions with the Admin SDK, to find the roles that the records about a
   // person imply for the person's account.

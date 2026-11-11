@@ -70,6 +70,47 @@ export function lookupFold(text: string): string {
   return fold(text).replaceAll("-", "");
 }
 
+/**
+ * Folds a text for matching in any script: Unicode NFKD, the combining marks of Latin letters
+ * removed (as `fold` does) while the marks of other scripts stay, because in Arabic, Hebrew,
+ * Devanagari or Hangul they carry the word, then NFC and lower case, with every run of
+ * characters that are not letters, marks or digits replaced by one hyphen. `São  Paulo!` gives
+ * `sao-paulo`, as with `fold`, and `جامعة المثال` gives `جامعة-المثال` where `fold` gives nothing.
+ * For search and for the name keys of organisations. The text itself is stored as written.
+ */
+export function searchFold(text: string): string {
+  return text
+    .normalize("NFKD")
+    .replace(/(?<=\p{Script=Latin})\p{M}+/gu, "")
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, "-")
+    .replace(/^-|-$/g, "");
+}
+
+/**
+ * The words of a search query, folded with `searchFold`: null when nothing was typed, which
+ * matches everything, and an empty list when what was typed holds no letter or digit, which
+ * matches nothing, so that a query in a script the fold cannot read never shows every record.
+ */
+export function searchWords(query: string): readonly string[] | null {
+  if (query.trim() === "") return null;
+  return searchFold(query).split("-").filter(Boolean);
+}
+
+/** Whether every word of a query is found in one of the texts. Null words match everything. */
+export function matchesSearch(words: readonly string[] | null, texts: readonly (string | null | undefined)[]): boolean {
+  if (words === null) return true;
+  if (words.length === 0) return false;
+  const folded = texts.flatMap((text) => (text == null ? [] : [searchFold(text)]));
+  return words.every((word) => folded.some((text) => text.includes(word)));
+}
+
+/** `searchFold` without its hyphens: the name of an organisation as its key folds it, in any script. */
+export function nameFold(text: string): string {
+  return searchFold(text).replaceAll("-", "");
+}
+
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 
 function encode(text: string): Uint8Array {
@@ -284,6 +325,48 @@ export const personEvidenceKey = {
 export function importedPersonId(firstEvidenceKey: string, secret: string): string {
   if (firstEvidenceKey.trim() === "") throw new RangeError("An evidence key is not empty.");
   return compose(["p", keyedShortHash(firstEvidenceKey, secret)]);
+}
+
+/**
+ * The key strings by which an institution and a laboratory are found again: the `nameAffiliation`
+ * identity keys of docs/DATA_MODEL.md, section 3. A folded name is joined to its context, the
+ * country of an institution and the institution of a laboratory. The importers, the functions
+ * that create these records and the interface share them, so that all three hash the same text.
+ * The name is folded with `nameFold`, so a name in any script has a key, and two names that
+ * differ only outside the Latin alphabet have different keys. Null when nothing is left of the
+ * name after folding.
+ */
+export const organisationKey = {
+  institution: (name: string, countryCode: string): string | null => {
+    const folded = nameFold(name);
+    return folded === "" ? null : `${folded}#${countryCode.trim().toUpperCase()}`;
+  },
+  laboratory: (institutionId: string, name: string): string | null => {
+    const folded = nameFold(name);
+    return folded === "" ? null : `${institutionId}#${folded}`;
+  },
+} as const;
+
+/**
+ * `inst__hash`: the identifier of an institution that is registered in the portal, from the hash
+ * of its name key (`organisationKey.institution`). The same institution entered twice, however
+ * its name is spelt, addresses the same document, so the second entry is found as a duplicate.
+ */
+export function registeredInstitutionId(name: string, countryCode: string): string {
+  const key = organisationKey.institution(name, countryCode);
+  if (key === null) throw new RangeError("The name of an institution holds a letter or a digit.");
+  return compose(["inst", shortHash(key)]);
+}
+
+/**
+ * `lab__hash`: the identifier of a laboratory that is registered in the portal, from the hash of
+ * its name key at its institution (`organisationKey.laboratory`). The same laboratory proposed
+ * twice addresses the same document, which is how a duplicate is caught.
+ */
+export function registeredLaboratoryId(institutionId: string, name: string): string {
+  const key = organisationKey.laboratory(institutionId, name);
+  if (key === null) throw new RangeError("The name of a laboratory holds a letter or a digit.");
+  return compose(["lab", shortHash(key)]);
 }
 
 /**
@@ -671,6 +754,8 @@ export const ID_BUILDERS = {
   personEmailIndexId,
   identityKeyId,
   importedPersonId,
+  registeredInstitutionId,
+  registeredLaboratoryId,
   importedAffiliationId,
   institutionCandidateId,
   studyAliasId,

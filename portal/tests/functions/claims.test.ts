@@ -27,6 +27,7 @@ import {
   coreTeamMember,
   dataOf,
   emailIndexPath,
+  grantCapability,
   grantRole,
   laboratory,
   leaveNoTrace,
@@ -640,6 +641,57 @@ describe("reviewAccountClaim", () => {
     expect(
       await codeOf(call(reviewer, reviewAccountClaimContract, { uid: "uid-nobody", decision: "reject", note: "No." })),
     ).toBe("not-found");
+  });
+});
+
+describe("reviewAccountClaim: someone whom no record names", () => {
+  const admission = {
+    uid: "uid-newcomer",
+    decision: "approveAsNewMember",
+    displayName: "Synthetic Requester",
+    affiliation: "Example University",
+  } as const;
+
+  it("admits the person as a new, live member and links the account, in one transaction with its audit entries", async () => {
+    const admin = await administrator("uid-admin");
+    const newcomer = await account("uid-newcomer", { email: "synthetic.newcomer@example.org" });
+    await call(newcomer, requestAccessContract, REQUEST);
+
+    const answer = await call(admin, reviewAccountClaimContract, admission);
+    expect(answer.status).toBe("approved");
+    const personId = answer.personId ?? "";
+    expect(await dataOf(`persons/${personId}`)).toMatchObject({
+      displayName: "Synthetic Requester",
+      affiliationSummary: "Example University",
+      userId: "uid-newcomer",
+      dataOrigin: "live",
+      replicationIds: [],
+    });
+    expect((await dataOf(`persons/${personId}/private/contact`))?.emails).toMatchObject([
+      { email: "synthetic.newcomer@example.org", kind: "primary", claimEligible: true },
+    ]);
+    expect((await dataOf(emailIndexPath("synthetic.newcomer@example.org")))?.personIds).toEqual([personId]);
+    expect(await claimOf("uid-newcomer")).toMatchObject({ status: "approved", personId });
+    expect((await accessOf("uid-newcomer")).member).toBe(true);
+    expect(await auditOf("person.created", personId)).toHaveLength(1);
+    expect(await auditOf("claim.approved", personId)).toHaveLength(1);
+    expect(JSON.stringify(await auditOf("person.created", personId))).not.toContain("synthetic.newcomer@example.org");
+  });
+
+  it("is refused without the capability to create persons, for one's own account, and without a statement", async () => {
+    const newcomer = await account("uid-newcomer", { email: "synthetic.newcomer@example.org" });
+    const reviewer = await account("uid-reviewer", { mfaEnrolled: true, secondFactor: true });
+    await grantCapability("uid-reviewer", "claims.review");
+    const admin = await administrator("uid-admin");
+    // A match that found nobody leaves no claim, and nothing is known to make a profile from.
+    await call(newcomer, claimProfileContract, {});
+    expect(await codeOf(call(admin, reviewAccountClaimContract, admission))).toBe("not-found");
+    await call(newcomer, requestAccessContract, REQUEST);
+    expect(await codeOf(call(reviewer, reviewAccountClaimContract, admission))).toBe("permission-denied");
+    expect(await codeOf(call(newcomer, reviewAccountClaimContract, admission))).toBe("permission-denied");
+    expect(await codeOf(call(null, reviewAccountClaimContract, admission))).toBe("unauthenticated");
+    expect(await claimOf("uid-newcomer")).toMatchObject({ status: "pendingReview", personId: null });
+    expect(await auditOf("person.created")).toHaveLength(0);
   });
 });
 

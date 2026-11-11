@@ -8,7 +8,18 @@
 import { grantableCapabilitySchema, roleSchema, roleScopeTypeSchema } from "./capabilities";
 import { entityTypeSchema } from "./entities";
 import { hasValidOrcidCheckDigit } from "./identifiers";
-import { idListSchema, idSchema, keySchema, orcidSchema, shortTextSchema, uidSchema } from "./schemas/base";
+import { nameFold } from "./ids";
+import {
+  countryCodeSchema,
+  idListSchema,
+  idSchema,
+  keySchema,
+  LIMITS,
+  orcidSchema,
+  shortTextSchema,
+  uidSchema,
+  urlSchema,
+} from "./schemas/base";
 import {
   claimMatchBasisSchema,
   claimStatusSchema,
@@ -18,7 +29,9 @@ import {
   roleAssignmentStatusSchema,
   userStatusSchema,
 } from "./schemas/identity";
+import { participationStatusSchema } from "./schemas/participation";
 import { laboratoryMemberRoleSchema, laboratoryMemberStatusSchema } from "./schemas/programme";
+import { reconciliationStatusSchema } from "./schemas/provenance";
 import { replicationMembershipRoleSchema, reviewStatusSchema, studyKeySchema } from "./schemas/replications";
 import { auditActionSchema, auditActorKindSchema } from "./schemas/system";
 import { z } from "./zod";
@@ -173,6 +186,9 @@ export type ListAccountClaimsOutput = CallableOutput<typeof listAccountClaimsCon
  * account to the chosen person exactly as a match would, and is refused for a person whom
  * another account has claimed. Nobody decides the claim of their own account, and a link to a
  * person who is not among the claim's candidates is for programme administrators only.
+ * `approveAsNewMember` admits someone whom no record names yet: it creates the person, live,
+ * with the name and affiliation the reviewer confirms, and links the account in the same
+ * transaction. It needs `people.manage` as well.
  */
 export const reviewAccountClaimContract = {
   name: "reviewAccountClaim",
@@ -181,6 +197,13 @@ export const reviewAccountClaimContract = {
       uid: uidSchema,
       decision: z.literal("approve"),
       personId: idSchema,
+      note: reasonSchema.exactOptional(),
+    }),
+    z.strictObject({
+      uid: uidSchema,
+      decision: z.literal("approveAsNewMember"),
+      displayName: z.string().trim().min(1).max(LIMITS.shortText),
+      affiliation: z.string().trim().min(1).max(LIMITS.shortText).exactOptional(),
       note: reasonSchema.exactOptional(),
     }),
     z.strictObject({ uid: uidSchema, decision: z.literal("reject"), note: reasonSchema }),
@@ -292,18 +315,72 @@ export const setUserStatusContract = {
   output: z.strictObject({ uid: uidSchema, status: userStatusSchema }),
 } as const satisfies CallableContract;
 
+/** A name that a person types: trimmed, and holding at least one letter or digit, which its name key needs. */
+const organisationNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(LIMITS.shortText)
+  .refine((name) => nameFold(name) !== "", { error: "The name needs at least one letter or digit" });
+
+/** An optional text that a person types: trimmed, and absent rather than empty. */
+const optionalTextSchema = z.string().trim().min(1).max(LIMITS.shortText).exactOptional();
+
 /**
- * Asks to represent a laboratory. For a member whose account is linked to a person. One request
- * per account and laboratory may be open. The evidence is computed on the server.
+ * The institution of a laboratory that is registered or created: one that exists, or a new one
+ * with its country and city, which is created with the laboratory.
+ */
+export const institutionChoiceSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("existing"), institutionId: idSchema }),
+  z.strictObject({
+    kind: z.literal("new"),
+    name: organisationNameSchema,
+    countryCode: countryCodeSchema,
+    city: z.string().trim().min(1).max(LIMITS.shortText),
+  }),
+]);
+export type InstitutionChoice = z.output<typeof institutionChoiceSchema>;
+
+/** A laboratory as a member registers it or an administrator creates it. */
+export const laboratoryInputSchema = z.strictObject({
+  name: organisationNameSchema,
+  institution: institutionChoiceSchema,
+  department: optionalTextSchema,
+  website: urlSchema.exactOptional(),
+});
+export type LaboratoryInput = z.output<typeof laboratoryInputSchema>;
+
+/**
+ * Asks to represent a laboratory, or registers a new one. For a member whose account is linked
+ * to a person. One request per account and laboratory may be open. The evidence is computed on
+ * the server.
+ *
+ * | Input        | Asks for                                                                       |
+ * |--------------|--------------------------------------------------------------------------------|
+ * | `laboratoryId` | The role in a laboratory that exists                                         |
+ * | `proposal`   | A new laboratory, which a reviewer creates on approval. It takes the identifier of its name key at its institution, so a laboratory that exists under that key already is reported as `duplicate` and shown to the reviewer beside the one that exists |
  */
 export const requestLabClaimContract = {
   name: "requestLabClaim",
-  input: z.strictObject({
+  input: z.union([
+    z.strictObject({
+      laboratoryId: idSchema,
+      requestedRole: labClaimRoleSchema,
+      message: reasonSchema.exactOptional(),
+    }),
+    z.strictObject({
+      proposal: laboratoryInputSchema,
+      requestedRole: labClaimRoleSchema,
+      message: reasonSchema.exactOptional(),
+    }),
+  ]),
+  output: z.strictObject({
+    claimId: idSchema,
     laboratoryId: idSchema,
-    requestedRole: labClaimRoleSchema,
-    message: reasonSchema.exactOptional(),
+    status: z.literal("pendingReview"),
+    /** Whether a proposed laboratory exists already under the same name at the same institution. */
+    duplicate: z.boolean(),
   }),
-  output: z.strictObject({ claimId: idSchema, status: z.literal("pendingReview") }),
 } as const satisfies CallableContract;
 
 /**
@@ -318,6 +395,225 @@ export const reviewLabClaimContract = {
     z.strictObject({ claimId: idSchema, decision: z.literal("reject"), note: reasonSchema }),
   ]),
   output: z.strictObject({ claimId: idSchema, status: claimStatusSchema.extract(["approved", "rejected"]) }),
+} as const satisfies CallableContract;
+
+/**
+ * Withdraws the caller's own request to represent or register a laboratory while it waits for
+ * review. Only the account that sent the request withdraws it, and a decided request stays as
+ * it was decided. A new request may be sent afterwards.
+ */
+export const withdrawLabClaimContract = {
+  name: "withdrawLabClaim",
+  input: z.strictObject({ claimId: idSchema }),
+  output: z.strictObject({ claimId: idSchema, status: z.literal("withdrawn") }),
+} as const satisfies CallableContract;
+
+/**
+ * Creates a laboratory directly, with a new institution where one is entered. Capability:
+ * `labs.manage` for the programme: programme administrators and the core team. The laboratory
+ * takes the identifier of its name key at its institution, and one that exists already under
+ * that key is refused as a duplicate (`already-exists`), with nothing written.
+ */
+export const createLaboratoryContract = {
+  name: "createLaboratory",
+  input: laboratoryInputSchema,
+  output: z.strictObject({ laboratoryId: idSchema, institutionId: idSchema, institutionCreated: z.boolean() }),
+} as const satisfies CallableContract;
+
+/** The fields of an equipment configuration that a person states. Each may be left out, which means unknown. */
+export const equipmentConfigurationInputSchema = z.strictObject({
+  name: z.string().trim().min(1).max(LIMITS.shortText),
+  amplifierManufacturer: optionalTextSchema,
+  amplifierModel: optionalTextSchema,
+  capType: optionalTextSchema,
+  electrodeType: optionalTextSchema,
+  channelCount: z.number().int().min(1).max(4_096).exactOptional(),
+  samplingRatesHz: z.array(z.number().int().min(1).max(1_000_000)).min(1).max(50).exactOptional(),
+  referenceScheme: optionalTextSchema,
+  triggerMethod: optionalTextSchema,
+  presentationSoftware: optionalTextSchema,
+  stimulusComputer: optionalTextSchema,
+  displayRefreshHz: z.number().positive().max(10_000).exactOptional(),
+  eyeTracker: optionalTextSchema,
+  responseDevices: z.array(z.string().trim().min(1).max(LIMITS.shortText)).min(1).max(50).exactOptional(),
+  notes: z.string().trim().min(1).max(LIMITS.longText).exactOptional(),
+});
+export type EquipmentConfigurationInput = z.output<typeof equipmentConfigurationInputSchema>;
+
+/**
+ * Saves an equipment configuration of a laboratory. Capability: `labs.manage` for the
+ * laboratory: its coordinators, the core team and programme administrators.
+ *
+ * With `replacesConfigurationId` null it opens a new configuration of its own. Naming the
+ * current configuration replaces it: in one transaction the old one is closed (`validTo` set,
+ * `isCurrent` cleared) and a new one opens that names it in `supersedesId`, so a closed
+ * configuration never changes. A configuration that is no longer current is refused. A save
+ * that changes nothing writes nothing and answers `changed: false`.
+ */
+export const saveEquipmentConfigurationContract = {
+  name: "saveEquipmentConfiguration",
+  input: z.strictObject({
+    laboratoryId: idSchema,
+    replacesConfigurationId: idSchema.nullable(),
+    configuration: equipmentConfigurationInputSchema,
+  }),
+  output: z.strictObject({
+    laboratoryId: idSchema,
+    configurationId: idSchema,
+    supersededId: idSchema.nullable(),
+    changed: z.boolean(),
+  }),
+} as const satisfies CallableContract;
+
+const targetCountSchema = z.number().int().min(0).max(1_000_000);
+
+/**
+ * Creates the participation of a laboratory in a replication, which is the only way one is
+ * created. As `invited` (the default) it speaks for the replication: capability
+ * `participations.manage` for the replication, held by its leads, the core team and programme
+ * administrators. As `interested` it speaks for the laboratory: the same capability for the
+ * laboratory, held by its coordinators. The participation takes the identifier that joins the
+ * two, so a second one is refused (`already-exists`). In one transaction it writes the
+ * participation, its restricted detail, one checklist item for each item of the onboarding
+ * template, the entry of the status history and the audit entry.
+ */
+export const createParticipationContract = {
+  name: "createParticipation",
+  input: z.strictObject({
+    replicationId: studyKeySchema,
+    laboratoryId: idSchema,
+    localLeadPersonId: idSchema.exactOptional(),
+    /** The participants the laboratory aims to record in the main experiment. Kept apart from resting state. */
+    targetNMain: targetCountSchema.exactOptional(),
+    /** The participants the laboratory aims to record at rest. Never added to the main figure. */
+    targetNRest: targetCountSchema.exactOptional(),
+    reason: reasonSchema.exactOptional(),
+    /** `invited` when the replication invites the laboratory, `interested` when the laboratory offers to take part. */
+    status: z.enum(["invited", "interested"]).exactOptional(),
+  }),
+  output: z.strictObject({
+    participationId: idSchema,
+    status: z.enum(["invited", "interested"]),
+    statusHistoryId: idSchema,
+    checklistItems: z.number().int().min(0),
+  }),
+} as const satisfies CallableContract;
+
+/**
+ * Changes the status of a participation, with a reason, an entry of the status history and the
+ * audit entry in one transaction. Capability: `participations.manage` for the side that decides
+ * the move in `PARTICIPATION_TRANSITIONS`: the laboratory answers an invitation, starts its
+ * onboarding and withdraws, and the replication decides everything from readiness onwards. A
+ * move that the table does not hold is refused, and so is a move into collection while
+ * readiness is not approved. The call states the status the caller saw, and is refused when the
+ * stored status says anything else.
+ */
+export const setParticipationStatusContract = {
+  name: "setParticipationStatus",
+  input: z.strictObject({
+    participationId: idSchema,
+    fromStatus: participationStatusSchema,
+    toStatus: participationStatusSchema,
+    reason: reasonSchema,
+  }),
+  output: z.strictObject({ participationId: idSchema, status: participationStatusSchema, statusHistoryId: idSchema }),
+} as const satisfies CallableContract;
+
+/** What a reviewer decides about one lead membership of a conflict. */
+export const leadOutcomeSchema = z.enum(["current", "former", "wrong"]);
+export type LeadOutcome = z.output<typeof leadOutcomeSchema>;
+
+const fingerprintSchema = idSchema;
+const optionalNoteSchema = reasonSchema.exactOptional();
+
+/**
+ * Decides an item of the reconciliation queue. Capability: `reconciliation.resolve` for the
+ * programme. A decided item never reopens: a second decision is refused. The decision, the
+ * changes it makes and the audit entry are written in one transaction.
+ *
+ * | Action            | For items of the kind   | Effect                                                     |
+ * |-------------------|-------------------------|------------------------------------------------------------|
+ * | `dismiss`         | Any                     | The item is closed as dismissed, with a note, and nothing else changes |
+ * | `decideLeads`     | `conflictingLead`       | Each named lead membership of the replication becomes current, former or wrong and is confirmed; a wrong one is archived. The current confirmed leads of the replication are recomputed |
+ * | `chooseValue`     | `valueConflict`         | The value of one candidate is set on the record, and its source record is named for the field |
+ * | `keepCurrent`     | `valueConflict`         | The record keeps its value; the decision is stored          |
+ * | `distinctPersons` | `duplicatePerson`       | The two records are different people; the decision is stored |
+ * | `mergePersons`    | `duplicatePerson`       | Every reference to `mergePersonId` moves to `keepPersonId`, through the identity keys and the source links, and the merged record is archived |
+ */
+export const resolveReconciliationItemContract = {
+  name: "resolveReconciliationItem",
+  input: z.discriminatedUnion("action", [
+    z.strictObject({ fingerprint: fingerprintSchema, action: z.literal("dismiss"), note: reasonSchema }),
+    z.strictObject({
+      fingerprint: fingerprintSchema,
+      action: z.literal("decideLeads"),
+      memberships: z
+        .array(
+          z.strictObject({ personId: idSchema, role: replicationMembershipRoleSchema, outcome: leadOutcomeSchema }),
+        )
+        .min(1)
+        .max(20),
+      note: optionalNoteSchema,
+    }),
+    z.strictObject({
+      fingerprint: fingerprintSchema,
+      action: z.literal("chooseValue"),
+      candidateKey: z.string().min(1).max(LIMITS.shortText),
+      note: optionalNoteSchema,
+    }),
+    z.strictObject({ fingerprint: fingerprintSchema, action: z.literal("keepCurrent"), note: optionalNoteSchema }),
+    z.strictObject({ fingerprint: fingerprintSchema, action: z.literal("distinctPersons"), note: optionalNoteSchema }),
+    z.strictObject({
+      fingerprint: fingerprintSchema,
+      action: z.literal("mergePersons"),
+      keepPersonId: idSchema,
+      mergePersonId: idSchema,
+      note: optionalNoteSchema,
+    }),
+  ]),
+  output: z.strictObject({
+    fingerprint: fingerprintSchema,
+    status: reconciliationStatusSchema.extract(["resolved", "dismissed"]),
+    /** The number of documents the decision changed, the item itself not included. */
+    changedDocuments: z.number().int().min(0),
+  }),
+} as const satisfies CallableContract;
+
+const rollbackCountsSchema = z.strictObject({
+  restored: z.number().int().min(0),
+  removed: z.number().int().min(0),
+  itemsWithdrawn: z.number().int().min(0),
+  /** Items of the queue that a reviewer has decided since. They are left as they are. */
+  itemsLeft: z.number().int().min(0),
+});
+
+/**
+ * Rolls an import batch back from its change log, with the logic of the import tools
+ * (`planBatchRollback`). Capability: `imports.rollback` for the programme. Without `confirm`
+ * it changes nothing and answers what a rollback would do, which the interface shows for
+ * confirmation. With it, it reverses the batch. A batch any of whose documents has changed
+ * since is refused as a whole, with the paths of those documents.
+ */
+export const rollbackImportBatchContract = {
+  name: "rollbackImportBatch",
+  input: z.strictObject({ batchId: idSchema, confirm: z.boolean() }),
+  output: z.discriminatedUnion("status", [
+    z.strictObject({ status: z.literal("nothingToReverse"), reason: z.string().max(500) }),
+    z.strictObject({ status: z.literal("refused"), changedDocuments: z.array(z.string().max(1_500)).max(1_000) }),
+    z.strictObject({
+      status: z.literal("planned"),
+      counts: rollbackCountsSchema,
+      /** Each document the rollback would change, with what it would do to it. */
+      documents: z
+        .array(
+          z.strictObject({ path: z.string().max(1_500), action: z.enum(["restore", "remove", "withdraw", "keep"]) }),
+        )
+        .max(1_000),
+      /** Whether more documents would change than `documents` lists. */
+      truncated: z.boolean(),
+    }),
+    z.strictObject({ status: z.literal("rolledBack"), counts: rollbackCountsSchema }),
+  ]),
 } as const satisfies CallableContract;
 
 /**
@@ -459,6 +755,36 @@ export const setReplicationStatusContract = {
     statusKey: keySchema,
     statusHistoryId: idSchema,
   }),
+} as const satisfies CallableContract;
+
+/** The fields of a replication that name the original study, which a citation check covers. */
+export const CITATION_FIELDS = [
+  "originalAuthors",
+  "originalYear",
+  "originalTitle",
+  "originalReference",
+  "originalDoi",
+] as const;
+export const citationFieldSchema = z.enum(CITATION_FIELDS);
+export type CitationField = z.output<typeof citationFieldSchema>;
+
+/**
+ * Changes one field of the citation of the original study while the citation has been checked
+ * (`citationStatus` is not `unverified`), which the security rules leave to this function. For
+ * holders of `replications.manage` for the replication: its leads, the core team and programme
+ * administrators. In one transaction the field changes, `citationStatus` returns to
+ * `unverified`, the time, source and metadata of the check are removed, because they describe a
+ * citation that no longer exists, and the audit entry is written. `value` is null to remove the
+ * field, and is checked against the schema of the replication.
+ */
+export const editReplicationCitationContract = {
+  name: "editReplicationCitation",
+  input: z.strictObject({
+    replicationId: studyKeySchema,
+    field: citationFieldSchema,
+    value: z.union([z.string().max(LIMITS.longText), z.number().int()]).nullable(),
+  }),
+  output: z.strictObject({ replicationId: studyKeySchema, citationStatus: z.literal("unverified") }),
 } as const satisfies CallableContract;
 
 /**

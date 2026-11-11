@@ -14,11 +14,13 @@ import {
   callerStamp,
   createdFields,
   defineCallable,
+  identityHashKey,
   readAccessDocument,
   requireVerifiedEmail,
   withheldChanges,
   writeAudit,
 } from "../framework";
+import { proposalOf, proposedLaboratoryId, readRegistration } from "../laboratories/registration";
 import { holdersOf, notifyAll } from "../notifications/notify";
 
 const NOT_LINKED_MESSAGE =
@@ -36,8 +38,14 @@ export function addressInDomains(emailLower: string, domains: readonly unknown[]
 }
 
 /**
- * Asks to represent a laboratory, as its coordinator or as an authorised representative
- * (docs/SECURITY.md, section 4). For a member whose account is linked to a person.
+ * Asks to represent a laboratory, as its coordinator or as an authorised representative, or
+ * registers a new laboratory with the same request (docs/SECURITY.md, section 4). For a member
+ * whose account is linked to a person.
+ *
+ * A proposed laboratory takes the identifier of its name key at its institution, which names the
+ * request before the laboratory exists. Where a laboratory exists under that key already, the
+ * request is kept and marked as a duplicate, and the reviewer sees it beside the laboratory that
+ * exists. Approval of the request creates the laboratory (`reviewLabClaim`).
  *
  * The evidence is computed here and never taken from the caller:
  *
@@ -45,36 +53,44 @@ export function addressInDomains(emailLower: string, domains: readonly unknown[]
  * |---------------------------------|------------------------------------------------------------------|
  * | `personListsLaboratory`         | The directory document of the person names the laboratory        |
  * | `memberEntry`                   | The status and the role of the person's member entry there, if any |
- * | `emailDomainMatchesInstitution` | The caller's verified address lies in an email domain of the laboratory's institution. Null where the laboratory names no institution |
+ * | `emailDomainMatchesInstitution` | The caller's verified address lies in an email domain of the laboratory's institution. Null where the laboratory names no institution or the institution is new |
+ * | `duplicateOfLaboratoryId`       | For a proposal: the laboratory that exists under the same name at the same institution, or null |
  *
  * It is stored with the request for whoever decides it: the holders of `labs.claims.review`,
  * which are programme administrators, the core team and the coordinators of that laboratory.
  * The address itself is not stored. One request per account and laboratory may be open.
  */
 export const requestLabClaim = defineCallable(requestLabClaimContract, {
+  usesIdentityHashKey: true,
   handler: async (input, context) => {
     const { uid, db } = context;
     const emailLower = requireVerifiedEmail(context);
     const at = context.clock.now();
     const now = Timestamp.fromDate(at);
-    const claimId = labClaimId(uid, input.laboratoryId);
+    const proposal = "proposal" in input ? proposalOf(input.proposal) : null;
+    const laboratoryId =
+      "laboratoryId" in input ? input.laboratoryId : proposedLaboratoryId(proposalOf(input.proposal));
+    const claimId = labClaimId(uid, laboratoryId);
     const claimReference = db.doc(COLLECTIONS.labClaims.docPath(claimId));
     const reviewReference = db.doc(COLLECTIONS.labClaimReview.docPath(claimId));
-    const laboratoryReference = db.doc(COLLECTIONS.laboratories.docPath(input.laboratoryId));
+    const laboratoryReference = db.doc(COLLECTIONS.laboratories.docPath(laboratoryId));
+    const secret = proposal === null ? null : identityHashKey();
 
     return db.runTransaction(async (transaction) => {
       const access = await readAccessDocument(db, uid, transaction);
       const personId = access.personId;
       if (!access.member || personId === null)
         throw new AppError("failed-precondition", NOT_LINKED_MESSAGE, "notLinked");
+      const registration =
+        proposal === null || secret === null ? null : await readRegistration(db, transaction, proposal, secret);
       const [laboratory, claimSnapshot, reviewSnapshot, person, entry] = await transaction.getAll(
         laboratoryReference,
         claimReference,
         reviewReference,
         db.doc(COLLECTIONS.persons.docPath(personId)),
-        db.doc(COLLECTIONS.laboratoryMembers.docPath(input.laboratoryId, personId)),
+        db.doc(COLLECTIONS.laboratoryMembers.docPath(laboratoryId, personId)),
       );
-      if (laboratory?.exists !== true || laboratory.get("archivedAt") != null) {
+      if (registration === null && (laboratory?.exists !== true || laboratory.get("archivedAt") != null)) {
         throw new AppError("not-found", "This laboratory does not exist.");
       }
       const stored = claimSnapshot?.exists ? parseStoredDocument(labClaimDocSchema, claimSnapshot.data()) : null;
@@ -93,17 +109,22 @@ export const requestLabClaim = defineCallable(requestLabClaimContract, {
       if (stored?.data.status === "approved") {
         throw new AppError("failed-precondition", "Your request for this laboratory has been approved already.");
       }
-      const institutionId: unknown = laboratory.get("institutionId");
+      const institutionId: unknown = registration === null ? laboratory?.get("institutionId") : proposal?.institutionId;
       const institution =
-        typeof institutionId === "string" && institutionId !== ""
-          ? await transaction.get(db.doc(COLLECTIONS.institutions.docPath(institutionId)))
-          : null;
+        registration !== null
+          ? registration.institution
+          : typeof institutionId === "string" && institutionId !== ""
+            ? await transaction.get(db.doc(COLLECTIONS.institutions.docPath(institutionId)))
+            : null;
       const domains: unknown = institution?.get("emailDomains");
-      const reviewers = await holdersOf(db, transaction, "labs.claims.review", { laboratoryId: input.laboratoryId });
+      const duplicateOf = registration?.existingLaboratoryId ?? null;
+      const reviewers = await holdersOf(db, transaction, "labs.claims.review", {
+        laboratoryId: duplicateOf ?? laboratoryId,
+      });
 
       const listed: unknown = person?.get("laboratoryIds");
       const evidence = {
-        personListsLaboratory: Array.isArray(listed) && listed.includes(input.laboratoryId),
+        personListsLaboratory: Array.isArray(listed) && listed.includes(laboratoryId),
         memberEntry:
           entry?.exists === true
             ? {
@@ -114,6 +135,7 @@ export const requestLabClaim = defineCallable(requestLabClaimContract, {
             : null,
         emailDomainMatchesInstitution:
           institution?.exists === true ? addressInDomains(emailLower, Array.isArray(domains) ? domains : []) : null,
+        ...(registration === null ? {} : { proposal: true, duplicateOfLaboratoryId: duplicateOf }),
         ...(input.message === undefined ? {} : { message: input.message }),
       };
 
@@ -123,8 +145,8 @@ export const requestLabClaim = defineCallable(requestLabClaimContract, {
           action: "labClaim.requested",
           actor: { kind: "user", uid },
           entityType: "laboratory",
-          entityId: input.laboratoryId,
-          changes: withheldChanges(["status", "requestedRole", "evidence"]),
+          entityId: laboratoryId,
+          changes: withheldChanges(["status", "requestedRole", "evidence", ...(proposal === null ? [] : ["proposal"])]),
           at,
         },
         db,
@@ -137,11 +159,12 @@ export const requestLabClaim = defineCallable(requestLabClaimContract, {
         labClaimDocSchema.parse({
           ...createdFields("labClaims", stamp),
           ...kept(stored?.data),
-          laboratoryId: input.laboratoryId,
+          laboratoryId,
           uid,
           requestedRole: input.requestedRole,
           status: "pendingReview",
           submittedAt: now,
+          ...(proposal === null ? {} : { proposal }),
         }),
       );
       const earlier =
@@ -176,13 +199,16 @@ export const requestLabClaim = defineCallable(requestLabClaimContract, {
         {
           type: "claimDecision",
           entityType: "laboratory",
-          entityId: input.laboratoryId,
+          entityId: laboratoryId,
           eventId: auditEventId,
-          payload: { kind: "labClaimAwaitsReview", requestedRole: input.requestedRole },
+          payload: {
+            kind: proposal === null ? "labClaimAwaitsReview" : "laboratoryRegistrationAwaitsReview",
+            requestedRole: input.requestedRole,
+          },
         },
         stamp,
       );
-      return { claimId, status: "pendingReview" as const };
+      return { claimId, laboratoryId, status: "pendingReview" as const, duplicate: duplicateOf !== null };
     });
   },
 });

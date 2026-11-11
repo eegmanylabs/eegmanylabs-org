@@ -25,7 +25,7 @@ import {
   stored,
   uidOfCaller,
 } from "../world";
-import { newRecord, seed, storedPath } from "./exfiltration-and-escalation-support";
+import { newParticipation, newRecord, seed, storedPath } from "./exfiltration-and-escalation-support";
 
 let environment: RulesTestEnvironment;
 const { get, create, update } = requestsOf(() => environment);
@@ -183,7 +183,7 @@ describe("the scope fields of a document that the caller may edit", () => {
   });
 
   it("are rebuilt from the two identifiers of a participation that is created", async () => {
-    const fresh = newRecord("participations", COORDINATOR);
+    const fresh = newParticipation();
     const path = `participations/${participationId(OTHER_REPLICATION, OWN_LABORATORY)}`;
     await expectOutcomes({
       "ownCoordinator: creates a participation that every member may read restricted parts of": [
@@ -214,7 +214,8 @@ describe("the scope fields of a document that the caller may edit", () => {
         create("ownCoordinator", path, { ...fresh, dataOrigin: "importedHistorical" }),
       ],
       "member: creates a participation": ["denied", create("member", path, fresh)],
-      "ownCoordinator: signs its laboratory up": ["allowed", create("ownCoordinator", path, fresh)],
+      // Only createParticipation creates one, with its checklist and its history.
+      "ownCoordinator: signs its laboratory up directly": ["denied", create("ownCoordinator", path, fresh)],
     });
   });
 });

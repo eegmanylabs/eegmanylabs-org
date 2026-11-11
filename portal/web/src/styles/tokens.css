@@ -217,6 +217,15 @@
     outline: 3px solid var(--focus-ring);
     outline-offset: 3px;
   }
+  /* Keyboard shortcuts are set in DM Sans like all other text, never in a monospace face. */
+  kbd {
+    font-family: var(--sans);
+  }
+  /* The browser's own clear button of a search field is blue and off the palette. A search is
+     cleared with Escape, by deleting the text, or with the page's own control. */
+  input[type="search"]::-webkit-search-cancel-button {
+    appearance: none;
+  }
   /* Text below 16px makes iOS Safari zoom the page when a field takes focus. */
   @media (pointer: coarse) {
     input,

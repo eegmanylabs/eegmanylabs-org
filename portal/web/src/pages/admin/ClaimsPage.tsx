@@ -14,6 +14,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { callFunction, useLiveQuery } from "@/data";
+import { useViewer } from "@/registry/viewer";
 import { AdminPage } from "./AdminPage";
 import { usePendingAccountClaims } from "./queues";
 import { ReasonDialog } from "./ReasonDialog";
@@ -167,7 +168,13 @@ function ClaimCard({ claim, onDecided }: { claim: Claim; onDecided: () => void }
   const [chosen, setChosen] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [admitting, setAdmitting] = useState(false);
+  const [newName, setNewName] = useState(claim.request?.statedName ?? "");
+  const [newAffiliation, setNewAffiliation] = useState(claim.request?.affiliation ?? "");
   const [busy, setBusy] = useState(false);
+  const viewer = useViewer();
+  // Admitting someone whom no record names creates a person, which needs `people.manage` too.
+  const canAdmit = claim.request !== null && viewer?.can("people.manage", "programme") === true;
   const name = claim.request?.statedName ?? claim.displayName ?? claim.emailLower;
   const nameIsStated = claim.request !== null || claim.displayName !== null;
   const headingId = `claim-${claim.uid}`;
@@ -193,7 +200,9 @@ function ClaimCard({ claim, onDecided }: { claim: Claim; onDecided: () => void }
               ? "The name above is the one they stated."
               : "The name above is the one the account gives itself."}{" "}
             {claim.displayName && claim.request ? `The account calls itself ${claim.displayName}. ` : null}
-            Neither is verified.
+            {claim.request
+              ? "This name and affiliation are as they gave them and have not been checked."
+              : "It has not been checked."}
           </p>
         ) : null}
       </header>
@@ -251,10 +260,51 @@ function ClaimCard({ claim, onDecided }: { claim: Claim; onDecided: () => void }
         <Button variant="primary" disabled={chosen === null || busy} onClick={() => setApproving(true)}>
           Approve and link
         </Button>
+        {canAdmit && claim.candidates.length === 0 ? (
+          <Button disabled={busy} onClick={() => setAdmitting(true)}>
+            Approve as a new member
+          </Button>
+        ) : null}
         <Button disabled={busy} onClick={() => setRejecting(true)}>
           Reject
         </Button>
       </div>
+      <ReasonDialog
+        open={admitting}
+        onOpenChange={setAdmitting}
+        title="Admit as a new member?"
+        description="A new member profile is created with the name and affiliation below, as live data, and this account is linked to it. Check the name and affiliation first: they are shown to every member."
+        label="Note for the record"
+        optional
+        confirmLabel="Create the profile and link"
+        canConfirm={newName.trim() !== ""}
+        onConfirm={async (note) => {
+          setBusy(true);
+          try {
+            const affiliation = newAffiliation.trim();
+            await callFunction(reviewAccountClaimContract, {
+              uid: claim.uid,
+              decision: "approveAsNewMember",
+              displayName: newName.trim(),
+              ...(affiliation === "" ? {} : { affiliation }),
+              ...(note === "" ? {} : { note }),
+            });
+            toast.show({ title: `${newName.trim()} is now a member, and the account is linked.` });
+            onDecided();
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <FormField label="Name" error={newName.trim() === "" ? "Enter the name of the new member." : null}>
+          {(control) => <Input {...control} value={newName} onChange={(event) => setNewName(event.target.value)} />}
+        </FormField>
+        <FormField label="Affiliation" hint="Optional.">
+          {(control) => (
+            <Input {...control} value={newAffiliation} onChange={(event) => setNewAffiliation(event.target.value)} />
+          )}
+        </FormField>
+      </ReasonDialog>
       <ReasonDialog
         open={approving}
         onOpenChange={setApproving}
