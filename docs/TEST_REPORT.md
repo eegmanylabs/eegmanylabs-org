@@ -73,7 +73,20 @@ The functions suite includes eighteen red-team tests written by an independent s
 
 The first real import of the accessible sources (the website data and sources B, C, D, E and F, and the five contributor sheets) was run into a local emulator by the import engineers, never into a real project. Every verification passed all eleven checks, every tab's row count equalled the source registry, and a second and a third run in a different order wrote nothing but their batch records. The run produced 8,703 documents and 521 open review items. No real programme data is in the repository: the saved state is in an ignored private directory, and a scan of every committable file against the real exports found no email address or document identifier from them.
 
-## 4. Public-site entry
+## 4. Registry, laboratories, participation and imports console
+
+Run on 11 November 2026 by the orchestrating session, independently of the engineers, from `portal/` with port base 9300 on the tree committed as "Registry, laboratories, participation and the imports console". `npm test` exited 0.
+
+| Suite within `npm test` | Files | Tests passed | Tests failed |
+|---|---|---|---|
+| Unit and component tests | 104 | 1,858 | 0 |
+| Emulator-backed rules and tools tests | 52 | 3,791 | 0 |
+| Emulator-backed functions tests | 21 | 222 | 0 |
+| Browser tests (Playwright, Chromium) | | 95 | 0 |
+
+Two independent reviews examined this work. A permissions review attacked it through the client SDK and the functions emulator and wrote its attempts as tests, and a journeys review drove the built application as a new member, a lead, a coordinator, the core team and an administrator at three screen widths. They reported 27 findings, all fixed. The red-team directories now hold 730 tests across 27 files. The browser tests run only on the synthetic demonstration world, so the pages have not yet been exercised against the real imported data.
+
+## 5. Public-site entry
 
 The gated Members' portal entry was verified by building the public site in scratch copies, never inside the repository.
 
@@ -87,7 +100,7 @@ The gated Members' portal entry was verified by building the public site in scra
 
 The comparison with `main` was run twice by the orchestrating session, before the first commit of the entry and again after the review fixes, and independently by the reviewer.
 
-## 5. Architecture spikes
+## 6. Architecture spikes
 
 Two throwaway spikes were run before the build to prove the architecture. Their code is not in the repository. Their results are summarised in `docs/ARCHITECTURE.md` section 10 and `docs/DECISIONS.md` D-010.
 
@@ -96,7 +109,7 @@ Two throwaway spikes were run before the build to prove the architecture. Their 
 | Application stack | 177 emulator-backed tests and 15 browser tests passed |
 | Collaborative editor on Firestore | All suites passed: security rules 28, provider 15, two-browser collaboration 10, editor features 18, versions 9, comments 11, presence 7 |
 
-## 6. Not yet verified
+## 7. Not yet verified
 
 | Item | Why it is unverified | What will verify it |
 |---|---|---|
