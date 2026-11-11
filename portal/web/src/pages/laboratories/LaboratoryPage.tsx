@@ -35,7 +35,7 @@ import {
   statusHistoryOfLaboratory,
   useInstitutions,
   useParticipations,
-  usePersons,
+  usePersonNames,
   useRequirements,
 } from "@/registry/queries";
 import { useRecordVisit } from "@/registry/use-record-visit";
@@ -272,19 +272,29 @@ interface TabSpec {
   readonly render: () => ReactNode;
 }
 
+const NO_PERSON_NAMES: ReadonlyMap<string, string> = new Map();
+
 function LaboratoryRecord({ laboratory, viewer }: { laboratory: Laboratory; viewer: Viewer }) {
   const [params, setParams] = useSearchParams();
-  const persons = usePersons();
   const institutions = useInstitutions();
   const allParticipations = useParticipations();
   const requirements = useRequirements();
   const entries = useLiveQuery(membersOfLaboratory(laboratory.id));
   const configurations = useLiveQuery(equipmentOfLaboratory(laboratory.id));
   const history = useLiveQuery(statusHistoryOfLaboratory(laboratory.id));
-  const personNames = useMemo(
-    () => new Map(ready(persons).map((person) => [person.id, person.displayName])),
-    [persons],
-  );
+  // Only the people the page names are read: the principal investigator, the member entries and
+  // the local leads of the participations.
+  const named = [
+    ...(laboratory.piPersonId === undefined ? [] : [laboratory.piPersonId]),
+    ...ready(entries).map((entry) => entry.personId),
+    ...ready(allParticipations).flatMap((participation) =>
+      participation.laboratoryId === laboratory.id && participation.localLeadPersonId !== undefined
+        ? [participation.localLeadPersonId]
+        : [],
+    ),
+  ];
+  const names = usePersonNames(named);
+  const personNames = names.status === "ready" ? names.data : NO_PERSON_NAMES;
   const institutionName =
     laboratory.institutionId === undefined
       ? null
@@ -339,7 +349,7 @@ function LaboratoryRecord({ laboratory, viewer }: { laboratory: Laboratory; view
   const tabs: readonly TabSpec[] = [
     {
       id: "profile",
-      live: combineLive([entries, persons] as const, () => true),
+      live: combineLive([entries, names] as const, () => true),
       render: () => (
         <ProfileTab
           laboratory={laboratory}
@@ -362,13 +372,6 @@ function LaboratoryRecord({ laboratory, viewer }: { laboratory: Laboratory; view
           laboratoryName={laboratory.name}
           entries={ready(entries)}
           personNames={personNames}
-          people={ready(persons)
-            .filter((person) => person.archivedAt === null)
-            .map((person) => ({
-              id: person.id,
-              name: person.displayName,
-              affiliation: person.affiliationSummary ?? null,
-            }))}
           canManage={canEdit}
           canConfirm={current && viewer.can("labs.manage", "programme")}
         />

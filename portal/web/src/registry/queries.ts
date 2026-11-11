@@ -8,7 +8,15 @@
 // than 1,000 records, such as the programme's members, is read whole.
 import { type ListableCollectionKey, MEMBERS_SCOPE_KEY } from "@eegml/shared";
 import { useMemo } from "react";
-import { type Live, type LiveQuery, type PagedItems, type RecordOf, useLiveCollection, useLiveQuery } from "@/data";
+import {
+  type Live,
+  type LiveQuery,
+  type PagedItems,
+  type RecordOf,
+  useLiveCollection,
+  useLiveDocuments,
+  useLiveQuery,
+} from "@/data";
 
 /** The most documents one query of a directory reads. The security rules refuse a larger list. */
 export const DIRECTORY_LIMIT = 1_000;
@@ -261,6 +269,27 @@ export function useDirectoryItems<K extends ListableCollectionKey>(
 
 export const useReplications = () => useDirectoryItems(ALL_REPLICATIONS);
 export const usePersons = () => useDirectoryItems(ALL_PERSONS);
+
+const NO_NAMES: Live<ReadonlyMap<string, string>> = {
+  status: "ready",
+  data: new Map(),
+  fromCache: false,
+  hasPendingWrites: false,
+};
+
+/**
+ * The display names of the named persons, read one document each, so that a record page that
+ * shows a few people reads those few and never the whole directory. A person who does not
+ * exist is absent from the map.
+ */
+export function usePersonNames(ids: readonly string[]): Live<ReadonlyMap<string, string>> {
+  const live = useLiveDocuments("persons", ids);
+  return useMemo(() => {
+    if (live.status === "idle") return NO_NAMES;
+    if (live.status !== "ready") return live;
+    return { ...live, data: new Map([...live.data].map(([id, person]) => [id, person.displayName])) };
+  }, [live]);
+}
 export const useLaboratories = () => useDirectoryItems(ALL_LABORATORIES);
 export const useInstitutions = () => useDirectoryItems(ALL_INSTITUTIONS);
 export const useCurrentEquipment = () => useLiveQuery(CURRENT_EQUIPMENT);

@@ -115,6 +115,15 @@ export async function liveListenerCount(page: Page): Promise<number | undefined>
   );
 }
 
+/** The keys of the subscriptions that the page watches now (see web/src/main.tsx). */
+export async function liveWatchedKeys(page: Page): Promise<string[]> {
+  return page.evaluate(
+    () =>
+      (window as unknown as { __portalTest?: { liveWatchedKeys: () => string[] } }).__portalTest?.liveWatchedKeys() ??
+      [],
+  );
+}
+
 /** Names of the IndexedDB databases in which Firestore keeps its local copy of documents. */
 export async function firestoreDatabases(page: Page): Promise<string[]> {
   return page.evaluate(async () =>

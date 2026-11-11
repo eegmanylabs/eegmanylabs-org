@@ -21,11 +21,13 @@ export { DataShapeError, type RecordOf, type WithId } from "./converter";
 export {
   LIVE_COLLECTION_MAX_PAGES,
   liveListenerCount,
+  liveWatchedKeys,
   reconnectLiveData,
   retryFailedLiveData,
   useLiveCollection,
   useLiveDataDisconnected,
   useLiveDocument,
+  useLiveDocuments,
   useLiveQuery,
 } from "./live";
 export { discardLocalData } from "./local-data";

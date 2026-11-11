@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type Live, type RecordOf, retryFailedLiveData, useLiveDocument, useLiveQuery } from "@/data";
 import { combineLive, orEmpty } from "@/registry/combine";
 import {
+  ALL_PERSONS,
   aliasesOfReplication,
   CONFIRMED_MEMBERSHIPS,
   contributorsOfReplication,
@@ -25,10 +26,11 @@ import {
   membershipsOfReplication,
   statusHistoryOfReplication,
   useCurrentEquipment,
+  useDirectoryItems,
   useLaboratories,
   useManuscripts,
   useParticipations,
-  usePersons,
+  usePersonNames,
   useReplicationStatuses,
   useRequirements,
 } from "@/registry/queries";
@@ -83,11 +85,18 @@ const hasAny = <T,>(live: Live<readonly T[]>): Live<boolean> =>
     ? { ...live, data: live.data.some((item) => (item as { archivedAt?: unknown }).archivedAt == null) }
     : live;
 
+const NO_PERSON_NAMES: ReadonlyMap<string, string> = new Map();
+
 function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"replications">; viewer: Viewer }) {
   const { studyKey } = replication;
   const [params, setParams] = useSearchParams();
   const statuses = useReplicationStatuses();
-  const persons = usePersons();
+  const member = viewer.access.member;
+  const addsLaboratories =
+    member && replication.archivedAt === null && viewer.can("participations.manage", { replicationId: studyKey });
+  // The directory serves the choice of a local lead when a laboratory is added, so only those who
+  // add laboratories read it.
+  const persons = useDirectoryItems(addsLaboratories ? ALL_PERSONS : null);
   const laboratories = useLaboratories();
   const allParticipations = useParticipations();
   const allManuscripts = useManuscripts();
@@ -131,10 +140,15 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
     [allManuscripts, studyKey],
   );
 
-  const personNames = useMemo(
-    () => new Map(ready(persons).map((person) => [person.id, person.displayName])),
-    [persons],
-  );
+  // Only the people the page names are read: the leads, the team and the local leads.
+  const names = usePersonNames([
+    ...replication.leadPersonIds,
+    ...ready(memberships).map((membership) => membership.personId),
+    ...ready(participations).flatMap((participation) =>
+      participation.localLeadPersonId === undefined ? [] : [participation.localLeadPersonId],
+    ),
+  ]);
+  const personNames = names.status === "ready" ? names.data : NO_PERSON_NAMES;
   const statusOptions = useMemo(
     () =>
       ready(statuses)
@@ -148,14 +162,12 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
   const leadNames = replication.leadPersonIds.map((id) => personNames.get(id) ?? id);
   const leadState: LeadState =
     leadNames.length > 0 ? "confirmed" : leadsUndecided(ready(memberships)) ? "needsReview" : "none";
+  const leadNamesLoading = leadNames.length > 0 && names.status === "loading";
   const canEdit =
     viewer.access.member &&
     replication.archivedAt === null &&
     viewer.can("replications.manage", { replicationId: studyKey });
-  const member = viewer.access.member;
   const aggregatesLive = hasAny(aggregates);
-  const addsLaboratories =
-    member && replication.archivedAt === null && viewer.can("participations.manage", { replicationId: studyKey });
 
   const tabs: readonly TabSpec[] = [
     {
@@ -173,7 +185,8 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
     },
     {
       id: "leadership",
-      live: hasAny(memberships),
+      // Waits for the names too, so that no identifier stands where a name belongs.
+      live: names.status === "loading" ? names : hasAny(memberships),
       render: () => (
         <LeadershipTab
           memberships={ready(memberships)}
@@ -198,6 +211,7 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
           participations={ready(participations)}
           laboratories={ready(laboratories)}
           persons={ready(persons)}
+          personNames={personNames}
           requirements={ready(allRequirements).filter(
             (requirement) => requirement.replicationId === studyKey && requirement.archivedAt === null,
           )}
@@ -312,7 +326,13 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
             }) ?? <Unknown />}
           </Detail>
           <Detail term="Leads">
-            <LeadsText row={{ leadNames, leadState }} />
+            {leadNamesLoading ? (
+              <span className="text-fg-muted" aria-busy="true">
+                Loading the names
+              </span>
+            ) : (
+              <LeadsText row={{ leadNames, leadState }} />
+            )}
           </Detail>
         </Details>
         {canEdit ? null : (

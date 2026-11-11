@@ -17,6 +17,7 @@ import { useToast } from "@/components/ui/toast";
 import { CallableError, callFunction, endLaboratoryMember, proposeLaboratoryMember, type RecordOf } from "@/data";
 import { LABORATORY_ENTRY_STATUS_LABELS, LABORATORY_ROLE_LABELS } from "@/registry/labels";
 import { memberPath } from "@/registry/paths";
+import { ALL_PERSONS, useDirectoryItems } from "@/registry/queries";
 
 type Entry = RecordOf<"laboratoryMembers">;
 type Role = Entry["role"];
@@ -24,7 +25,7 @@ type Role = Entry["role"];
 /** How many people the picker lists at once. The search narrows them down. */
 const PICKER_LIMIT = 50;
 
-export interface PersonOption {
+interface PersonOption {
   readonly id: string;
   readonly name: string;
   readonly affiliation: string | null;
@@ -43,16 +44,31 @@ function ProposeMemberDialog({
   uid,
   laboratoryId,
   laboratoryName,
-  people,
+  listed,
 }: {
   uid: string;
   laboratoryId: string;
   laboratoryName: string;
-  /** The people who have no entry in the laboratory yet. */
-  people: readonly PersonOption[];
+  /** The people who have an entry in the laboratory already, whom the picker leaves out. */
+  listed: ReadonlySet<string>;
 }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
+  // The directory is read only while the dialog is open, so the page itself never waits for it.
+  const directory = useDirectoryItems(open ? ALL_PERSONS : null);
+  const people = useMemo<readonly PersonOption[]>(
+    () =>
+      directory.status === "ready"
+        ? directory.data
+            .filter((person) => person.archivedAt === null && !listed.has(person.id))
+            .map((person) => ({
+              id: person.id,
+              name: person.displayName,
+              affiliation: person.affiliationSummary ?? null,
+            }))
+        : [],
+    [directory, listed],
+  );
   const [query, setQuery] = useState("");
   const [personId, setPersonId] = useState("");
   const [role, setRole] = useState<Role>("member");
@@ -126,11 +142,15 @@ function ProposeMemberDialog({
             {(control) => (
               <Select {...control} value={personId} onChange={(event) => setPersonId(event.target.value)}>
                 <option value="">
-                  {words === null
-                    ? "Search first"
-                    : matches.length === 0
-                      ? "Nobody in the directory matches"
-                      : "Choose a person"}
+                  {directory.status === "loading"
+                    ? "Loading the directory"
+                    : directory.status === "error"
+                      ? "The directory could not be loaded. Close this and try again."
+                      : words === null
+                        ? "Search first"
+                        : matches.length === 0
+                          ? "Nobody in the directory matches"
+                          : "Choose a person"}
                 </option>
                 {matches.map((person) => (
                   <option key={person.id} value={person.id}>
@@ -249,7 +269,6 @@ export interface LaboratoryMembersTabProps {
   readonly laboratoryName: string;
   readonly entries: readonly Entry[];
   readonly personNames: ReadonlyMap<string, string>;
-  readonly people: readonly PersonOption[];
   /** Whether the account manages the laboratory, which shows the controls. The rules decide in any case. */
   readonly canManage: boolean;
   /** Whether the account confirms entries for the programme. */
@@ -262,7 +281,6 @@ export function LaboratoryMembersTab({
   laboratoryName,
   entries,
   personNames,
-  people,
   canManage,
   canConfirm,
 }: LaboratoryMembersTabProps) {
@@ -271,17 +289,12 @@ export function LaboratoryMembersTab({
     .sort((a, b) =>
       (personNames.get(a.personId) ?? a.personId).localeCompare(personNames.get(b.personId) ?? b.personId, "en"),
     );
-  const listed = new Set(entries.map((entry) => entry.personId));
+  const listed = useMemo(() => new Set(entries.map((entry) => entry.personId)), [entries]);
   return (
     <div className="grid gap-3">
       {canManage ? (
         <div>
-          <ProposeMemberDialog
-            uid={uid}
-            laboratoryId={laboratoryId}
-            laboratoryName={laboratoryName}
-            people={people.filter((person) => !listed.has(person.id))}
-          />
+          <ProposeMemberDialog uid={uid} laboratoryId={laboratoryId} laboratoryName={laboratoryName} listed={listed} />
         </div>
       ) : null}
       {shown.length === 0 ? (

@@ -1,12 +1,13 @@
 // The members directory with more than a thousand synthetic people, more than one query may
 // read: it loads them all, counts them, finds the last of them, keeps every keystroke of a fast
-// search, and scrolls without a long task of more than 200 milliseconds. The people are invented for this test, on
+// search, and scrolls without a long task of more than 200 milliseconds. A laboratory page
+// reads only the people it names, and never the whole directory. The people are invented for this test, on
 // no real domain, and are removed afterwards. The data is synthetic.
 import { COLLECTIONS, systemWriteContext } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "../support/admin";
 import { signInAsIvy } from "./registry-support";
-import { expect, test } from "./support";
+import { expect, liveWatchedKeys, test } from "./support";
 
 /** With the twelve people of the demonstration world, the directory holds 1,002 people. */
 const SYNTHETIC = 989;
@@ -110,4 +111,16 @@ test("the members table with more than a thousand rows scrolls without long task
   await search.pressSequentially("Synthetic Person 12", { delay: 0 });
   await expect(search).toHaveValue("Synthetic Person 12");
   await expect(page.getByTestId("result-count")).toContainText(/Showing \d+ of 1,002 members/);
+});
+
+test("a laboratory page reads the people it names and not the whole directory", async ({ page }) => {
+  await signInAsIvy(page);
+  // A fresh load of the record page, so that nothing another page read is still watched.
+  await page.goto("./#/labs/demo-lab-memory");
+  await page.reload();
+  const profile = page.getByTestId("laboratory-profile");
+  await expect(profile.getByRole("link", { name: "Cleo Placeholder" }).first()).toBeVisible({ timeout: 30_000 });
+  const keys = await liveWatchedKeys(page);
+  expect(keys.some((key) => key.includes('"persons"') && key.startsWith("pages:"))).toBe(false);
+  expect(keys.some((key) => key.startsWith("docs:persons:"))).toBe(true);
 });

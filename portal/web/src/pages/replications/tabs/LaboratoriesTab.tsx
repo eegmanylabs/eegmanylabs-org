@@ -59,7 +59,10 @@ export interface LaboratoriesTabProps {
   viewer: Viewer;
   participations: readonly RecordOf<"participations">[];
   laboratories: readonly RecordOf<"laboratories">[];
+  /** The directory, for the choice of a local lead. Read only for those who add laboratories. */
   persons: readonly RecordOf<"persons">[];
+  /** The names of the people the participations name. */
+  personNames: ReadonlyMap<string, string>;
   requirements: readonly RecordOf<"replicationEquipmentRequirements">[];
   currentEquipment: readonly RecordOf<"laboratoryEquipment">[];
   aggregates: readonly Aggregate[];
@@ -71,6 +74,7 @@ export function LaboratoriesTab({
   participations,
   laboratories,
   persons,
+  personNames,
   requirements,
   currentEquipment,
   aggregates,
@@ -84,7 +88,6 @@ export function LaboratoriesTab({
   const sectionOrigin = origins.length === 1 ? origins[0] : undefined;
   const perFigure = sectionOrigin === undefined;
   const laboratoryNames = new Map(laboratories.map((laboratory) => [laboratory.id, laboratory.name]));
-  const personNames = new Map(persons.map((person) => [person.id, person.displayName]));
   const adds = viewer.access.member && viewer.can("participations.manage", { replicationId: studyKey });
   const taking = new Set(participations.map((participation) => participation.laboratoryId));
   const sorted = [...participations].sort((a, b) =>

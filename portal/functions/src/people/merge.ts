@@ -15,8 +15,9 @@
 // would be lost: the reviewer keeps that record instead, or unlinks the account first. When the
 // kept record is linked to an account, which only a programme administrator decides, the
 // member entries and memberships it gains await confirmation again (`proposed` and
-// `needsReview`), so that no role and no scope reaches the account unconfirmed, the merged
-// record is taken out of `leadPersonIds` in place of being replaced, and the account is told.
+// `needsReview`), so that no role and no scope reaches the account unconfirmed, the kept record
+// keeps its own `laboratoryIds` and `replicationIds`, the merged record is taken out of
+// `leadPersonIds` in place of being replaced, and the account is told.
 // The audit entry of the merge names the identity keys and the email index entries it moved by
 // their identifiers, which are keyed hashes, and never by the addresses behind them.
 import {
@@ -264,8 +265,14 @@ export async function planPersonMerge(
       update(keepReference, {
         sourceRecordIds: union(keep.data.sourceRecordIds, merged.data.sourceRecordIds),
         fieldSources: { ...(merged.data.fieldSources ?? {}), ...(keep.data.fieldSources ?? {}) },
-        laboratoryIds: union(keep.data.laboratoryIds, merged.data.laboratoryIds),
-        replicationIds: union(keep.data.replicationIds, merged.data.replicationIds),
+        // The units of the merged record give scope, so a claimed record gains them only once the
+        // copied entries are confirmed again, which puts them on it through the triggers.
+        ...(linkedAccount === null
+          ? {
+              laboratoryIds: union(keep.data.laboratoryIds, merged.data.laboratoryIds),
+              replicationIds: union(keep.data.replicationIds, merged.data.replicationIds),
+            }
+          : {}),
       });
       update(mergeReference, { archivedAt: now });
       const eventId = stamp.writeContext.auditEventId;

@@ -74,6 +74,61 @@ export function useLiveDocument<K extends CollectionKey>(key: K, ids: DocPathIds
   return useLiveDoc(ids === null ? null : documentReference(db, key, ...ids));
 }
 
+/** The registry entries whose documents sit at the top level and are named by one identifier. */
+type TopLevelKey = { [K in CollectionKey]: DocPathIds<K> extends readonly [string] ? K : never }[CollectionKey];
+
+/**
+ * The named documents of a top-level registry entry, live and validated, by identifier. A
+ * document that does not exist is absent from the map. The result is ready once every document
+ * has answered, so a page that shows a few names reads those few documents and never the whole
+ * directory. Pass null, or no identifier, to watch nothing.
+ */
+export function useLiveDocuments<K extends TopLevelKey>(
+  key: K,
+  ids: readonly string[] | null,
+): Live<ReadonlyMap<string, RecordOf<K>>> {
+  const wanted = ids === null ? [] : [...new Set(ids)].sort();
+  return useSubscription<ReadonlyMap<string, RecordOf<K>>>(
+    cache,
+    wanted.length === 0 ? null : `docs:${key}:${JSON.stringify(wanted)}`,
+    (publish, fail) => {
+      const answers = new Map<string, { data: RecordOf<K> | null; fromCache: boolean; pending: boolean }>();
+      const stops = wanted.map((id) =>
+        onSnapshot(
+          documentReference(db, key, ...([id] as unknown as DocPathIds<K>)),
+          { includeMetadataChanges: true },
+          (snapshot) => {
+            try {
+              answers.set(id, {
+                data: snapshot.exists() ? snapshot.data() : null,
+                fromCache: snapshot.metadata.fromCache,
+                pending: snapshot.metadata.hasPendingWrites,
+              });
+            } catch (error) {
+              publish({ status: "error", error: toLiveError(error) });
+              return;
+            }
+            if (answers.size < wanted.length) return;
+            const found = new Map<string, RecordOf<K>>();
+            for (const [answered, answer] of answers) if (answer.data !== null) found.set(answered, answer.data);
+            const all = [...answers.values()];
+            publish({
+              status: "ready",
+              data: found,
+              fromCache: all.some((answer) => answer.fromCache),
+              hasPendingWrites: all.some((answer) => answer.pending),
+            });
+          },
+          (error) => fail(toLiveError(error)),
+        ),
+      );
+      return () => {
+        for (const stop of stops) stop();
+      };
+    },
+  );
+}
+
 /**
  * The documents that a query describes, live and validated. Pass null to watch nothing.
  * Components that describe the same query share one listener. One document that does not match
@@ -178,4 +233,9 @@ export function closeLiveData(): void {
 /** Number of Firestore listeners the cache holds. Exposed for tests. */
 export function liveListenerCount(): number {
   return cache.size;
+}
+
+/** What the views on screen watch now, each as the key of its subscription. Exposed for tests. */
+export function liveWatchedKeys(): string[] {
+  return cache.watchedKeys;
 }

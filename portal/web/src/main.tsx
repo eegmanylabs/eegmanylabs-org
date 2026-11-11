@@ -4,12 +4,12 @@ import { RouterProvider } from "react-router/dom";
 import "./styles/app.css";
 import { createPortalRouter } from "@/app/router";
 import { captureSignInLink } from "@/auth/pending-sign-in";
-import { liveListenerCount } from "@/data";
+import { liveListenerCount, liveWatchedKeys } from "@/data";
 
 declare global {
   interface Window {
     /** Present in emulator builds only, for the end-to-end tests. */
-    __portalTest?: { liveListenerCount: () => number };
+    __portalTest?: { liveListenerCount: () => number; liveWatchedKeys: () => string[] };
   }
 }
 
@@ -21,7 +21,7 @@ if (!document.documentElement.hasAttribute("data-framed")) {
   const router = createPortalRouter(signInLink);
 
   // Vite replaces the mode's name when it builds, so staging and production do not contain this.
-  if (import.meta.env.MODE === "emulator") window.__portalTest = { liveListenerCount };
+  if (import.meta.env.MODE === "emulator") window.__portalTest = { liveListenerCount, liveWatchedKeys };
 
   const root = document.getElementById("root");
   if (!root) throw new Error("index.html has no #root element.");

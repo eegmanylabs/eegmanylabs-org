@@ -279,6 +279,37 @@ describe("a subscription that fails", () => {
     expect(connection).toHaveBeenCalledTimes(4);
   });
 
+  it("says it is disconnected while the server has not answered a new subscription or confirmed a write", () => {
+    const cache = new SubscriptionCache();
+    const { state, start } = source<string>();
+    cache.subscribe("doc:a", start, () => {});
+    // A database that stopped answering never sends anything: the subscription waits.
+    expect(cache.disconnected).toBe(true);
+    state.publish(ready("saved"));
+    expect(cache.disconnected).toBe(false);
+
+    // A change of this browser that the server has not confirmed yet.
+    state.publish({ status: "ready", data: "edited", fromCache: false, hasPendingWrites: true });
+    expect(cache.read("doc:a")).toMatchObject({ data: "edited", hasPendingWrites: true });
+    expect(cache.disconnected).toBe(true);
+    state.publish(ready("edited"));
+    expect(cache.disconnected).toBe(false);
+  });
+
+  it("does not take a refusal of the server for a lost connection", () => {
+    const cache = new SubscriptionCache(5_000, [100]);
+    const { state, start } = source<string>();
+    cache.subscribe("doc:a", start, () => {});
+    state.fail(refused);
+    expect(cache.disconnected).toBe(false);
+    vi.advanceTimersByTime(100);
+    // Started again after the refusal: still an answer of the server, not silence.
+    expect(cache.disconnected).toBe(false);
+    state.fail(refused);
+    expect(cache.read("doc:a")).toEqual({ status: "error", error: refused });
+    expect(cache.disconnected).toBe(false);
+  });
+
   it("stops saying it is disconnected when nobody watches the value any more", () => {
     const cache = new SubscriptionCache();
     const { state, start } = source<string>();

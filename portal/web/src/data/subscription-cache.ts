@@ -13,7 +13,8 @@
 // be empty or out of date, and an empty list shown as "nothing here" would be untrue. Once the
 // server has confirmed the subscription, values from the local copy are shown, marked
 // `fromCache`, and the cache reports itself `disconnected` while any watched value is in that
-// state or still waits for the server, so that the shell can say so.
+// state, holds writes the server has not confirmed or still waits for the server, so that the
+// shell can say so when that lasts.
 
 export interface LiveError {
   /** A short machine-readable reason, for example "permission-denied" or "data/invalid-shape". */
@@ -61,6 +62,8 @@ interface Entry {
   confirmed: boolean;
   /** Whether the latest value came from the local copy, shown or held back. */
   local: boolean;
+  /** Whether the latest value holds writes of this browser that the server has not confirmed. */
+  pending: boolean;
   teardown: ReturnType<typeof setTimeout> | undefined;
   retry: ReturnType<typeof setTimeout> | undefined;
 }
@@ -87,6 +90,11 @@ export class SubscriptionCache {
   }
 
   /** Number of subscriptions the cache holds, running or waiting to start again. */
+  /** The keys of the values that are watched now, for tests. */
+  get watchedKeys(): string[] {
+    return [...this.#entries].filter(([, entry]) => entry.listeners.size > 0).map(([key]) => key);
+  }
+
   get size(): number {
     return this.#entries.size;
   }
@@ -127,6 +135,7 @@ export class SubscriptionCache {
       failures: 0,
       confirmed: false,
       local: false,
+      pending: false,
       teardown: undefined,
       retry: undefined,
     };
@@ -198,6 +207,7 @@ export class SubscriptionCache {
       if (!accepts()) return;
       if (state.status === "ready") {
         entry.local = state.fromCache;
+        entry.pending = state.hasPendingWrites;
         if (!state.fromCache) entry.confirmed = true;
         this.#updateConnection();
       }
@@ -220,12 +230,14 @@ export class SubscriptionCache {
     starting = false;
     if (failedWhileStarting || entry.generation !== generation) stop();
     else entry.stop = stop;
+    this.#updateConnection();
   }
 
   #failed(entry: Entry, error: LiveError): void {
     const stop = entry.stop;
     entry.stop = stopped;
     stop();
+    this.#updateConnection();
     const delay = this.#retryDelaysMs[entry.failures];
     if (delay === undefined || entry.listeners.size === 0) {
       entry.state = { status: "error", error };
@@ -247,10 +259,19 @@ export class SubscriptionCache {
     for (const notify of entry.listeners) notify();
   }
 
+  /**
+   * The cache is disconnected while a watched subscription that is running shows the local copy,
+   * holds writes that the server has not confirmed, or has not heard from the server since it
+   * first started. A subscription that the server refused and that waits to start again is left
+   * out, because a refusal is an answer of the server. Every start waits briefly, so the shell
+   * says so only once the state has lasted (see ConnectionBanner).
+   */
   #updateConnection(): void {
     let disconnected = false;
     for (const entry of this.#entries.values()) {
-      if (entry.listeners.size > 0 && entry.local && entry.stop !== stopped) disconnected = true;
+      if (entry.listeners.size === 0 || entry.stop === stopped) continue;
+      const waiting = !entry.confirmed && entry.failures === 0;
+      if (entry.local || entry.pending || waiting) disconnected = true;
     }
     if (disconnected === this.#disconnected) return;
     this.#disconnected = disconnected;

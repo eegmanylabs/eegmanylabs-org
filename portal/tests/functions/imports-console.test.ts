@@ -312,6 +312,9 @@ describe("resolveReconciliationItem: a possible duplicate person", () => {
   it("leaves a merge into a claimed record to programme administrators, and asks for the copied entries to be confirmed again", async () => {
     const admin = await world();
     await adminDb.doc(COLLECTIONS.persons.docPath("person-keep")).update({ userId: "uid-keeper" });
+    await adminDb
+      .doc(COLLECTIONS.persons.docPath("person-merge"))
+      .update({ laboratoryIds: ["lab-one"], replicationIds: [STUDY] });
     await account("uid-keeper", { personId: "person-keep" });
     const core = await coreTeamMember("uid-core");
     expect(await codeOf(call(core, resolveReconciliationItemContract, merge))).toBe("permission-denied");
@@ -320,6 +323,10 @@ describe("resolveReconciliationItem: a possible duplicate person", () => {
     await call(admin, resolveReconciliationItemContract, merge);
     expect((await dataOf(COLLECTIONS.laboratoryMembers.docPath("lab-one", "person-keep")))?.status).toBe("proposed");
     expect((await dataOf(membershipPath(STUDY, "person-keep", "member")))?.reviewStatus).toBe("needsReview");
+    // The units of the merged record, which give scope, wait for that confirmation too.
+    const kept = await dataOf(COLLECTIONS.persons.docPath("person-keep"));
+    expect(kept?.laboratoryIds ?? []).not.toContain("lab-one");
+    expect(kept?.replicationIds ?? []).not.toContain(STUDY);
     expect((await notificationsOf("uid-keeper")).map((notification) => notification.payload.kind)).toContain(
       "personMerged",
     );
