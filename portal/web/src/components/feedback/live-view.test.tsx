@@ -40,6 +40,32 @@ describe("LiveView", () => {
     expect(alert.textContent).not.toContain("internal detail");
   });
 
+  it("asks for another try, not a reload, where it offers one, and shows a callable's own message", () => {
+    const failed: Live<string> = {
+      status: "error",
+      error: { code: "failed-precondition", message: "Drive did not answer." },
+    };
+    const retried = render(
+      <LiveView<string>
+        live={failed}
+        loadingLabel="Loading"
+        errorTitle="The folder could not be opened."
+        onRetry={() => undefined}
+      >
+        {(data) => <p>{data}</p>}
+      </LiveView>,
+    );
+    expect(retried.getByRole("alert").textContent).toContain("Try again in a moment.");
+    expect(retried.getByRole("alert").textContent).not.toContain("Reload");
+    retried.unmount();
+    render(
+      <LiveView<string> live={failed} loadingLabel="Loading" errorTitle="The folder could not be opened." fromCallable>
+        {(data) => <p>{data}</p>}
+      </LiveView>,
+    );
+    expect(screen.getByRole("alert").textContent).toContain("Drive did not answer.");
+  });
+
   it("renders nothing when there is nothing to watch", () => {
     const { container } = view({ status: "idle" });
     expect(container.textContent).toBe("");

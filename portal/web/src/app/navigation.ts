@@ -5,7 +5,9 @@
 // is protected by security rules and functions whether or not the entry is shown.
 import type { Capability } from "@eegml/shared";
 import {
+  Cable,
   Contact,
+  Database,
   FilePenLine,
   FlaskConical,
   House,
@@ -116,6 +118,16 @@ export const NAVIGATION: readonly NavigationEntry[] = [
     icon: TrendingUp,
     requires: "portal.use",
     order: 171,
+    group: "main",
+    audience: "linked",
+  },
+  {
+    id: "datasets",
+    label: "Datasets",
+    to: "/datasets",
+    icon: Database,
+    requires: "portal.use",
+    order: 173,
     group: "main",
     audience: "linked",
   },
@@ -237,6 +249,15 @@ export const NAVIGATION: readonly NavigationEntry[] = [
     icon: Scale,
     requires: "reconciliation.resolve",
     order: 1_065,
+    group: "administration",
+  },
+  {
+    id: "admin-integrations",
+    label: "Integrations",
+    to: "/admin/integrations",
+    icon: Cable,
+    requires: "integrations.manage",
+    order: 1_068,
     group: "administration",
   },
   {

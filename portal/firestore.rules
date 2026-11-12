@@ -450,7 +450,8 @@ service cloud.firestore {
         'recruitmentReport', 'taskList', 'task', 'page', 'thread', 'comment', 'attachment', 'database',
         'databaseRow', 'view', 'dashboard', 'storageEndpoint', 'dataset', 'processingRun', 'manuscript',
         'contributorTable', 'contributor', 'decision', 'risk', 'incident', 'meeting', 'progressReport',
-        'documentLink', 'source', 'importBatch'
+        'documentLink', 'source', 'importBatch', 'integrationConnection', 'syncMapping', 'syncRun', 'syncConflict',
+        'syncReviewItem', 'documentTemplate', 'generatedDocument'
       ];
     }
 
@@ -2908,6 +2909,86 @@ service cloud.firestore {
       allow read: if isMember() && boundedRead();
     }
 
+    // ===== Datasets (section 10) =====
+    //
+    // The registry of where data is held. Every write goes through a callable function, which
+    // checks `datasets.manage`, keeps the scope fields, the workflow, the history and the
+    // summaries in step and writes the audit entry, so no client writes here at all. The
+    // registry document of a dataset, the workflow of a replication and the public description
+    // of a storage server are read by every member; none of them names a path, a host or a
+    // participant. A copy, a transfer and a quality assessment are read within the dataset's
+    // scope. The listings of files, the BIDS report and the record of who read a location are
+    // read only by holders of `datasets.paths.read` for the dataset's replication or laboratory:
+    // its leads, the laboratory's coordinators, programme administrators and the core team. The
+    // location of a copy, the connection of a server and the viewer links have no rule: a
+    // function serves them and records each read.
+
+    // Whether the caller holds a capability for the replication or the laboratory of a record of
+    // a dataset. The laboratory is asked for only where the record names one.
+    function canForDataset(capability, data) {
+      return ('rep:' + data.replicationId) in heldFor(capability)
+        || (data.laboratoryId != null && ('lab:' + data.laboratoryId) in heldFor(capability))
+        || canForProgramme(capability);
+    }
+
+    // Reads: 1 (access).
+    match /storageEndpoints/{key} {
+      allow read: if isMember() && boundedRead();
+    }
+
+    // Reads: 1 (access).
+    match /datasets/{datasetKey} {
+      allow read: if isMember() && boundedRead();
+    }
+
+    // Reads: 1 (access).
+    match /datasetWorkflows/{studyKey} {
+      allow read: if isMember() && boundedRead();
+    }
+
+    // The BIDS report and the free metadata of a dataset, decided by the dataset itself.
+    // Reads: 2 (access, the dataset).
+    match /datasets/{datasetKey}/private/detail {
+      allow get: if isMember()
+        && get(/databases/$(database)/documents/datasets/$(datasetKey)) != null
+        && canForDataset('datasetsPathsRead', get(/databases/$(database)/documents/datasets/$(datasetKey)).data);
+    }
+
+    // The copies of a dataset, its transfers and its quality assessments, read within its scope
+    // beneath one dataset or across the datasets of a unit the caller belongs to.
+    // Reads: 1 (access).
+    match /{path=**}/storageRefs/{refId} {
+      allow read: if isMember() && (core() || withinUnit(resource.data)) && boundedRead();
+    }
+
+    // Reads: 1 (access).
+    match /{path=**}/transfers/{transferId} {
+      allow read: if isMember() && (core() || withinUnit(resource.data)) && boundedRead();
+    }
+
+    // Reads: 1 (access).
+    match /{path=**}/qcAssessments/{assessmentId} {
+      allow read: if isMember() && (core() || withinUnit(resource.data)) && boundedRead();
+    }
+
+    // The listings of files and the record of reads of locations, which can name participant
+    // labels and paths: a list constrains `replicationId` or `laboratoryId` to a unit in which
+    // the caller holds `datasets.paths.read`.
+    // Reads: 1 (access).
+    match /{path=**}/manifests/{manifestId} {
+      allow read: if isMember() && canForDataset('datasetsPathsRead', resource.data) && boundedRead();
+    }
+
+    // Reads: 1 (access).
+    match /{path=**}/fileChunks/{chunkId} {
+      allow read: if isMember() && canForDataset('datasetsPathsRead', resource.data) && boundedRead();
+    }
+
+    // Reads: 1 (access).
+    match /{path=**}/accessEvents/{eventId} {
+      allow read: if isMember() && canForDataset('datasetsPathsRead', resource.data) && boundedRead();
+    }
+
     // ===== Scientific outputs and governance (section 11) =====
 
     // The scope fields of an output that names a replication are that replication's key, and
@@ -3338,6 +3419,53 @@ service cloud.firestore {
     // Reads: 1 (access).
     match /integrationMappings/{mappingId} {
       allow read: if isMember() && canForProgramme('integrationsManage') && boundedRead();
+    }
+
+    // The Google integrations: their connections, push channels, sheet mappings, runs, conflicts,
+    // review items and templates. Callable functions and jobs write all of them, and whoever
+    // manages the integrations reads them. The cell states of a mapping and the lease of a
+    // spreadsheet have no rule, so no client reads them, and a connection names the secret that
+    // holds a credential and never holds one.
+
+    // Reads: 1 (access).
+    match /integrationConnections/{system} {
+      allow read: if isMember() && canForProgramme('integrationsManage') && boundedRead();
+    }
+
+    // Reads: 1 (access).
+    match /driveChannels/{channelId} {
+      allow read: if isMember() && canForProgramme('integrationsManage') && boundedRead();
+    }
+
+    // Reads: 1 (access).
+    match /syncMappings/{mappingId} {
+      allow read: if isMember() && canForProgramme('integrationsManage') && boundedRead();
+    }
+
+    // Reads: 1 (access).
+    match /syncRuns/{runId} {
+      allow read: if isMember() && canForProgramme('integrationsManage') && boundedRead();
+    }
+
+    // Reads: 1 (access).
+    match /syncConflicts/{conflictId} {
+      allow read: if isMember() && canForProgramme('integrationsManage') && boundedRead();
+    }
+
+    // Reads: 1 (access).
+    match /syncReviewItems/{itemId} {
+      allow read: if isMember() && canForProgramme('integrationsManage') && boundedRead();
+    }
+
+    // Reads: 1 (access).
+    match /documentTemplates/{key} {
+      allow read: if isMember() && canForProgramme('integrationsManage') && boundedRead();
+    }
+
+    // A generated document is read as the record it was generated for, whose audience it copies.
+    // Reads: 1 (access).
+    match /generatedDocuments/{documentId} {
+      allow read: if isMember() && (core() || holdsScopeOf(resource.data)) && boundedRead();
     }
 
     // ===== Events, audit, automation, notifications and search (section 13) =====

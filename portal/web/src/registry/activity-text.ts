@@ -10,6 +10,7 @@ export const ACTIVITY_ACTION_LABELS: Readonly<Record<string, string>> = {
   "task.moved": "moved",
   "task.statusChanged": "changed the status of",
   "task.participantClaimed": "joined",
+  "qcAssessment.recorded": "recorded a quality-control assessment for",
 };
 
 /** The verb of an action, or a plain one for an action that is newer than this list. */

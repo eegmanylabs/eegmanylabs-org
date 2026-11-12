@@ -2,6 +2,7 @@
 // row, the arrow keys, Home and End move between rows, and Enter opens the row. With
 // `rowHeight` and `viewportHeight` it renders only the rows that are in view, so a list of
 // thousands of rows scrolls without delay.
+
 import {
   type KeyboardEvent,
   type ReactNode,
@@ -13,6 +14,7 @@ import {
   useState,
 } from "react";
 import { useRememberedScroll } from "@/components/remembered-scroll";
+import { ScrollEdgeMarks, useScrollEdges } from "@/components/ui/horizontal-scroll";
 import { type SortDirection, SortHeader } from "@/components/ui/sort-header";
 import { TableHeaderCell } from "@/components/ui/table";
 import { cn } from "@/utils/cn";
@@ -149,8 +151,10 @@ export function RecordTable<T, K extends string>({
     }
   };
 
+  const { edges, update: updateEdges } = useScrollEdges(scroller);
   const onScroll = (event: UIEvent<HTMLDivElement>) => {
     if (virtualise !== undefined) setScrollTop(event.currentTarget.scrollTop);
+    updateEdges();
   };
 
   const spacer = (height: number, key: string) =>
@@ -162,76 +166,83 @@ export function RecordTable<T, K extends string>({
     ) : null;
 
   return (
-    <div
-      ref={(element) => {
-        scroller.current = element;
-        setScrollElement(element);
-      }}
-      onScroll={onScroll}
-      className="relative overflow-auto rounded-tile border border-border bg-surface"
-      style={virtualise === undefined ? undefined : { height: virtualise.viewportHeight }}
-      data-testid={testId}
-    >
-      <table aria-label={caption} aria-rowcount={rows.length + 1} className="w-full border-collapse text-left text-sm">
-        <thead className="sticky top-0 z-10 bg-surface-muted text-micro text-fg-muted">
-          <tr aria-rowindex={1} className="h-10 border-b border-border">
-            {columns.map((column) =>
-              column.sortKey === undefined ? (
-                <TableHeaderCell key={column.id} className={column.className}>
-                  {column.header}
-                </TableHeaderCell>
-              ) : (
-                <SortHeader
-                  key={column.id}
-                  direction={column.sortKey === sortKey ? direction : null}
-                  onSort={() => onSort(column.sortKey as K)}
+    <div className="relative min-w-0">
+      <div
+        ref={(element) => {
+          scroller.current = element;
+          setScrollElement(element);
+        }}
+        onScroll={onScroll}
+        className="relative overflow-auto rounded-tile border border-border bg-surface"
+        style={virtualise === undefined ? undefined : { height: virtualise.viewportHeight }}
+        data-testid={testId}
+      >
+        <table
+          aria-label={caption}
+          aria-rowcount={rows.length + 1}
+          className="w-full border-collapse text-left text-sm"
+        >
+          <thead className="sticky top-0 z-10 bg-surface-muted text-micro text-fg-muted">
+            <tr aria-rowindex={1} className="h-10 border-b border-border">
+              {columns.map((column) =>
+                column.sortKey === undefined ? (
+                  <TableHeaderCell key={column.id} className={column.className}>
+                    {column.header}
+                  </TableHeaderCell>
+                ) : (
+                  <SortHeader
+                    key={column.id}
+                    direction={column.sortKey === sortKey ? direction : null}
+                    onSort={() => onSort(column.sortKey as K)}
+                  >
+                    {column.header}
+                  </SortHeader>
+                ),
+              )}
+            </tr>
+          </thead>
+          <tbody ref={body}>
+            {virtualise === undefined ? null : spacer(first * virtualise.rowHeight, "before")}
+            {shown.map((row, offset) => {
+              const index = first + offset;
+              const key = rowKey(row);
+              const open = key === openKey;
+              return (
+                <tr
+                  key={key}
+                  data-index={index}
+                  aria-rowindex={index + 2}
+                  aria-label={rowLabel(row)}
+                  aria-current={open ? "true" : undefined}
+                  tabIndex={index === activeIndex ? 0 : -1}
+                  onFocus={() => setActive(index)}
+                  onKeyDown={(event) => onKeyDown(event, index, row)}
+                  onClick={(event) => {
+                    // A link inside the row goes where it points; the rest of the row opens it.
+                    if ((event.target as HTMLElement).closest("a, button")) return;
+                    setActive(index);
+                    onOpen(row);
+                  }}
+                  className={cn(
+                    "cursor-pointer border-b border-border hover:bg-surface-muted",
+                    virtualise === undefined ? "h-10" : "overflow-hidden",
+                    open && "bg-surface-accent hover:bg-surface-accent",
+                  )}
+                  style={virtualise === undefined ? undefined : { height: virtualise.rowHeight }}
                 >
-                  {column.header}
-                </SortHeader>
-              ),
-            )}
-          </tr>
-        </thead>
-        <tbody ref={body}>
-          {virtualise === undefined ? null : spacer(first * virtualise.rowHeight, "before")}
-          {shown.map((row, offset) => {
-            const index = first + offset;
-            const key = rowKey(row);
-            const open = key === openKey;
-            return (
-              <tr
-                key={key}
-                data-index={index}
-                aria-rowindex={index + 2}
-                aria-label={rowLabel(row)}
-                aria-current={open ? "true" : undefined}
-                tabIndex={index === activeIndex ? 0 : -1}
-                onFocus={() => setActive(index)}
-                onKeyDown={(event) => onKeyDown(event, index, row)}
-                onClick={(event) => {
-                  // A link inside the row goes where it points; the rest of the row opens it.
-                  if ((event.target as HTMLElement).closest("a, button")) return;
-                  setActive(index);
-                  onOpen(row);
-                }}
-                className={cn(
-                  "cursor-pointer border-b border-border hover:bg-surface-muted",
-                  virtualise === undefined ? "h-10" : "overflow-hidden",
-                  open && "bg-surface-accent hover:bg-surface-accent",
-                )}
-                style={virtualise === undefined ? undefined : { height: virtualise.rowHeight }}
-              >
-                {columns.map((column) => (
-                  <td key={column.id} className={cn("px-3 py-1.5 align-middle text-fg", column.className)}>
-                    {column.cell(row)}
-                  </td>
-                ))}
-              </tr>
-            );
-          })}
-          {virtualise === undefined ? null : spacer((rows.length - 1 - last) * virtualise.rowHeight, "after")}
-        </tbody>
-      </table>
+                  {columns.map((column) => (
+                    <td key={column.id} className={cn("px-3 py-1.5 align-middle text-fg", column.className)}>
+                      {column.cell(row)}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+            {virtualise === undefined ? null : spacer((rows.length - 1 - last) * virtualise.rowHeight, "after")}
+          </tbody>
+        </table>
+      </div>
+      <ScrollEdgeMarks edges={edges} />
     </div>
   );
 }

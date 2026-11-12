@@ -5,12 +5,15 @@
 // accessibility of each new page. Everyone here is invented, and every address uses the
 // example.org domain.
 import type { Page } from "@playwright/test";
+import { DEMO_DATASET } from "../../tools/src/fixtures/demo-world";
 import { reviewPage } from "./identity-support";
 import { ALPHA, IVY, leadBrowser, signInAsIvy } from "./registry-support";
 import { expect, seriousFindings, test } from "./support";
 
 /** Today as the portal shows a date, which the browsers of this suite read in the same zone. */
 const today = () => new Date().toISOString().slice(0, 10);
+/** The dataset of the demonstration world, which a task links to. */
+const DATASET_KEY = DEMO_DATASET.key;
 
 let counter = 0;
 /** A name no other test of this run uses. */
@@ -105,6 +108,11 @@ test("AS-6: a lead plans nested work that the assignee is told of and finds in M
     await panel.getByLabel("Record to link", { exact: true }).selectOption(ALPHA);
     await panel.getByRole("button", { name: "Add link" }).click();
     await expect(panel.getByRole("link", { name: ALPHA })).toBeVisible({ timeout: 20_000 });
+    // The dataset of the work is linked from the registry, and the link opens it.
+    await panel.getByLabel("Kind of record to link").selectOption("dataset");
+    await panel.getByLabel("Record to link", { exact: true }).selectOption(DATASET_KEY);
+    await panel.getByRole("button", { name: "Add link" }).click();
+    await expect(panel.getByRole("link", { name: new RegExp(`^${DATASET_KEY}`) })).toBeVisible({ timeout: 20_000 });
     const assignees = panel.getByLabel("Add to the assignees");
     await assignees.selectOption({ label: IVY.name });
     // The first of the buttons named Add is that of the assignees, the first role of the panel.
@@ -158,6 +166,9 @@ test("AS-6: a lead plans nested work that the assignee is told of and finds in M
     await expect(own.getByText("Give the progress as a whole number from 0 to 100.")).toBeVisible();
     await expect(progress).toHaveAttribute("aria-invalid", "true");
     await expect(progress).not.toHaveValue("140");
+    // The dataset link of the task opens the dataset in the registry (acceptance scenario 6).
+    await own.getByRole("link", { name: new RegExp(`^${DATASET_KEY}`) }).click();
+    await expect(page.getByRole("heading", { level: 1, name: DATASET_KEY })).toBeVisible({ timeout: 20_000 });
   } finally {
     await lead.context.close();
   }

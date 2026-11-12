@@ -34,6 +34,12 @@ export const ALL_PARTICIPATIONS = whole("participations", []);
 export const ALL_MANUSCRIPTS = whole("manuscripts", []);
 export const ALL_ALIASES = whole("replicationAliases", "group");
 export const ALL_INSTITUTIONS = whole("institutions", []);
+/** The registry documents of every dataset, which every member reads: they name no path and no participant. */
+export const ALL_DATASETS = whole("datasets", []);
+/** The public description of every storage server, which every member reads: never its address. */
+export const ALL_STORAGE_ENDPOINTS = whole("storageEndpoints", []);
+/** The workflows of datasets that replications define, which every member reads. */
+export const ALL_DATASET_WORKFLOWS = whole("datasetWorkflows", []);
 /** The equipment requirements of every replication, which every member reads. */
 export const ALL_REQUIREMENTS = whole("replicationEquipmentRequirements", "group");
 
@@ -190,19 +196,54 @@ export function statusHistoryOfReplication(studyKey: string): LiveQuery<"statusH
 }
 
 /**
- * The document links of a replication that the caller may read: those every member reads, and
- * the restricted ones of a scope the caller holds. `scopeKeys` are the caller's own, at most 30.
+ * The document links of a replication that the caller may read: those of the replication itself
+ * and of its manuscripts, datasets and other records, those every member reads and the
+ * restricted ones of a scope the caller holds. `scopeKeys` are the caller's own, at most 30.
  */
 export function documentLinksOfReplication(studyKey: string, scopeKeys: readonly string[]): LiveQuery<"documentLinks"> {
   return {
     collection: "documentLinks",
     within: [],
     where: [
-      ["entityType", "==", "replication"],
-      ["entityId", "==", studyKey],
+      ["replicationId", "==", studyKey],
+      ["scopeKeys", "array-contains-any", scopeKeys],
+    ],
+    limit: 500,
+  };
+}
+
+/** The document links of a laboratory that the caller may read. */
+export function documentLinksOfLaboratory(
+  laboratoryId: string,
+  scopeKeys: readonly string[],
+): LiveQuery<"documentLinks"> {
+  return {
+    collection: "documentLinks",
+    within: [],
+    where: [
+      ["entityType", "==", "laboratory"],
+      ["entityId", "==", laboratoryId],
       ["scopeKeys", "array-contains-any", scopeKeys],
     ],
     limit: 200,
+  };
+}
+
+/** The generated documents of a record that the caller may read. */
+export function generatedDocumentsOf(
+  entityType: "replication" | "laboratory",
+  entityId: string,
+  scopeKeys: readonly string[],
+): LiveQuery<"generatedDocuments"> {
+  return {
+    collection: "generatedDocuments",
+    within: [],
+    where: [
+      ["entityType", "==", entityType],
+      ["entityId", "==", entityId],
+      ["scopeKeys", "array-contains-any", scopeKeys],
+    ],
+    limit: 50,
   };
 }
 
@@ -296,4 +337,7 @@ export const useCurrentEquipment = () => useLiveQuery(CURRENT_EQUIPMENT);
 export const useRequirements = () => useLiveQuery(ALL_REQUIREMENTS);
 export const useParticipations = () => useDirectoryItems(ALL_PARTICIPATIONS);
 export const useManuscripts = () => useDirectoryItems(ALL_MANUSCRIPTS);
+export const useDatasets = () => useDirectoryItems(ALL_DATASETS);
+export const useStorageEndpoints = () => useDirectoryItems(ALL_STORAGE_ENDPOINTS);
+export const useDatasetWorkflows = () => useDirectoryItems(ALL_DATASET_WORKFLOWS);
 export const useReplicationStatuses = () => useLiveQuery(REPLICATION_STATUS_DEFINITIONS);

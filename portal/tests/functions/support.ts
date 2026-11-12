@@ -28,6 +28,7 @@ import {
   roleAssignmentId,
   systemWriteContext,
   type UserNotificationDoc,
+  unitScopeKeys,
   userNotificationDocSchema,
 } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
@@ -212,9 +213,11 @@ export async function leaveNoTrace(): Promise<void> {
   await setBackgroundTriggers(false);
   await resetWorld();
   await pause(100);
-  await setBackgroundTriggers(true);
   await warmTriggers();
 }
+
+/** How many times the triggers are switched on again before a file's clean-up gives up. */
+const WARM_ATTEMPTS = 3;
 
 /**
  * Waits until the triggers that were just switched on answer again: a sentinel write has been
@@ -222,21 +225,33 @@ export async function leaveNoTrace(): Promise<void> {
  * on, so without this the first events of the next file would pay for that load.
  */
 async function warmTriggers(): Promise<void> {
-  sentinels += 1;
-  const sentinel = adminDb.doc(`countCategories/zz-warm-${process.pid}-${sentinels}`);
-  await sentinel.set({
-    ...standard(),
-    key: "zzWarm",
-    label: "Warm",
-    definition: "A sentinel.",
-    position: 999,
-    isCore: false,
-  });
-  await eventually(
-    async () => (await adminDb.collection("auditEvents").where("documentPath", "==", sentinel.path).get()).size > 0,
-    "the audit entry of the sentinel",
-  );
-  await sentinel.delete();
+  // The hub can refuse or drop the request that switches the triggers on, and with more
+  // triggers to register it takes longer to answer. A switch that did not take is made again,
+  // with a fresh sentinel, a bounded number of times.
+  for (let attempt = 1; ; attempt += 1) {
+    const switched = await setBackgroundTriggers(true);
+    sentinels += 1;
+    const sentinel = adminDb.doc(`countCategories/zz-warm-${process.pid}-${sentinels}`);
+    await sentinel.set({
+      ...standard(),
+      key: "zzWarm",
+      label: "Warm",
+      definition: "A sentinel.",
+      position: 999,
+      isCore: false,
+    });
+    try {
+      await eventually(
+        async () => (await adminDb.collection("auditEvents").where("documentPath", "==", sentinel.path).get()).size > 0,
+        `the audit entry of the sentinel${switched ? "" : " (the hub did not confirm the switch)"}`,
+      );
+      await sentinel.delete();
+      return;
+    } catch (error) {
+      await sentinel.delete();
+      if (attempt >= WARM_ATTEMPTS) throw error;
+    }
+  }
 }
 
 let sentinels = 0;
@@ -471,6 +486,31 @@ export async function laboratory(id: string, fields: Record<string, unknown> = {
     custom: {},
     dataOrigin: "demo",
     ...fields,
+  });
+}
+
+/** A dataset of the registry, written as `registerDataset` would write it, with no copy yet. */
+export async function dataset(datasetKey: string, replicationId: string, laboratoryId: string | null): Promise<void> {
+  await adminDb.doc(COLLECTIONS.datasets.docPath(datasetKey)).set({
+    ...standard(),
+    datasetKey,
+    replicationId,
+    laboratoryId,
+    participationId: null,
+    scopeKeys: unitScopeKeys(replicationId, laboratoryId),
+    title: `Synthetic dataset ${datasetKey}`,
+    modality: "main",
+    expectedManifestId: null,
+    availability: "noStorage",
+    lastSeenAt: null,
+    workflowStatusKey: "received",
+    statusHistoryId: null,
+    bidsConversionStatus: "notStarted",
+    bidsStatus: "notStarted",
+    qcStatus: "notStarted",
+    analysisReady: false,
+    custom: {},
+    dataOrigin: "demo",
   });
 }
 

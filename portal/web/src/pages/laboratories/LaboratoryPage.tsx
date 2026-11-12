@@ -14,6 +14,7 @@ import { Unknown } from "@/components/registry/unknown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   type Live,
@@ -25,16 +26,21 @@ import {
   useLiveQuery,
 } from "@/data";
 import { ScopeDashboard } from "@/pages/dashboards/ScopeDashboard";
+import { DatasetsTab } from "@/pages/datasets/DatasetsTab";
+import { DriveLinks } from "@/pages/integrations/DriveLinks";
+import { GeneratedDocuments } from "@/pages/integrations/GeneratedDocuments";
 import { ParticipationCard } from "@/pages/participations/ParticipationCard";
 import { Section } from "@/pages/replications/tabs/OverviewTab";
 import { EntityTasksTab } from "@/pages/tasks/EntityTasksTab";
 import { UpdatesTab } from "@/pages/tasks/UpdatesTab";
 import { NotesTab } from "@/pages/workspace/NotesTab";
-import { combineLive } from "@/registry/combine";
+import { combineLive, orEmpty } from "@/registry/combine";
 import { countryName, LABORATORY_STATUS_LABELS, PARTICIPATION_STATUS_LABELS } from "@/registry/labels";
 import { memberPath, replicationPath } from "@/registry/paths";
 import {
+  documentLinksOfLaboratory,
   equipmentOfLaboratory,
+  generatedDocumentsOf,
   membersOfLaboratory,
   statusHistoryOfLaboratory,
   useInstitutions,
@@ -53,6 +59,8 @@ const TAB_IDS = [
   "members",
   "equipment",
   "participations",
+  "datasets",
+  "documents",
   "activity",
   "tasks",
   "updates",
@@ -66,6 +74,8 @@ const TAB_LABELS: Readonly<Record<TabId, string>> = {
   members: "Members",
   equipment: "Equipment",
   participations: "Participations",
+  datasets: "Datasets",
+  documents: "Documents",
   activity: "Activity",
   tasks: "Tasks",
   updates: "Updates",
@@ -323,6 +333,18 @@ function LaboratoryRecord({ laboratory, viewer }: { laboratory: Laboratory; view
   );
   const current = viewer.access.member && laboratory.archivedAt === null;
   const canEdit = current && viewer.can("labs.manage", { laboratoryId: laboratory.id });
+  const links = orEmpty(
+    useLiveQuery(
+      viewer.queryScopeKeys.length === 0 ? null : documentLinksOfLaboratory(laboratory.id, viewer.queryScopeKeys),
+    ),
+  );
+  const generated = orEmpty(
+    useLiveQuery(
+      viewer.queryScopeKeys.length === 0
+        ? null
+        : generatedDocumentsOf("laboratory", laboratory.id, viewer.queryScopeKeys),
+    ),
+  );
   const confirmedEntry = ready(entries).find(
     (entry) => entry.personId === viewer.personId && entry.status === "confirmed" && entry.archivedAt === null,
   );
@@ -438,6 +460,47 @@ function LaboratoryRecord({ laboratory, viewer }: { laboratory: Laboratory; view
         </div>
       ),
     },
+    // Every laboratory has a registry of datasets, which every member reads.
+    {
+      id: "datasets",
+      live: { status: "ready", data: true, fromCache: false, hasPendingWrites: false },
+      render: () => <DatasetsTab viewer={viewer} laboratoryId={laboratory.id} />,
+    },
+    {
+      id: "documents",
+      // Those who manage the laboratory see the tab without documents too, to link the first.
+      live: combineLive(
+        [links, generated] as const,
+        (list, documents) =>
+          list.some((link) => link.archivedAt === null) ||
+          documents.length > 0 ||
+          canEdit ||
+          viewer.can("integrations.manage", "programme"),
+      ),
+      render: () => (
+        <div className="grid gap-8">
+          <DriveLinks
+            links={ready(links)}
+            canLink={canEdit}
+            targets={[
+              {
+                value: "laboratory",
+                label: `The laboratory ${laboratory.name}`,
+                entityType: "laboratory",
+                entityId: laboratory.id,
+              },
+            ]}
+            caption="Documents linked to the laboratory"
+          />
+          <GeneratedDocuments
+            entityType="laboratory"
+            entityId={laboratory.id}
+            scopeKeys={viewer.queryScopeKeys}
+            canGenerate={canEdit || viewer.can("integrations.manage", "programme")}
+          />
+        </div>
+      ),
+    },
     {
       id: "activity",
       live: combineLive([history, configurations] as const, () => activity.length > 0),
@@ -540,7 +603,7 @@ function LaboratoryRecord({ laboratory, viewer }: { laboratory: Laboratory; view
         <LoadingState label="Loading the laboratory" />
       ) : (
         <Tabs value={selected.id} onValueChange={showTab}>
-          <div className="relative overflow-x-auto">
+          <HorizontalScroll>
             <TabsList aria-label="Sections of the laboratory" className="min-w-max">
               {present.map((tab) => (
                 <TabsTrigger key={tab.id} value={tab.id}>
@@ -548,7 +611,7 @@ function LaboratoryRecord({ laboratory, viewer }: { laboratory: Laboratory; view
                 </TabsTrigger>
               ))}
             </TabsList>
-          </div>
+          </HorizontalScroll>
           {present.map((tab) => (
             <TabsContent key={tab.id} value={tab.id}>
               {tab.live.status === "loading" ? (

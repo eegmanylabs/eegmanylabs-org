@@ -5,9 +5,17 @@
 // takes the place of a core field: a core field with the same identifier wins, and the functions
 // refuse such an identifier in the first place.
 import { DATA_ORIGINS } from "../data-origin";
+import { DEFAULT_DATASET_WORKFLOW } from "../datasets/workflow";
 import type { EntityType } from "../entities";
 import { nestedEntityId } from "../ids";
 import { RECRUITMENT_MODALITIES, RECRUITMENT_MODALITY_LABELS } from "../recruitment-effective";
+import {
+  bidsConversionStatusSchema,
+  bidsStatusSchema,
+  datasetAvailabilitySchema,
+  datasetModalitySchema,
+  qcStatusSchema,
+} from "../schemas/datasets";
 import { participationStatusSchema, readinessStatusSchema } from "../schemas/participation";
 import { laboratoryStatusSchema } from "../schemas/programme";
 import { reportEntryKindSchema, reportKindSchema } from "../schemas/recruitment";
@@ -55,6 +63,8 @@ export interface SourceLookups {
   readonly tags?: readonly { readonly id: string; readonly name: string }[];
   /** The categories of participant counts that are in use, in order, for the counts of recruitment. */
   readonly countCategories?: readonly { readonly key: string; readonly label: string }[];
+  /** The states of the workflows of datasets in use, in order, with their category. */
+  readonly datasetStatuses?: readonly { readonly key: string; readonly label: string; readonly category: string }[];
 }
 
 /** A built-in property of a core source, and how its value is read from a document. */
@@ -71,6 +81,7 @@ export const CORE_SOURCE_KEYS = [
   "core:tasks",
   "core:recruitmentReports",
   "core:recruitment",
+  "core:datasets",
 ] as const;
 export type CoreSourceKey = (typeof CORE_SOURCE_KEYS)[number];
 
@@ -596,6 +607,61 @@ export const CORE_SOURCES: Readonly<Record<CoreSourceKey, CoreSource>> = {
     ],
     defaultConfig: {
       sorts: [{ property: "participation", direction: "ascending" }],
+      boardProperty: "status",
+    },
+  },
+  "core:datasets": {
+    key: "core:datasets",
+    label: "Datasets",
+    selectable: true,
+    entityType: "dataset",
+    titleProperty: "datasetKey",
+    // The custom values of a dataset are not built, so the source takes no custom properties.
+    customKey: null,
+    reference: (id) => ({ entityType: "dataset", entityId: id }),
+    fields: (lookups) => [
+      field("datasetKey", "Dataset", "text", (document) => text(document.datasetKey)),
+      field("title", "Title", "text", (document) => text(document.title)),
+      field("replication", "Replication", "relation", (document) => references("replication", document.replicationId), {
+        config: { relation: { target: "core:replications" } },
+      }),
+      field("laboratory", "Laboratory", "relation", (document) => references("laboratory", document.laboratoryId), {
+        config: { relation: { target: "core:laboratories" } },
+      }),
+      field("modality", "Modality", "select", (document) => text(document.modality), {
+        config: { options: optionsOf(datasetModalitySchema.options) },
+      }),
+      field("groupingLabel", "Session or grouping", "text", (document) => text(document.groupingLabel)),
+      field("status", "Workflow state", "status", (document) => text(document.workflowStatusKey), {
+        config: {
+          options: (lookups.datasetStatuses ?? DEFAULT_DATASET_WORKFLOW.states).map((status) => ({
+            id: status.key,
+            name: status.label,
+            group: TASK_STATUS_GROUPS[status.category] ?? "inProgress",
+          })),
+        },
+      }),
+      field("bidsConversionStatus", "BIDS conversion", "select", (document) => text(document.bidsConversionStatus), {
+        config: { options: optionsOf(bidsConversionStatusSchema.options) },
+      }),
+      field("bidsStatus", "BIDS validation", "select", (document) => text(document.bidsStatus), {
+        config: { options: optionsOf(bidsStatusSchema.options) },
+      }),
+      field("qcStatus", "QC", "select", (document) => text(document.qcStatus), {
+        config: { options: optionsOf(qcStatusSchema.options) },
+      }),
+      field("analysisReady", "Analysis ready", "checkbox", (document) => flag(document.analysisReady)),
+      field("availability", "Availability", "select", (document) => text(document.availability), {
+        config: { options: optionsOf(datasetAvailabilitySchema.options) },
+      }),
+      field("lastSeenAt", "Last seen", "date", (document) => instantText(document.lastSeenAt)),
+      field("receivedAt", "Received", "date", (document) => instantText(document.receivedAt)),
+      field("expectedFileCount", "Expected files", "number", (document) => numeric(document.expectedFileCount)),
+      field("receivedFileCount", "Received files", "number", (document) => numeric(document.receivedFileCount)),
+      dataOrigin(),
+    ],
+    defaultConfig: {
+      sorts: [{ property: "datasetKey", direction: "ascending" }],
       boardProperty: "status",
     },
   },

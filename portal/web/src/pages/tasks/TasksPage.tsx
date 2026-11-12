@@ -11,10 +11,11 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { callFunction, retryFailedLiveData, useLiveQuery } from "@/data";
 import { meetingPages, workspacePages } from "@/pages/workspace/queries";
-import { ALL_PERSONS, useDirectoryItems, useLaboratories, useReplications } from "@/registry/queries";
+import { ALL_PERSONS, useDatasets, useDirectoryItems, useLaboratories, useReplications } from "@/registry/queries";
 import {
   finishedStatus,
   managesList,
@@ -77,6 +78,7 @@ function useLinkTargets(viewer: Viewer, people: readonly Person[]): LinkTargets 
   const laboratories = useLaboratories();
   const pages = useLiveQuery(workspacePages(viewer));
   const meetings = useLiveQuery(meetingPages(viewer));
+  const datasets = useDatasets();
   return useMemo(
     () => ({
       replication:
@@ -93,8 +95,15 @@ function useLinkTargets(viewer: Viewer, people: readonly Person[]): LinkTargets 
           ? live.data.filter((page) => page.archivedAt === null).map((page) => ({ id: page.id, name: page.title }))
           : [],
       ),
+      dataset:
+        datasets.status === "ready"
+          ? datasets.data
+              .filter((dataset) => dataset.archivedAt === null)
+              .map((dataset) => ({ id: dataset.id, name: `${dataset.datasetKey}, ${dataset.title}` }))
+              .sort((a, b) => a.name.localeCompare(b.name, "en"))
+          : [],
     }),
-    [replications, laboratories, pages, meetings, people],
+    [replications, laboratories, pages, meetings, people, datasets],
   );
 }
 
@@ -366,7 +375,7 @@ function Tasks({ viewer, data }: { readonly viewer: Viewer; readonly data: TaskD
             />
           ) : (
             <Tabs value={tab} onValueChange={(value) => set({ tab: value })}>
-              <div className="relative overflow-x-auto">
+              <HorizontalScroll>
                 <TabsList aria-label="Ways to see the tasks" className="min-w-max">
                   {TABS.filter(([id]) => !(special && id === "tree")).map(([id, label]) => (
                     <TabsTrigger key={id} value={id} className="whitespace-nowrap">
@@ -374,7 +383,7 @@ function Tasks({ viewer, data }: { readonly viewer: Viewer; readonly data: TaskD
                     </TabsTrigger>
                   ))}
                 </TabsList>
-              </div>
+              </HorizontalScroll>
               <TabsContent value="tree" className="mt-3">
                 {list === undefined ? null : (
                   <TaskTree

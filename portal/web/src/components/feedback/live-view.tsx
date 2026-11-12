@@ -22,16 +22,21 @@ export interface LiveViewProps<T> {
    * account no longer has access to, with a way out.
    */
   denied?: ReactNode;
+  /**
+   * Whether the value comes from a callable function, whose error messages are written for the
+   * reader (`CallableError`), so the error state shows the message itself.
+   */
+  fromCallable?: boolean;
   children: (data: T) => ReactNode;
 }
 
-function describeFailure(code: string): string {
+function describeFailure(code: string, retries: boolean): string {
   if (code === "permission-denied") return "Your account is not allowed to see this.";
   if (code === "unavailable") return "The portal could not reach its server. Check your connection.";
   if (code === "data/invalid-shape") {
     return "This record is in a form this version of the portal does not understand. Reload the page to get the latest version.";
   }
-  return "Reload the page to try again.";
+  return retries ? "Try again in a moment." : "Reload the page to try again.";
 }
 
 /**
@@ -70,7 +75,16 @@ function Loading({ label, custom }: { label: string; custom: ReactNode | undefin
  * Renders a live value with the portal's standard loading and error states, so every data view
  * handles the three cases the same way. Nothing is rendered while there is nothing to watch.
  */
-export function LiveView<T>({ live, loadingLabel, loading, errorTitle, onRetry, denied, children }: LiveViewProps<T>) {
+export function LiveView<T>({
+  live,
+  loadingLabel,
+  loading,
+  errorTitle,
+  onRetry,
+  denied,
+  fromCallable = false,
+  children,
+}: LiveViewProps<T>) {
   switch (live.status) {
     case "idle":
       return null;
@@ -81,7 +95,7 @@ export function LiveView<T>({ live, loadingLabel, loading, errorTitle, onRetry, 
       return (
         <ErrorState
           title={errorTitle}
-          description={describeFailure(live.error.code)}
+          description={fromCallable ? live.error.message : describeFailure(live.error.code, onRetry !== undefined)}
           action={onRetry ? <Button onClick={onRetry}>Try again</Button> : undefined}
         />
       );

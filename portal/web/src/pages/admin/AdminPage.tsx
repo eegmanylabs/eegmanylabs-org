@@ -10,17 +10,20 @@ import { PageHeader } from "@/components/page-header";
  */
 export function AdminPage({
   entryId,
+  title,
   description,
   children,
 }: {
   entryId: string;
+  /** The title of a page below the entry, such as the conflicts of the integrations. The entry's label otherwise. */
+  title?: string;
   description: string;
   children: ReactNode;
 }) {
   const entry = navigationEntry(entryId);
   return (
-    <RequireCapability capability={entry.requires} title={entry.label}>
-      <PageHeader title={entry.label} description={description} />
+    <RequireCapability capability={entry.requires} title={title ?? entry.label}>
+      <PageHeader title={title ?? entry.label} description={description} />
       <div className="grid gap-6 *:min-w-0">{children}</div>
     </RequireCapability>
   );

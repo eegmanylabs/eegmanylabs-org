@@ -217,27 +217,49 @@ describe("the documents that say who holds which role", () => {
 
 describe("a storage path", () => {
   it("is refused in every document that holds one, whose rules are not written yet", async () => {
-    const HOLDERS = [
-      "storageEndpoints",
-      "storageEndpointConnection",
-      "datasetStorageRefs",
-      "datasetStorageRefLocation",
-      "datasetManifests",
-      "datasetViewerLinks",
-      "attachments",
-    ] as const;
-    for (const key of HOLDERS) {
-      await expectOutcomes(
-        forEach(EVERYONE, "denied", `reads a document of ${key}`, (caller) => get(caller, unbuiltPath(key))),
-      );
-    }
     await expectOutcomes({
-      ...forEach(EVERYONE, "denied", "lists every storage reference", (caller) =>
-        listAcrossParents(caller, "storageRefs", limit(5)),
+      ...forEach(EVERYONE, "denied", "reads a document of attachments", (caller) =>
+        get(caller, unbuiltPath("attachments")),
       ),
       ...forEach(EVERYONE, "denied", "lists the attachments of its scope", (caller) =>
         list(caller, "attachments", where("scopeKeys", "array-contains", "members"), limit(5)),
       ),
+    });
+  });
+
+  it("is never read by a client from the dataset registry, which serves a location only through a function that records it", async () => {
+    // The location of a copy, the connection of a server and a viewer link have no rule at all.
+    for (const key of ["storageEndpointConnection", "datasetStorageRefLocation", "datasetViewerLinks"] as const) {
+      await expectOutcomes(
+        forEach(EVERYONE, "denied", `reads a document of ${key}`, (caller) => get(caller, storedPath(key))),
+      );
+    }
+    // The listings of files name paths: only holders of datasets.paths.read for the unit read them,
+    // which a lab member, the replication's team and every outsider are not.
+    await expectOutcomes({
+      ...forEach([...OUTSIDERS, ...INSIDERS_WITHOUT_MANAGEMENT], "denied", "reads a listing", (caller) =>
+        get(caller, storedPath("datasetManifests")),
+      ),
+      ...forEach(
+        [...OUTSIDERS, ...INSIDERS_WITHOUT_MANAGEMENT],
+        "denied",
+        "lists the listings of the replication",
+        (caller) => listAcrossParents(caller, "manifests", where("replicationId", "==", OWN_REPLICATION), limit(5)),
+      ),
+      ...forEach([...OUTSIDERS, ...INSIDERS_WITHOUT_MANAGEMENT], "denied", "reads the chunks of a listing", (caller) =>
+        get(caller, storedPath("datasetManifestFileChunks")),
+      ),
+      ...forEach(
+        EVERYONE_BELOW_ADMIN.filter((caller) => caller !== "coreTeam"),
+        "denied",
+        "lists every listing",
+        (caller) => listAcrossParents(caller, "manifests", limit(5)),
+      ),
+      "the lead reads a listing": ["allowed", get("ownLead", storedPath("datasetManifests"))],
+      "the coordinator lists the listings of the laboratory": [
+        "allowed",
+        listAcrossParents("ownCoordinator", "manifests", where("laboratoryId", "==", "lab-synthetic-own"), limit(5)),
+      ],
     });
   });
 

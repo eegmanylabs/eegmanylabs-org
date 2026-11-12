@@ -6,6 +6,8 @@
 // `can` for it, and it also asks for the caller's second factor wherever that access document
 // says one is required. A time crosses the wire as an ISO 8601 text with an offset.
 import { grantableCapabilitySchema, roleSchema, roleScopeTypeSchema } from "./capabilities";
+import { hasControlCharacter, storagePathProblem } from "./datasets/paths";
+import { DOCUMENT_TEMPLATE_KINDS } from "./docs/templates";
 import { entityTypeSchema } from "./entities";
 import { hasValidOrcidCheckDigit } from "./identifiers";
 import { nameFold } from "./ids";
@@ -25,6 +27,29 @@ import {
   urlSchema,
 } from "./schemas/base";
 import {
+  bidsConversionStatusSchema,
+  bidsStatusSchema,
+  DATASET_WORKFLOW_MAX_STATES,
+  datasetModalitySchema,
+  datasetWorkflowStateSchema,
+  manifestFileStatusSchema,
+  manifestKindSchema,
+  qcExclusionSchema,
+  qcLevelSchema,
+  qcOutcomeSchema,
+  qcStatusSchema,
+  storageAllowedPrefixesSchema,
+  storageEndpointStatusSchema,
+  storageProtocolSchema,
+  storageRefRoleSchema,
+  storageScanModeSchema,
+  storageScanStatusSchema,
+  storageSecretNameSchema,
+  transferApprovalSchema,
+  transferStatusSchema,
+  viewerToolSchema,
+} from "./schemas/datasets";
+import {
   claimMatchBasisSchema,
   claimStatusSchema,
   correctionRequestStatusSchema,
@@ -35,7 +60,12 @@ import {
 } from "./schemas/identity";
 import { participationStatusSchema } from "./schemas/participation";
 import { laboratoryMemberRoleSchema, laboratoryMemberStatusSchema } from "./schemas/programme";
-import { reconciliationStatusSchema } from "./schemas/provenance";
+import {
+  GOOGLE_SYSTEMS,
+  integrationConnectionStatusSchema,
+  reconciliationStatusSchema,
+  secretNameSchema,
+} from "./schemas/provenance";
 import { reportEntryKindSchema, reportKindSchema } from "./schemas/recruitment";
 import {
   recruitmentBasisSchema,
@@ -65,6 +95,8 @@ import {
   propertyTypeSchema,
   viewTypeSchema,
 } from "./schemas/workspace";
+import { ROW_POLICIES, SYNC_DIRECTIONS } from "./sync/planner";
+import { SYNC_TARGET_KEYS, type SyncTargetKey } from "./sync/targets";
 import { dashboardWidgetInputSchema } from "./views/dashboard";
 import { propertyConfigSchema, viewCollectionKeySchema, viewConfigSchema, viewScopeSchema } from "./views/model";
 import { z } from "./zod";
@@ -1218,7 +1250,7 @@ const unclaimedParticipantInputSchema = z.strictObject({
   role: taskParticipantRoleSchema,
 });
 
-/** A record that a task links to. A dataset link stores its identifier until the registry of datasets exists. */
+/** A record that a task links to: one that exists and that the caller may open, a dataset among them. */
 const taskLinkInputSchema = z.strictObject({ entityType: entityTypeSchema, entityId: idSchema });
 
 const checklistInputSchema = z.record(
@@ -1306,7 +1338,7 @@ export const createTaskContract = {
  * for each. The managers of a list change every field. An assignee or a collaborator changes the
  * progress, the estimate and the checklist, and anyone who reads a task follows it or stops
  * following it. A dependency that would close a cycle is refused, and so is a link to a record
- * that does not exist, apart from a dataset, whose registry does not exist yet.
+ * that does not exist or that the caller may not open.
  */
 export const updateTasksContract = {
   name: "updateTasks",
@@ -1526,6 +1558,672 @@ export const generateForecastContract = {
   name: "generateForecast",
   input: z.strictObject({ replicationId: idSchema, assumptions: forecastAssumptionsSchema }),
   output: z.strictObject({ forecastRunId: idSchema }),
+} as const satisfies CallableContract;
+
+// Google Workspace (docs/INTEGRATIONS.md, section 3). Every function below reaches Google only
+// through the adapters of the functions, which are in-memory fakes in the emulator, and none
+// trusts a file identifier or a record identifier from the browser without checking the caller.
+
+/** A file or folder identifier as Drive gives it. */
+const externalFileIdSchema = z
+  .string()
+  .min(1)
+  .max(200)
+  .regex(/^[A-Za-z0-9_-]+$/, { error: "Expected a Drive identifier" });
+
+/** The kinds of record a Drive file or folder can be linked to. */
+export const driveLinkTargetSchema = z.enum(["replication", "laboratory", "manuscript", "dataset"]);
+export type DriveLinkTarget = z.output<typeof driveLinkTargetSchema>;
+
+/**
+ * Links a Drive file or folder to a replication, a laboratory, a manuscript or a dataset, from
+ * the address a member pasted. The caller manages the target: `replications.manage` for a
+ * replication and its manuscripts, `labs.manage` for a laboratory, `datasets.manage` for a
+ * dataset of the registry. The function
+ * asks Drive for the item's name, type and owner as the portal's account sees it and stores the
+ * link with its access status: `shared` when the account can open it, `restricted` when it
+ * cannot, in which case the answer names the account to share it with.
+ */
+export const linkDriveResourceContract = {
+  name: "linkDriveResource",
+  input: z.strictObject({
+    entityType: driveLinkTargetSchema,
+    entityId: idSchema,
+    address: urlSchema,
+    /** Whether the link is for the team of the record only, rather than every member. */
+    restricted: z.boolean(),
+  }),
+  output: z.strictObject({
+    linkId: idSchema,
+    accessStatus: z.enum(["shared", "restricted", "unreachable"]),
+    title: z.string().max(LIMITS.shortText).nullable(),
+    /** The account to share the item with, where the portal cannot open it yet. */
+    shareWith: z.string().max(LIMITS.shortText).nullable(),
+  }),
+} as const satisfies CallableContract;
+
+export const driveItemKindSchema = z.enum(["folder", "document", "spreadsheet", "file"]);
+
+export const driveItemSchema = z.strictObject({
+  id: externalFileIdSchema,
+  name: z.string().max(LIMITS.shortText),
+  kind: driveItemKindSchema,
+  mimeType: z.string().max(200),
+  modifiedAt: z.iso.datetime({ offset: true }).nullable(),
+  ownerName: z.string().max(LIMITS.shortText).nullable(),
+  lastModifiedBy: z.string().max(LIMITS.shortText).nullable(),
+  /** Google's own address for the item, which applies the reader's own permissions. */
+  url: urlSchema.nullable(),
+});
+export type DriveItem = z.output<typeof driveItemSchema>;
+
+/**
+ * Lists one folder of a linked Drive folder: its direct children, folders first, one page at a
+ * time, as the portal's account sees them. The caller reads the link (its scope, or every
+ * member where the link is not restricted), and a folder below the linked one is opened only
+ * when Drive places it inside that folder, so a link never opens anything beside it.
+ */
+export const browseDriveFolderContract = {
+  name: "browseDriveFolder",
+  input: z.strictObject({
+    linkId: idSchema,
+    /** A folder inside the linked one. The linked folder itself where absent. */
+    folderId: externalFileIdSchema.exactOptional(),
+    pageToken: z.string().min(1).max(500).exactOptional(),
+  }),
+  output: z.strictObject({
+    folder: z.strictObject({ id: externalFileIdSchema, name: z.string().max(LIMITS.shortText) }),
+    /** The folders from the linked one down to this one, for a breadcrumb. */
+    path: z.array(z.strictObject({ id: externalFileIdSchema, name: z.string().max(LIMITS.shortText) })).max(25),
+    items: z.array(driveItemSchema).max(1_000),
+    nextPageToken: z.string().max(500).nullable(),
+  }),
+} as const satisfies CallableContract;
+
+/**
+ * Describes one file of a linked file or folder: its metadata and Google's own address for it.
+ * The same reading rule as `browseDriveFolder` applies. The portal never relays file content
+ * (docs/INTEGRATIONS.md, section 3.2): the file opens at Google's address with the reader's own
+ * Google permissions.
+ */
+export const previewDriveFileContract = {
+  name: "previewDriveFile",
+  input: z.strictObject({ linkId: idSchema, fileId: externalFileIdSchema.exactOptional() }),
+  output: z.strictObject({ file: driveItemSchema }),
+} as const satisfies CallableContract;
+
+/** Asks Drive again for a linked item's metadata and access, for those who may link to its record. */
+export const checkDriveLinkContract = {
+  name: "checkDriveLink",
+  input: z.strictObject({ linkId: idSchema }),
+  output: z.strictObject({
+    accessStatus: z.enum(["shared", "restricted", "unreachable"]),
+    shareWith: z.string().max(LIMITS.shortText).nullable(),
+  }),
+} as const satisfies CallableContract;
+
+const syncColumnInputSchema = z.strictObject({
+  field: mapKeySchema,
+  column: z.string().trim().min(1).max(LIMITS.shortText),
+  direction: z.enum(SYNC_DIRECTIONS),
+});
+
+/**
+ * Creates or changes a mapping of a sheet tab to a portal collection, for holders of
+ * `integrations.manage`. The source and its tab must be registered, and the fields are checked
+ * against the synchronisation targets, so a special-category or restricted field can never be
+ * mapped. A new mapping starts as a dry run: live writes need `controlSyncMapping`.
+ */
+export const saveSyncMappingContract = {
+  name: "saveSyncMapping",
+  input: z.strictObject({
+    /** The mapping to change. Absent to create one, whose identifier is derived from source, tab and collection. */
+    mappingId: idSchema.exactOptional(),
+    name: z.string().trim().min(1).max(LIMITS.shortText),
+    sourceKey: keySchema,
+    tabKey: keySchema,
+    collectionKey: z.enum(SYNC_TARGET_KEYS as [SyncTargetKey, ...SyncTargetKey[]]),
+    keyColumn: z.string().trim().min(1).max(LIMITS.shortText),
+    columns: z.array(syncColumnInputSchema).min(1).max(100),
+    sheetOnlyRows: z.enum(ROW_POLICIES.sheetOnly),
+    appOnlyRecords: z.enum(ROW_POLICIES.appOnly),
+    cellCeiling: z.number().int().min(1).max(5_000),
+  }),
+  output: z.strictObject({ mappingId: idSchema, created: z.boolean() }),
+} as const satisfies CallableContract;
+
+/**
+ * Pauses or resumes a mapping, or moves it between dry run and live. `integrations.manage`
+ * pauses, resumes and withdraws live approval. Approving live writes is a programme
+ * administrator's act alone (docs/INTEGRATIONS.md, section 1), audited with its scope.
+ */
+export const controlSyncMappingContract = {
+  name: "controlSyncMapping",
+  input: z.strictObject({
+    mappingId: idSchema,
+    action: z.enum(["pause", "resume", "approveLive", "withdrawLive"]),
+    reason: reasonSchema.exactOptional(),
+  }),
+  output: z.strictObject({ status: z.enum(["active", "paused", "needsAttention"]), mode: z.enum(["dryRun", "live"]) }),
+} as const satisfies CallableContract;
+
+/** Enqueues a run of a mapping now, in its current mode, for holders of `integrations.manage`. One queued run is enough. */
+export const requestSyncRunContract = {
+  name: "requestSyncRun",
+  input: z.strictObject({ mappingId: idSchema }),
+  output: z.strictObject({ runId: idSchema, alreadyQueued: z.boolean() }),
+} as const satisfies CallableContract;
+
+/** Retries a run that failed or was dead-lettered, or cancels one that has not started, for `integrations.manage`. */
+export const controlSyncRunContract = {
+  name: "controlSyncRun",
+  input: z.strictObject({ runId: idSchema, action: z.enum(["retry", "cancel"]) }),
+  output: z.strictObject({ status: z.enum(["queued", "cancelled"]) }),
+} as const satisfies CallableContract;
+
+/**
+ * Resolves a conflict, for holders of `integrations.manage`: keep the portal value, keep the
+ * value of the sheet or document, or keep a merged value. For a sheet the function writes the
+ * one cell and the record and sets the base. If either side changed after the conflict was
+ * recorded, nothing is written: the conflict is refreshed with the new values and the answer
+ * says so. Every resolution is audited with the resolver.
+ */
+export const resolveSyncConflictContract = {
+  name: "resolveSyncConflict",
+  input: z.strictObject({
+    conflictId: idSchema,
+    resolution: z.enum(["keepApp", "keepSheet", "merged"]),
+    /** For `merged`: the value to keep, as a person would type it in the sheet. */
+    mergedValue: z.string().max(LIMITS.longText).exactOptional(),
+    note: reasonSchema.exactOptional(),
+  }),
+  output: z.strictObject({ status: z.enum(["resolved", "refreshed"]) }),
+} as const satisfies CallableContract;
+
+/**
+ * Settles a review item that a run raised, for `integrations.manage`: dismiss it, forget the
+ * stored state of a row that has gone so that it is appended again on the next run, or clear
+ * the mark of an unstable cell. Nothing is ever deleted from the sheet or the portal.
+ */
+export const resolveSyncReviewItemContract = {
+  name: "resolveSyncReviewItem",
+  input: z.strictObject({
+    itemId: idSchema,
+    action: z.enum(["dismiss", "forgetRow", "clearMark"]),
+    note: reasonSchema,
+  }),
+  output: z.strictObject({ status: z.enum(["dismissed", "resolved"]) }),
+} as const satisfies CallableContract;
+
+/**
+ * Creates or updates the generated document of a template for a record: the programme, a
+ * replication or a laboratory. For `integrations.manage`, and for those who manage the record
+ * (`replications.manage` or `labs.manage` for it). The work is a queued job, and the answer
+ * names the record of the document and the run.
+ */
+export const generateDocumentContract = {
+  name: "generateDocument",
+  input: z
+    .strictObject({
+      /** The template, by its key: what an administrator of the integrations, who reads the templates, names. */
+      templateKey: keySchema.exactOptional(),
+      /** The template, by its kind: the template of that kind that is in use for the kind of record. */
+      kind: z.enum(DOCUMENT_TEMPLATE_KINDS).exactOptional(),
+      entityType: z.enum(["programme", "replication", "laboratory"]),
+      entityId: idSchema,
+    })
+    .refine((input) => (input.templateKey === undefined) !== (input.kind === undefined), {
+      error: "Name the template by its key or by its kind",
+    }),
+  output: z.strictObject({ generatedDocumentId: idSchema, runId: idSchema, alreadyQueued: z.boolean() }),
+} as const satisfies CallableContract;
+
+/**
+ * Registers or changes a document template, for `integrations.manage`: the template document,
+ * the shared-drive folder that receives copies, and whether it is in use. Moving a template to
+ * live writes is a programme administrator's act alone.
+ */
+export const saveDocumentTemplateContract = {
+  name: "saveDocumentTemplate",
+  input: z.strictObject({
+    key: keySchema,
+    kind: z.enum(DOCUMENT_TEMPLATE_KINDS),
+    name: z.string().trim().min(1).max(LIMITS.shortText),
+    externalDocumentId: externalFileIdSchema,
+    targetFolderId: externalFileIdSchema,
+    enabled: z.boolean(),
+    mode: z.enum(["dryRun", "live"]),
+  }),
+  output: z.strictObject({ key: keySchema, created: z.boolean() }),
+} as const satisfies CallableContract;
+
+/**
+ * Acts on a connection, for `integrations.manage`: test it, pause or resume it, or open a new
+ * Drive push channel before the old one expires. Naming the secret that holds a credential
+ * needs `integrations.credentials`, and only the name is ever stored.
+ */
+export const controlIntegrationConnectionContract = {
+  name: "controlIntegrationConnection",
+  input: z.strictObject({
+    system: z.enum(GOOGLE_SYSTEMS),
+    action: z.enum(["test", "pause", "resume", "renewChannel", "setCredentialRef"]),
+    credentialRef: secretNameSchema.exactOptional(),
+  }),
+  output: z.strictObject({
+    status: integrationConnectionStatusSchema,
+    message: z.string().max(LIMITS.longText),
+  }),
+} as const satisfies CallableContract;
+
+// ===== Datasets =====
+//
+// The dataset registry (docs/DATA_MODEL.md, section 10). Every write goes through one of these
+// functions. `datasets.manage` for the dataset's replication or laboratory lets a caller change
+// a dataset; `datasets.paths.read` lets a caller read where its copies are, and every such read
+// is recorded in the dataset's access events. Nothing here moves a file: a transfer is recorded
+// and requested, and people carry it out with their institutions' own tools.
+
+/**
+ * The path of a copy below the base path of its server. The functions store it in normal form
+ * (`normaliseStoragePath`); a path that could leave its folder, name the whole server or carry a
+ * control character is refused.
+ */
+export const storagePathSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(1_024)
+  .superRefine((path, context) => {
+    const problem = storagePathProblem(path);
+    if (problem !== null) context.addIssue({ code: "custom", message: problem });
+  });
+
+/** A value of the free metadata of a dataset: a text, a number or a yes or no. */
+const metadataValueSchema = z.union([z.string().max(LIMITS.shortText), z.number(), z.boolean()]);
+const metadataSchema = z
+  .record(z.string().trim().min(1).max(100), metadataValueSchema)
+  .refine((map) => Object.keys(map).length <= 100, { error: "Metadata holds at most 100 entries" });
+
+/** One file of a manifest as a client states it. */
+export const manifestFileInputSchema = z.strictObject({
+  relativePath: z
+    .string()
+    .min(1)
+    .max(1_024)
+    .refine((path) => !hasControlCharacter(path), { error: "A path may not hold a control character" }),
+  sizeBytes: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).exactOptional(),
+  checksumAlgorithm: z.string().min(1).max(32).exactOptional(),
+  checksum: z.string().min(1).max(256).exactOptional(),
+  modifiedAt: instantSchema.exactOptional(),
+});
+export type ManifestFileInput = z.output<typeof manifestFileInputSchema>;
+
+/** The most files one call records. A larger manifest is listed by a scan, which writes it in chunks. */
+export const MANIFEST_INPUT_MAX_FILES = 10_000;
+
+const storageConnectionInputSchema = z.strictObject({
+  host: z
+    .string()
+    .trim()
+    .min(1)
+    .max(253)
+    .regex(/^[A-Za-z0-9.-]+$/, { error: "A host is a name of letters, digits, dots and hyphens" }),
+  port: z.number().int().min(1).max(65_535).exactOptional(),
+  basePath: storagePathSchema.exactOptional(),
+  /** The name of the secret that holds the read-only credential, never the credential. */
+  credentialRef: storageSecretNameSchema.exactOptional(),
+  /**
+   * The folder below the base path in which each replication or laboratory may name copies.
+   * Absent, the folders stored for the server stay as they are.
+   */
+  allowedPrefixes: storageAllowedPrefixesSchema.exactOptional(),
+});
+
+/**
+ * Registers or changes a storage server, for holders of `datasets.manage` for the programme.
+ * The connection details are written where no client reads them, and naming a secret needs
+ * `integrations.credentials` as well.
+ */
+export const saveStorageEndpointContract = {
+  name: "saveStorageEndpoint",
+  input: z.strictObject({
+    key: keySchema,
+    name: shortTextSchema,
+    institutionId: idSchema.nullable(),
+    ownerPersonId: idSchema.nullable(),
+    protocol: storageProtocolSchema,
+    scanMode: storageScanModeSchema,
+    description: z.string().trim().max(LIMITS.longText),
+    retired: z.boolean(),
+    connection: storageConnectionInputSchema,
+  }),
+  output: z.strictObject({ key: keySchema, created: z.boolean() }),
+} as const satisfies CallableContract;
+
+/** Checks that a storage server answers, for holders of `datasets.manage` for the programme. */
+export const checkStorageEndpointContract = {
+  name: "checkStorageEndpoint",
+  input: z.strictObject({ key: keySchema }),
+  output: z.strictObject({
+    status: storageEndpointStatusSchema,
+    reachable: z.boolean(),
+    message: z.string().max(LIMITS.longText),
+  }),
+} as const satisfies CallableContract;
+
+/** Gives an administrator the connection details of a storage server to edit them. Audited. */
+export const getStorageEndpointConnectionContract = {
+  name: "getStorageEndpointConnection",
+  input: z.strictObject({ key: keySchema }),
+  output: z.strictObject({
+    host: z.string().max(253),
+    port: z.number().int().nullable(),
+    basePath: z.string().max(1_024).nullable(),
+    credentialRef: z.string().max(LIMITS.shortText).nullable(),
+    allowedPrefixes: storageAllowedPrefixesSchema,
+  }),
+} as const satisfies CallableContract;
+
+/** The first copy of a dataset, given when it is registered. */
+const firstStorageInputSchema = z.strictObject({
+  endpointKey: keySchema,
+  role: storageRefRoleSchema,
+  path: storagePathSchema,
+  viewerSupport: z.array(viewerToolSchema).max(5),
+});
+
+/**
+ * Registers a dataset, for holders of `datasets.manage` for its replication or its laboratory.
+ * The key is the dataset's permanent identifier and must be new. The dataset starts in the first
+ * state of its replication's workflow, and its first copy may be given at once. No file is moved
+ * and no central copy is needed: a copy on an institutional server is enough, or none at all.
+ */
+export const registerDatasetContract = {
+  name: "registerDataset",
+  input: z.strictObject({
+    datasetKey: keySchema,
+    replicationId: studyKeySchema,
+    laboratoryId: idSchema.nullable(),
+    title: shortTextSchema,
+    modality: datasetModalitySchema,
+    groupingLabel: shortTextSchema.nullable(),
+    sourceInstitutionId: idSchema.nullable(),
+    storageOwnerPersonId: idSchema.nullable(),
+    protocolId: idSchema.nullable(),
+    expectedFileCount: z.number().int().min(0).max(10_000_000).nullable(),
+    expectedParticipants: z.number().int().min(0).max(100_000).nullable(),
+    metadata: metadataSchema,
+    storage: firstStorageInputSchema.nullable(),
+  }),
+  output: z.strictObject({ datasetKey: keySchema, storageRefId: idSchema.nullable() }),
+} as const satisfies CallableContract;
+
+/**
+ * Changes the descriptive fields of a dataset, its metadata and its BIDS conversion, for holders
+ * of `datasets.manage`. A field that is absent stays as it is, and null clears it.
+ */
+export const updateDatasetContract = {
+  name: "updateDataset",
+  input: z.strictObject({
+    datasetKey: keySchema,
+    title: shortTextSchema.optional(),
+    modality: datasetModalitySchema.optional(),
+    groupingLabel: shortTextSchema.nullable().optional(),
+    sourceInstitutionId: idSchema.nullable().optional(),
+    storageOwnerPersonId: idSchema.nullable().optional(),
+    protocolId: idSchema.nullable().optional(),
+    expectedFileCount: z.number().int().min(0).max(10_000_000).nullable().optional(),
+    expectedParticipants: z.number().int().min(0).max(100_000).nullable().optional(),
+    bidsConversionStatus: bidsConversionStatusSchema.optional(),
+    bidsVersion: z.string().trim().min(1).max(32).nullable().optional(),
+    metadata: metadataSchema.optional(),
+    bidsMissingMetadata: z.array(shortTextSchema).max(LIMITS.list).optional(),
+    bidsNamingMap: z
+      .array(z.strictObject({ source: shortTextSchema, bids: shortTextSchema }))
+      .max(LIMITS.list)
+      .optional(),
+    archived: z.boolean().optional(),
+  }),
+  output: z.strictObject({ datasetKey: keySchema, changedFields: z.array(z.string()) }),
+} as const satisfies CallableContract;
+
+/**
+ * Moves a dataset to another state of its replication's workflow, for holders of
+ * `datasets.manage`. The call states the state the caller saw, the workflow must allow the move,
+ * and the history entry is written in the same transaction.
+ */
+export const setDatasetStatusContract = {
+  name: "setDatasetStatus",
+  input: z.strictObject({
+    datasetKey: keySchema,
+    fromStatusKey: keySchema,
+    toStatusKey: keySchema,
+    reason: reasonSchema,
+    /**
+     * That the caller saw what the record says against a state that claims the dataset's checks
+     * have passed (`datasetContradictions`) and moves it anyway. The problems are kept with the move.
+     */
+    acknowledgeContradictions: z.boolean().exactOptional(),
+  }),
+  output: z.strictObject({
+    datasetKey: keySchema,
+    statusKey: keySchema,
+    statusHistoryId: idSchema,
+    analysisReady: z.boolean(),
+  }),
+} as const satisfies CallableContract;
+
+/**
+ * Defines the workflow of the datasets of a replication, for holders of `replications.manage`.
+ * A state that a dataset of the replication is in cannot be removed.
+ */
+export const saveDatasetWorkflowContract = {
+  name: "saveDatasetWorkflow",
+  input: z.strictObject({
+    replicationId: studyKeySchema,
+    states: z.array(datasetWorkflowStateSchema).min(2).max(DATASET_WORKFLOW_MAX_STATES),
+    transitions: z.record(keySchema, z.array(keySchema).max(DATASET_WORKFLOW_MAX_STATES)),
+    initialKey: keySchema,
+  }),
+  output: z.strictObject({ replicationId: studyKeySchema, created: z.boolean() }),
+} as const satisfies CallableContract;
+
+/** Adds a copy of a dataset on a storage server, for holders of `datasets.manage`. */
+export const addStorageRefContract = {
+  name: "addStorageRef",
+  input: z.strictObject({
+    datasetKey: keySchema,
+    endpointKey: keySchema,
+    role: storageRefRoleSchema,
+    path: storagePathSchema,
+    viewerSupport: z.array(viewerToolSchema).max(5),
+    note: z.string().trim().max(LIMITS.longText),
+  }),
+  output: z.strictObject({ storageRefId: idSchema }),
+} as const satisfies CallableContract;
+
+/**
+ * Changes a copy of a dataset, for holders of `datasets.manage`: its role, the viewers it
+ * supports and its note; retires it; or relocates it, which closes it and opens a new copy at
+ * the new place that names the old one, so the move stays in the history.
+ */
+export const changeStorageRefContract = {
+  name: "changeStorageRef",
+  input: z.discriminatedUnion("action", [
+    z.strictObject({
+      action: z.literal("update"),
+      datasetKey: keySchema,
+      storageRefId: idSchema,
+      role: storageRefRoleSchema,
+      viewerSupport: z.array(viewerToolSchema).max(5),
+      note: z.string().trim().max(LIMITS.longText),
+    }),
+    z.strictObject({
+      action: z.literal("retire"),
+      datasetKey: keySchema,
+      storageRefId: idSchema,
+      reason: reasonSchema,
+    }),
+    z.strictObject({
+      action: z.literal("relocate"),
+      datasetKey: keySchema,
+      storageRefId: idSchema,
+      endpointKey: keySchema,
+      path: storagePathSchema,
+      reason: reasonSchema,
+    }),
+  ]),
+  output: z.strictObject({ storageRefId: idSchema }),
+} as const satisfies CallableContract;
+
+/**
+ * Scans a copy of a dataset, for holders of `datasets.manage`: lists its files with their sizes,
+ * modification times and the checksums the server holds, without reading a recording, and
+ * compares the listing with the expected manifest. A server that does not answer, refuses the
+ * account or is too slow leaves the last listing in place and marks the copy unavailable.
+ */
+export const scanStorageRefContract = {
+  name: "scanStorageRef",
+  input: z.strictObject({ datasetKey: keySchema, storageRefId: idSchema }),
+  output: z.strictObject({
+    status: storageScanStatusSchema,
+    manifestId: idSchema.nullable(),
+    counts: z.partialRecord(manifestFileStatusSchema, z.number().int().min(0)),
+    message: z.string().max(LIMITS.longText),
+  }),
+} as const satisfies CallableContract;
+
+/**
+ * Records a manifest by hand or from an uploaded file, for holders of `datasets.manage`: the
+ * expected files of the dataset, or a listing of one copy made inside the institution. A listing
+ * is compared with the latest expected manifest.
+ */
+export const recordManifestContract = {
+  name: "recordManifest",
+  input: z.strictObject({
+    datasetKey: keySchema,
+    kind: manifestKindSchema,
+    storageRefId: idSchema.nullable(),
+    origin: z.enum(["upload", "manual"]),
+    files: z.array(manifestFileInputSchema).min(1).max(MANIFEST_INPUT_MAX_FILES),
+  }),
+  output: z.strictObject({
+    manifestId: idSchema,
+    counts: z.partialRecord(manifestFileStatusSchema, z.number().int().min(0)),
+  }),
+} as const satisfies CallableContract;
+
+/**
+ * Gives a holder of `datasets.paths.read` the location of a copy and how its server is reached,
+ * and records the read in the dataset's access events and the audit trail.
+ */
+export const getStorageLocationContract = {
+  name: "getStorageLocation",
+  input: z.strictObject({ datasetKey: keySchema, storageRefId: idSchema }),
+  output: z.strictObject({
+    uri: z.string().max(LIMITS.url),
+    endpointName: z.string().max(LIMITS.shortText),
+    protocol: storageProtocolSchema,
+    host: z.string().max(253).nullable(),
+    port: z.number().int().nullable(),
+    basePath: z.string().max(1_024).nullable(),
+  }),
+} as const satisfies CallableContract;
+
+/** Saves the viewer link of a copy that declares support for the viewer, for holders of `datasets.manage`. */
+export const saveViewerLinkContract = {
+  name: "saveViewerLink",
+  input: z.strictObject({ datasetKey: keySchema, storageRefId: idSchema, tool: viewerToolSchema, url: urlSchema }),
+  output: z.strictObject({ linkId: idSchema }),
+} as const satisfies CallableContract;
+
+/** Gives a holder of `datasets.paths.read` the viewer link of a copy, and records the request. */
+export const openViewerLinkContract = {
+  name: "openViewerLink",
+  input: z.strictObject({ datasetKey: keySchema, storageRefId: idSchema, tool: viewerToolSchema }),
+  output: z.strictObject({ url: urlSchema }),
+} as const satisfies CallableContract;
+
+/**
+ * Requests a transfer of a dataset from one copy to another, for holders of `datasets.manage`.
+ * The portal moves nothing: the request waits for approval by someone else who manages the
+ * dataset, and people carry the transfer out with their institutions' tools.
+ */
+export const requestTransferContract = {
+  name: "requestTransfer",
+  input: z.strictObject({ datasetKey: keySchema, fromRefId: idSchema, toRefId: idSchema, reason: reasonSchema }),
+  output: z.strictObject({ transferId: idSchema }),
+} as const satisfies CallableContract;
+
+/**
+ * Moves a transfer on, for holders of `datasets.manage`. Someone other than the requester
+ * approves or refuses it. Once approved it is recorded as started, completed or failed, and a
+ * completed transfer is verified when the latest listing of its destination matches the latest
+ * listing of its source.
+ */
+export const advanceTransferContract = {
+  name: "advanceTransfer",
+  input: z.strictObject({
+    datasetKey: keySchema,
+    transferId: idSchema,
+    action: z.enum(["approve", "refuse", "start", "complete", "fail", "verify"]),
+    note: z.string().trim().max(LIMITS.longText),
+    bytesTransferred: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).nullable(),
+  }),
+  output: z.strictObject({ status: transferStatusSchema, approval: transferApprovalSchema }),
+} as const satisfies CallableContract;
+
+/** The largest bids-validator report one call takes, in characters. */
+export const BIDS_REPORT_MAX_LENGTH = 4_000_000;
+
+/**
+ * Imports the JSON output of a bids-validator run, for holders of `datasets.manage`. The counts
+ * go on the registry document and the condensed report, with the missing metadata, into its
+ * restricted detail.
+ */
+export const importBidsReportContract = {
+  name: "importBidsReport",
+  input: z.strictObject({
+    datasetKey: keySchema,
+    report: z.string().min(2).max(BIDS_REPORT_MAX_LENGTH),
+    validatorVersion: z.string().trim().min(1).max(64),
+  }),
+  output: z.strictObject({
+    bidsStatus: bidsStatusSchema,
+    errorCount: z.number().int().min(0),
+    warningCount: z.number().int().min(0),
+    missingMetadataCount: z.number().int().min(0),
+  }),
+} as const satisfies CallableContract;
+
+/** A parameter or a metric of an assessment: a text, a number or a yes or no. */
+const qcValuesSchema = z
+  .record(z.string().trim().min(1).max(100), metadataValueSchema)
+  .refine((map) => Object.keys(map).length <= 100, { error: "At most 100 entries" });
+
+/**
+ * Records a quality-control assessment of a dataset or of one recording, for holders of
+ * `datasets.manage`. Assessments never change: a correction is a new one that names the one it
+ * replaces. The latest assessment of the dataset as a whole sets its QC status.
+ */
+export const recordQcAssessmentContract = {
+  name: "recordQcAssessment",
+  input: z.strictObject({
+    datasetKey: keySchema,
+    level: qcLevelSchema,
+    recordingLabel: shortTextSchema.nullable(),
+    tool: shortTextSchema.nullable(),
+    toolVersion: z.string().trim().min(1).max(64).nullable(),
+    pipelineVersion: z.string().trim().min(1).max(64).nullable(),
+    parameters: qcValuesSchema,
+    metrics: qcValuesSchema,
+    outcome: qcOutcomeSchema,
+    exclusions: z.array(qcExclusionSchema).max(LIMITS.list),
+    deviationIds: idListSchema,
+    notes: z.string().trim().max(LIMITS.longText),
+    supersedesAssessmentId: idSchema.nullable(),
+  }),
+  output: z.strictObject({ assessmentId: idSchema, qcStatus: qcStatusSchema }),
 } as const satisfies CallableContract;
 
 /**

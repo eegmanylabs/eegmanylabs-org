@@ -9,7 +9,7 @@ import {
 } from "@eegml/shared";
 
 export const DATA_ORIGIN_LABELS: Readonly<Record<DataOrigin, string>> = {
-  live: "Live",
+  live: "Entered in the portal",
   importedHistorical: "Imported historical",
   demo: "Demonstration data",
   projected: "Projected",
@@ -106,6 +106,7 @@ export const DOCUMENT_KIND_LABELS = {
 export const DOCUMENT_ACCESS_LABELS = {
   unknown: "Access not checked",
   public: "Open to anyone with the link",
+  shared: "Shared with the portal",
   restricted: "Restricted",
   unreachable: "Could not be reached",
 } as const;

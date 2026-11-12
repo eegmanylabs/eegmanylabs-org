@@ -21,6 +21,7 @@ const KINDS = [
   "personMerged",
   "laboratoryMembershipConfirmed",
   "replicationMembershipConfirmed",
+  "integrationNeedsAttention",
 ];
 
 describe("describeNotification", () => {

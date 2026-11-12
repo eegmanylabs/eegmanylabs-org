@@ -12,9 +12,11 @@ import { Unknown } from "@/components/registry/unknown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type Live, type RecordOf, retryFailedLiveData, useLiveDocument, useLiveQuery } from "@/data";
 import { ScopeDashboard } from "@/pages/dashboards/ScopeDashboard";
+import { DatasetsTab } from "@/pages/datasets/DatasetsTab";
 import { RecruitmentTab } from "@/pages/recruitment/RecruitmentTab";
 import { EntityTasksTab } from "@/pages/tasks/EntityTasksTab";
 import { UpdatesTab } from "@/pages/tasks/UpdatesTab";
@@ -26,11 +28,13 @@ import {
   CONFIRMED_MEMBERSHIPS,
   contributorsOfReplication,
   documentLinksOfReplication,
+  generatedDocumentsOf,
   historicalAggregatesOfReplication,
   hypothesesOfReplication,
   membershipsOfReplication,
   statusHistoryOfReplication,
   useCurrentEquipment,
+  useDatasets,
   useDirectoryItems,
   useLaboratories,
   useManuscripts,
@@ -59,6 +63,7 @@ const TAB_IDS = [
   "leadership",
   "laboratories",
   "recruitment",
+  "datasets",
   "hypotheses",
   "publications",
   "contributors",
@@ -76,6 +81,7 @@ const TAB_LABELS: Readonly<Record<TabId, string>> = {
   leadership: "Leadership",
   laboratories: "Laboratories",
   recruitment: "Recruitment",
+  datasets: "Datasets",
   hypotheses: "Hypotheses",
   publications: "Publications",
   contributors: "Contributors",
@@ -129,6 +135,11 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
   const aggregates = useLiveQuery(historicalAggregatesOfReplication(studyKey));
   const contributors = useLiveQuery(contributorsOfReplication(studyKey));
   const links = useLiveQuery(documentLinksOfReplication(studyKey, viewer.queryScopeKeys));
+  const generated = orEmpty(
+    useLiveQuery(
+      viewer.queryScopeKeys.length === 0 ? null : generatedDocumentsOf("replication", studyKey, viewer.queryScopeKeys),
+    ),
+  );
   const history = useLiveQuery(statusHistoryOfReplication(studyKey));
 
   const memberships = useMemo<Live<readonly RecordOf<"replicationMemberships">[]>>(() => {
@@ -149,6 +160,14 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
           }
         : allParticipations,
     [allParticipations, studyKey],
+  );
+  const allDatasets = useDatasets();
+  const datasets = useMemo<Live<readonly RecordOf<"datasets">[]>>(
+    () =>
+      allDatasets.status === "ready"
+        ? { ...allDatasets, data: allDatasets.data.filter((item) => item.replicationId === studyKey) }
+        : allDatasets,
+    [allDatasets, studyKey],
   );
   const manuscripts = useMemo<Live<readonly RecordOf<"manuscripts">[]>>(
     () =>
@@ -241,6 +260,8 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
     // Every replication has recruitment, whose reports its team and laboratories read and whose
     // latest totals every member reads.
     { id: "recruitment", live: ALWAYS, render: () => <RecruitmentTab viewer={viewer} studyKey={studyKey} /> },
+    // Every replication has a registry of datasets, which every member reads.
+    { id: "datasets", live: ALWAYS, render: () => <DatasetsTab viewer={viewer} replicationId={studyKey} /> },
     {
       id: "hypotheses",
       // The team waits for the restricted labels too, so that none is shown as missing while it loads.
@@ -262,7 +283,27 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
       live: hasAny(contributors),
       render: () => <ContributorsTab contributors={ready(contributors)} origin={replication.dataOrigin} />,
     },
-    { id: "documents", live: hasAny(links), render: () => <DocumentsTab links={ready(links)} /> },
+    {
+      id: "documents",
+      // Those who manage the replication see the tab without documents too, to link the first.
+      live: combineLive(
+        [links, manuscripts, generated, datasets] as const,
+        (list, _manuscripts, documents) =>
+          list.some((link) => link.archivedAt === null) ||
+          documents.length > 0 ||
+          (viewer.access.member && viewer.can("replications.manage", { replicationId: studyKey })) ||
+          viewer.can("integrations.manage", "programme"),
+      ),
+      render: () => (
+        <DocumentsTab
+          studyKey={studyKey}
+          links={ready(links)}
+          manuscripts={ready(manuscripts)}
+          datasets={ready(datasets)}
+          viewer={viewer}
+        />
+      ),
+    },
     {
       id: "activity",
       live: hasAny(history),
@@ -388,7 +429,7 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
         <LoadingState label="Loading the replication" />
       ) : (
         <Tabs value={selected.id} onValueChange={showTab}>
-          <div className="relative overflow-x-auto">
+          <HorizontalScroll>
             <TabsList aria-label="Sections of the replication" className="min-w-max">
               {present.map((tab) => (
                 <TabsTrigger key={tab.id} value={tab.id}>
@@ -396,7 +437,7 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
                 </TabsTrigger>
               ))}
             </TabsList>
-          </div>
+          </HorizontalScroll>
           {present.map((tab) => (
             <TabsContent key={tab.id} value={tab.id}>
               {tab.live.status === "loading" ? (

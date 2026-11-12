@@ -75,6 +75,8 @@ const LIMIT = 200;
 /** The page and the thread of the world (fixtures.ts). */
 const PAGE = entityRefId("replication", OWN_REPLICATION);
 const THREAD = autoId("stored thread");
+/** The dataset of the world (fixtures.ts). */
+const DATASET = "SyntheticStudy2001-own-main";
 
 export const QUERY_CATALOGUE: readonly CataloguedQuery[] = [
   // What sits beneath participations, read across them within a scope.
@@ -181,8 +183,27 @@ export const QUERY_CATALOGUE: readonly CataloguedQuery[] = [
     orderBy: [["effectiveAt", "desc"]],
     limit: LIMIT,
   }),
-  catalogued("the document links of a record", "member", "scopeKeys", {
+  catalogued("the document links of a replication and of its records", "member", "scopeKeys", {
     collection: "documentLinks",
+    within: [],
+    where: [
+      ["replicationId", "==", OWN_REPLICATION],
+      ["scopeKeys", "array-contains-any", heldBy("member")],
+    ],
+    limit: LIMIT,
+  }),
+  catalogued("the document links of a laboratory that the caller may read", "member", "scopeKeys", {
+    collection: "documentLinks",
+    within: [],
+    where: [
+      ["entityType", "==", "laboratory"],
+      ["entityId", "==", OWN_LABORATORY],
+      ["scopeKeys", "array-contains-any", heldBy("member")],
+    ],
+    limit: LIMIT,
+  }),
+  catalogued("the generated documents of a replication that the caller may read", "member", "scopeKeys", {
+    collection: "generatedDocuments",
     within: [],
     where: [
       ["entityType", "==", "replication"],
@@ -701,5 +722,87 @@ export const QUERY_CATALOGUE: readonly CataloguedQuery[] = [
       ["level", "==", "all"],
     ],
     limit: 1_000,
+  }),
+  // The dataset registry: what sits beneath one dataset, within its scope, and the listings and
+  // the record of reads, for a holder of datasets.paths.read in the replication or the laboratory.
+  catalogued("the copies of a dataset, within a scope the caller holds", "ownLabMember", "scopeKeys", {
+    collection: "datasetStorageRefs",
+    within: [DATASET],
+    where: [["scopeKeys", "array-contains-any", heldBy("ownLabMember")]],
+    limit: LIMIT,
+  }),
+  catalogued("the copies held on one storage server, across datasets", null, null, {
+    collection: "datasetStorageRefs",
+    within: "group",
+    where: [["endpointKey", "==", "bremen-sftp"]],
+    limit: 2_000,
+  }),
+  catalogued("the transfers of a dataset, within a scope the caller holds", "ownTeam", "scopeKeys", {
+    collection: "datasetTransfers",
+    within: [DATASET],
+    where: [["scopeKeys", "array-contains-any", heldBy("ownTeam")]],
+    limit: LIMIT,
+  }),
+  catalogued("the quality assessments of a dataset, within a scope the caller holds", "ownLabMember", "scopeKeys", {
+    collection: "datasetQcAssessments",
+    within: [DATASET],
+    where: [["scopeKeys", "array-contains-any", heldBy("ownLabMember")]],
+    limit: LIMIT,
+  }),
+  catalogued("the listings of a dataset, for a lead of its replication", "ownLead", "replicationId", {
+    collection: "datasetManifests",
+    within: [DATASET],
+    where: [["replicationId", "==", OWN_REPLICATION]],
+    limit: LIMIT,
+  }),
+  catalogued("the listings of a dataset, for a coordinator of its laboratory", "ownCoordinator", "laboratoryId", {
+    collection: "datasetManifests",
+    within: [DATASET],
+    where: [["laboratoryId", "==", OWN_LABORATORY]],
+    limit: LIMIT,
+  }),
+  catalogued("the files of a listing, for a lead of the replication", "ownLead", "replicationId", {
+    collection: "datasetManifestFileChunks",
+    within: [DATASET, autoId("stored manifest")],
+    where: [["replicationId", "==", OWN_REPLICATION]],
+    limit: LIMIT,
+  }),
+  catalogued(
+    "the reads of the locations of a dataset, for a coordinator of its laboratory",
+    "ownCoordinator",
+    "laboratoryId",
+    {
+      collection: "datasetAccessEvents",
+      within: [DATASET],
+      where: [["laboratoryId", "==", OWN_LABORATORY]],
+      limit: LIMIT,
+    },
+  ),
+  catalogued("the deviations of one participation, within a scope the caller holds", "ownLabMember", "scopeKeys", {
+    collection: "participationDeviations",
+    within: [OWN_PARTICIPATION],
+    where: [["scopeKeys", "array-contains-any", heldBy("ownLabMember")]],
+    limit: LIMIT,
+  }),
+  catalogued("the documents linked to a dataset that the caller reads", "ownLabMember", "scopeKeys", {
+    collection: "documentLinks",
+    within: [],
+    where: [
+      ["entityType", "==", "dataset"],
+      ["entityId", "==", DATASET],
+      ["scopeKeys", "array-contains-any", heldBy("ownLabMember")],
+    ],
+    limit: LIMIT,
+  }),
+  catalogued("the status history of a dataset, latest first, which every member reads", "member", "scopeKeys", {
+    collection: "statusHistory",
+    within: [],
+    where: [
+      ["entityType", "==", "dataset"],
+      ["entityId", "==", DATASET],
+      ["scopeKeys", "array-contains-any", [MEMBERS_SCOPE_KEY]],
+    ],
+    orderBy: [["effectiveAt", "desc"]],
+    limit: LIMIT,
   }),
 ];

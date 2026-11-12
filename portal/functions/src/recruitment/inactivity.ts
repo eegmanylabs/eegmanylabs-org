@@ -86,7 +86,7 @@ async function silentSince(
 }
 
 /** The accounts whose access document lists a value in one of its arrays: the coordinators of a laboratory, the leads of a replication. */
-async function accountsListing(
+export async function accountsListing(
   db: Firestore,
   field: "coordinatorLaboratoryIds" | "leadReplicationIds",
   value: string,

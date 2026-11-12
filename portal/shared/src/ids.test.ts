@@ -13,6 +13,8 @@ import {
   contributorNameHash,
   contributorSheetSourceKey,
   contributorTableId,
+  datasetQcListId,
+  datasetQcTaskId,
   documentLinkSlotId,
   entityRefId,
   eventFailureId,
@@ -76,7 +78,9 @@ import {
   studyAliasId,
   studyAliasIndexId,
   syncCellStateId,
+  syncConflictId,
   syncMappingId,
+  syncReviewItemId,
   syncRunId,
   tagId,
   unitScopeKeys,
@@ -230,6 +234,8 @@ const GOLDEN: { readonly [Name in IdBuilderName]: readonly [actual: string | nul
   syncMappingId: [syncMappingId("F", "tab-1", "core:participations"), "f5c017c2fbf8de1e331c"],
   syncCellStateId: [syncCellStateId("AmodioJost2007__lab-1", "targetNMain"), "f7f7f8f24a22bc246e7f"],
   syncRunId: [syncRunId("mapping-1", "2026-01-02T03:00:00Z"), "b0c9805a4264f1b6480b"],
+  syncConflictId: [syncConflictId("mapping-1", "lab-memory:root-1", "channelCount", "64"), "7ec60f25e2fbd94e69de"],
+  syncReviewItemId: [syncReviewItemId("mapping-1", "missingRow", "lab-memory:root-1", ""), "cce5b5f7abec95b8c439"],
   generatedDocumentId: [
     generatedDocumentId("progress", "replication", "AmodioJost2007"),
     "progress__replication__AmodioJost2007",
@@ -244,6 +250,8 @@ const GOLDEN: { readonly [Name in IdBuilderName]: readonly [actual: string | nul
     "inactivity__5a3384dcdb973395b3f3",
   ],
   recruitmentFollowUpListId: [recruitmentFollowUpListId("lab__0f3a"), "recruitmentFollowUp__e6274d880e0bed504d50"],
+  datasetQcTaskId: [datasetQcTaskId("AmodioJost2007-bremen-main"), "datasetQc__efe1bc3ce24ba653a499"],
+  datasetQcListId: [datasetQcListId("AmodioJost2007"), "datasetQcList__8b1eb44b495a600d1a3c"],
 };
 
 describe("the identifier builders", () => {
@@ -521,6 +529,12 @@ describe("hashed identifiers", () => {
   it("cannot be reached from two different lists of values", () => {
     expect(sourceRecordId("ab", "c", "d", "e")).not.toBe(sourceRecordId("a", "bc", "d", "e"));
     expect(syncCellStateId("a", "bc")).not.toBe(syncCellStateId("ab", "c"));
+    // A conflict on a cell that never agreed differs from one whose base was empty or a value.
+    const bases = [undefined, null, "", "64"].map((base) => syncConflictId("m", "row", "field", base));
+    expect(new Set(bases).size).toBe(4);
+    // Row keys and bases may hold a line feed: they are hashed before they are joined.
+    expect(syncConflictId("m", "row\nwith a break", "field", "two\nlines")).toMatch(/^[0-9a-f]{20}$/);
+    expect(syncReviewItemId("m", "missingRow", "row\nwith a break", "")).toMatch(/^[0-9a-f]{20}$/);
     // A value with a line feed could imitate two values, so it is refused.
     expect(() => sourceRecordId("F", "tab-1\nrow-0", "row-1", "aabb")).toThrow(RangeError);
     expect(() => notificationId("mention\nevent-0", "event-1")).toThrow(RangeError);

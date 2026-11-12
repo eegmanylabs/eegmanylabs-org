@@ -305,7 +305,16 @@ export const documentLinkKindSchema = z.enum([
   "form",
   "url",
 ]);
-export const linkAccessStatusSchema = z.enum(["unknown", "public", "restricted", "unreachable"]);
+/**
+ * | Status        | Meaning                                                                 |
+ * |---------------|-------------------------------------------------------------------------|
+ * | `unknown`     | Not checked yet: how every link found in the sources starts             |
+ * | `public`      | Answers anyone with the link                                            |
+ * | `shared`      | Shared with the portal's Google account, which reads its metadata       |
+ * | `restricted`  | Exists behind sign-in, and is not shared with the portal's account      |
+ * | `unreachable` | Gone, deleted, or no longer reachable by the portal's account           |
+ */
+export const linkAccessStatusSchema = z.enum(["unknown", "public", "shared", "restricted", "unreachable"]);
 
 /**
  * `documentLinks/{id}`: any external document attached to any record. It carries the audience

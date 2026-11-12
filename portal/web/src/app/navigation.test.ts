@@ -22,7 +22,7 @@ describe("the navigation registry", () => {
     }
   });
 
-  it("shows Home, the directory, recruitment, the tasks, the dashboards and the account page to a signed-in account and nothing to anyone else", () => {
+  it("shows Home, the directory, recruitment, the tasks, the datasets, the dashboards and the account page to a signed-in account and nothing to anyone else", () => {
     expect(visibleNavigation(new Set<Capability>(["portal.use"])).map((item) => item.label)).toEqual([
       "Home",
       "Replications",
@@ -31,6 +31,7 @@ describe("the navigation registry", () => {
       "Readiness",
       "Recruitment",
       "Tasks",
+      "Datasets",
       "Dashboards",
       "Account and security",
     ]);
@@ -49,6 +50,7 @@ describe("the navigation registry", () => {
       "/readiness",
       "/recruitment",
       "/tasks",
+      "/datasets",
       "/dashboards",
       "/account",
     ]);
@@ -66,6 +68,7 @@ describe("the navigation registry", () => {
       "/admin/audit": "audit.read",
       "/admin/imports": "imports.run",
       "/admin/review-queue": "reconciliation.resolve",
+      "/admin/integrations": "integrations.manage",
       "/admin/integrity": "audit.read",
     });
     expect(visibleNavigation(new Set<Capability>(["portal.use", "audit.read"])).map((item) => item.id)).toEqual([
@@ -76,6 +79,7 @@ describe("the navigation registry", () => {
       "readiness",
       "recruitment",
       "tasks",
+      "datasets",
       "dashboards",
       "account",
       "admin-audit",

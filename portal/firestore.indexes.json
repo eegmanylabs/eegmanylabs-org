@@ -167,6 +167,20 @@
       ]
     },
     {
+      "collectionGroup": "documentLinks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "replicationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scopeKeys",
+          "arrayConfig": "CONTAINS"
+        }
+      ]
+    },
+    {
       "collectionGroup": "forecastRuns",
       "queryScope": "COLLECTION",
       "fields": [
@@ -177,6 +191,24 @@
         {
           "fieldPath": "generatedAt",
           "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "generatedDocuments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entityType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "entityId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scopeKeys",
+          "arrayConfig": "CONTAINS"
         }
       ]
     },
@@ -606,6 +638,11 @@
       "indexes": []
     },
     {
+      "collectionGroup": "datasets",
+      "fieldPath": "custom",
+      "indexes": []
+    },
+    {
       "collectionGroup": "deviations",
       "fieldPath": "description",
       "indexes": []
@@ -655,6 +692,11 @@
       ]
     },
     {
+      "collectionGroup": "documentTemplates",
+      "fieldPath": "managedSections",
+      "indexes": []
+    },
+    {
       "collectionGroup": "equipment",
       "fieldPath": "isCurrent",
       "indexes": [
@@ -675,6 +717,21 @@
           "queryScope": "COLLECTION_GROUP"
         }
       ]
+    },
+    {
+      "collectionGroup": "fileChunks",
+      "fieldPath": "files",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "generatedDocuments",
+      "fieldPath": "managedSections",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "integrationConnections",
+      "fieldPath": "config",
+      "indexes": []
     },
     {
       "collectionGroup": "laboratories",
@@ -811,12 +868,22 @@
     },
     {
       "collectionGroup": "private",
+      "fieldPath": "bidsReport",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "private",
       "fieldPath": "custom",
       "indexes": []
     },
     {
       "collectionGroup": "private",
       "fieldPath": "evidence",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "private",
+      "fieldPath": "metadata",
       "indexes": []
     },
     {
@@ -832,6 +899,16 @@
     {
       "collectionGroup": "protocols",
       "fieldPath": "description",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "qcAssessments",
+      "fieldPath": "metrics",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "qcAssessments",
+      "fieldPath": "parameters",
       "indexes": []
     },
     {
@@ -873,6 +950,33 @@
       "collectionGroup": "special",
       "fieldPath": "raw",
       "indexes": []
+    },
+    {
+      "collectionGroup": "storageEndpoints",
+      "fieldPath": "description",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "storageRefs",
+      "fieldPath": "endpointKey",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
     },
     {
       "collectionGroup": "tasks",

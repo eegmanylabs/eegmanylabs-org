@@ -16,6 +16,11 @@ export interface DialogContentProps {
   /** `center` is a modal panel. `left` is a panel that slides over the page from the left edge. */
   placement?: "center" | "left";
   className?: string;
+  /**
+   * The control that focus returns to when the dialog closes, for a dialog opened from state
+   * rather than from a trigger, which Radix cannot find by itself. Null leaves focus to Radix.
+   */
+  returnFocus?: () => HTMLElement | null;
   children: ReactNode;
 }
 
@@ -29,6 +34,7 @@ export function DialogContent({
   description,
   placement = "center",
   className,
+  returnFocus,
   children,
 }: DialogContentProps) {
   const heading = <RadixDialog.Title className="text-xl tracking-title text-fg">{title}</RadixDialog.Title>;
@@ -38,6 +44,16 @@ export function DialogContent({
       <RadixDialog.Content
         // Without a description Radix expects this attribute to be cleared explicitly.
         {...(description ? {} : { "aria-describedby": undefined })}
+        {...(returnFocus === undefined
+          ? {}
+          : {
+              onCloseAutoFocus: (event: Event) => {
+                const target = returnFocus();
+                if (target === null || !target.isConnected) return;
+                event.preventDefault();
+                target.focus();
+              },
+            })}
         className={cn(
           "fixed z-50 border-border bg-surface text-fg",
           placement === "center" &&

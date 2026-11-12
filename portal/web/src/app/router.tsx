@@ -162,6 +162,30 @@ export function portalRoutes(signInLink: string | null): RouteObject[] {
                       ],
                     },
                     {
+                      path: "/datasets",
+                      ...titled("Datasets"),
+                      children: [
+                        {
+                          index: true,
+                          ...lazyPage(async () => (await import("@/pages/datasets/DatasetsPage")).DatasetsPage),
+                        },
+                        {
+                          path: "servers",
+                          ...lazyPage(
+                            async () => (await import("@/pages/datasets/StorageServersPage")).StorageServersPage,
+                          ),
+                          handle: { title: "Storage servers" } satisfies RouteHandle,
+                        },
+                        {
+                          path: ":datasetKey",
+                          ...lazyPage(async () => (await import("@/pages/datasets/DatasetPage")).DatasetPage),
+                          handle: {
+                            title: (params: Readonly<Params>) => params.datasetKey ?? "Dataset",
+                          } satisfies RouteHandle,
+                        },
+                      ],
+                    },
+                    {
                       path: "/readiness",
                       ...lazyPage(async () => (await import("@/pages/readiness/ReadinessPage")).ReadinessPage),
                       ...titled("Readiness"),
@@ -317,6 +341,23 @@ export function portalRoutes(signInLink: string | null): RouteObject[] {
                   path: "/admin/review-queue",
                   ...lazyPage(async () => (await import("@/pages/admin/imports/ReviewQueuePage")).ReviewQueuePage),
                   ...titled("Review queue"),
+                },
+                {
+                  path: "/admin/integrations",
+                  ...titled("Integrations"),
+                  children: [
+                    {
+                      index: true,
+                      ...lazyPage(
+                        async () => (await import("@/pages/admin/integrations/IntegrationsPage")).IntegrationsPage,
+                      ),
+                    },
+                    {
+                      path: "conflicts",
+                      ...lazyPage(async () => (await import("@/pages/admin/integrations/ConflictsPage")).ConflictsPage),
+                      ...titled("Conflicts"),
+                    },
+                  ],
                 },
                 {
                   path: "/admin/integrity",

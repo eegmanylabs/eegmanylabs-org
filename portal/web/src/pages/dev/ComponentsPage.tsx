@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormField } from "@/components/ui/form-field";
+import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Pagination } from "@/components/ui/pagination";
@@ -122,6 +123,19 @@ export function ComponentsPage() {
           <TabsContent value="overview">The overview panel.</TabsContent>
           <TabsContent value="people">The people panel.</TabsContent>
         </Tabs>
+      </Section>
+
+      <Section title="Horizontal scroll">
+        <div className="w-60" data-testid="sample-horizontal-scroll">
+          <HorizontalScroll>
+            <div className="flex w-max gap-2 pb-1">
+              <Button size="sm">First action</Button>
+              <Button size="sm">Second action</Button>
+              <Button size="sm">Third action</Button>
+              <Button size="sm">Fourth action</Button>
+            </div>
+          </HorizontalScroll>
+        </div>
       </Section>
 
       <Section title="Table">

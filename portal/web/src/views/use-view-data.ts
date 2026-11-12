@@ -29,6 +29,7 @@ import {
 } from "@/data";
 import { combineLive, orEmpty } from "@/registry/combine";
 import {
+  ALL_DATASETS,
   ALL_LABORATORIES,
   ALL_PARTICIPATIONS,
   ALL_PERSONS,
@@ -111,8 +112,10 @@ function mayChangeCore(
     case "core:tasks":
     case "core:recruitmentReports":
     case "core:recruitment":
-      // The functions of tasks decide who changes a task, which `taskEditable` asks, and a
-      // recruitment report is never changed: a correction is a new report.
+    case "core:datasets":
+      // The functions of tasks decide who changes a task, which `taskEditable` asks, a
+      // recruitment report is never changed, since a correction is a new report, and a dataset
+      // changes through the functions of the registry on its own page.
       return false;
   }
 }
@@ -123,6 +126,7 @@ const WITHOUT_CUSTOM: ReadonlySet<CoreSourceKey> = new Set([
   "core:tasks",
   "core:recruitmentReports",
   "core:recruitment",
+  "core:datasets",
 ]);
 
 /** The sources of recruitment, which read the reports. */
@@ -159,6 +163,7 @@ export function useViewData(collectionKey: string | null, viewer: Viewer, second
   const checklists = orEmpty(useLiveQuery(checklistsInScope(viewer.staff ? "all" : viewer.queryScopeKeys)));
   const taskData = useTaskData(coreKey === "core:tasks" ? viewer : null);
   const recruitmentData = useRecruitmentData(coreKey !== null && RECRUITMENT_SOURCES.has(coreKey) ? viewer : null);
+  const datasets = useLiveCollection(coreKey === "core:datasets" ? ALL_DATASETS : null);
   const schema = useLiveDocument(
     "collectionSchemas",
     coreSource?.customKey === null || coreSource === null ? null : [coreSource.customKey],
@@ -241,6 +246,7 @@ export function useViewData(collectionKey: string | null, viewer: Viewer, second
       checklists,
       orIdleTasks(taskData),
       orIdleRecruitment(recruitmentData),
+      orEmptyPaged(datasets),
     ] as const,
     (...values) => values,
   );
@@ -270,6 +276,7 @@ export function useViewData(collectionKey: string | null, viewer: Viewer, second
       checklistList,
       tasks,
       recruitment,
+      datasetList,
     ] = ready.data;
     const names = new Map<string, string>();
     for (const person of personList.items) if (person.userId !== null) names.set(person.userId, person.displayName);
@@ -320,6 +327,7 @@ export function useViewData(collectionKey: string | null, viewer: Viewer, second
       ["core:checklistItems", core("core:checklistItems", checklistList)],
     ]);
     if (tasks !== null) collections.set("core:tasks", taskCollection(tasks, lookups));
+    if (coreKey === "core:datasets") collections.set("core:datasets", core("core:datasets", datasetList.items));
     const now = new Date();
     if (recruitment !== null) {
       const built = recruitmentCollections(recruitment, participationList.items, lookups, todayIso(now));
@@ -392,7 +400,7 @@ export function useViewData(collectionKey: string | null, viewer: Viewer, second
 
     if (coreKey === null) return { status: "error", error: { code: "not-found", message: "No such collection." } };
     const collection = collections.get(coreKey) as CollectionData;
-    if (coreKey === "core:recruitmentReports" || coreKey === "core:recruitment") {
+    if (coreKey === "core:recruitmentReports" || coreKey === "core:recruitment" || coreKey === "core:datasets") {
       return {
         status: "ready",
         fromCache: false,
@@ -404,7 +412,7 @@ export function useViewData(collectionKey: string | null, viewer: Viewer, second
           canEdit: () => false,
           canAddRows: false,
           canManageProperties: false,
-          truncated: recruitment?.truncated ?? false,
+          truncated: coreKey === "core:datasets" ? datasetList.truncated : (recruitment?.truncated ?? false),
           people,
         },
       };

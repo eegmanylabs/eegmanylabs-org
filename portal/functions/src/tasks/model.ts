@@ -163,8 +163,8 @@ const NOT_A_DEPENDENCY_MESSAGE = "A dependency names a task that does not exist,
 
 /**
  * Whether the caller reads a record that a task links to, as the security rules decide it. The
- * replications, laboratories and members of the programme are read by every member; a task or
- * a page by its own decision; and any other record by its scope keys.
+ * replications, laboratories, members and datasets of the programme are read by every member; a
+ * task or a page by its own decision; and any other record by its scope keys.
  */
 function readsLinked(caller: TaskCaller, entityType: EntityType, data: unknown): boolean {
   const { access, session, uid } = caller;
@@ -173,6 +173,7 @@ function readsLinked(caller: TaskCaller, entityType: EntityType, data: unknown):
     case "replication":
     case "laboratory":
     case "person":
+    case "dataset":
       return true;
     case "task": {
       const task = parseStoredDocument(taskDocSchema, data);
@@ -195,9 +196,8 @@ function readsLinked(caller: TaskCaller, entityType: EntityType, data: unknown):
 /**
  * Refuses links to records that do not exist or that the caller may not open, with one message
  * for both, so that a link tells nobody whether a record they may not open exists. Only the
- * links that the change adds are checked: a link kept from before stays. A dataset is the
- * exception: its registry does not exist yet, so a link to one keeps the identifier and
- * resolves once the registry does.
+ * links that the change adds are checked: a link kept from before stays, so a dataset that a task
+ * named before the registry existed keeps its link and opens once it is registered.
  */
 export async function checkLinks(
   db: Firestore,
@@ -212,7 +212,7 @@ export async function checkLinks(
     const key = `${link.entityType} ${link.entityId}`;
     if (seen.has(key)) throw new AppError("invalid-argument", "A task links to the same record once.");
     seen.add(key);
-    if (link.entityType === "dataset" || kept.has(key)) continue;
+    if (kept.has(key)) continue;
     let path: string;
     try {
       path = entityPath(link.entityType, link.entityId);

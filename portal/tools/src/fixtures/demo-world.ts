@@ -844,3 +844,227 @@ export const DEMO_CATEGORY_EXTENSION = {
   definition: "Participants whose resting recording includes the complete eyes-closed block of the protocol.",
   replicationId: "DemoAlpha2001",
 } as const;
+
+/**
+ * The Google Workspace of the demonstration world, which the functions serve from the in-memory
+ * fake of the emulator (`functions/src/integrations/google/fake/fixtures.ts`). The identifiers
+ * here are the fake's invented file identifiers, which no real Drive holds, and a functions test
+ * checks that the two lists agree.
+ */
+export const DEMO_WORKSPACE = {
+  account: "google-workspace-fake@example.org",
+  generatedFolder: "fake-generated-documents",
+} as const;
+
+export interface DemoSyncSource {
+  readonly key: string;
+  readonly title: string;
+  readonly fileId: string;
+  readonly tabTitle: string;
+  readonly sheetId: string;
+}
+
+/** The two spreadsheets that mappings synchronise: registered sources, whose addresses only functions read. */
+export const DEMO_SYNC_SOURCES: readonly DemoSyncSource[] = [
+  {
+    key: "demo-equipment-register",
+    title: "Synthetic equipment register",
+    fileId: "fake-equipment-register",
+    tabTitle: "Equipment",
+    sheetId: "0",
+  },
+  {
+    key: "demo-laboratory-directory",
+    title: "Synthetic laboratory directory",
+    fileId: "fake-laboratory-directory",
+    tabTitle: "Laboratories",
+    sheetId: "0",
+  },
+];
+
+export interface DemoSyncMapping {
+  readonly name: string;
+  readonly sourceKey: string;
+  readonly tabTitle: string;
+  readonly collectionKey: "core:equipment" | "core:laboratories";
+  readonly keyColumn: string;
+  readonly columns: readonly {
+    readonly field: string;
+    readonly column: string;
+    readonly direction: "appAuthoritative" | "sheetAuthoritative" | "bidirectional" | "generated";
+  }[];
+  /** The equipment register is live, so that an equipment edit reaches it (acceptance scenario 3). The directory starts as a dry run. */
+  readonly mode: "dryRun" | "live";
+}
+
+export const DEMO_SYNC_MAPPINGS: readonly DemoSyncMapping[] = [
+  {
+    name: "Equipment register",
+    sourceKey: "demo-equipment-register",
+    tabTitle: "Equipment",
+    collectionKey: "core:equipment",
+    keyColumn: "Configuration key",
+    columns: [
+      { field: "laboratoryName", column: "Laboratory", direction: "generated" },
+      { field: "name", column: "Configuration", direction: "bidirectional" },
+      { field: "channelCount", column: "EEG channels", direction: "bidirectional" },
+      { field: "samplingRatesHz", column: "Sampling rates in hertz", direction: "bidirectional" },
+      { field: "capType", column: "Cap", direction: "bidirectional" },
+    ],
+    mode: "live",
+  },
+  {
+    name: "Laboratory directory",
+    sourceKey: "demo-laboratory-directory",
+    tabTitle: "Laboratories",
+    collectionKey: "core:laboratories",
+    keyColumn: "Laboratory key",
+    columns: [
+      { field: "name", column: "Name", direction: "appAuthoritative" },
+      { field: "city", column: "City", direction: "bidirectional" },
+      { field: "website", column: "Website", direction: "bidirectional" },
+    ],
+    mode: "dryRun",
+  },
+];
+
+export interface DemoDocumentTemplate {
+  readonly key: string;
+  readonly name: string;
+  readonly kind:
+    | "programmeProgress"
+    | "replicationProgress"
+    | "laboratoryProgress"
+    | "recruitment"
+    | "meetings"
+    | "milestones";
+  readonly entityType: "programme" | "replication" | "laboratory";
+  readonly templateFileId: string;
+}
+
+/** One template of each kind, each an invented document of the fake's shared drive. */
+export const DEMO_DOCUMENT_TEMPLATES: readonly DemoDocumentTemplate[] = [
+  {
+    key: "programme-progress",
+    name: "Programme progress",
+    kind: "programmeProgress",
+    entityType: "programme",
+    templateFileId: "fake-template-programme-progress",
+  },
+  {
+    key: "replication-progress",
+    name: "Replication progress",
+    kind: "replicationProgress",
+    entityType: "replication",
+    templateFileId: "fake-template-replication-progress",
+  },
+  {
+    key: "laboratory-progress",
+    name: "Laboratory progress",
+    kind: "laboratoryProgress",
+    entityType: "laboratory",
+    templateFileId: "fake-template-laboratory-progress",
+  },
+  {
+    key: "replication-recruitment",
+    name: "Recruitment",
+    kind: "recruitment",
+    entityType: "replication",
+    templateFileId: "fake-template-recruitment",
+  },
+  {
+    key: "replication-meetings",
+    name: "Meetings",
+    kind: "meetings",
+    entityType: "replication",
+    templateFileId: "fake-template-meetings",
+  },
+  {
+    key: "replication-milestones",
+    name: "Milestones",
+    kind: "milestones",
+    entityType: "replication",
+    templateFileId: "fake-template-milestones",
+  },
+];
+
+/**
+ * The storage servers of the demonstration world. Their hosts and base paths are those of the
+ * servers of the storage fake that the emulator's functions serve
+ * (`functions/src/integrations/storage/fixtures.ts`), so a scan in the emulator lists the fake's
+ * synthetic files. A credential is never named by value: each server names a secret that does
+ * not exist.
+ */
+export interface DemoStorageEndpoint {
+  readonly key: string;
+  readonly name: string;
+  readonly protocol: "sftp" | "ftps" | "s3" | "filesystem";
+  readonly scanMode: "remote" | "uploadedManifest";
+  readonly institutionId?: string;
+  readonly description: string;
+  readonly host: string;
+  readonly basePath: string;
+  readonly credentialRef: string;
+  /** The folder of each replication or laboratory below the base path, by scope key. */
+  readonly allowedPrefixes: Readonly<Record<string, string>>;
+}
+
+export const DEMO_STORAGE_ENDPOINTS: readonly DemoStorageEndpoint[] = [
+  {
+    key: "bremen-sftp",
+    name: "Synthetic Bremen EEG server",
+    protocol: "sftp",
+    scanMode: "remote",
+    description: "A synthetic institutional SFTP server in Bremen, with a read-only account for metadata scans.",
+    host: "sftp.bremen.example.org",
+    basePath: "eeg",
+    credentialRef: "STORAGE_BREMEN_READONLY",
+    allowedPrefixes: { "rep:DemoAlpha2001": "DemoAlpha2001", "lab:demo-lab-attention": "DemoAlpha2001/attention-main" },
+  },
+  {
+    key: "munich-ftps",
+    name: "Synthetic Munich EEG server",
+    protocol: "ftps",
+    scanMode: "remote",
+    description: "A synthetic institutional FTPS server in Munich, with a read-only account for metadata scans.",
+    host: "ftps.munich.example.org",
+    basePath: "projects/eegmanylabs",
+    credentialRef: "STORAGE_MUNICH_READONLY",
+    allowedPrefixes: { "rep:DemoAlpha2001": "DemoAlpha2001", "lab:demo-lab-signal": "DemoAlpha2001/signal-main" },
+  },
+  {
+    key: "central-objects",
+    name: "Synthetic central object store",
+    protocol: "s3",
+    scanMode: "remote",
+    description: "An optional central copy in object storage. Nothing needs to be held here.",
+    host: "objects.central.example.org",
+    basePath: "eegml-central",
+    credentialRef: "STORAGE_CENTRAL_READONLY",
+    allowedPrefixes: { "rep:DemoAlpha2001": "DemoAlpha2001" },
+  },
+  {
+    key: "northfield-nas",
+    name: "Synthetic Northfield file system",
+    protocol: "filesystem",
+    scanMode: "uploadedManifest",
+    institutionId: "demo-inst-northfield",
+    description: "An institutional file system reachable only from inside the institution; listings are uploaded.",
+    host: "nas.northfield.example.org",
+    basePath: "data",
+    credentialRef: "STORAGE_NORTHFIELD_READONLY",
+    allowedPrefixes: { "rep:DemoAlpha2001": "DemoAlpha2001" },
+  },
+];
+
+/** A dataset of the demonstration world, held on the Bremen server with no central copy. */
+export const DEMO_DATASET = {
+  key: "DemoAlpha2001-demo-attention-lab-main",
+  replicationId: "DemoAlpha2001",
+  laboratoryId: "demo-lab-attention",
+  title: "Flanker task, main experiment (synthetic)",
+  endpointKey: "bremen-sftp",
+  path: "DemoAlpha2001/attention-main",
+  storageRefId: "demo-storage-ref-bremen",
+  historyId: "demo-dataset-history-received",
+} as const;

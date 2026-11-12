@@ -148,6 +148,19 @@ test("the table is a named region that the keyboard can reach and scroll", async
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
+test("a region that scrolls sideways marks the edge beyond which more lies, and clears it at the end", async ({
+  page,
+}) => {
+  const sample = page.getByTestId("sample-horizontal-scroll");
+  await expect(sample.getByTestId("scroll-more-after")).toBeVisible();
+  await expect(sample.getByTestId("scroll-more-before")).toHaveCount(0);
+  await sample.locator("div.overflow-x-auto").evaluate((element) => {
+    element.scrollLeft = element.scrollWidth;
+  });
+  await expect(sample.getByTestId("scroll-more-before")).toBeVisible();
+  await expect(sample.getByTestId("scroll-more-after")).toHaveCount(0);
+});
+
 test("badges and states use the colours of the tokens", async ({ page }) => {
   const colours = async (text: string) =>
     page.getByText(text, { exact: true }).evaluate((element) => {

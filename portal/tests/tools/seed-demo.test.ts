@@ -37,7 +37,7 @@ function runCli(args: string[], environment: Record<string, string | undefined>)
 const withEmulators = emulatorEnvironment(PORTS, PROJECT_ID);
 
 /** What a first run creates: every document of the world, and an account and an access document for each demonstration account. */
-const WORLD_SIZE = 219;
+const WORLD_SIZE = 249;
 
 /** Every document names the command as its author, as trusted code acting by itself. */
 const STANDARD = {
@@ -215,14 +215,26 @@ describe("seed:demo", () => {
     expect(await sizeOf("contributors")).toBe(2);
     expect(await sizeOf("historicalAggregates")).toBe(5);
     expect(await sizeOf("documentLinks")).toBe(2);
-    expect(await sizeOf("statusHistory")).toBe(1);
+    // The status change of a replication, and the first state of the demonstration dataset.
+    expect(await sizeOf("statusHistory")).toBe(2);
+    expect(await sizeOf("datasets")).toBe(1);
+    expect(await sizeOf("storageEndpoints")).toBe(4);
     // Laboratory management and the imports console have something to show: equipment with
     // history, requirements, a checklist for every participation, a source, a batch and its queue.
     expect((await adminDb.collectionGroup("equipment").get()).size).toBe(3);
     expect((await adminDb.collectionGroup("equipment").where("isCurrent", "==", true).get()).size).toBe(2);
     expect((await adminDb.collectionGroup("equipmentRequirements").get()).size).toBe(7);
     expect((await adminDb.collectionGroup("checklist").get()).size).toBe(6 * 9);
-    expect(await sizeOf("sources")).toBe(2);
+    // Two sources of the imports console, and the two spreadsheets that mappings synchronise.
+    expect(await sizeOf("sources")).toBe(4);
+    // The Google Workspace that the emulator's fake serves: three connections, two mappings, one
+    // of them approved for live writes, and a template of each kind.
+    expect(await sizeOf("integrationConnections")).toBe(3);
+    expect((await adminDb.collection("syncMappings").get()).docs.map((mapping) => mapping.get("mode")).sort()).toEqual([
+      "dryRun",
+      "live",
+    ]);
+    expect(await sizeOf("documentTemplates")).toBe(6);
     expect(await sizeOf("importBatches")).toBe(1);
     expect(await sizeOf("reconciliationItems")).toBe(3);
     // Recruitment has a history at one participation, with a correction and a verification, the

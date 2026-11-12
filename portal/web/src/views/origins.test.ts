@@ -21,7 +21,7 @@ describe("originNote", () => {
   it("names a single origin and counts mixed ones", () => {
     expect(originNote([record("a", "demo"), record("b", "demo")])).toBe("From demonstration data");
     expect(originNote([record("a", "importedHistorical"), record("b", "demo"), record("c", "live")])).toBe(
-      "Mixed origins: 1 live, 1 imported historical, 1 demonstration data",
+      "Mixed origins: 1 entered in the portal, 1 imported historical, 1 demonstration data",
     );
   });
 });

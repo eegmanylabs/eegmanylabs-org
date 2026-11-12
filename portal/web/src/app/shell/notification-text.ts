@@ -41,6 +41,12 @@ function recordPath(payload: Payload): string | null {
 
 export function describeNotification(payload: Payload): NotificationText {
   switch (payload.kind) {
+    case "integrationNeedsAttention":
+      return {
+        title: "A Google integration needs attention",
+        detail: text(payload.message),
+        to: "/admin/integrations",
+      };
     case "accountClaimAwaitsReview":
       return { title: "An account claim waits for review", detail: null, to: "/admin/claims" };
     case "accessRequestAwaitsReview":
@@ -155,6 +161,12 @@ export function describeNotification(payload: Payload): NotificationText {
         to: participationId === null ? null : participationRecruitmentPath(participationId),
       };
     }
+    case "storageUnreachable":
+      return {
+        title: "A storage server did not answer",
+        detail: text(payload.title),
+        to: "/datasets/servers",
+      };
     default:
       return { title: "Something changed that concerns you", detail: null, to: null };
   }

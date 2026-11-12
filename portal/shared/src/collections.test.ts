@@ -67,7 +67,7 @@ const parameterNames = (path: string) => [...path.matchAll(/\{([^{}]+)\}/g)].map
 
 describe("the registry", () => {
   it("has one entry for every collection, subcollection and fixed-name document of the data model", () => {
-    expect(COLLECTION_KEYS).toHaveLength(145);
+    expect(COLLECTION_KEYS).toHaveLength(149);
     expect(COLLECTION_ENTRIES.map((entry) => entry.key)).toEqual(COLLECTION_KEYS);
   });
 
@@ -131,11 +131,13 @@ describe("the registry", () => {
     }
   });
 
-  it("lets no client write what no client reads, with the one exception of viewer links", () => {
+  it("lets no client write what no client reads", () => {
     const writeOnly = COLLECTION_ENTRIES.filter(
       (entry) => entry.read.tiers.includes("FUNCTION") && entry.write.mode === "client",
     ).map((entry) => entry.key);
-    expect(writeOnly).toEqual(["datasetViewerLinks"]);
+    // Viewer links, the one exception before the dataset registry was built, are now saved
+    // through a callable function as well.
+    expect(writeOnly).toEqual([]);
   });
 });
 
@@ -156,19 +158,7 @@ describe("the enforcement of an entry", () => {
         // Attachments. Pages and their threads are built (D-010), and so are databases, custom
         // properties, views and dashboards (D-011).
         "attachments",
-        // Storage endpoints, datasets and processing runs.
-        "storageEndpoints",
-        "storageEndpointConnection",
-        "datasets",
-        "datasetDetail",
-        "datasetStorageRefs",
-        "datasetStorageRefLocation",
-        "datasetManifests",
-        "datasetManifestFileChunks",
-        "datasetTransfers",
-        "datasetQcAssessments",
-        "datasetAccessEvents",
-        "datasetViewerLinks",
+        // Processing runs, which the scientific workflows of a later phase build on the registry.
         "processingRuns",
         // Governance records.
         "decisions",
@@ -176,14 +166,7 @@ describe("the enforcement of an entry", () => {
         "incidents",
         "meetings",
         "progressReports",
-        // Synchronisation, generated documents, publishing and automation.
-        "integrationConnections",
-        "syncMappings",
-        "syncMappingCellState",
-        "syncRuns",
-        "syncConflicts",
-        "documentTemplates",
-        "generatedDocuments",
+        // Publishing and automation.
         "publicationBatches",
         "automationRules",
         "automationRuns",
@@ -192,7 +175,7 @@ describe("the enforcement of an entry", () => {
         "eventFailures",
       ].sort(),
     );
-    expect(COLLECTION_ENTRIES.filter((entry) => entry.enforcement === "enforced")).toHaveLength(110);
+    expect(COLLECTION_ENTRIES.filter((entry) => entry.enforcement === "enforced")).toHaveLength(133);
   });
 
   it("never opens a document beneath a parent that is still closed", () => {
@@ -250,6 +233,9 @@ describe("the identifier rule of an entry", () => {
       // opens, which the registry calls opaque beside the tasks and lists made in the portal.
       "inactivityFollowUpTaskId",
       "recruitmentFollowUpListId",
+      // The quality-control task of a dataset and the list that holds them, likewise.
+      "datasetQcTaskId",
+      "datasetQcListId",
     ]);
   });
 });
@@ -409,9 +395,19 @@ describe("the access rules of an entry", () => {
       "pageVersions",
       "pageVersionChunks",
       "pagePermissions",
+      "storageEndpoints",
       "storageEndpointConnection",
+      "datasets",
+      "datasetWorkflows",
+      "datasetDetail",
+      "datasetStorageRefs",
       "datasetStorageRefLocation",
+      "datasetManifests",
+      "datasetManifestFileChunks",
+      "datasetTransfers",
+      "datasetQcAssessments",
       "datasetAccessEvents",
+      "datasetViewerLinks",
       "sources",
       "sourceLocation",
       "sourceTabs",
@@ -426,10 +422,14 @@ describe("the access rules of an entry", () => {
       "reconciliationItems",
       "integrationMappings",
       "integrationConnections",
+      "driveChannels",
       "syncMappings",
       "syncMappingCellState",
+      "syncLeases",
       "syncRuns",
       "syncConflicts",
+      "syncReviewItems",
+      "documentTemplates",
       "generatedDocuments",
       "publicationBatches",
       "auditEvents",
@@ -687,6 +687,7 @@ describe("the flags of an entry", () => {
         "importBatchSeenRecords",
         "importBatchLog",
         "syncMappingCellState",
+        "syncLeases",
         "userNotifications",
         "userRecents",
         "pageContent",

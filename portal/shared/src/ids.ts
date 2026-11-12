@@ -718,6 +718,28 @@ export function syncRunId(mappingId: string, startedBy: string): string {
   return shortHash(lines([mappingId, startedBy]));
 }
 
+/**
+ * The hash of the mapping or generated document, the row key or section, the field and the base
+ * value of a conflict. A conflict seen on many runs is one record, and once it is resolved the
+ * base changes, so a later disagreement in the same cell is a record of its own. The row key and
+ * the base are hashed first, since either may hold a line feed. A cell linked with two
+ * different values has no base, which the hash states with a marker of its own.
+ */
+export function syncConflictId(
+  scopeId: string,
+  rowOrSection: string,
+  field: string,
+  base: string | null | undefined,
+): string {
+  const baseLine = base === undefined ? "absent" : base === null ? "null" : `value:${shortHash(base)}`;
+  return shortHash(lines([scopeId, shortHash(rowOrSection), field, baseLine]));
+}
+
+/** The hash of the mapping, the kind of question, the row key and the field: one review item per question. */
+export function syncReviewItemId(mappingId: string, kind: string, rowKey: string, field: string): string {
+  return shortHash(lines([mappingId, kind, shortHash(rowKey), field]));
+}
+
 /** `templateKey__entityType__entityId`. The entity identifier may contain the separator. */
 export function generatedDocumentId(templateKey: string, entityType: EntityType, entityId: string): string {
   return compose([templateKey, entityType, entityId], 2);
@@ -773,6 +795,16 @@ export function recruitmentFollowUpListId(laboratoryId: string): string {
   return compose(["recruitmentFollowUp", shortHash(laboratoryId)]);
 }
 
+/** The quality-control task of a dataset, opened when its data first arrives: `datasetQc__` and the hash of the dataset key. */
+export function datasetQcTaskId(datasetKey: string): string {
+  return compose(["datasetQc", shortHash(datasetKey)]);
+}
+
+/** The task list of a replication that holds the quality-control tasks of its datasets: `datasetQcList__` and the hash of the replication. */
+export function datasetQcListId(replicationId: string): string {
+  return compose(["datasetQcList", shortHash(replicationId)]);
+}
+
 /**
  * Every builder of a natural key, by name. The collection registry names the builder of each
  * collection whose identifier is derived, and the integrity checker rebuilds identifiers with it.
@@ -819,6 +851,8 @@ export const ID_BUILDERS = {
   syncMappingId,
   syncCellStateId,
   syncRunId,
+  syncConflictId,
+  syncReviewItemId,
   generatedDocumentId,
   notificationId,
   mailId,
@@ -827,5 +861,7 @@ export const ID_BUILDERS = {
   scopeDashboardId,
   inactivityFollowUpTaskId,
   recruitmentFollowUpListId,
+  datasetQcTaskId,
+  datasetQcListId,
 } as const;
 export type IdBuilderName = keyof typeof ID_BUILDERS;

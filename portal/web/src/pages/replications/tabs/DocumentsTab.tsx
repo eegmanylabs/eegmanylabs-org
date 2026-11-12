@@ -1,48 +1,63 @@
-import { ExternalLink } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/table";
 import type { RecordOf } from "@/data";
-import { DOCUMENT_ACCESS_LABELS, DOCUMENT_KIND_LABELS } from "@/registry/labels";
+import { managesDataset } from "@/pages/datasets/dataset-format";
+import { DriveLinks, type LinkTargetOption } from "@/pages/integrations/DriveLinks";
+import { GeneratedDocuments } from "@/pages/integrations/GeneratedDocuments";
+import type { Viewer } from "@/registry/viewer";
 
-/** The documents linked to the replication that the caller may see. */
-export function DocumentsTab({ links }: { links: readonly RecordOf<"documentLinks">[] }) {
-  const sorted = [...links]
-    .filter((link) => link.archivedAt === null)
-    .sort((a, b) => (a.title ?? a.url).localeCompare(b.title ?? b.url));
+/**
+ * The documents of a replication: the documents linked to it and to its manuscripts and
+ * datasets, which its managers link from Google Drive, and the Google Docs generated for it.
+ */
+export function DocumentsTab({
+  studyKey,
+  links,
+  manuscripts,
+  datasets,
+  viewer,
+}: {
+  studyKey: string;
+  links: readonly RecordOf<"documentLinks">[];
+  manuscripts: readonly RecordOf<"manuscripts">[];
+  /** The datasets of the replication, of which the reader may link to those it manages. */
+  datasets: readonly RecordOf<"datasets">[];
+  viewer: Viewer;
+}) {
+  const manages = viewer.access.member && viewer.can("replications.manage", { replicationId: studyKey });
+  const datasetTargets: LinkTargetOption[] = datasets
+    .filter((dataset) => dataset.archivedAt === null && managesDataset(viewer, dataset))
+    .map((dataset) => ({
+      value: `dataset:${dataset.id}`,
+      label: `The dataset ${dataset.datasetKey}`,
+      entityType: "dataset",
+      entityId: dataset.id,
+    }));
+  // The managers of the replication link to it and its manuscripts; those who manage a dataset of it link to the dataset.
+  const targets: LinkTargetOption[] = [
+    { value: "replication", label: `The replication ${studyKey}`, entityType: "replication", entityId: studyKey },
+    ...manuscripts
+      .filter((manuscript) => manuscript.archivedAt === null)
+      .map((manuscript) => ({
+        value: `manuscript:${manuscript.id}`,
+        label: `The manuscript ${manuscript.title}`,
+        entityType: "manuscript" as const,
+        entityId: manuscript.id,
+      })),
+    ...datasetTargets,
+  ];
   return (
-    <Table caption="Linked documents">
-      <TableHead>
-        <TableRow>
-          <TableHeaderCell>Document</TableHeaderCell>
-          <TableHeaderCell>Kind</TableHeaderCell>
-          <TableHeaderCell>Access</TableHeaderCell>
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        {sorted.map((link) => (
-          <TableRow key={link.id} className="align-top">
-            <TableCell>
-              <a
-                href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 break-all text-fg-accent underline"
-              >
-                {link.title ?? link.url}
-                <ExternalLink aria-hidden="true" className="size-3.5 shrink-0" strokeWidth={1.8} />
-                <span className="sr-only">(opens in a new tab)</span>
-              </a>
-            </TableCell>
-            <TableCell>{DOCUMENT_KIND_LABELS[link.kind]}</TableCell>
-            <TableCell>
-              <span className="flex flex-wrap items-center gap-1.5">
-                {DOCUMENT_ACCESS_LABELS[link.accessStatus]}
-                {link.restricted ? <Badge tone="outline">Team only</Badge> : null}
-              </span>
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <div className="grid gap-8">
+      <DriveLinks
+        links={links}
+        canLink={manages || datasetTargets.length > 0}
+        targets={manages ? targets : datasetTargets}
+        caption="Documents linked to the replication and its records"
+      />
+      <GeneratedDocuments
+        entityType="replication"
+        entityId={studyKey}
+        scopeKeys={viewer.queryScopeKeys}
+        canGenerate={manages || viewer.can("integrations.manage", "programme")}
+      />
+    </div>
   );
 }

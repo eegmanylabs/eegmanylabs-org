@@ -1,5 +1,6 @@
-import type { ComponentProps } from "react";
+import { type ComponentProps, useRef } from "react";
 import { cn } from "@/utils/cn";
+import { ScrollEdgeMarks, useScrollEdges } from "./horizontal-scroll";
 
 export interface TableProps extends ComponentProps<"table"> {
   /** Names the table for assistive technology. It is not shown. */
@@ -9,21 +10,29 @@ export interface TableProps extends ComponentProps<"table"> {
 /**
  * The frame of a data table: a bordered, horizontally scrollable region with hairline row
  * dividers and no striping. The region is positioned, so that text for assistive technology,
- * which is positioned absolutely, scrolls with the table and never widens the page.
+ * which is positioned absolutely, scrolls with the table and never widens the page. On a screen
+ * too narrow for every column, a mark on the edge says that more columns lie beyond it.
  */
 export function Table({ caption, className, children, ...props }: TableProps) {
+  const region = useRef<HTMLElement | null>(null);
+  const { edges, update } = useScrollEdges(region);
   return (
-    <section
-      aria-label={caption}
-      // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
-      tabIndex={0}
-      className="relative overflow-x-auto rounded-tile border border-border bg-surface"
-    >
-      <table className={cn("w-full border-collapse text-left text-sm", className)} {...props}>
-        <caption className="sr-only">{caption}</caption>
-        {children}
-      </table>
-    </section>
+    <div className="relative min-w-0">
+      <section
+        ref={region}
+        aria-label={caption}
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: a region that scrolls must be reachable by keyboard
+        tabIndex={0}
+        onScroll={update}
+        className="relative overflow-x-auto rounded-tile border border-border bg-surface"
+      >
+        <table className={cn("w-full border-collapse text-left text-sm", className)} {...props}>
+          <caption className="sr-only">{caption}</caption>
+          {children}
+        </table>
+      </section>
+      <ScrollEdgeMarks edges={edges} />
+    </div>
   );
 }
 

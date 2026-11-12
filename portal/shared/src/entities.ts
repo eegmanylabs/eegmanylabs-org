@@ -46,6 +46,13 @@ import { z } from "./zod";
  * | `documentLink`           | `documentLinks/{id}`                                   |
  * | `source`                 | `sources/{key}`                                        |
  * | `importBatch`            | `importBatches/{batchId}`                              |
+ * | `integrationConnection`  | `integrationConnections/{system}`                      |
+ * | `syncMapping`            | `syncMappings/{id}`                                    |
+ * | `syncRun`                | `syncRuns/{id}`                                        |
+ * | `syncConflict`           | `syncConflicts/{id}`                                   |
+ * | `syncReviewItem`         | `syncReviewItems/{id}`                                 |
+ * | `documentTemplate`       | `documentTemplates/{key}`                              |
+ * | `generatedDocument`      | `generatedDocuments/{templateKey__entityType__entityId}` |
  *
  * The identifier of an entity in a subcollection joins the identifier of its parent document
  * to its own with two underscores, as in `AmodioJost2007__h01` for a hypothesis. Build it with
@@ -90,6 +97,13 @@ export const ENTITY_TYPES = [
   "documentLink",
   "source",
   "importBatch",
+  "integrationConnection",
+  "syncMapping",
+  "syncRun",
+  "syncConflict",
+  "syncReviewItem",
+  "documentTemplate",
+  "generatedDocument",
 ] as const;
 export const entityTypeSchema = z.enum(ENTITY_TYPES);
 export type EntityType = z.output<typeof entityTypeSchema>;

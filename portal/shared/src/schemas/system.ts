@@ -89,6 +89,25 @@ import {
  * | `countCategory.saved`           | A count category is created, changed, archived or restored         |
  * | `forecast.generated`            | A recruitment forecast is run and stored                            |
  * | `recruitment.inactivityFlagged` | The sweep finds a participation without reports and opens a follow-up task |
+ * | `storageEndpoint.saved`         | A storage server is registered or changed, with its connection details |
+ * | `storageEndpoint.checked`       | A storage server is checked, by a person or by the daily sweep      |
+ * | `storageEndpoint.connectionViewed` | An administrator reads the connection details of a storage server |
+ * | `dataset.registered`            | A dataset is registered, with its first state and any first storage reference |
+ * | `dataset.updated`               | Fields of a dataset, its metadata or its BIDS mappings change      |
+ * | `dataset.statusChanged`         | A dataset moves to another state of its workflow, with the history entry |
+ * | `datasetWorkflow.saved`         | The workflow of datasets of a replication is defined or changed    |
+ * | `storageRef.added`              | A storage reference is added to a dataset                           |
+ * | `storageRef.changed`            | A storage reference changes, is retired or is relocated             |
+ * | `storageRef.scanned`            | A storage reference is scanned, successfully or not                 |
+ * | `manifest.recorded`             | An expected manifest or a listing is recorded by hand or by upload  |
+ * | `storageLocation.viewed`        | Someone reads the location of a storage reference                   |
+ * | `viewerLink.saved`              | A viewer link is saved for a storage reference                      |
+ * | `viewerLink.opened`             | Someone asks for a viewer link                                      |
+ * | `transfer.requested`            | A transfer between storage references is requested                 |
+ * | `transfer.advanced`             | A transfer is approved, refused, started, completed, failed or verified |
+ * | `bidsReport.imported`           | A bids-validator report is imported                                 |
+ * | `qcAssessment.recorded`         | A quality-control assessment is recorded                            |
+ * | `dataset.qcTaskOpened`          | The arrival of data opens the quality-control task of a dataset     |
  * | `document.created`              | The audit trigger saw a document created outside a callable function |
  * | `document.updated`              | The audit trigger saw a document changed outside a callable function |
  * | `document.deleted`              | The audit trigger saw a document deleted                           |
@@ -159,6 +178,48 @@ export const AUDIT_ACTIONS = [
   "document.created",
   "document.updated",
   "document.deleted",
+  "integration.paused",
+  "integration.resumed",
+  "integration.tested",
+  "integration.channelRenewed",
+  "integration.credentialNamed",
+  "driveLink.created",
+  "driveLink.checked",
+  "syncMapping.saved",
+  "syncMapping.paused",
+  "syncMapping.resumed",
+  "syncMapping.liveApproved",
+  "syncMapping.liveWithdrawn",
+  "syncRun.requested",
+  "syncRun.retried",
+  "syncRun.cancelled",
+  "syncRun.deadLettered",
+  "syncConflict.resolved",
+  "syncReviewItem.resolved",
+  "sync.recordUpdated",
+  "sync.sheetUpdated",
+  "documentTemplate.saved",
+  "generatedDocument.requested",
+  "generatedDocument.sectionTaken",
+  "storageEndpoint.saved",
+  "storageEndpoint.checked",
+  "storageEndpoint.connectionViewed",
+  "dataset.registered",
+  "dataset.updated",
+  "dataset.statusChanged",
+  "datasetWorkflow.saved",
+  "storageRef.added",
+  "storageRef.changed",
+  "storageRef.scanned",
+  "manifest.recorded",
+  "storageLocation.viewed",
+  "viewerLink.saved",
+  "viewerLink.opened",
+  "transfer.requested",
+  "transfer.advanced",
+  "bidsReport.imported",
+  "qcAssessment.recorded",
+  "dataset.qcTaskOpened",
 ] as const;
 export const auditActionSchema = z.enum(AUDIT_ACTIONS);
 export type AuditAction = z.output<typeof auditActionSchema>;

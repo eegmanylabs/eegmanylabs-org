@@ -5,6 +5,7 @@ import {
   bootstrapAdminRecordSchema,
   COLLECTIONS,
   type CollectionKey,
+  DOCUMENT_TEMPLATES,
   distinctRoles,
   historicalAggregateId,
   hypothesisId,
@@ -31,8 +32,10 @@ import {
   rolesOfPerson,
   sequenceId,
   sha256Hex,
+  sourceTabKey,
   studyAliasId,
   summaryTotals,
+  syncMappingId,
   systemActor,
   systemWriteContext,
   unitScopeKeys,
@@ -49,7 +52,9 @@ import {
   DEMO_CATEGORY_EXTENSION,
   DEMO_CONTRIBUTOR_TABLE,
   DEMO_CONTRIBUTORS,
+  DEMO_DATASET,
   DEMO_DOCUMENT_LINKS,
+  DEMO_DOCUMENT_TEMPLATES,
   DEMO_EQUIPMENT,
   DEMO_HISTORICAL_AGGREGATES,
   DEMO_HYPOTHESES,
@@ -66,7 +71,11 @@ import {
   DEMO_REQUIREMENTS,
   DEMO_SOURCES,
   DEMO_STATUS_HISTORY,
+  DEMO_STORAGE_ENDPOINTS,
+  DEMO_SYNC_MAPPINGS,
+  DEMO_SYNC_SOURCES,
   DEMO_TARGETS,
+  DEMO_WORKSPACE,
 } from "../fixtures/demo-world";
 import { emulatorHashKey } from "../hash-key";
 import { seedLookups } from "./seed-lookups";
@@ -757,6 +766,179 @@ export function demoDocuments(now: Date, hashKey: string): DemoDocument[] {
   log.forEach((entry, index) => {
     append("importBatchLog", COLLECTIONS.importBatchLog.docPath(batchId, sequenceId(index + 1)), { batchId, ...entry });
   });
+
+  // The Google Workspace that the emulator's fake serves: three connections, two synchronised
+  // spreadsheets registered as sources, their mappings, and a template of each kind. The equipment
+  // register and the templates are approved for live writes, which in the emulator reach the fake.
+  for (const system of ["googleDrive", "googleSheets", "googleDocs"] as const) {
+    add("integrationConnections", COLLECTIONS.integrationConnections.docPath(system), {
+      system,
+      status: "live",
+      adapter: "fake",
+      identity: DEMO_WORKSPACE.account,
+      config: {},
+      lastSuccessAt: null,
+      lastErrorAt: null,
+    });
+  }
+  for (const source of DEMO_SYNC_SOURCES) {
+    add("sources", COLLECTIONS.sources.docPath(source.key), {
+      key: source.key,
+      title: source.title,
+      kind: "googleSheet",
+      authority: "live",
+      syncPolicy: "twoWay",
+      accessStatus: "shared",
+      lastFetchedAt: null,
+    });
+    add("sourceLocation", COLLECTIONS.sourceLocation.docPath(source.key), {
+      url: `https://docs.google.com/spreadsheets/d/${source.fileId}/edit`,
+      externalId: source.fileId,
+    });
+    const tabKey = sourceTabKey(source.tabTitle);
+    add("sourceTabs", COLLECTIONS.sourceTabs.docPath(source.key, tabKey), {
+      sourceKey: source.key,
+      tabKey,
+      name: source.tabTitle,
+      sheetId: source.sheetId,
+      visibility: "visible",
+      headerRow: 1,
+      lastSeenAt: timestamp,
+    });
+  }
+  for (const mapping of DEMO_SYNC_MAPPINGS) {
+    const tabKey = sourceTabKey(mapping.tabTitle);
+    add(
+      "syncMappings",
+      COLLECTIONS.syncMappings.docPath(syncMappingId(mapping.sourceKey, tabKey, mapping.collectionKey)),
+      {
+        name: mapping.name,
+        connectionId: "googleSheets",
+        sourceKey: mapping.sourceKey,
+        tabKey,
+        collectionKey: mapping.collectionKey,
+        keyStrategy: "keyColumn",
+        keyColumn: mapping.keyColumn,
+        columnMap: mapping.columns.map((column) => ({ ...column })),
+        sheetOnlyRows: "propose",
+        appOnlyRecords: "append",
+        cellCeiling: 200,
+        mode: mapping.mode,
+        status: "active",
+        approvedBy: mapping.mode === "live" ? SEED_DEMO_ACTOR : null,
+        approvedAt: mapping.mode === "live" ? timestamp : null,
+        lastRunId: null,
+        lastRunAt: null,
+        lastSuccessAt: null,
+      },
+    );
+  }
+  for (const template of DEMO_DOCUMENT_TEMPLATES) {
+    add("documentTemplates", COLLECTIONS.documentTemplates.docPath(template.key), {
+      key: template.key,
+      name: template.name,
+      kind: template.kind,
+      entityType: template.entityType,
+      externalDocumentId: template.templateFileId,
+      targetFolderId: DEMO_WORKSPACE.generatedFolder,
+      managedSections: DOCUMENT_TEMPLATES[template.kind].sections.map((section) => section.name),
+      enabled: true,
+      mode: "live",
+      approvedBy: SEED_DEMO_ACTOR,
+      approvedAt: timestamp,
+    });
+  }
+
+  // The dataset registry: the storage servers that the emulator's storage fake answers for, and
+  // one dataset held on the Bremen server alone, with no central copy, in its first state.
+  for (const endpoint of DEMO_STORAGE_ENDPOINTS) {
+    const usedByDemo = endpoint.key === DEMO_DATASET.endpointKey;
+    add("storageEndpoints", COLLECTIONS.storageEndpoints.docPath(endpoint.key), {
+      key: endpoint.key,
+      name: endpoint.name,
+      protocol: endpoint.protocol,
+      scanMode: endpoint.scanMode,
+      ...(endpoint.institutionId === undefined ? {} : { institutionId: endpoint.institutionId }),
+      description: endpoint.description,
+      status: "active",
+      lastCheckedAt: null,
+      lastSeenAt: null,
+      scopeKeys: usedByDemo ? unitScopeKeys(DEMO_DATASET.replicationId, DEMO_DATASET.laboratoryId) : [],
+    });
+    add("storageEndpointConnection", COLLECTIONS.storageEndpointConnection.docPath(endpoint.key), {
+      host: endpoint.host,
+      basePath: endpoint.basePath,
+      credentialRef: endpoint.credentialRef,
+      allowedPrefixes: endpoint.allowedPrefixes,
+    });
+  }
+  const datasetScope = {
+    replicationId: DEMO_DATASET.replicationId,
+    laboratoryId: DEMO_DATASET.laboratoryId,
+    scopeKeys: unitScopeKeys(DEMO_DATASET.replicationId, DEMO_DATASET.laboratoryId),
+  };
+  append("statusHistory", COLLECTIONS.statusHistory.docPath(DEMO_DATASET.historyId), {
+    entityType: "dataset",
+    entityId: DEMO_DATASET.key,
+    fromStatusKey: null,
+    toStatusKey: "received",
+    effectiveAt: timestamp,
+    recordedAt: timestamp,
+    changedBy: SEED_DEMO_ACTOR,
+    source: "manual",
+    ...datasetScope,
+    scopeKeys: [...datasetScope.scopeKeys, MEMBERS_SCOPE_KEY],
+  });
+  add("datasets", COLLECTIONS.datasets.docPath(DEMO_DATASET.key), {
+    datasetKey: DEMO_DATASET.key,
+    replicationId: DEMO_DATASET.replicationId,
+    laboratoryId: DEMO_DATASET.laboratoryId,
+    participationId: participationId(DEMO_DATASET.replicationId, DEMO_DATASET.laboratoryId),
+    scopeKeys: datasetScope.scopeKeys,
+    title: DEMO_DATASET.title,
+    modality: "main",
+    expectedParticipants: 3,
+    expectedManifestId: null,
+    availability: "unknown",
+    lastSeenAt: null,
+    workflowStatusKey: "received",
+    statusHistoryId: DEMO_DATASET.historyId,
+    bidsConversionStatus: "notStarted",
+    bidsStatus: "notStarted",
+    qcStatus: "notStarted",
+    analysisReady: false,
+    custom: {},
+    dataOrigin: "demo",
+  });
+  add("datasetDetail", COLLECTIONS.datasetDetail.docPath(DEMO_DATASET.key), {
+    metadata: { amplifier: "Synthetic amplifier", samplingRateHz: 1000 },
+  });
+  add("datasetStorageRefs", COLLECTIONS.datasetStorageRefs.docPath(DEMO_DATASET.key, DEMO_DATASET.storageRefId), {
+    datasetId: DEMO_DATASET.key,
+    endpointKey: DEMO_DATASET.endpointKey,
+    role: "primary",
+    availability: "unknown",
+    verifiedAt: null,
+    verifiedBy: null,
+    verificationManifestId: null,
+    validFrom: timestamp,
+    validTo: null,
+    relocatedFromRefId: null,
+    lastSeenAt: null,
+    lastScanAt: null,
+    lastScanStatus: "never",
+    latestManifestId: null,
+    viewerSupport: [],
+    viewerLinkTools: [],
+    ...datasetScope,
+  });
+  add(
+    "datasetStorageRefLocation",
+    COLLECTIONS.datasetStorageRefLocation.docPath(DEMO_DATASET.key, DEMO_DATASET.storageRefId),
+    {
+      uri: DEMO_DATASET.path,
+    },
+  );
 
   for (const account of DEMO_ACCOUNTS) {
     add("users", COLLECTIONS.users.docPath(account.uid), {

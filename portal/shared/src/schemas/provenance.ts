@@ -1,7 +1,11 @@
 // Provenance, migration and integrations (docs/DATA_MODEL.md, section 12): the source registry,
 // import batches and the verbatim rows they stored (D-012), the reconciliation queue, and the
 // records of synchronisation, generated documents and publishing.
+
+import { MANAGED_SECTION_STATUSES } from "../docs/plan";
+import { DOCUMENT_TEMPLATE_KINDS } from "../docs/templates";
 import { entityTypeSchema } from "../entities";
+import { ROW_POLICIES, SYNC_DIRECTIONS, SYNC_ISSUE_KINDS } from "../sync/planner";
 import { timestampSchema } from "../timestamp";
 import { z } from "../zod";
 import {
@@ -324,7 +328,7 @@ export const reconciliationItemDocSchema = documentBaseSchema.extend({
 });
 export type ReconciliationItemDoc = z.output<typeof reconciliationItemDocSchema>;
 
-/** The key of an external system, such as `quire`, `google` or `doi`. */
+/** The key of an external system, such as `quire`, `googleSheets` or `doi`. */
 export const systemKeySchema = keySchema;
 
 /** `integrationMappings/{system__entityType__hashOfExternalId}`: the identifier of a record in an external system. */
@@ -337,22 +341,88 @@ export const integrationMappingDocSchema = documentBaseSchema.extend({
 });
 export type IntegrationMappingDoc = z.output<typeof integrationMappingDocSchema>;
 
-export const integrationConnectionStatusSchema = z.enum(["notConfigured", "connected", "error", "disabled"]);
+/** The Google services the portal connects to, each through an adapter of its own. */
+export const GOOGLE_SYSTEMS = ["googleDrive", "googleSheets", "googleDocs"] as const;
+export const googleSystemSchema = z.enum(GOOGLE_SYSTEMS);
+export type GoogleSystem = z.output<typeof googleSystemSchema>;
+
+/**
+ * The state of a connection (docs/INTEGRATIONS.md, section 9).
+ *
+ * | State            | Meaning                                                              |
+ * |------------------|----------------------------------------------------------------------|
+ * | `notConfigured`  | No credential or identity exists for the system                      |
+ * | `dryRun`         | The connection reads and plans, and nothing it serves writes externally |
+ * | `live`           | At least one approved mapping or template writes externally           |
+ * | `degraded`       | The last attempt failed and retries are under way, or a quota is respected |
+ * | `needsAttention` | Retries are exhausted, access was lost, or a guard stopped a write   |
+ * | `paused`         | An administrator stopped the connection                              |
+ */
+export const integrationConnectionStatusSchema = z.enum([
+  "notConfigured",
+  "dryRun",
+  "live",
+  "degraded",
+  "needsAttention",
+  "paused",
+]);
+export type IntegrationConnectionStatus = z.output<typeof integrationConnectionStatusSchema>;
+
+/** Which implementation serves a connection: none, the in-memory fake of the emulator, or the real adapter. */
+export const integrationAdapterSchema = z.enum(["none", "fake", "real"]);
+
+/**
+ * The name of a secret in the secret store, such as `GOOGLE_DOCS_REFRESH_TOKEN`. A document
+ * names a secret and never holds one.
+ */
+export const secretNameSchema = z
+  .string()
+  .min(3)
+  .max(100)
+  .regex(/^[A-Z][A-Z0-9_]+$/, { error: "Expected the name of a secret, in capitals and underscores" });
 
 /** `integrationConnections/{system}`: the state of one integration. `credentialRef` names a secret and is never the secret. */
 export const integrationConnectionDocSchema = documentBaseSchema.extend({
   system: systemKeySchema,
   status: integrationConnectionStatusSchema,
+  adapter: integrationAdapterSchema,
+  /** The account the connection acts as, which file owners share files with. */
+  identity: shortTextSchema.exactOptional(),
   /** Non-secret configuration. */
   config: freeMapSchema,
-  credentialRef: z.string().min(1).max(LIMITS.shortText).exactOptional(),
+  credentialRef: secretNameSchema.exactOptional(),
+  /** Why the connection is in its state, in words, where the state needs a reason. */
+  statusReason: longTextSchema.exactOptional(),
   lastSuccessAt: timestampSchema.nullable(),
   lastError: longTextSchema.exactOptional(),
   lastErrorAt: timestampSchema.nullable(),
+  /** For Drive: the page token from which the change feed is read next. It never expires. */
+  changesPageToken: z.string().min(1).max(200).exactOptional(),
+  lastPolledAt: timestampSchema.nullable().exactOptional(),
 });
 export type IntegrationConnectionDoc = z.output<typeof integrationConnectionDocSchema>;
 
-export const syncDirectionSchema = z.enum(["appAuthoritative", "sheetAuthoritative", "bidirectional", "generated"]);
+/**
+ * `driveChannels/{channelId}`: one push channel on the Drive change log. A channel lasts a week
+ * at most and cannot be renewed, so a replacement is opened before it expires. The channel
+ * token itself is never stored, only its hash, which a notification is compared with.
+ */
+export const driveChannelDocSchema = documentBaseSchema.extend({
+  channelId: z.string().min(1).max(64),
+  resourceId: z.string().min(1).max(LIMITS.shortText),
+  tokenHash: z
+    .string()
+    .max(64)
+    .regex(/^[0-9a-f]{64}$/, { error: "Expected a SHA-256 hash in hexadecimal" }),
+  expiresAt: timestampSchema,
+  /** The highest message number handled, so that a repeated or older message is ignored. */
+  lastMessageNumber: z.number().int().min(0),
+  lastMessageAt: timestampSchema.nullable(),
+  stoppedAt: timestampSchema.nullable(),
+});
+export type DriveChannelDoc = z.output<typeof driveChannelDocSchema>;
+
+export const syncDirectionSchema = z.enum(SYNC_DIRECTIONS);
 
 export const syncColumnSchema = z.strictObject({
   field: mapKeySchema,
@@ -360,19 +430,50 @@ export const syncColumnSchema = z.strictObject({
   column: z.string().min(1).max(LIMITS.shortText),
   direction: syncDirectionSchema,
 });
+export type SyncColumn = z.output<typeof syncColumnSchema>;
+
+/** Whether an external write is made, or only planned and shown (docs/INTEGRATIONS.md, section 1). */
+export const integrationModeSchema = z.enum(["dryRun", "live"]);
+export type IntegrationMode = z.output<typeof integrationModeSchema>;
+
+export const syncMappingStatusSchema = z.enum(["active", "paused", "needsAttention"]);
+
+/** A value in the canonical form of the synchronisation planner, or null for no value. */
+export const canonicalValueSchema = z.string().max(LIMITS.longText).nullable();
+
+/** The most cells one run of a mapping may write before it stops for review. */
+export const MAX_CELL_CEILING = 5_000;
 
 /**
  * `syncMappings/{id}`: how one tab of a registered source maps to one collection. A mapping
  * names its source and tab and never an address, and a special-category field is never mapped.
  */
 export const syncMappingDocSchema = documentBaseSchema.extend({
+  name: shortTextSchema,
   connectionId: idSchema,
   sourceKey: sourceKeySchema,
   tabKey: keySchema,
   collectionKey: collectionKeySchema,
-  keyStrategy: keySchema,
-  columnMap: z.array(syncColumnSchema).max(200),
-  enabled: z.boolean(),
+  keyStrategy: z.enum(["keyColumn"]),
+  /** The header of the column that holds the row key. */
+  keyColumn: z.string().min(1).max(LIMITS.shortText),
+  columnMap: z.array(syncColumnSchema).max(100),
+  sheetOnlyRows: z.enum(ROW_POLICIES.sheetOnly),
+  appOnlyRecords: z.enum(ROW_POLICIES.appOnly),
+  cellCeiling: z.number().int().min(1).max(MAX_CELL_CEILING),
+  mode: integrationModeSchema,
+  status: syncMappingStatusSchema,
+  statusReason: longTextSchema.exactOptional(),
+  approvedBy: actorSchema.nullable(),
+  approvedAt: timestampSchema.nullable(),
+  lastRunId: idSchema.nullable(),
+  lastRunAt: timestampSchema.nullable(),
+  /** Whether the last run was a dry run, which computed a plan and wrote nothing. */
+  lastRunDry: z.boolean().exactOptional(),
+  lastSuccessAt: timestampSchema.nullable(),
+  /** The Drive version read before the grid on the last successful live run. */
+  lastDriveVersion: z.string().min(1).max(40).exactOptional(),
+  lastStats: countMapSchema.exactOptional(),
 });
 export type SyncMappingDoc = z.output<typeof syncMappingDocSchema>;
 
@@ -380,67 +481,232 @@ export type SyncMappingDoc = z.output<typeof syncMappingDocSchema>;
 export const syncCellStateDocSchema = documentBaseSchema.extend({
   mappingId: idSchema,
   recordId: idSchema,
+  rowKey: z.string().min(1).max(LIMITS.shortText),
   field: mapKeySchema,
-  appValue: z.unknown().exactOptional(),
-  sheetValue: z.unknown().exactOptional(),
+  appValue: canonicalValueSchema,
+  sheetValue: canonicalValueSchema,
   appUpdatedAt: timestampSchema.exactOptional(),
+  /** The Drive version of the spreadsheet when the cell last agreed. */
   sheetRevisionId: z.string().min(1).max(LIMITS.shortText).exactOptional(),
   syncedAt: timestampSchema,
+  /** Set when a written value read back differently. The cell is written no more until it is cleared. */
+  unstable: z.boolean(),
 });
 export type SyncCellStateDoc = z.output<typeof syncCellStateDocSchema>;
 
-export const syncTriggerSchema = z.enum(["event", "schedule", "manual"]);
-export const syncRunStatusSchema = z.enum(["running", "succeeded", "partial", "failed"]);
+/** `syncLeases/{sourceKey}`: the lease that lets one run at a time touch a spreadsheet. */
+export const syncLeaseDocSchema = documentBaseSchema.extend({
+  sourceKey: sourceKeySchema,
+  runId: idSchema,
+  expiresAt: timestampSchema,
+});
+export type SyncLeaseDoc = z.output<typeof syncLeaseDocSchema>;
 
-/** `syncRuns/{id}`: one run of a synchronisation mapping. */
+/**
+ * | Kind             | The job                                                              |
+ * |------------------|----------------------------------------------------------------------|
+ * | `sheetSync`      | One run of a mapping                                                 |
+ * | `documentUpdate` | Creating or updating one generated document                          |
+ * | `driveChanges`   | Reading the Drive change feed and starting the runs it calls for     |
+ */
+export const syncJobKindSchema = z.enum(["sheetSync", "documentUpdate", "driveChanges"]);
+export type SyncJobKind = z.output<typeof syncJobKindSchema>;
+export const syncTriggerSchema = z.enum(["event", "schedule", "manual"]);
+
+/**
+ * | Status       | Meaning                                                                |
+ * |--------------|------------------------------------------------------------------------|
+ * | `queued`     | Waiting to start. The run record is written when the job is enqueued   |
+ * | `running`    | Started, and holding the lease of its file                             |
+ * | `succeeded`  | Finished, and wrote what it planned (or planned only, in a dry run)    |
+ * | `partial`    | Finished, with some cells left for review                              |
+ * | `skipped`    | Nothing had changed since the last run, or the mapping is paused       |
+ * | `retrying`   | Failed for a reason that passes, and waits for its next attempt        |
+ * | `failed`     | Failed for a reason that a retry cannot clear, such as lost access     |
+ * | `deadLetter` | Failed on every attempt. A person retries it once the cause is cleared |
+ * | `cancelled`  | Cancelled by an administrator before it started                        |
+ */
+export const syncRunStatusSchema = z.enum([
+  "queued",
+  "running",
+  "succeeded",
+  "partial",
+  "skipped",
+  "retrying",
+  "failed",
+  "deadLetter",
+  "cancelled",
+]);
+export type SyncRunStatus = z.output<typeof syncRunStatusSchema>;
+
+/**
+ * | Kind          | The cause of a failed attempt                                       |
+ * |---------------|---------------------------------------------------------------------|
+ * | `quota`       | A quota was exceeded and the backoff ran out                        |
+ * | `outage`      | The service answered with a server error or did not answer          |
+ * | `accessLost`  | The portal's account can no longer open the file                    |
+ * | `guard`       | A guard stopped a write: a moved key, a copied file, a missing column |
+ * | `internal`    | A fault of the portal                                               |
+ */
+export const syncErrorKindSchema = z.enum(["quota", "outage", "accessLost", "guard", "internal"]);
+export type SyncErrorKind = z.output<typeof syncErrorKindSchema>;
+
+/** One line of the plan a run stores, for a person to read: what it would do, or did, to one cell, row or section. */
+export const syncPlanEntrySchema = z.strictObject({
+  action: z.enum([
+    "writeSheet",
+    "writeApp",
+    "appendRow",
+    "repairAnchor",
+    "conflict",
+    "settle",
+    "issue",
+    "adoptSection",
+    "writeSection",
+  ]),
+  rowKey: z.string().min(1).max(LIMITS.shortText).exactOptional(),
+  field: mapKeySchema.exactOptional(),
+  before: canonicalValueSchema.exactOptional(),
+  after: canonicalValueSchema.exactOptional(),
+  detail: longTextSchema.exactOptional(),
+});
+export type SyncPlanEntry = z.output<typeof syncPlanEntrySchema>;
+
+/** The most plan entries a run stores. A longer plan says how many were left out. */
+export const MAX_PLAN_ENTRIES = 200;
+
+/** `syncRuns/{id}`: one job of an integration, written when it is enqueued. */
 export const syncRunDocSchema = documentBaseSchema.extend({
-  mappingId: idSchema,
+  kind: syncJobKindSchema,
+  mappingId: idSchema.exactOptional(),
+  generatedDocumentId: idSchema.exactOptional(),
+  mode: integrationModeSchema,
   trigger: syncTriggerSchema,
   status: syncRunStatusSchema,
   attempts: z.number().int().min(0),
-  startedAt: timestampSchema,
+  maxAttempts: z.number().int().min(1).max(20),
+  nextAttemptAt: timestampSchema.nullable(),
+  requestedBy: actorSchema,
+  queuedAt: timestampSchema,
+  startedAt: timestampSchema.nullable(),
   finishedAt: timestampSchema.nullable(),
   stats: countMapSchema,
-  /** The last error. */
+  /** The last error, in words, without any value of a record. */
   error: longTextSchema.exactOptional(),
+  errorKind: syncErrorKindSchema.exactOptional(),
+  plan: z.array(syncPlanEntrySchema).max(MAX_PLAN_ENTRIES).exactOptional(),
+  planOmitted: z.number().int().min(0).exactOptional(),
+  /** The Drive version of the file the run read, before it read the content. */
+  driveVersion: z.string().min(1).max(40).exactOptional(),
 });
 export type SyncRunDoc = z.output<typeof syncRunDocSchema>;
 
 export const syncConflictStatusSchema = z.enum(["open", "resolved"]);
+/** Keep the portal value, keep the value of the sheet or document, or keep a value the resolver entered. */
 export const syncResolutionSchema = z.enum(["keepApp", "keepSheet", "merged"]);
+export type SyncResolution = z.output<typeof syncResolutionSchema>;
+export const syncConflictOriginSchema = z.enum(["sheet", "document"]);
 
-/** `syncConflicts/{id}`: a conflicting cell, held until an authorised user resolves it through a callable function. */
+/**
+ * `syncConflicts/{id}`: a conflicting cell of a sheet, or a hand-edited section of a generated
+ * document, held until an authorised user resolves it through a callable function. The
+ * identifier is derived from the mapping or document, the row or section, the field and the
+ * base, so a conflict seen on ten runs is one record, and a cell has one open conflict at most.
+ */
 export const syncConflictDocSchema = documentBaseSchema.extend({
-  mappingId: idSchema,
+  origin: syncConflictOriginSchema,
+  mappingId: idSchema.exactOptional(),
+  generatedDocumentId: idSchema.exactOptional(),
+  /** For a document: the managed section. */
+  section: keySchema.exactOptional(),
+  ...entityRefShape,
   recordId: idSchema,
-  field: mapKeySchema,
-  baseValue: z.unknown().exactOptional(),
-  appValue: z.unknown().exactOptional(),
-  sheetValue: z.unknown().exactOptional(),
+  rowKey: z.string().min(1).max(LIMITS.shortText).exactOptional(),
+  /** The field in conflict. Absent for a hand-edited section that no designated field is bound to. */
+  field: mapKeySchema.exactOptional(),
+  /** What the conflict is about, in words, for the resolution screen. */
+  label: shortTextSchema,
+  /** The value both sides last agreed on. Absent when the cell was linked with two different values. */
+  baseValue: canonicalValueSchema.exactOptional(),
+  appValue: canonicalValueSchema,
+  /** The value of the sheet, or the text of the document section. */
+  sheetValue: canonicalValueSchema,
   appUpdatedAt: timestampSchema.exactOptional(),
+  /** The Drive version of the file when the conflict was last seen. */
   sheetRevisionId: z.string().min(1).max(LIMITS.shortText).exactOptional(),
+  externalModifiedAt: timestampSchema.exactOptional(),
+  /** The file's last modifying user, which attributes the external change only approximately. */
+  externalModifiedBy: shortTextSchema.exactOptional(),
   detectedAt: timestampSchema,
+  lastSeenAt: timestampSchema,
   status: syncConflictStatusSchema,
   resolution: syncResolutionSchema.exactOptional(),
-  resolvedValue: z.unknown().exactOptional(),
+  resolvedValue: canonicalValueSchema.exactOptional(),
   resolvedBy: actorSchema.nullable(),
   resolvedAt: timestampSchema.nullable(),
+  note: longTextSchema.exactOptional(),
 });
 export type SyncConflictDoc = z.output<typeof syncConflictDocSchema>;
 
-/** `documentTemplates/{key}`: a template from which documents are generated. */
+/** The kinds of review item: what the planner raises about a row, and what a run finds about its file. */
+export const SYNC_REVIEW_KINDS = [...SYNC_ISSUE_KINDS, "accessLost", "copiedFile", "keyMoved"] as const;
+export const syncReviewKindSchema = z.enum(SYNC_REVIEW_KINDS);
+export type SyncReviewKind = z.output<typeof syncReviewKindSchema>;
+export const syncReviewStatusSchema = z.enum(["open", "dismissed", "resolved"]);
+export const syncReviewResolutionSchema = z.enum(["dismissed", "rowForgotten", "markCleared"]);
+
+/**
+ * `syncReviewItems/{id}`: a question a run could not settle about a row, a column or the file:
+ * a key with no record, a row that has gone, a duplicated key, a formula or an unstable cell.
+ * Nothing on either side is ever deleted in response: a person decides.
+ */
+export const syncReviewItemDocSchema = documentBaseSchema.extend({
+  mappingId: idSchema,
+  kind: syncReviewKindSchema,
+  rowKey: z.string().min(1).max(LIMITS.shortText).exactOptional(),
+  field: mapKeySchema.exactOptional(),
+  detail: longTextSchema,
+  status: syncReviewStatusSchema,
+  detectedAt: timestampSchema,
+  lastSeenAt: timestampSchema,
+  resolution: syncReviewResolutionSchema.exactOptional(),
+  resolvedBy: actorSchema.nullable(),
+  resolvedAt: timestampSchema.nullable(),
+  note: longTextSchema.exactOptional(),
+});
+export type SyncReviewItemDoc = z.output<typeof syncReviewItemDocSchema>;
+
+/** `documentTemplates/{key}`: a template from which documents are generated, and where its copies go. */
 export const documentTemplateDocSchema = documentBaseSchema.extend({
   key: keySchema,
   name: shortTextSchema,
+  kind: z.enum(DOCUMENT_TEMPLATE_KINDS),
   entityType: entityTypeSchema,
+  /** The identifier of the template document in Drive. Never committed for a real document. */
   externalDocumentId: z.string().min(1).max(LIMITS.shortText).exactOptional(),
+  /** The folder of a shared drive where copies are created. */
+  targetFolderId: z.string().min(1).max(LIMITS.shortText).exactOptional(),
   /** The names of the sections that the generator manages. */
   managedSections: z.array(keySchema).max(100),
   enabled: z.boolean(),
+  mode: integrationModeSchema,
+  approvedBy: actorSchema.nullable(),
+  approvedAt: timestampSchema.nullable(),
 });
 export type DocumentTemplateDoc = z.output<typeof documentTemplateDocSchema>;
 
-export const generatedDocumentStatusSchema = z.enum(["pending", "current", "stale", "failed"]);
+export const generatedDocumentStatusSchema = z.enum(["pending", "current", "stale", "edited", "failed"]);
+
+/** One managed section of a generated document, anchored by a named range. */
+export const managedSectionSchema = z.strictObject({
+  rangeName: z.string().min(1).max(LIMITS.shortText),
+  status: z.enum(MANAGED_SECTION_STATUSES),
+  textHash: z.string().min(1).max(64),
+  /** For a section bound to a designated field: the field value it was last generated from. */
+  base: canonicalValueSchema.exactOptional(),
+  generatedAt: timestampSchema,
+});
+export type ManagedSection = z.output<typeof managedSectionSchema>;
 
 /**
  * `generatedDocuments/{templateKey__entityType__entityId}`: a document generated once for a
@@ -448,13 +714,21 @@ export const generatedDocumentStatusSchema = z.enum(["pending", "current", "stal
  */
 export const generatedDocumentDocSchema = documentBaseSchema.extend({
   templateKey: keySchema,
+  /** The kind of its template, which decides its audience (`DOCUMENT_TEMPLATES`). */
+  templateKind: z.enum(DOCUMENT_TEMPLATE_KINDS).exactOptional(),
   ...entityRefShape,
+  title: shortTextSchema,
   externalDocumentId: z.string().min(1).max(LIMITS.shortText).exactOptional(),
-  /** The named ranges that the generator manages, by section name. */
-  managedSections: boundedRecord(keySchema, z.unknown(), 100),
+  /** Google's own address of the document, which applies the reader's own permissions. */
+  url: urlSchema.exactOptional(),
+  /** The managed sections, by section name. */
+  managedSections: boundedRecord(keySchema, managedSectionSchema, 100),
   lastGeneratedAt: timestampSchema.nullable(),
+  reportDate: isoDateSchema.exactOptional(),
   lastRevisionId: z.string().min(1).max(LIMITS.shortText).exactOptional(),
+  lastDriveVersion: z.string().min(1).max(40).exactOptional(),
   status: generatedDocumentStatusSchema,
+  statusReason: longTextSchema.exactOptional(),
   restricted: z.boolean(),
   ...scopeFieldsShape,
 });

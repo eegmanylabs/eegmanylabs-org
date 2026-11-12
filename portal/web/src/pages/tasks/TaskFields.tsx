@@ -353,6 +353,7 @@ export interface LinkTargets {
   readonly laboratory: readonly { readonly id: string; readonly name: string }[];
   readonly person: readonly { readonly id: string; readonly name: string }[];
   readonly page: readonly { readonly id: string; readonly name: string }[];
+  readonly dataset: readonly { readonly id: string; readonly name: string }[];
 }
 
 export function linkAddress(entityType: string, entityId: string): string | null {
@@ -365,15 +366,14 @@ export function linkAddress(entityType: string, entityId: string): string | null
       return `/members/${encodeURIComponent(entityId)}`;
     case "page":
       return `/pages/${encodeURIComponent(entityId)}`;
+    case "dataset":
+      return `/datasets/${encodeURIComponent(entityId)}`;
     default:
       return null;
   }
 }
 
-/**
- * The records a task links to. A dataset is linked by its identifier: the registry of datasets
- * does not exist yet, so the link is kept and opens once it does.
- */
+/** The records a task links to, each of which opens on its own page. */
 export function Links({
   task,
   targets,
@@ -389,10 +389,8 @@ export function Links({
   const [kind, setKind] = useState<(typeof LINK_KINDS)[number][0]>("replication");
   const [target, setTarget] = useState("");
   const nameOf = (entityType: string, entityId: string) =>
-    entityType === "dataset"
-      ? entityId
-      : (targets[entityType as keyof LinkTargets]?.find((candidate) => candidate.id === entityId)?.name ?? entityId);
-  const options = kind === "dataset" ? [] : targets[kind];
+    targets[entityType as keyof LinkTargets]?.find((candidate) => candidate.id === entityId)?.name ?? entityId;
+  const options = targets[kind];
   return (
     <Part title="Links">
       {task.links.length === 0 ? <p className="text-xs text-fg-muted">No links.</p> : null}
@@ -404,12 +402,7 @@ export function Links({
             <li key={`${link.entityType}:${link.entityId}`} className="flex items-center gap-2 text-sm">
               <Badge tone="outline">{label}</Badge>
               {address === null ? (
-                <span className="truncate">
-                  {nameOf(link.entityType, link.entityId)}
-                  {link.entityType === "dataset" ? (
-                    <span className="text-xs text-fg-muted"> (opens once the dataset registry exists)</span>
-                  ) : null}
-                </span>
+                <span className="truncate">{nameOf(link.entityType, link.entityId)}</span>
               ) : (
                 <Link to={address} className="truncate hover:underline">
                   {nameOf(link.entityType, link.entityId)}
@@ -460,36 +453,20 @@ export function Links({
                 </option>
               ))}
             </Select>
-            {kind === "dataset" ? (
-              <Input
-                aria-label="Identifier of the dataset"
-                className="h-8 min-w-0 flex-1"
-                value={target}
-                maxLength={200}
-                onChange={(event) => setTarget(event.target.value)}
-                placeholder="For example StudyA2001__lab-a__main"
-              />
-            ) : (
-              <Select
-                aria-label="Record to link"
-                className="h-8 min-w-0 flex-1"
-                value={target}
-                onChange={(event) => setTarget(event.target.value)}
-              >
-                <option value="">Choose a record</option>
-                {options.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name}
-                  </option>
-                ))}
-              </Select>
-            )}
+            <Select
+              aria-label="Record to link"
+              className="h-8 min-w-0 flex-1"
+              value={target}
+              onChange={(event) => setTarget(event.target.value)}
+            >
+              <option value="">Choose a record</option>
+              {options.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                </option>
+              ))}
+            </Select>
           </div>
-          {kind === "dataset" ? (
-            <p className="text-xs text-fg-muted">
-              The registry of datasets does not exist yet. The identifier is kept and the link opens once it does.
-            </p>
-          ) : null}
           <Button type="submit" size="sm" disabled={target.trim() === "" || change.busy}>
             Add link
           </Button>

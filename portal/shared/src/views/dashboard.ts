@@ -188,7 +188,8 @@ export function nextPlacement(layout: readonly Placement[], id: string, w: numbe
  * The widgets that the dashboard of the programme, a replication or a laboratory starts with:
  * figures and a chart of its participations, the participations themselves, its activity, and
  * the effective recruitment of its participations, the main experiment, the resting state and
- * unique participants each a figure of its own and never added together. The participations are
+ * unique participants each a figure of its own and never added together, and the pipeline of
+ * its datasets by state and by QC status. The participations are
  * the same documents on every dashboard (D-011), scoped to the record.
  */
 export function defaultDashboardWidgets(
@@ -201,6 +202,7 @@ export function defaultDashboardWidgets(
       : { property: scopeType === "replication" ? "replication" : "laboratory", value: scopeId };
   const participations = { collectionKey: "core:participations", scope } as const;
   const recruitment = { collectionKey: "core:recruitment", scope } as const;
+  const datasets = { collectionKey: "core:datasets", scope } as const;
   const recruited = (title: string, property: string, x: number) => ({
     type: "kpi" as const,
     config: { title, ...recruitment, config: {}, measure: { kind: "sum" as const, property } },
@@ -291,5 +293,29 @@ export function defaultDashboardWidgets(
     testedMain: recruited("Tested, main experiment", "main_tested", 0),
     testedRest: recruited("Tested, resting state", "rest_tested", 4),
     testedParticipants: recruited("Tested, unique participants", "participants_tested", 8),
+    // The pipeline of datasets: where the datasets of the scope are in their workflow, and how
+    // far their quality control has come, from the registry documents that every member reads.
+    datasetsByState: {
+      type: "chart",
+      config: { title: "Datasets by state", ...datasets, config: {}, groupBy: "status", measure: { kind: "count" } },
+      x: 0,
+      y: 14,
+      w: 6,
+      h: 4,
+    },
+    datasetsByQc: {
+      type: "chart",
+      config: {
+        title: "Datasets by QC status",
+        ...datasets,
+        config: {},
+        groupBy: "qcStatus",
+        measure: { kind: "count" },
+      },
+      x: 6,
+      y: 14,
+      w: 6,
+      h: 4,
+    },
   };
 }

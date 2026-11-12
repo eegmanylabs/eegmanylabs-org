@@ -214,7 +214,11 @@ export const saveProperty = defineCallable(savePropertyContract, {
         };
       }
 
-      const existing = input.propertyId === undefined ? undefined : definitions[input.propertyId];
+      // A name that every object inherits, such as `constructor`, is no property of the map.
+      const existing =
+        input.propertyId === undefined || !Object.hasOwn(definitions, input.propertyId)
+          ? undefined
+          : definitions[input.propertyId];
       if (input.propertyId !== undefined && (existing === undefined || reserved.has(input.propertyId))) {
         throw new AppError("not-found", "This property does not exist.");
       }

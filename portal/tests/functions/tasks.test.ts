@@ -34,6 +34,7 @@ import {
   call,
   codeOf,
   dataOf,
+  dataset,
   eventually,
   grantRole,
   laboratory,
@@ -215,6 +216,8 @@ describe("a task", () => {
   it("is created nested, with a deadline, a dependency, a link and an assignee, who is notified", async () => {
     const lead = await leadOf("StudyA2001", "uid-lead");
     await memberOf("uid-assignee");
+    // The dataset the task links to is in the registry (acceptance scenario 6).
+    await dataset("StudyA2001-lab-a-main", "StudyA2001", null);
     const listId = await projectList(lead);
     const { taskId: parent } = await call(lead, createTaskContract, {
       listId,
@@ -237,7 +240,7 @@ describe("a task", () => {
         dependsOn: { [first]: "finishToStart" },
         links: [
           { entityType: "replication", entityId: "StudyA2001" },
-          { entityType: "dataset", entityId: "StudyA2001__lab-a__main" },
+          { entityType: "dataset", entityId: "StudyA2001-lab-a-main" },
         ],
       },
     });

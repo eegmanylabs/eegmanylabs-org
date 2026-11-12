@@ -7,6 +7,13 @@ export const memberPath = (personId: string): string => `/members/${encodeURICom
 
 export const laboratoryPath = (laboratoryId: string): string => `/labs/${encodeURIComponent(laboratoryId)}`;
 
+/** The registry of datasets, and the record page of one dataset. */
+export const DATASETS_PATH = "/datasets";
+export const datasetPath = (datasetKey: string): string => `/datasets/${encodeURIComponent(datasetKey)}`;
+
+/** The storage servers that hold the copies of datasets. */
+export const STORAGE_SERVERS_PATH = "/datasets/servers";
+
 /** A page of the workspace. A thread of it is opened in its comment panel. */
 export const pagePath = (pageId: string, threadId?: string): string =>
   `/pages/${encodeURIComponent(pageId)}${threadId === undefined ? "" : `?thread=${encodeURIComponent(threadId)}`}`;
@@ -25,6 +32,7 @@ export function recordPath(entityType: EntityType, entityId: string): string | n
   if (entityType === "laboratory") return laboratoryPath(entityId);
   if (entityType === "page") return pagePath(entityId);
   if (entityType === "participation") return participationRecruitmentPath(entityId);
+  if (entityType === "dataset") return datasetPath(entityId);
   return null;
 }
 
