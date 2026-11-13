@@ -54,7 +54,7 @@ The preview builds the application and serves it with `scripts/pages-server.mjs`
 | `npm run test:functions` | Integration tests of the functions | Bundles the functions, starts the Authentication, Firestore and Functions emulators |
 | `npm run test:tools` | Integration tests of the command-line tools | Starts the Authentication and Firestore emulators |
 | `npm run test:seed-lookups` | The integration test of `seed:lookups` alone, which proves that a second run writes nothing | Starts the Firestore emulator and no other |
-| `npm run test:e2e` | Playwright tests against the built application, including the accessibility and security checks | Builds, starts all emulators and the preview server |
+| `npm run test:e2e` | Playwright tests against the built application, including the accessibility and security checks | Builds, then runs the tests in three batches (Playwright shards), each with freshly started emulators and preview server. The functions emulator keeps one idle worker process of about 220 MB for every function it has run and never stops it, so a single run of every browser test used up to 14 GB and the kernel killed processes |
 | `npm test` | All of the test commands above, with two starts of the emulators: one without the functions emulator for the rules and the tools, and one with it for the functions and the browser tests | Builds first |
 
 Every command that needs emulators starts them through `firebase emulators:exec` and stops them when the tests finish, whether they pass or fail. A test command fails at once, with a message that names the port, if another run is already using the same port base. That check covers the emulator ports and, for the commands that start the preview server, its ports as well.

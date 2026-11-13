@@ -9,8 +9,12 @@ import { adminDb } from "../support/admin";
 import { signInAsIvy } from "./registry-support";
 import { expect, test } from "./support";
 
-test("a table of 5,000 rows scrolls without long tasks above 200 milliseconds", async ({ page }) => {
+test("a table of 5,000 rows scrolls without long tasks above 200 milliseconds", async ({ page, monitor }) => {
   test.setTimeout(300_000);
+  // Loading 5,000 rows can make the Firestore SDK test the network by loading an image from
+  // Google, which the policy of an emulator build refuses (see the offline test in
+  // workspace.spec.ts). That one probe is allowed here; every other problem still fails the test.
+  monitor.expectProblems();
   // A database beneath a page of the workspace, which every member reads, with 5,000 rows
   // written as trusted code would write them.
   const pageId = "e2e-large-database-page";
@@ -106,6 +110,13 @@ test("a table of 5,000 rows scrolls without long tasks above 200 milliseconds", 
     await page.waitForTimeout(300);
     const longTasks = await page.evaluate(() => (window as unknown as { __longTasks: number[] }).__longTasks);
     expect(Math.max(0, ...longTasks), `long tasks: ${longTasks.join(", ")}`).toBeLessThanOrEqual(200);
+    const probe = "www.google.com/images/cleardot.gif";
+    expect(monitor.cspViolations.filter((violation) => !violation.includes(probe))).toEqual([]);
+    expect(
+      monitor.requests.filter((request) => new URL(request).host === "www.google.com" && !request.includes(probe)),
+    ).toEqual([]);
+    expect([...monitor.foreignHosts].filter((host) => host !== "www.google.com")).toEqual([]);
+    expect(monitor.uncaughtErrors).toEqual([]);
   } finally {
     const rows = await adminDb.collection(COLLECTIONS.databaseRows.collectionPath(databaseId)).listDocuments();
     for (let start = 0; start < rows.length; start += 400) {
