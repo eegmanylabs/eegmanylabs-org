@@ -190,13 +190,28 @@ describe("the prediction-market hypotheses, applied after the website data and t
     expect(raw).toMatchObject({ E: { v: "Alpha  power decreases over  the attended side " } });
   });
 
-  it("stores null-sig verbatim as an unverified source value: the text null is a value, and nothing states a result", async () => {
-    const second = await hypothesis("AlphaBeta2001", "h02");
-    expect(second?.nullSigSource).toBe("null");
-    expect(typeof second?.nullSigSource).toBe("string");
-    expect((await hypothesis("AlphaBeta2001", "h01"))?.nullSigSource).toBe("sig");
+  it("stores null-sig verbatim and sealed (question 22): the text null is a value, and nothing states a result", async () => {
+    const nullSigs = (await sealed("AlphaBeta2001"))?.nullSigSource as Record<string, unknown> | undefined;
+    expect(nullSigs).toEqual({ h01: "sig", h02: "null" });
+    expect(typeof nullSigs?.h02).toBe("string");
+    expect((await sealed("AlphaBeta2001"))?.materialSealedBy).toEqual({
+      decidedBy: "programmeLead",
+      decidedOn: "2026-11-13",
+      reference: "docs/MIGRATION_PLAN.md, section 11, question 22",
+    });
+    let labelled = 0;
+    for (const document of (await documentsOf("predictionMarketOutcomes")).values()) {
+      for (const value of Object.values((document.nullSigSource ?? {}) as Record<string, unknown>)) {
+        expect(["sig", "null"]).toContain(value);
+        labelled += 1;
+      }
+    }
+    // Every one of the twelve hypotheses has a label of its own, sealed with its study.
+    expect(labelled).toBe(12);
     for (const document of (await documentsOf("hypotheses", true)).values()) {
-      expect(["sig", "null"]).toContain(document.nullSigSource);
+      // The hypothesis, which every member reads, holds no label and no link of the market.
+      for (const field of ["nullSigSource", "studyDescriptionUrl", "infosheetUrl"])
+        expect(document).not.toHaveProperty(field);
       expect(document).toMatchObject({
         scientificReviewStatus: "unverified",
         analysisStatus: "notStarted",
@@ -217,10 +232,12 @@ describe("the prediction-market hypotheses, applied after the website data and t
       decidedOn: "2026-11-13",
       reference: "docs/MIGRATION_PLAN.md, section 11, question 7",
     });
-    // A blank is no label: the studies without one get no entry and no document, and never the label `no`.
-    expect(await sealed("Delta1999")).toBeUndefined();
-    expect(await sealed("AlphaGamma2002")).toBeUndefined();
-    expect((await documentsOf("predictionMarketOutcomes")).size).toBe(3);
+    // A blank is no label: the studies without one get no entry, and never the label `no`. Their sealed document holds
+    // their null-significance labels and links alone (question 22).
+    expect((await sealed("Delta1999"))?.labelsSource).toEqual({});
+    expect((await sealed("AlphaGamma2002"))?.labelsSource).toEqual({});
+    // One sealed document for each of the eight studies, each with the decision that seals the labels.
+    expect((await documentsOf("predictionMarketOutcomes")).size).toBe(8);
     // The restricted document of the replication, which its team reads, holds no label.
     expect((await documentsOf("private", true)).size).toBe(0);
     // A label is a string exactly as written. It is no boolean anywhere.
@@ -262,7 +279,7 @@ describe("the prediction-market hypotheses, applied after the website data and t
     const sealedChanges = changes.docs.filter((change) =>
       String(change.get("documentPath")).startsWith("predictionMarketOutcomes/"),
     );
-    expect(sealedChanges.length).toBe(3);
+    expect(sealedChanges.length).toBe(8);
     for (const change of sealedChanges) {
       expect(change.get("after")).toEqual({ sealed: true });
       const kept = await change.ref.collection("special").doc("state").get();
@@ -301,41 +318,44 @@ describe("the prediction-market hypotheses, applied after the website data and t
     expect(await items("formattingSignal")).toEqual([]);
   });
 
-  it("reads the address of a link from its target and never from its label", async () => {
-    const iota = await hypothesis("Iota2004", "h01");
-    expect(iota?.infosheetUrl).toBe(PAPERS.Iota2004?.infosheet);
-    expect(iota?.studyDescriptionUrl).toBe("https://osf.example.org/io004");
-    expect(await link("Iota2004", "pmInfosheet")).toMatchObject({
-      url: PAPERS.Iota2004?.infosheet,
-      // The label is the title of the link. It is no address and no identifier.
-      title: "Itoa2004",
-      kind: "url",
-      entityType: "replication",
-      entityId: "Iota2004",
-      replicationId: "Iota2004",
-      scopeKeys: ["rep:Iota2004", "members"],
-      restricted: false,
-      accessStatus: "unknown",
+  it("reads the address of a link from its target and never from its label, and seals the market's links (question 22)", async () => {
+    expect(await sealed("Iota2004")).toMatchObject({
+      infosheetUrl: PAPERS.Iota2004?.infosheet,
+      studyDescriptionUrl: "https://osf.example.org/io004",
     });
-    expect(await link("Iota2004", "pmStudyDescription")).toMatchObject({ url: "https://osf.example.org/io004" });
+    // The links to the market's documents are no document link, which members read.
+    expect(await link("Iota2004", "pmInfosheet")).toBeUndefined();
+    expect(await link("Iota2004", "pmStudyDescription")).toBeUndefined();
     // The DOI of this paper is nowhere in the text of its citation. The target of the link has it.
     expect(await link("Lambda2003", "originalPaper")).toMatchObject({
       url: "https://doi.org/10.1000/invented.2003.08",
+      kind: "url",
+      entityType: "replication",
+      entityId: "Lambda2003",
+      replicationId: "Lambda2003",
+      scopeKeys: ["rep:Lambda2003", "members"],
+      restricted: false,
+      accessStatus: "unknown",
     });
     const links = [...(await documentsOf("documentLinks")).entries()].filter(([id]) =>
       /__(pm[A-Z]|originalPaper)/.test(id),
     );
-    // Three links for each of the eight studies, and one for the programme.
-    expect(links).toHaveLength(8 * 3 + 1);
+    // The link to the paper of each of the eight studies, and none to the market.
+    expect(links).toHaveLength(8);
+    expect(links.every(([id]) => id.endsWith("__originalPaper"))).toBe(true);
+    // The link of the programme to the market's information sheet stays in its source record, which is sealed.
     const general = `documentLinks/${documentLinkSlotId(entityRefId("programme", "eegmanylabs"), "pmGeneralInfo")}`;
-    expect((await adminDb.doc(general).get()).data()).toMatchObject({
-      url: PROGRAMME_LINK.address,
-      title: PROGRAMME_LINK.label,
-      entityType: "programme",
-      entityId: "eegmanylabs",
-      replicationId: null,
-      scopeKeys: ["programme", "members"],
-    });
+    expect((await adminDb.doc(general).get()).exists).toBe(false);
+    const footer = JSON.stringify((await sourceRecords("hypotheses")).map((record) => record.raw));
+    expect(footer).toContain(PROGRAMME_LINK.address);
+    // Every study's description and information sheet are sealed, and reach no document that members read.
+    const readable = JSON.stringify([...(await memberReadable()).values()]);
+    for (const paper of Object.values(PAPERS)) {
+      expect(readable).not.toContain(paper.infosheet);
+      expect(readable).not.toContain(`"${paper.osf}"`);
+    }
+    expect(readable).not.toContain(PROGRAMME_LINK.address);
+    expect(readable).not.toContain("nullSigSource");
   });
 
   it("resolves a variant spelling through the folded lookup and stores it as an alias of the study", async () => {
@@ -613,8 +633,8 @@ describe("the prediction-market hypotheses over several runs", () => {
     expect((await documentsOf("replications")).size).toBe(8);
   });
 
-  it("writes no link to the market's documents and no null-significance label where the output is withheld (question 7)", async () => {
-    // A real project receives neither until the programme lead says whether they are prediction-market data.
+  it("writes the links to the market's documents and the null-significance labels sealed on every run, a real project's included (question 22)", async () => {
+    // No rehearsal is named: the output is released, sealed.
     await run(market, await workbookFile(), "apply", { target: { production: false, rehearse: [] } });
     const iota = await hypothesis("Iota2004", "h01");
     expect(iota).toBeDefined();
@@ -622,6 +642,11 @@ describe("the prediction-market hypotheses over several runs", () => {
       expect(iota).not.toHaveProperty(field);
     expect(await link("Iota2004", "pmInfosheet")).toBeUndefined();
     expect(await link("Iota2004", "pmStudyDescription")).toBeUndefined();
+    expect(await sealed("Iota2004")).toMatchObject({
+      nullSigSource: { h01: expect.any(String) },
+      infosheetUrl: PAPERS.Iota2004?.infosheet,
+      materialSealedBy: { reference: "docs/MIGRATION_PLAN.md, section 11, question 22" },
+    });
     // The survey and market questions are written, sealed: programme administrators alone read them.
     expect((await documentsOf("predictionMarketItems")).size).toBeGreaterThan(0);
   });
@@ -714,9 +739,15 @@ describe("the prediction-market hypotheses over several runs", () => {
       "infosheet_link:e/hypotheses/infosheet_link/noAddress",
       "studyDescr_pdf:e/hypotheses/studyDescr_pdf/target+e/hypotheses/studyDescr_pdf/text",
     ]);
+    // The addresses are sealed (question 22): the items are sealed and show neither address.
+    for (const defect of defects) {
+      expect(defect.sealed).toBe(true);
+      for (const value of claimValues(defect)) expect(value).toBeUndefined();
+    }
+    expect(JSON.stringify(defects)).not.toContain("osf.example.org");
     // The link is what a reader follows, so its target is the address. A label alone gives none.
-    expect((await hypothesis("AlphaGamma2002", "h01"))?.studyDescriptionUrl).toBe("https://osf.example.org/ag002");
-    expect(await hypothesis("Iota2004", "h01")).not.toHaveProperty("infosheetUrl");
+    expect((await sealed("AlphaGamma2002"))?.studyDescriptionUrl).toBe("https://osf.example.org/ag002");
+    expect(await sealed("Iota2004")).not.toHaveProperty("infosheetUrl");
     expect(await link("Iota2004", "pmInfosheet")).toBeUndefined();
     // The label still names the study, in its own scheme.
     expect(await alias("Iota2004", "sourceLabel", "Itoa2004")).toBeDefined();
@@ -743,12 +774,16 @@ describe("the prediction-market hypotheses over several runs", () => {
       "apply",
     );
     const reviews = await items("vocabularyReview");
+    // The value of a row is a sealed label (question 22): its item is sealed and shows no value. The new option of a
+    // list is vocabulary, which names no row, and is shown.
     expect(reviews.map((item) => `${item.field}:${claimSources(item)[0]}=${claimValues(item)[0]}`).sort()).toEqual([
-      "null-sig:e/hypotheses=maybe",
+      "null-sig:e/hypotheses=undefined",
       "replicated:e/hypotheses/list=postponed",
     ]);
-    // The value is stored as it is written, whatever the list says.
-    expect((await hypothesis("Delta1999", "h01"))?.nullSigSource).toBe("maybe");
+    expect(reviews.find((item) => item.field === "null-sig")?.sealed).toBe(true);
+    // The value is stored as it is written, whatever the list says, in the sealed document.
+    expect((await sealed("Delta1999"))?.nullSigSource).toMatchObject({ h01: "maybe" });
+    expect(await hypothesis("Delta1999", "h01")).not.toHaveProperty("nullSigSource");
     // A footer counter counts the sealed labels, so the item names its cell and shows neither count.
     const [footer] = await items("annotationReview", "footer");
     expect(claimValues(footer)).toEqual([undefined, undefined]);

@@ -73,7 +73,9 @@ export interface ItemClaim {
   readonly sourceRecordId?: string;
   /**
    * True for a value that a decision of the programme seals: an outcome label of source E
-   * (question 7), a summary figure of source F (question 14), or what is computed from one. The
+   * (question 7), a null-significance label or a link to the market's study description or
+   * information sheet (question 22), a summary figure of source F (question 14), or what is
+   * computed from one. The
    * item is then sealed, the claim shows no value, and its key is a keyed hash of the subject and
    * the value together, so that two items with equal values have different keys.
    */
@@ -83,16 +85,32 @@ export interface ItemClaim {
 /** The figures of the summary tabs of sources F and A, under the names their claims carry. */
 const SUMMARY_METRICS = new Set(["nLabsSigned", "totalNToBeRun", "nLabsFinished", "totalNMainCollected", "totalNRest"]);
 
+/** The columns of source E whose values are sealed labels (questions 7 and 22). */
+const SEALED_LABEL_COLUMNS = new Set(["replicated", "null-sig"]);
+/** The columns of source E whose links lead to the market's own documents (question 22). */
+const SEALED_LINK_COLUMNS = new Set(["studyDescr_pdf", "infosheet_link"]);
+/** The claims about a link cell that state its address: its target, its text, and a text that is no address. */
+const LINK_ADDRESS_CLAIMS = new Set(["target", "text", "noAddress"]);
+
 /**
  * Whether the source of a claim states a sealed value, whatever the call site says: an outcome
- * label of source E or a counter computed from the labels (question 7), or a summary figure of
- * source F (question 14) or of the coordination workbook A, which the project seals alike, or a
- * value computed from one. The migration of items raised before the seal reads them the same way.
+ * label of source E or a counter computed from the labels (question 7), a null-significance
+ * label or the address of a link to the market's study description or information sheet
+ * (question 22), the value of a row of either label column, or a summary figure of source F
+ * (question 14) or of the coordination workbook A, which the answer to question 24 keeps sealed,
+ * or a value computed from one. The migration of items raised before the seal reads them the
+ * same way. An option of a validated list is vocabulary, which names no row, and stays shown.
  */
 export function statesSealedValue(source: string, field: string | undefined): boolean {
   const parts = source.split("/");
   const [sourceKey] = parts;
-  if (sourceKey === "e") return ["replicated", "footer", "recount"].includes(parts.at(-1) ?? "");
+  if (sourceKey === "e") {
+    const last = parts.at(-1) ?? "";
+    if (["replicated", "null-sig", "footer", "recount"].includes(last)) return true;
+    if (SEALED_LINK_COLUMNS.has(parts.at(-2) ?? "") && LINK_ADDRESS_CLAIMS.has(last)) return true;
+    // A value of a row outside the list of its column, which the claim of the tab itself states.
+    return parts.length === 2 && field !== undefined && SEALED_LABEL_COLUMNS.has(field);
+  }
   if (sourceKey !== "f" && sourceKey !== "a") return false;
   // The comparison of the two workbooks names the bare source keys, and the metric as the field.
   if (parts.length === 1) return field !== undefined && SUMMARY_METRICS.has(field);

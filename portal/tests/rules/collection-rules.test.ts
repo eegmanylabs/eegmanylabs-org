@@ -830,8 +830,17 @@ describe("a replication", () => {
           resultReviewedBy: OWNER_UID,
           resultReviewedAt: serverTimestamp(),
         }),
-        "an edit to a study description that is no web address": update("ownLead", `${hypotheses}/h01`, {
-          studyDescriptionUrl: "x",
+        "an edit to a preregistration that is no web address": update("ownLead", `${hypotheses}/h01`, {
+          preregistrationUrl: "x",
+        }),
+        // The null-significance label and the links to the market's documents are sealed (question 22), and no field
+        // of a hypothesis, which every member reads.
+        "a null-significance label on a hypothesis": update("ownLead", `${hypotheses}/h01`, { nullSigSource: "sig" }),
+        "a link to the market's study description on a hypothesis": update("ownLead", `${hypotheses}/h01`, {
+          studyDescriptionUrl: "https://example.org/study-description",
+        }),
+        "a link to the market's information sheet on a hypothesis": update("ownLead", `${hypotheses}/h01`, {
+          infosheetUrl: "https://example.org/information-sheet",
         }),
         "a removal": remove("ownLead", `${hypotheses}/h01`),
         // A lead does not review its own result: the review and the review status are for
@@ -913,7 +922,7 @@ describe("a replication", () => {
           resultReviewedAt: serverTimestamp(),
         }),
       ],
-      // The review covers the content. Its lead changes nothing but the addresses any more, and
+      // The review covers the content. Its lead changes nothing but the address any more, and
       // a reviewer who changes the content clears the review or signs it anew.
       "another analysis under the review, by the lead": [
         "denied",
@@ -925,6 +934,10 @@ describe("a replication", () => {
       ],
       "an address on the reviewed hypothesis, by the lead": [
         "allowed",
+        update("ownLead", `${hypotheses}/h01`, { preregistrationUrl: "https://example.org/preregistration" }),
+      ],
+      "a sealed link on the reviewed hypothesis, by the lead": [
+        "denied",
         update("ownLead", `${hypotheses}/h01`, { studyDescriptionUrl: "https://example.org/study-description" }),
       ],
       "another analysis under the review of someone else, by an administrator": [

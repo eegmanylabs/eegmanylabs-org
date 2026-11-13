@@ -634,8 +634,9 @@ export const systemSettingsDocSchema = documentBaseSchema.extend({
   recruitmentInactivityDays: z.number().int().min(7).max(365).exactOptional(),
   /**
    * When a programme administrator marked the migration verified, through `markMigrationVerified`
-   * with the second factor, and who did. Raw source material is kept until then and for a year
-   * after (docs/MIGRATION_PLAN.md, section 11, question 20). Absent while it is unverified.
+   * with the second factor, and who did. Raw source material is kept until then, and the outreach
+   * records of people who never joined for three years after (docs/MIGRATION_PLAN.md, section 11,
+   * questions 20 and 21). Absent while it is unverified.
    */
   migrationVerifiedAt: timestampSchema.exactOptional(),
   migrationVerifiedBy: uidSchema.exactOptional(),

@@ -1,11 +1,13 @@
 // The rules that apply the programme's answers of 13 November 2026 (docs/MIGRATION_PLAN.md,
-// section 11), beside the registry-driven matrix: the outcome labels of the prediction market
+// section 11), beside the registry-driven matrix: the outcome labels of the prediction market,
+// its null-significance labels and the links to its study descriptions and information sheets,
 // and the summary figures of the historical workbooks are sealed and read by programme
 // administrators alone, and so are the raw rows that hold them, whatever an override or a named
-// grant says (questions 7 and 14); the contributor lists of a replication are read by its team
-// (question 10); and the basis on which an import confirmed a lead is written by trusted code.
+// grant says (questions 7, 14, 22 and 24); the contributor lists of a replication are read by its
+// team and by programme staff (questions 10 and 23); and the basis on which an import confirmed a
+// lead is written by trusted code.
 // Fixtures are synthetic: fictitious accounts and studies on the example.org domain.
-import { replicationMembershipId } from "@eegml/shared";
+import { hypothesisId, replicationMembershipId } from "@eegml/shared";
 import type { RulesTestEnvironment } from "@firebase/rules-unit-testing";
 import { doc, limit, setDoc, where } from "firebase/firestore";
 import { afterAll, beforeAll, describe, it } from "vitest";
@@ -144,8 +146,64 @@ describe("what a decision of the programme seals", () => {
   });
 });
 
+describe("the null-significance labels and the links to the market's documents (question 22)", () => {
+  const sealed = storedPath("predictionMarketOutcomes");
+  const hypothesis = `replications/${OWN_REPLICATION}/hypotheses/${hypothesisId(1)}`;
+  const material = {
+    nullSigSource: "sig",
+    studyDescriptionUrl: "https://example.org/synthetic-market/study-description.pdf",
+    infosheetUrl: "https://example.org/synthetic-market/information-sheet",
+  } as const;
+
+  it("are held in the sealed document of the replication, which a programme administrator alone reads", async () => {
+    const seeded = FIXTURES.predictionMarketOutcomes?.seed ?? {};
+    for (const field of ["nullSigSource", "studyDescriptionUrl", "infosheetUrl", "materialSealedBy"]) {
+      if (!(field in seeded)) throw new Error(`The sealed fixture holds no ${field}.`);
+    }
+    await expectOutcomes({
+      "the programme administrator reads them": ["allowed", get("admin", sealed)],
+      ...forEach(EVERYONE_BELOW_ADMIN, "denied", "reads them", (caller) => get(caller, sealed)),
+      ...forEach(EVERYONE_BELOW_ADMIN, "denied", "lists them", (caller) =>
+        list(caller, "predictionMarketOutcomes", where("replicationId", "==", OWN_REPLICATION), limit(10)),
+      ),
+    });
+  });
+
+  it("are written by no client into the sealed document, a programme administrator included", async () => {
+    await expectOutcomes({
+      "the programme administrator rewrites a null-significance label": [
+        "denied",
+        update("admin", sealed, { nullSigSource: { h01: "a forged label" } }),
+      ],
+      "the programme administrator rewrites a link": [
+        "denied",
+        update("admin", sealed, { infosheetUrl: "https://example.org/a-forged-sheet" }),
+      ],
+    });
+  });
+
+  it("are written by no one onto a hypothesis, which every member reads", async () => {
+    const callers = ["admin", "coreTeam", "ownLead"] as const;
+    const attempts: Record<string, Parameters<typeof expectOutcomes>[0][string]> = {};
+    for (const caller of callers) {
+      // The same caller may change the address of the preregistration, so a denial below is the field's alone.
+      attempts[`${caller} changes the preregistration of a hypothesis`] = [
+        "allowed",
+        update(caller, hypothesis, { preregistrationUrl: `https://example.org/preregistration-${caller}` }),
+      ];
+      for (const [field, value] of Object.entries(material)) {
+        attempts[`${caller} writes ${field} on a hypothesis`] = [
+          "denied",
+          update(caller, hypothesis, { [field]: value }),
+        ];
+      }
+    }
+    await expectOutcomes(attempts);
+  });
+});
+
 describe("the contributor lists of a replication", () => {
-  it("are read by its team, which the programme decided, and by programme staff, which is the portal's model and an open question, and by no other member", async () => {
+  it("are read by its team, which the programme decided, and by programme staff, which the answer to question 23 confirms, and by no other member", async () => {
     const path = storedPath("contributors");
     await expectOutcomes({
       "the programme administrator reads a row": ["allowed", get("admin", path)],

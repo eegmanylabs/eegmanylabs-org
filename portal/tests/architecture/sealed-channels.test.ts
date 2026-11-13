@@ -1,5 +1,5 @@
-// What a decision of the programme seals (docs/MIGRATION_PLAN.md, section 11, questions 7 and
-// 14) reaches no derived channel. The rules let programme administrators alone read a sealed
+// What a decision of the programme seals (docs/MIGRATION_PLAN.md, section 11, questions 7, 14,
+// 22 and 24) reaches no derived channel. The rules let programme administrators alone read a sealed
 // collection (tests/rules/programme-answers-features.test.ts); this file holds the code that
 // derives other documents from stored ones to the same promise: the search index, digests and
 // scheduled reports, exports, the publishing allow-list, automations, synchronised sheets,
@@ -38,6 +38,11 @@ const CHANNELS: Readonly<Record<string, readonly string[]>> = {
 };
 
 const SEALED_NAMES = SEALED.flatMap((entry) => [entry.key, entry.collectionId]);
+
+/** The fields that question 22 seals, which the sealed document of the prediction market alone holds. */
+const SEALED_MARKET_FIELDS = ["nullSigSource", "studyDescriptionUrl", "infosheetUrl"] as const;
+/** The slots of the document links to the market's own documents, which no importer writes since question 22. */
+const SEALED_MARKET_SLOTS = ["pmStudyDescription", "pmInfosheet", "pmGeneralInfo"] as const;
 
 describe("a sealed collection", () => {
   it("is what the answers seal: the prediction-market data, the summary figures and the raw rows that hold them", () => {
@@ -88,6 +93,42 @@ describe("a sealed collection", () => {
     const trigger = sourceFiles("functions/src/triggers").find((file) => file.path.endsWith("audit-entry.ts"));
     expect(trigger?.text).toContain('entry.dataClass === "member" || entry.dataClass === "public"');
     for (const entry of SEALED) expect(["member", "public"]).not.toContain(entry.dataClass);
+  });
+
+  it("holds the null-significance labels and the links to the market's documents in the sealed document alone (question 22)", () => {
+    const holders = COLLECTION_ENTRIES.filter((entry) =>
+      SEALED_MARKET_FIELDS.some((field) => field in entry.schema.shape),
+    ).map((entry) => entry.key);
+    expect(holders).toEqual(["predictionMarketOutcomes"]);
+    expect(SEALED.map((entry) => entry.key)).toContain("predictionMarketOutcomes");
+  });
+
+  it.each(Object.entries(CHANNELS))(
+    "leaves the null-significance labels and the links to the market's documents unnamed in the code of %s",
+    (_channel, roots) => {
+      const files = roots.flatMap((root) =>
+        root.endsWith(".ts")
+          ? sourceFiles(root.split("/").slice(0, -1).join("/")).filter((file) => file.path === root)
+          : sourceFiles(root),
+      );
+      const naming = files.flatMap((file) =>
+        [...SEALED_MARKET_FIELDS, ...SEALED_MARKET_SLOTS]
+          .filter((name) => file.text.includes(name))
+          .map((name) => `${file.path}: ${name}`),
+      );
+      expect(naming).toEqual([]);
+    },
+  );
+
+  it("is written by the importer of source E into no document link and no hypothesis (question 22)", () => {
+    const importer = sourceFiles("tools/src/import/sources").find((file) =>
+      file.path.endsWith("sources/prediction-market.ts"),
+    );
+    for (const slot of SEALED_MARKET_SLOTS) expect(importer?.text, slot).not.toContain(`"${slot}"`);
+    for (const field of SEALED_MARKET_FIELDS) {
+      // Each field is named only where the importer states the sealed document.
+      expect(importer?.text.split(`${field}:`).length, field).toBe(2);
+    }
   });
 
   it("shows a marker in the change log of an import in place of its states", () => {

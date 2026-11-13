@@ -12,7 +12,11 @@
 // | 7 and 14              | The outcome labels of source E and the summary figures of source F are sealed |
 // | 10                    | Contributor lists are read by the team of their replication                   |
 // | 15                    | The alpha-asymmetry subproject is active and is the related project `asymmetry` |
-// | 20                    | Raw source material is kept until the migration is verified and for one year after; gender and ethnicity are held only with explicit consent |
+// | 20                    | Gender and ethnicity are held only with explicit consent                      |
+// | 20 and 21             | Raw source material is kept until the migration is verified; three years after, the outreach records of people who never joined are deleted and nothing else is |
+// | 22                    | The links and null-significance labels of the prediction market are sealed like its outcome labels |
+// | 23                    | Programme staff read contributor lists, as they read every scoped record     |
+// | 24                    | The seal of every source's raw rows and of the summary figures of source A is kept |
 //
 // Of the decisions needed of docs/DECISIONS.md, decision 7 is recorded here as well: no
 // notification email is sent for now, and notifications and digests stay in the portal.
@@ -147,54 +151,67 @@ export const DECIDED_STUDY_IDENTIFIERS: readonly string[] = [
   ...new Set([...Object.keys(STUDY_STATUS_DECISIONS), ...SHARED_DATASET_GROUPS.flat(), ...COMBINED_AMODIO_STUDIES]),
 ];
 
-/** Question 10: contributor lists of manuscripts are read by the team of their replication. */
+/**
+ * Question 10: contributor lists of manuscripts are read by the team of their replication.
+ * Question 23 adds programme staff (the core team), who read them as they read every record
+ * within a scope.
+ */
 export const CONTRIBUTOR_LISTS_DECISION = migrationAnswer(10);
 
 /**
- * Questions 7 and 14: what is sealed. A sealed value is read by programme administrators alone,
- * through the capability `sealed.read`, and reaches no member, coordinator, lead, derived view,
- * search entry, digest, export, publication, automation or generated document.
+ * Questions 7, 14, 22 and 24: what is sealed. A sealed value is read by programme administrators
+ * alone, through the capability `sealed.read`, and reaches no member, coordinator, lead, derived
+ * view, search entry, digest, export, publication, automation, generated document, review-queue
+ * item or value of the change log.
  *
- * | Source | What is sealed                                            | Question |
- * |--------|-----------------------------------------------------------|----------|
- * | `e`    | The outcome labels of the column `replicated`             | 7        |
- * | `f`    | The summary figures of the tab `numberOfLabsPerReplication` | 14     |
+ * | Source | What is sealed                                                                  | Question |
+ * |--------|---------------------------------------------------------------------------------|----------|
+ * | `e`    | The outcome labels of the column `replicated`                                   | 7        |
+ * | `e`    | The survey and market questions of the tab `questions4MarketsNSurvey`           | 7        |
+ * | `e`    | The links to the market's study descriptions and information sheets, and the null-significance labels of the column `null-sig` | 22 |
+ * | `f`    | The summary figures of the tab `numberOfLabsPerReplication`                     | 14       |
+ * | `a`    | The summary figures of the coordination workbook                                | 24       |
+ * | All    | The raw rows of every source                                                    | 24       |
  *
- * The raw rows of both sources hold the sealed values, so their source records are read by
- * holders of `sealed.read` alone. The project extends the seal, as a safeguard of its own and no
- * part of the answers, to the raw rows of every other source and to the summary figures of the
- * coordination workbook A; whether the programme wants that is an open question
- * (docs/MIGRATION_PLAN.md, section 11).
+ * The raw rows of sources E and F hold the values that questions 7, 14 and 22 seal. The project
+ * extended the seal, as a safeguard, to the raw rows of every other source and to the summary
+ * figures of the coordination workbook A, and the answer to question 24 keeps that wider seal.
  */
 export const SEALED_SOURCE_KEYS = ["e", "f"] as const;
 export const SEALED_OUTCOMES_DECISION = migrationAnswer(7);
 export const SEALED_SUMMARY_DECISION = migrationAnswer(14);
+/** Question 22: the links to the market's documents and the null-significance labels are sealed like the outcome labels. */
+export const SEALED_MARKET_MATERIAL_DECISION = migrationAnswer(22);
 /** The source whose summary figures question 14 seals. */
 export const SEALED_SUMMARY_SOURCE_KEY = "f";
 
 /**
- * Question 20: raw source records and export files are kept until an administrator marks the
- * migration verified, and for one year after. Then the outreach records of source F for people
- * who never joined the programme are deleted. What happens to the other raw records after that
- * year was not decided, so the portal deletes nothing else and keeps the question open
- * (docs/MIGRATION_PLAN.md, section 11).
+ * Questions 20 and 21: raw source records and export files are kept until an administrator marks
+ * the migration verified. Question 20 kept them for one year after; the later answer to question
+ * 21 extends that to three years. Then the outreach records of source F for people who never
+ * joined the programme are deleted, and nothing else: every other raw source record and export
+ * file is kept.
  *
- * "Never joined" is the project's reading of the answer, written down in the same section: an
- * outreach contact that names no person, whose address resolves to no person through the email
- * index, and whose row no open review item names. A contact that may belong to a member is kept.
+ * "Never joined" is the reading that question 21 put to the programme lead and that the answer
+ * kept: an outreach contact that names no person, whose address resolves to no person through the
+ * email index, and whose row no open review item names. A contact that may belong to a member is
+ * kept.
  */
-export const MIGRATION_RETENTION_DECISION = migrationAnswer(20);
-/** The source whose outreach records the retention of question 20 deletes. */
+export const MIGRATION_RETENTION_DECISION = migrationAnswer(21);
+/** The source whose outreach records the retention of questions 20 and 21 deletes. */
 export const OUTREACH_SOURCE_KEY = "f";
+/** The calendar years after the verification for which the outreach records are kept (question 21). */
+export const OUTREACH_RETENTION_YEARS = 3;
 
 /**
- * The instant before which nothing of question 20 is deleted: one calendar year after the
- * verification, in UTC, or null while unverified. A verification on 29 February counts to 1 March.
+ * The instant before which nothing of questions 20 and 21 is deleted: three calendar years after
+ * the verification, in UTC, or null while unverified. A verification on 29 February counts to 1
+ * March. Three calendar years span 1,095 or 1,096 days, by the leap days they cross.
  */
 export function outreachRetentionCutoff(verifiedAt: Date | null): Date | null {
   if (verifiedAt === null) return null;
   const cutoff = new Date(verifiedAt.getTime());
-  cutoff.setUTCFullYear(cutoff.getUTCFullYear() + 1);
+  cutoff.setUTCFullYear(cutoff.getUTCFullYear() + OUTREACH_RETENTION_YEARS);
   return cutoff;
 }
 

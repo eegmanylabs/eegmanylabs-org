@@ -32,6 +32,7 @@ import {
   rolesOfMemberEntry,
   rolesOfMembership,
   rolesOfPerson,
+  SEALED_MARKET_MATERIAL_DECISION,
   SEALED_OUTCOMES_DECISION,
   sequenceId,
   sha256Hex,
@@ -65,6 +66,7 @@ import {
   DEMO_LABORATORIES,
   DEMO_LABORATORY_MEMBERS,
   DEMO_MANUSCRIPTS,
+  DEMO_MARKET_LINKS,
   DEMO_MEMBERSHIPS,
   DEMO_PARTICIPATIONS,
   DEMO_PAUSE,
@@ -363,12 +365,23 @@ export function demoDocuments(now: Date, hashKey: string): DemoDocument[] {
         (hypothesis) => hypothesis.replicationId === replication.studyKey && hypothesis.replicatedSource !== undefined,
       ).map((hypothesis) => [hypothesisId(hypothesis.number), hypothesis.replicatedSource]),
     );
-    if (Object.keys(replicated).length > 0) {
-      // The outcome labels are sealed, as the programme decided for the real ones (question 7).
+    const nullSig = Object.fromEntries(
+      DEMO_HYPOTHESES.filter(
+        (hypothesis) => hypothesis.replicationId === replication.studyKey && hypothesis.nullSigSource !== undefined,
+      ).map((hypothesis) => [hypothesisId(hypothesis.number), hypothesis.nullSigSource]),
+    );
+    const links = DEMO_MARKET_LINKS[replication.studyKey];
+    const material = Object.keys(nullSig).length > 0 || links !== undefined;
+    if (Object.keys(replicated).length > 0 || material) {
+      // The outcome labels are sealed, as the programme decided for the real ones (question 7), and so are the
+      // null-significance labels and the links to the market's documents (question 22).
       add("predictionMarketOutcomes", COLLECTIONS.predictionMarketOutcomes.docPath(replication.studyKey), {
         replicationId: replication.studyKey,
         labelsSource: replicated,
         sealedBy: SEALED_OUTCOMES_DECISION,
+        ...(Object.keys(nullSig).length === 0 ? {} : { nullSigSource: nullSig }),
+        ...(links ?? {}),
+        ...(material ? { materialSealedBy: SEALED_MARKET_MATERIAL_DECISION } : {}),
       });
     }
   }
@@ -394,7 +407,6 @@ export function demoDocuments(now: Date, hashKey: string): DemoDocument[] {
         replicationId: hypothesis.replicationId,
         hypothesisNumber: String(hypothesis.number),
         text: hypothesis.text,
-        ...(hypothesis.nullSigSource === undefined ? {} : { nullSigSource: hypothesis.nullSigSource }),
         scientificReviewStatus: "unverified",
         analysisStatus: "notStarted",
         resultReviewedBy: null,

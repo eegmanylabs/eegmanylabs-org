@@ -6,7 +6,7 @@
 // |--------------------|----------|-------------------------------------------------------------------------|---------------------------------------|
 // | `candidateStudies` | 9        | The candidate documents of the three candidate tabs of the list of studies | Withheld: the candidates stay archived in the source records |
 // | `replicatedLabels` | 7        | The unverified outcome labels of the prediction-market hypotheses       | Released, sealed for programme administrators |
-// | `predictionMarketMaterial` | 7 | The links to the market's study description and information sheet, and the null-significance labels of the hypotheses | Withheld: whether these are prediction-market data, which no one may see, is asked of the programme lead |
+// | `predictionMarketMaterial` | 22 | The links to the market's study description and information sheet, and the null-significance labels of the hypotheses | Released, sealed for programme administrators like the outcome labels |
 // | `contributorLists` | 10       | The apply of a contributor sheet                                         | Released, read by the team of the replication |
 // | `demographics`     | 20       | The apply of the membership workbook, which holds special-category data | Released: values are stored only for a person whose consent the portal records, and discarded for everyone else |
 //
@@ -18,6 +18,7 @@ import {
   CONTRIBUTOR_LISTS_DECISION,
   DEMOGRAPHICS_CONSENT_DECISION,
   type ProgrammeDecision,
+  SEALED_MARKET_MATERIAL_DECISION,
   SEALED_OUTCOMES_DECISION,
 } from "@eegml/shared";
 import { ToolRefusal } from "../environment";
@@ -37,9 +38,9 @@ export const WITHHELD_OUTPUTS = {
     releasedBy: SEALED_OUTCOMES_DECISION,
   },
   predictionMarketMaterial: {
-    question: 7,
+    question: 22,
     what: "the links to the study descriptions and information sheets of the prediction market and the null-significance labels of its hypotheses",
-    releasedBy: null,
+    releasedBy: SEALED_MARKET_MATERIAL_DECISION,
   },
   contributorLists: { question: 10, what: "the contributor lists", releasedBy: CONTRIBUTOR_LISTS_DECISION },
   demographics: {

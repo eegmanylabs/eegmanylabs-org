@@ -2,7 +2,10 @@
 // measured and analysed, where it was preregistered, the original statistics and the result
 // with where each comes from, the analysis runs that test it, the outputs that report it and
 // the prediction-market questions about it. A value that nobody has recorded stays empty: the
-// portal never fills one in.
+// portal never fills one in. The prediction-market data, the outcome and null-significance
+// labels, the links to the market's documents and its questions, are sealed by decisions of the
+// programme (docs/MIGRATION_PLAN.md, section 11, questions 7 and 22) and shown to programme
+// administrators alone.
 import { type FindingSource, findingSourceSchema, recordHypothesisFindingContract } from "@eegml/shared";
 import { type FormEvent, useState } from "react";
 import { Detail, Details } from "@/components/registry/details";
@@ -20,6 +23,28 @@ import { ANALYSIS_STATUS_LABELS, FINDING_SOURCE_LABELS, provenanceText } from "@
 import { SCIENTIFIC_REVIEW_LABELS } from "@/registry/labels";
 
 type Hypothesis = RecordOf<"replicationHypotheses">;
+
+/** The sealed prediction-market data of a replication, which programme administrators alone read. */
+export interface SealedMarketData {
+  /** The verbatim "replicated" labels by hypothesis. */
+  readonly replicated: Readonly<Record<string, string>>;
+  /** The verbatim null-significance labels by hypothesis. */
+  readonly nullSig: Readonly<Record<string, string>>;
+  readonly studyDescriptionUrl: string | undefined;
+  readonly infosheetUrl: string | undefined;
+}
+
+const SEALED_NOTE = "Sealed by a decision of the programme and shown to programme administrators only";
+
+/** An address that a source gave, as a link. */
+function Address({ url }: { url: string | undefined }) {
+  if (url === undefined) return <Unknown />;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="break-all text-fg-accent underline">
+      {url}
+    </a>
+  );
+}
 
 /** A label as a source gave it, which nobody has reviewed scientifically. */
 function SourceValue({ value }: { value: string }) {
@@ -64,8 +89,8 @@ function Finding({
 export interface HypothesesTabProps {
   studyKey: string;
   hypotheses: readonly Hypothesis[];
-  /** The verbatim "replicated" labels by hypothesis, which are sealed, or null where the caller may not read them. */
-  replicatedLabels: Readonly<Record<string, string>> | null;
+  /** The sealed prediction-market data of the replication, or null where the caller may not read it. */
+  sealed: SealedMarketData | null;
   /** The analysis runs the reader may read. */
   runs: readonly RecordOf<"processingRuns">[];
   manuscripts: readonly RecordOf<"manuscripts">[];
@@ -78,7 +103,7 @@ export interface HypothesesTabProps {
 export function HypothesesTab({
   studyKey,
   hypotheses,
-  replicatedLabels,
+  sealed,
   runs,
   manuscripts,
   predictionItems,
@@ -95,9 +120,20 @@ export function HypothesesTab({
         Original statistics and results are shown with where they come from. The labels "null or significant" and
         "replicated" are copied from the programme's historical records and nobody has reviewed them scientifically.
       </p>
+      {sealed === null ? null : (
+        <Details>
+          <Detail term="Prediction-market study description">
+            <Address url={sealed.studyDescriptionUrl} />
+          </Detail>
+          <Detail term="Prediction-market information sheet">
+            <Address url={sealed.infosheetUrl} />
+          </Detail>
+        </Details>
+      )}
       <ol className="grid gap-3">
         {sorted.map((hypothesis) => {
-          const replicated = replicatedLabels?.[hypothesis.id];
+          const replicated = sealed?.replicated[hypothesis.id];
+          const nullSig = sealed?.nullSig[hypothesis.id];
           const testing = runs.filter((run) => run.archivedAt === null && run.hypothesisIds.includes(hypothesis.id));
           const reporting = manuscripts.filter(
             (manuscript) => manuscript.archivedAt === null && (manuscript.hypothesisIds ?? []).includes(hypothesis.id),
@@ -185,15 +221,17 @@ export function HypothesesTab({
                   </Detail>
                 )}
                 <Detail term="Null or significant">
-                  {hypothesis.nullSigSource === undefined ? (
+                  {sealed === null ? (
+                    <Unknown>{SEALED_NOTE}</Unknown>
+                  ) : nullSig === undefined ? (
                     <Unknown />
                   ) : (
-                    <SourceValue value={hypothesis.nullSigSource} />
+                    <SourceValue value={nullSig} />
                   )}
                 </Detail>
                 <Detail term="Replicated">
-                  {replicatedLabels === null ? (
-                    <Unknown>Sealed by a decision of the programme and shown to programme administrators only</Unknown>
+                  {sealed === null ? (
+                    <Unknown>{SEALED_NOTE}</Unknown>
                   ) : replicated === undefined ? (
                     <Unknown />
                   ) : (

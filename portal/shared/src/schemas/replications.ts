@@ -131,10 +131,12 @@ export const replicationDetailDocSchema = documentBaseSchema.extend({
 export type ReplicationDetailDoc = z.output<typeof replicationDetailDocSchema>;
 
 /**
- * `predictionMarketOutcomes/{studyKey}`: the outcome labels of the prediction market for one
- * replication, sealed by a decision of the programme (docs/MIGRATION_PLAN.md, section 11,
- * question 7). Programme administrators alone read them, and nothing derived from them reaches
- * any other reader. A label is an unverified source value: it sets no result and no status.
+ * `predictionMarketOutcomes/{studyKey}`: the sealed data of the prediction market for one
+ * replication (docs/MIGRATION_PLAN.md, section 11): its outcome labels (question 7), and its
+ * null-significance labels and the links to its study description and information sheet
+ * (question 22). Programme administrators alone read them, and nothing derived from them
+ * reaches any other reader. A label is an unverified source value: it sets no result and no
+ * status.
  */
 export const predictionMarketOutcomeDocSchema = documentBaseSchema.extend({
   replicationId: idSchema,
@@ -142,6 +144,17 @@ export const predictionMarketOutcomeDocSchema = documentBaseSchema.extend({
   labelsSource: boundedRecord(mapKeySchema, verbatimSchema, 99),
   /** The decision that seals the labels. */
   sealedBy: programmeDecisionSchema,
+  /**
+   * Hypothesis identifier to the verbatim label of the column `null-sig`. The text `null` is a
+   * real value here and is never read as missing. A blank cell has no entry.
+   */
+  nullSigSource: boundedRecord(mapKeySchema, verbatimSchema, 99).exactOptional(),
+  /** The address of the market's description of the study: the target of the link in `studyDescr_pdf`. */
+  studyDescriptionUrl: urlSchema.exactOptional(),
+  /** The address of the market's information sheet of the study: the target of the link in `infosheet_link`. */
+  infosheetUrl: urlSchema.exactOptional(),
+  /** The decision that seals the null-significance labels and the links, present while the document holds any. */
+  materialSealedBy: programmeDecisionSchema.exactOptional(),
   ...provenanceShape,
 });
 export type PredictionMarketOutcomeDoc = z.output<typeof predictionMarketOutcomeDocSchema>;
@@ -290,8 +303,6 @@ export const replicationHypothesisDocSchema = documentBaseSchema.extend({
   /** Written through a callable function together with its provenance, or by an import. */
   originalStatistics: longTextSchema.exactOptional(),
   originalStatisticsProvenance: findingProvenanceSchema.exactOptional(),
-  /** Verbatim. The text `null` is a real value here and is never read as missing. */
-  nullSigSource: verbatimSchema.exactOptional(),
   scientificReviewStatus: scientificReviewStatusSchema,
   analysisStatus: analysisStatusSchema,
   /** Written through a callable function together with its provenance. */
@@ -299,8 +310,9 @@ export const replicationHypothesisDocSchema = documentBaseSchema.extend({
   resultProvenance: findingProvenanceSchema.exactOptional(),
   resultReviewedBy: actorSchema.nullable(),
   resultReviewedAt: timestampSchema.nullable(),
-  studyDescriptionUrl: urlSchema.exactOptional(),
-  infosheetUrl: urlSchema.exactOptional(),
+  // The null-significance label and the links to the market's study description and information
+  // sheet are prediction-market data, sealed in `predictionMarketOutcomes` (question 22), and are
+  // no fields of a hypothesis, which every member reads.
   ...provenanceShape,
 });
 export type ReplicationHypothesisDoc = z.output<typeof replicationHypothesisDocSchema>;
@@ -438,7 +450,8 @@ export const historicalAggregateDocSchema = documentBaseSchema.extend({
   dataOrigin: z.enum(["importedHistorical", "demo"]),
   /**
    * The decision that seals the figure: the summary figures of source F (question 14). Absent on
-   * the figures of another source, which the project seals alike as a safeguard of its own.
+   * the figures of the coordination workbook A, which the project sealed alike as a safeguard and
+   * which the answer to question 24 keeps sealed.
    */
   sealedBy: programmeDecisionSchema.exactOptional(),
   ...provenanceShape,

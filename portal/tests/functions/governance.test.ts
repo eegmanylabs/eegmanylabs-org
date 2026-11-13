@@ -315,7 +315,7 @@ describe("retention sweeps", () => {
     expect(configurable.every((outcome) => outcome.deleted === 0 && outcome.periodDays === null)).toBe(true);
     expect(run.outcomes[0]?.note).toMatch(/No period is configured/);
     expect(run.outcomes.find((outcome) => outcome.target === "outreachNeverJoined")).toMatchObject({
-      decision: { reference: "docs/MIGRATION_PLAN.md, section 11, question 20" },
+      decision: { reference: "docs/MIGRATION_PLAN.md, section 11, question 21" },
       deleted: 0,
     });
     expect((await adminDb.doc(COLLECTIONS.mail.docPath("mail-old")).get()).exists).toBe(true);

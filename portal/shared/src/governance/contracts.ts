@@ -253,10 +253,10 @@ const periodsSchema = z.record(retentionTargetSchema, z.number().int().nullable(
 /** The configured periods, null where none is, and the latest sweeps. */
 /**
  * The retention of the raw material of the migration, which the programme decided
- * (docs/MIGRATION_PLAN.md, section 11, question 20): kept until an administrator marks the
- * migration verified, and for one year after; then the outreach records of source F for people
- * who never joined are deleted. What becomes of the other raw records after that year is not
- * decided, and nothing deletes them.
+ * (docs/MIGRATION_PLAN.md, section 11, questions 20 and 21): kept until an administrator marks
+ * the migration verified, and for three years after; then the outreach records of source F for
+ * people who never joined are deleted. Every other raw record and export file is kept, and
+ * nothing deletes them.
  */
 const migrationRetentionSchema = z.strictObject({
   /** When the migration was marked verified, or null while it is not. */
@@ -281,10 +281,10 @@ export const getRetentionContract = {
 } as const satisfies CallableContract;
 
 /**
- * Marks the migration verified, which starts the year after which the outreach records of
- * people who never joined are deleted. For a programme administrator with the second factor. A
- * later mark, with its reason, moves the start to the moment it is made: the year can be made to
- * start later and never earlier, so a mistaken mark only lengthens what is kept.
+ * Marks the migration verified, which starts the three years after which the outreach records
+ * of people who never joined are deleted. For a programme administrator with the second factor. A
+ * later mark, with its reason, moves the start to the moment it is made: the three years can be
+ * made to start later and never earlier, so a mistaken mark only lengthens what is kept.
  */
 export const markMigrationVerifiedContract = {
   name: "markMigrationVerified",

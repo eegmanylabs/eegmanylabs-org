@@ -184,7 +184,8 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
   const confirmedMemberships = orEmpty(useLiveQuery(team ? null : CONFIRMED_MEMBERSHIPS));
   const aliases = useLiveQuery(aliasesOfReplication(studyKey));
   const hypotheses = useLiveQuery(hypothesesOfReplication(studyKey));
-  // The outcome labels are sealed by a decision of the programme: programme administrators alone read them.
+  // The prediction-market data of the replication, its outcome and null-significance labels and the links to the
+  // market's documents, are sealed by decisions of the programme: programme administrators alone read them.
   const outcomes = useLiveDocument("predictionMarketOutcomes", sealedReader ? [studyKey] : null);
   // The summary figures of the historical workbooks are sealed: programme administrators alone read them.
   const aggregates = orEmpty(useLiveQuery(sealedReader ? historicalAggregatesOfReplication(studyKey) : null));
@@ -377,7 +378,16 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
         <HypothesesTab
           studyKey={studyKey}
           hypotheses={ready(hypotheses)}
-          replicatedLabels={sealedReader && outcomes.status === "ready" ? (outcomes.data?.labelsSource ?? {}) : null}
+          sealed={
+            sealedReader && outcomes.status === "ready"
+              ? {
+                  replicated: outcomes.data?.labelsSource ?? {},
+                  nullSig: outcomes.data?.nullSigSource ?? {},
+                  studyDescriptionUrl: outcomes.data?.studyDescriptionUrl,
+                  infosheetUrl: outcomes.data?.infosheetUrl,
+                }
+              : null
+          }
           runs={ready(runs)}
           manuscripts={ready(manuscripts)}
           predictionItems={sealedReader ? ready(predictionItems) : null}

@@ -8,7 +8,7 @@ describe("the withheld outputs", () => {
     expect(Object.fromEntries(WITHHELD_OUTPUT_KEYS.map((key) => [key, WITHHELD_OUTPUTS[key].question]))).toEqual({
       candidateStudies: 9,
       replicatedLabels: 7,
-      predictionMarketMaterial: 7,
+      predictionMarketMaterial: 22,
       contributorLists: 10,
       demographics: 20,
     });
@@ -18,8 +18,8 @@ describe("the withheld outputs", () => {
   const released = WITHHELD_OUTPUT_KEYS.filter((output) => WITHHELD_OUTPUTS[output].releasedBy !== null);
 
   it("release what the answers of 13 November 2026 let through, and name the decision that did", () => {
-    expect(released).toEqual(["replicatedLabels", "contributorLists", "demographics"]);
-    expect(withheld).toEqual(["candidateStudies", "predictionMarketMaterial"]);
+    expect(released).toEqual(["replicatedLabels", "predictionMarketMaterial", "contributorLists", "demographics"]);
+    expect(withheld).toEqual(["candidateStudies"]);
     for (const output of released) {
       expect(WITHHELD_OUTPUTS[output].releasedBy).toEqual({
         decidedBy: "programmeLead",
@@ -61,6 +61,13 @@ describe("the withheld outputs", () => {
     const production = { production: true, rehearse: WITHHELD_OUTPUT_KEYS };
     expect(() => requireReleased(production, "candidateStudies", "d")).toThrow(/question 9/);
     expect(() => requireReleased(production, "candidateStudies", "d")).toThrow(/reviewed change/);
+  });
+
+  it("release the links and null-significance labels of the prediction market, which the plan writes sealed", () => {
+    expect(() => requireReleased({ production: true, rehearse: [] }, "predictionMarketMaterial", "e")).not.toThrow();
+    expect(WITHHELD_OUTPUTS.predictionMarketMaterial.releasedBy.reference).toBe(
+      "docs/MIGRATION_PLAN.md, section 11, question 22",
+    );
   });
 
   it("release the member rows of source G, whose values the plan stores for consenting people alone", () => {

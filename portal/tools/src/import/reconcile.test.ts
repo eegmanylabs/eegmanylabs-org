@@ -1,7 +1,7 @@
 // Unit tests of the builders of reconciliation items. Subjects and values are invented.
 import { reconciliationKindSchema } from "@eegml/shared";
 import { describe, expect, it } from "vitest";
-import { itemBuilders, PERSONAL_KINDS } from "./reconcile";
+import { itemBuilders, PERSONAL_KINDS, statesSealedValue } from "./reconcile";
 
 const SECRET = "a-synthetic-secret-for-tests-of-32-bytes-or-more";
 const items = itemBuilders(SECRET);
@@ -124,5 +124,43 @@ describe("itemBuilders", () => {
     expect(backward.fingerprint).toBe(forward.fingerprint);
     // The first claim is what the importer states first, such as the stored value before the expected one.
     expect(forward.candidates.map((candidate) => candidate.sourceRecordId)).toEqual(["record-2", "record-1"]);
+  });
+});
+
+describe("statesSealedValue", () => {
+  it("seals the outcome labels, the null-significance labels and the links to the market's documents (questions 7 and 22)", () => {
+    expect(statesSealedValue("e/hypotheses/replicated", "labelsSource")).toBe(true);
+    expect(statesSealedValue("e/hypotheses/null-sig", "nullSigSource")).toBe(true);
+    for (const column of ["studyDescr_pdf", "infosheet_link"]) {
+      for (const claim of ["target", "text", "noAddress"]) {
+        expect(statesSealedValue(`e/hypotheses/${column}/${claim}`, column), `${column}/${claim}`).toBe(true);
+      }
+    }
+    // A value of a row outside the list of its column is a label of that row.
+    expect(statesSealedValue("e/hypotheses", "null-sig")).toBe(true);
+    expect(statesSealedValue("e/hypotheses", "replicated")).toBe(true);
+  });
+
+  it("leaves shown what names no row's label or link: an option of a list, and the label of a link as a spelling", () => {
+    expect(statesSealedValue("e/hypotheses/list", "null-sig")).toBe(false);
+    expect(statesSealedValue("e/hypotheses/list", "replicated")).toBe(false);
+    expect(statesSealedValue("e/hypotheses/infosheet_link", "sourceLabel")).toBe(false);
+    expect(statesSealedValue("e/hypotheses", "originalTitle")).toBe(false);
+  });
+
+  it("hides the value of a sealed claim and keys its hash with the subject, whatever the call site says", () => {
+    const item = items.linkDefect({
+      subject: "AlphaBeta2001",
+      field: "studyDescr_pdf",
+      claims: [
+        {
+          source: "e/hypotheses/studyDescr_pdf/target",
+          value: "https://example.org/a",
+          valueSource: "https://example.org/a",
+        },
+      ],
+    });
+    expect(item.sealed).toBe(true);
+    expect(item.candidates[0]).not.toHaveProperty("valueSource");
   });
 });

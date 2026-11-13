@@ -3,8 +3,8 @@
 // study, applied to its open status question with the decision as provenance (question 1); the
 // sealed capability, which no named grant confers (questions 7 and 14); and the retention of the
 // raw material of the migration, which deletes nothing before the migration is marked verified
-// and one year has passed, under a fake clock, and keeps any contact that may belong to a member
-// (question 20).
+// and three years have passed, under a fake clock, and keeps any contact that may belong to a
+// member (questions 20 and 21).
 // Fixtures are synthetic: fictitious accounts, people and studies on the example.org domain.
 import {
   COLLECTIONS,
@@ -258,7 +258,7 @@ describe("registerDataset and the two Amodio replications (questions 2 and 3)", 
   });
 });
 
-describe("the retention of the raw material of the migration (question 20)", () => {
+describe("the retention of the raw material of the migration (questions 20 and 21)", () => {
   async function settings(fields: Record<string, unknown> = {}): Promise<void> {
     await adminDb
       .doc(COLLECTIONS.systemSettings.docPath())
@@ -326,37 +326,62 @@ describe("the retention of the raw material of the migration (question 20)", () 
   const outcomeOf = (outcomes: Awaited<ReturnType<typeof sweepRetention>>) =>
     outcomes.find((outcome) => outcome.target === "outreachNeverJoined");
 
-  it("deletes nothing before the migration is marked verified, nor in the year after", async () => {
+  it("deletes nothing before the migration is marked verified, nor in the three years after", async () => {
     await outreach("contact-outsider", null);
-    const now = new Date("2030-01-01T00:00:00Z");
+    const now = new Date("2035-01-01T00:00:00Z");
     const unverified = await sweepRetention(adminDb, { retention: {}, migrationVerifiedAt: null }, now, false);
     expect(outcomeOf(unverified)).toMatchObject({
       eligible: 0,
       deleted: 0,
-      decision: { reference: "docs/MIGRATION_PLAN.md, section 11, question 20" },
+      decision: { reference: "docs/MIGRATION_PLAN.md, section 11, question 21" },
     });
     expect(outcomeOf(unverified)?.note).toMatch(/not marked verified/);
     const verifiedAt = new Date("2027-03-01T00:00:00Z");
-    const within = await sweepRetention(
+    // One year after the mark, the period that question 20 named before question 21 extended it, nothing goes. Nor
+    // does it 1,095 days after: three years from 1 March 2027 run over 29 February 2028, so they last 1,096 days.
+    for (const within of [366 * DAY, 2 * 366 * DAY, 1_095 * DAY, 1_096 * DAY - 1]) {
+      const kept = await sweepRetention(
+        adminDb,
+        { retention: {}, migrationVerifiedAt: verifiedAt },
+        new Date(verifiedAt.getTime() + within),
+        false,
+      );
+      expect(outcomeOf(kept)).toMatchObject({ eligible: 0, deleted: 0 });
+      expect(outcomeOf(kept)?.note).toContain("Kept for three years after the migration was marked verified");
+      expect(await exists(COLLECTIONS.outreachContacts.docPath("contact-outsider"))).toBe(true);
+      expect(await exists(COLLECTIONS.sourceRecords.docPath("record-contact-outsider"))).toBe(true);
+    }
+    // At 1,096 days the three calendar years have passed, and the contact goes.
+    const swept = await sweepRetention(
       adminDb,
       { retention: {}, migrationVerifiedAt: verifiedAt },
-      // A year from 1 March 2027 runs over 29 February 2028, which 365 days would fall short of.
-      new Date(verifiedAt.getTime() + 365 * DAY),
+      new Date(verifiedAt.getTime() + 1_096 * DAY),
       false,
     );
-    expect(outcomeOf(within)).toMatchObject({ eligible: 0, deleted: 0 });
-    expect(outcomeOf(within)?.note).toContain("Kept for one year after the migration was marked verified");
-    expect(await exists(COLLECTIONS.outreachContacts.docPath("contact-outsider"))).toBe(true);
-    expect(await exists(COLLECTIONS.sourceRecords.docPath("record-contact-outsider"))).toBe(true);
+    expect(outcomeOf(swept)).toMatchObject({ eligible: 1, deleted: 1 });
+    expect(outcomeOf(swept)?.note).toContain("three years after the migration was marked verified");
+    expect(await exists(COLLECTIONS.outreachContacts.docPath("contact-outsider"))).toBe(false);
   });
 
   it("then deletes the outreach records of people who never joined, keeps everything else, and never the audit trail", async () => {
     await outreach("contact-outsider", null);
     await outreach("contact-member", "person-joined");
     await outreach("contact-of-a", null, "a");
+    // A raw row of source F that is no outreach contact is other raw material, which question 21 keeps.
+    await adminDb.doc(COLLECTIONS.sourceRecords.docPath("record-f-summary")).set({
+      ...standard(),
+      sourceKey: "f",
+      tabKey: "numberoflabsperreplication",
+      rowKey: "row__2",
+      rowNumber: 2,
+      raw: { A: "SyntheticStudy2001", B: "3" },
+      rawHash: "bbbbbbbbbbbb",
+      observedOn: "2026-11-09",
+      supersededById: null,
+    });
     const audit = await adminDb.collection(COLLECTIONS.auditEvents.collectionPath()).add({ marker: "synthetic" });
     const verifiedAt = new Date("2027-03-01T00:00:00Z");
-    const later = new Date(verifiedAt.getTime() + 366 * DAY);
+    const later = new Date(verifiedAt.getTime() + 1_097 * DAY);
     const dry = await sweepRetention(adminDb, { retention: {}, migrationVerifiedAt: verifiedAt }, later, true);
     expect(outcomeOf(dry)).toMatchObject({ eligible: 1, deleted: 0 });
     expect(await exists(COLLECTIONS.outreachContacts.docPath("contact-outsider"))).toBe(true);
@@ -375,6 +400,8 @@ describe("the retention of the raw material of the migration (question 20)", () 
     expect(await exists(COLLECTIONS.outreachContacts.docPath("contact-member"))).toBe(true);
     expect(await exists(COLLECTIONS.sourceRecords.docPath("record-contact-member"))).toBe(true);
     expect(await exists(COLLECTIONS.outreachContacts.docPath("contact-of-a"))).toBe(true);
+    expect(await exists(COLLECTIONS.sourceRecords.docPath("record-contact-of-a"))).toBe(true);
+    expect(await exists(COLLECTIONS.sourceRecords.docPath("record-f-summary"))).toBe(true);
     expect((await dataOf(`importBatches/${BATCH}/changes/contact-member`))?.after).toEqual({
       contactNameSource: "Synthetic Contact",
     });
@@ -407,7 +434,7 @@ describe("the retention of the raw material of the migration (question 20)", () 
     const swept = await sweepRetention(
       adminDb,
       { retention: {}, migrationVerifiedAt: verifiedAt },
-      new Date(verifiedAt.getTime() + 400 * DAY),
+      new Date(verifiedAt.getTime() + 1_200 * DAY),
       false,
       emailIndexResolver(adminDb, () => DEMO_IDENTITY_HASH_KEY),
     );
@@ -436,14 +463,14 @@ describe("the retention of the raw material of the migration (question 20)", () 
     expect(marked.verifiedBy).toBe("uid-admin");
     const deletable = new Date(marked.deletableFrom ?? "");
     const verified = new Date(marked.verifiedAt ?? "");
-    expect(deletable.getUTCFullYear() - verified.getUTCFullYear()).toBe(1);
+    expect(deletable.getUTCFullYear() - verified.getUTCFullYear()).toBe(3);
     expect(deletable.toISOString().slice(4)).toBe(verified.toISOString().slice(4));
     const stored = await dataOf(COLLECTIONS.systemSettings.docPath());
     expect(stored?.migrationVerifiedBy).toBe("uid-admin");
     const [entry] = await auditOf("migration.verified");
-    expect(JSON.stringify(entry)).toContain("docs/MIGRATION_PLAN.md, section 11, question 20");
+    expect(JSON.stringify(entry)).toContain("docs/MIGRATION_PLAN.md, section 11, question 21");
     expect((await call(admin, getRetentionContract, {})).migration).toEqual(marked);
-    // A second mark moves the start of the year later, never earlier, with an audit entry of its own.
+    // A second mark moves the start of the three years later, never earlier, with an audit entry of its own.
     const moved = await call(admin, markMigrationVerifiedContract, { note: "The first mark was premature." });
     expect(new Date(moved.verifiedAt ?? "").getTime()).toBeGreaterThan(verified.getTime());
     expect(await auditOf("migration.verified")).toHaveLength(2);

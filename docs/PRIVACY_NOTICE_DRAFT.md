@@ -91,7 +91,7 @@ The portal has no advertising or analytics. Its own code is delivered with the p
 | Daily backups of the portal's database | 7 days |
 | Weekly backups of the portal's database | 14 weeks |
 | Exports of the portal's database | 98 days |
-| The original records the portal was created from, including records of people contacted about joining | Until the move into the portal has been checked, and then for one year. After that, the records of people who were contacted and never joined are deleted. How long the other original records are kept after that year has not been decided yet |
+| The original records the portal was created from, including records of people contacted about joining | Until the move into the portal has been checked, and then for three years. After that, the records of people who were contacted and never joined are deleted. How long the other original records are kept after those three years has not been decided yet |
 | A record that a deletion or a removal of access took place, which holds identifiers only and no other details about you | 10 years, so that restoring a backup can never bring deleted information back |
 
 When your account is deleted, Firebase Authentication removes its data within 180 days, and keeps the IP addresses it logs for a few weeks.

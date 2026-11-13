@@ -14,6 +14,7 @@
 // | Skip a hidden row                                              | Reads it as data and stores that it is hidden                  |
 // | Read the text `null` as a missing value                        | Stores `null-sig` verbatim                                     |
 // | Turn `replicated` into a boolean, a result or a status         | Keeps the label verbatim in the source record and in the sealed document of the replication, which programme administrators alone read (question 7), and queues it as an unverified label whose value the item does not show |
+// | Write a `null-sig` label or a link to the market's study description or information sheet where a member reads it | Keeps them in the source record and in the same sealed document (question 22); an item about one shows no value |
 // | Take the address of a link from its label                      | Reads the hyperlink target of the cell                         |
 // | Create a replication                                           | Resolves the identifier through the folded lookup, or queues the row |
 // | Parse a footer counter                                         | Recounts from the data and reports a counter that disagrees    |
@@ -29,9 +30,9 @@ import {
   lookupFold,
   nestedEntityId,
   PROGRAMME_KEY,
-  PROGRAMME_SCOPE_KEY,
   predictionMarketItemId,
   replicationScopeKey,
+  SEALED_MARKET_MATERIAL_DECISION,
   SEALED_OUTCOMES_DECISION,
   shortHash,
   sourceTabKey,
@@ -705,15 +706,14 @@ class PredictionMarketPlan {
       );
     }
 
-    // Hypotheses. The labels of `null-sig` are kept verbatim, and nothing here states a result. Whether the labels and
-    // the links to the market's own documents are prediction-market data, which no one may see (question 7), is asked
-    // of the programme lead: until the answer, a real project receives none of them, and they stay in the source rows.
+    // Hypotheses. Nothing here states a result. The labels of `null-sig` and the links to the market's own documents
+    // are prediction-market data, sealed like the outcome labels (question 22): they go verbatim to the sealed document
+    // of the replication with the outcome labels, and never to the hypothesis, which every member reads.
     const material = this.#context.writes("predictionMarketMaterial");
     const description = material ? this.#address(first, "studyDescr_pdf", refs, true) : null;
     const infosheet = material ? this.#address(first, "infosheet_link", refs, false) : null;
     for (const entry of rows) {
       const text = collapsed(this.#text(entry.row, "hypothesis_text") ?? "");
-      const nullSig = material ? this.#text(entry.row, "null-sig") : null;
       builder.document({
         collection: "replicationHypotheses",
         ids: [replicationId, hypothesisId(entry.number)],
@@ -724,13 +724,7 @@ class PredictionMarketPlan {
           resultReviewedBy: null,
           resultReviewedAt: null,
         },
-        owned: {
-          hypothesisNumber: String(entry.number),
-          text,
-          nullSigSource: nullSig ?? undefined,
-          studyDescriptionUrl: description ?? undefined,
-          infosheetUrl: infosheet ?? undefined,
-        },
+        owned: { hypothesisNumber: String(entry.number), text },
         sourceRecordIds: [entry.row.recordId],
       });
     }
@@ -784,32 +778,26 @@ class PredictionMarketPlan {
     if (usableDoi !== undefined) doiLookupDocument(builder, replication(replicationId), usableDoi, supplier);
     if (year !== null) await this.#yearAsWritten(study, year, supplier);
 
-    // Links, each in a named place of its study, so that a corrected address updates the same document.
+    // The link to the original paper, in a named place of its study, so that a corrected address updates the same
+    // document. The links to the market's own documents are sealed (question 22) and are no document link.
     const paper = citationLink ?? addressesIn(citation ?? "").find((address) => doiOfAddress(address) !== null) ?? null;
-    const links: readonly (readonly [slot: string, address: string | null, title: string | undefined])[] = [
-      ["pmStudyDescription", description, undefined],
-      ["pmInfosheet", infosheet, [...labels.keys()][0]],
-      ["originalPaper", paper !== null && isStorableUrl(paper) ? paper : null, undefined],
-    ];
-    for (const [slot, address, title] of links) {
-      if (address === null) continue;
+    if (paper !== null && isStorableUrl(paper)) {
       slotLinkDocument(builder, {
         owner: replication(replicationId),
-        slot,
-        url: address,
+        slot: "originalPaper",
+        url: paper,
         replicationId,
         ownerScopeKeys: scope,
         recordId: supplier,
       });
       builder.document({
         collection: "documentLinks",
-        ids: [documentLinkSlotId(entityRefId("replication", replicationId), slot)],
-        ...(title === undefined ? {} : { owned: { title } }),
+        ids: [documentLinkSlotId(entityRefId("replication", replicationId), "originalPaper")],
         sourceRecordIds: recordIds,
       });
     }
 
-    await this.#labels(study);
+    await this.#labels(study, material ? { description, infosheet } : null);
   }
 
   /**
@@ -822,11 +810,12 @@ class PredictionMarketPlan {
     const target = linkOf(entry.row, column);
     const text = collapsed(this.#text(entry.row, name) ?? "");
     const subject = refs[0]?.entityId ?? "";
+    // The address is sealed (question 22): the item names the source record, and shows neither address.
     const claim = (defect: string, value: string): ItemClaim => ({
       source: `${this.#source}/${name}/${defect}`,
       value,
-      valueSource: value,
       sourceRecordId: entry.row.recordId,
+      sealed: true,
     });
     if (target !== null && textIsAddress && isStorableUrl(text) && text !== target) {
       // The cell shows one address and links to another. The link is what a reader follows.
@@ -880,25 +869,39 @@ class PredictionMarketPlan {
   }
 
   /**
-   * Stores the labels of `replicated` verbatim in the sealed document of the replication, and
-   * raises what they ask. A label is an unverified source value: it sets no result, no review
-   * status and no status of a replication, and a blank stays absent. The labels are sealed by a
-   * decision of the programme (question 7): programme administrators alone read them, so no item
+   * Stores the labels of `replicated` verbatim in the sealed document of the replication, with
+   * the labels of `null-sig` and the links to the market's study description and information
+   * sheet, and raises what the labels ask. A label is an unverified source value: it sets no
+   * result, no review status and no status of a replication, and a blank stays absent. The
+   * outcome labels are sealed by a decision of the programme (question 7), and the other labels
+   * and the links by another (question 22): programme administrators alone read them, so no item
    * shows one and the key of each claim about one is a keyed hash, which nobody can confirm a
    * guess against.
    */
-  async #labels(study: Study): Promise<void> {
+  async #labels(
+    study: Study,
+    links: { readonly description: string | null; readonly infosheet: string | null } | null,
+  ): Promise<void> {
     const { items } = this.#context;
     const builder = this.#builder;
     const { replicationId, rows } = study;
     const refs = [replication(replicationId)];
     const source = this.#source;
     const labelled = rows.filter((entry) => entry.replicated !== null);
+    const nullSigs =
+      links === null
+        ? []
+        : rows.flatMap((entry) => {
+            const value = this.#text(entry.row, "null-sig");
+            return value === null || collapsed(value) === "" ? [] : [{ entry, value }];
+          });
+    const material = links !== null && (nullSigs.length > 0 || links.description !== null || links.infosheet !== null);
 
-    // A study whose labels have all gone from the source keeps a document with an empty map. One that never had a
-    // label gets no document.
+    // A study whose labels and links have all gone from the source keeps a document with an empty map. One that never
+    // had a label or a link gets no document.
     const sealedPath = COLLECTIONS.predictionMarketOutcomes.docPath(replicationId);
-    const held = labelled.length > 0 || (await readDocuments(this.#db, [sealedPath])).get(sealedPath) !== null;
+    const held =
+      labelled.length > 0 || material || (await readDocuments(this.#db, [sealedPath])).get(sealedPath) !== null;
     if (held && this.#context.writes("replicatedLabels")) {
       builder.document({
         collection: "predictionMarketOutcomes",
@@ -908,8 +911,15 @@ class PredictionMarketPlan {
           labelsSource: Object.fromEntries(
             labelled.map((entry) => [hypothesisId(entry.number), entry.replicated ?? ""]),
           ),
+          nullSigSource:
+            nullSigs.length === 0
+              ? undefined
+              : Object.fromEntries(nullSigs.map(({ entry, value }) => [hypothesisId(entry.number), value])),
+          studyDescriptionUrl: links?.description ?? undefined,
+          infosheetUrl: links?.infosheet ?? undefined,
+          materialSealedBy: material ? SEALED_MARKET_MATERIAL_DECISION : undefined,
         },
-        sourceRecordIds: (labelled.length > 0 ? labelled : rows).map((entry) => entry.row.recordId),
+        sourceRecordIds: (material || labelled.length === 0 ? rows : labelled).map((entry) => entry.row.recordId),
       });
     }
 
@@ -946,12 +956,8 @@ class PredictionMarketPlan {
             personal: true,
             claims: [
               claim,
-              {
-                source: `${source}/null-sig`,
-                value: nullSig,
-                valueSource: nullSig,
-                sourceRecordId: entry.row.recordId,
-              },
+              // The null-significance label is sealed as well (question 22).
+              { source: `${source}/null-sig`, value: nullSig, sourceRecordId: entry.row.recordId, sealed: true },
             ],
           }),
         );
@@ -1084,17 +1090,17 @@ class PredictionMarketPlan {
         const value = this.#text(entry.row, name);
         if (value === null || collapsed(value) === "") continue;
         // A term names the record it was read from, and members read terms. A label of `replicated`
-        // therefore becomes a term from the list of the workbook alone, and never from a row, which
-        // would tell a member which hypothesis carries it.
-        if (name === "null-sig") this.#terms.add(kinds[name], collapsed(value), entry.row.recordId, value);
+        // (question 7) or of `null-sig` (question 22) therefore becomes a term from the list of the
+        // workbook alone, and never from a row, which would tell a member which hypothesis carries it.
         if (!allowed.has(value) && !outside.has(value)) outside.set(value, entry.row);
       }
       for (const [value, row] of outside) {
+        // The value of a row is a sealed label: the item names the row and shows no value.
         this.#builder.item(
           items.vocabularyReview({
             subject: `${this.#source}/${name}/value/${shortHash(value)}`,
             field: name,
-            claims: [{ source: this.#source, value, valueSource: value, sourceRecordId: row.recordId }],
+            claims: [{ source: this.#source, value, sourceRecordId: row.recordId, sealed: true }],
           }),
         );
       }
@@ -1102,8 +1108,9 @@ class PredictionMarketPlan {
   }
 
   /**
-   * Reads the footer of the hypotheses tab: the link of the programme, and the counters, which
-   * are never parsed. Each counter is compared, as text, with a count taken from the data.
+   * Reads the footer of the hypotheses tab: the counters, which are never parsed, and the link of
+   * the programme, which is sealed and stays in its source record. Each counter is compared, as
+   * text, with a count taken from the data.
    */
   #footer(rows: readonly HypothesisRow[]): void {
     const { items } = this.#context;
@@ -1118,28 +1125,8 @@ class PredictionMarketPlan {
     const remaining = `${total - count("replicated", CANCELLED)} hypotheses left`;
     for (const row of this.#stored("hypotheses")) {
       if (row.rowClass !== "annotation" || row.cellLevel === true) continue;
-      const linkColumn = this.#column("infosheet_link");
-      const target = this.#context.writes("predictionMarketMaterial") ? linkOf(row, linkColumn) : null;
-      if (target !== null && isStorableUrl(target)) {
-        const owner = { entityType: "programme", entityId: PROGRAMME_KEY } as const;
-        const title = tidied(cellText(row, linkColumn) ?? "");
-        slotLinkDocument(this.#builder, {
-          owner,
-          slot: "pmGeneralInfo",
-          url: target,
-          replicationId: null,
-          ownerScopeKeys: [PROGRAMME_SCOPE_KEY],
-          recordId: row.recordId,
-        });
-        if (title !== "" && title.length <= LIMITS.shortText) {
-          this.#builder.document({
-            collection: "documentLinks",
-            ids: [documentLinkSlotId(entityRefId(owner.entityType, owner.entityId), "pmGeneralInfo")],
-            owned: { title },
-            sourceRecordIds: [row.recordId],
-          });
-        }
-      }
+      // The link of the programme to the market's information sheet is sealed (question 22). It stays in the source
+      // record of its row, which programme administrators alone read, and becomes no document link.
       for (const label of row.labels) {
         const text = collapsed(cellText(row, label) ?? "");
         const counter = /^\d+\/\d+$/.test(text) ? expected[label] : undefined;

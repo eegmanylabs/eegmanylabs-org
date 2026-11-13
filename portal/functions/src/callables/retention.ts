@@ -130,11 +130,11 @@ export const setRetentionPeriod = defineCallable(setRetentionPeriodContract, {
 });
 
 /**
- * Marks the migration verified (docs/MIGRATION_PLAN.md, section 11, question 20). Raw source
- * material is kept until then and for one year after, when the retention sweep deletes the
+ * Marks the migration verified (docs/MIGRATION_PLAN.md, section 11, questions 20 and 21). Raw
+ * source material is kept until then and for three years after, when the retention sweep deletes the
  * outreach records of people who never joined. A programme administrator with the second factor
  * marks it, with an audit entry that names the decision. A later mark, with its reason, moves the
- * start of the year to the moment it is made: a mark made by mistake or too early can only make
+ * start of the three years to the moment it is made: a mark made by mistake or too early can only make
  * the programme keep the records longer, never shorter.
  */
 export const markMigrationVerified = defineCallable(markMigrationVerifiedContract, {

@@ -5,15 +5,15 @@
 // version of a page with its chunks. The audit trail is never touched.
 //
 // One target is no setting but a decision of the programme (docs/MIGRATION_PLAN.md, section 11,
-// question 20): the raw material of the migration is kept until an administrator marks the
-// migration verified and for one year after, and then the outreach records of source F for people
-// who never joined are deleted: the outreach contact, the raw rows behind it, and the values of
-// the change log entries about them, which become a marker. What becomes of the other raw records
-// after that year was not decided, so the sweep deletes nothing else.
+// questions 20 and 21): the raw material of the migration is kept until an administrator marks
+// the migration verified and for three years after, and then the outreach records of source F for
+// people who never joined are deleted: the outreach contact, the raw rows behind it, and the
+// values of the change log entries about them, which become a marker. Every other raw record and
+// export file is kept (question 21), so the sweep deletes nothing else.
 //
-// "Never joined" is the project's reading, recorded in the same section of the plan: a contact
-// that names no person, whose address resolves to no person through the email index at the time
-// of the sweep, and whose row no open review item names. Contacts are written by an import that
+// "Never joined" is the reading that question 21 put to the programme lead and that the answer
+// kept: a contact that names no person, whose address resolves to no person through the email
+// index at the time of the sweep, and whose row no open review item names. Contacts are written by an import that
 // stops running once the migration is verified, so each is resolved again here: a person who
 // joined after the last import, or whose match waits in the queue, keeps their record.
 import {
@@ -272,7 +272,7 @@ async function outreachOfOutsiders(
 
 /**
  * What the retention of the migration does at an instant. Nothing goes before the migration is
- * marked verified and the year after it has passed.
+ * marked verified and the three years after it have passed.
  */
 async function sweepMigration(
   db: Firestore,
@@ -296,7 +296,7 @@ async function sweepMigration(
       ...outcome,
       eligible: 0,
       deleted: 0,
-      note: "Kept for one year after the migration was marked verified, so nothing was deleted.",
+      note: "Kept for three years after the migration was marked verified, so nothing was deleted.",
     };
   }
   const { eligible, changes, kept } = await outreachOfOutsiders(db, personOfAddress);
@@ -321,7 +321,7 @@ async function sweepMigration(
     ...outcome,
     eligible: eligible.length,
     deleted: dryRun ? 0 : eligible.length,
-    note: `${dryRun ? "Dry run: nothing was deleted." : "The outreach records of people who never joined, one year after the migration was marked verified."}${keptNote}${more}`,
+    note: `${dryRun ? "Dry run: nothing was deleted." : "The outreach records of people who never joined, three years after the migration was marked verified."}${keptNote}${more}`,
   };
 }
 

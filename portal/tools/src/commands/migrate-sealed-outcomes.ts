@@ -1,24 +1,28 @@
 // migrate:sealed-outcomes [--apply] [--production --project <identifier>]
 //
-// Brings what imports wrote before the programme sealed the outcome labels of source E and the
-// summary figures of source F (docs/MIGRATION_PLAN.md, section 11, questions 7 and 14) under the
-// seal. Without `--apply` it reports what it would change and writes nothing.
+// Brings what imports wrote before the programme sealed the outcome labels of source E, the
+// summary figures of source F, and the null-significance labels and the links to the market's
+// study descriptions and information sheets (docs/MIGRATION_PLAN.md, section 11, questions 7, 14
+// and 22) under the seal. Without `--apply` it reports what it would change and writes nothing.
 //
 // | Step | What it changes                                                                      |
 // |------|--------------------------------------------------------------------------------------|
 // | 1    | Moves `replicatedSource` out of `replications/{studyKey}/private/detail`, which the team of the replication reads, into `predictionMarketOutcomes/{studyKey}`, in one transaction for each replication |
-// | 2    | Takes `replicatedSource` out of both states of every change-log entry that holds it, and marks the entry sealed; every other entry is marked not sealed, so that the core team lists it again |
+// | 1a   | Moves `nullSigSource`, `studyDescriptionUrl` and `infosheetUrl` out of every hypothesis, which every member reads, into the same sealed document, in one transaction for each replication, and removes the document links to the market's own documents (slots `pmStudyDescription`, `pmInfosheet` and `pmGeneralInfo`) |
+// | 2    | Takes `replicatedSource` out of both states of every change-log entry that holds it, and the three fields of step 1a out of every entry about a hypothesis, puts a marker in place of both states of every entry about a removed document link, and marks each such entry sealed; every other entry is marked not sealed, so that the core team lists it again |
 // | 3    | Takes the shown value out of every candidate that states a label or a summary figure, and marks the item sealed; every other item is marked not sealed |
 // | 4    | Names the decision that seals them on the historical aggregates of source F          |
 //
 // The command is idempotent: a second run finds nothing to change. A replication whose sealed
 // document exists already keeps it, and the field is removed from its detail document, because the
-// import wrote the sealed document from the same rows. It reports identifiers and counts only,
-// never a label or a figure. The way back is to restore the export taken before `--apply`
+// import wrote the sealed document from the same rows; a value of step 1a that the sealed
+// document holds already is kept there. It reports identifiers and counts only, never a label, a
+// link or a figure. The way back is to restore the export taken before `--apply`
 // (README, "Migrations").
 import {
   COLLECTIONS,
   INITIAL_SCHEMA_VERSION,
+  SEALED_MARKET_MATERIAL_DECISION,
   SEALED_OUTCOMES_DECISION,
   SEALED_SUMMARY_DECISION,
   SEALED_SUMMARY_SOURCE_KEY,
@@ -40,6 +44,10 @@ export interface SealedOutcomesMigrationSummary {
   readonly moved: string[];
   /** The replications whose sealed document existed, and whose detail document only lost the field. */
   readonly cleared: string[];
+  /** The replications whose hypotheses held a null-significance label or a link to the market's documents. */
+  readonly materialMoved: string[];
+  /** The document links to the market's own documents, which are removed. */
+  readonly linksRemoved: number;
   /** Change-log entries that held labels, which lose them and are marked sealed. */
   readonly entriesSealed: number;
   /** Change-log entries without the flag that hold no sealed value, which are marked not sealed. */
@@ -70,8 +78,42 @@ const withoutLabels = (state: unknown): unknown => {
   return kept;
 };
 
+/** The marker that the change log of an import shows in place of a state of a sealed document. */
+const SEALED_MARKER = { sealed: true } as const;
+const isMarker = (state: unknown): boolean =>
+  state === null || (typeof state === "object" && JSON.stringify(state) === JSON.stringify(SEALED_MARKER));
+
 const holdsLabels = (state: unknown): boolean =>
   typeof state === "object" && state !== null && "replicatedSource" in state;
+
+/** The fields of a hypothesis that question 22 seals. */
+const MATERIAL_FIELDS = ["nullSigSource", "studyDescriptionUrl", "infosheetUrl"] as const;
+/** The slots of the document links to the market's own documents, which question 22 seals. */
+const MATERIAL_SLOTS = ["pmStudyDescription", "pmInfosheet", "pmGeneralInfo"] as const;
+const HYPOTHESIS_PATH = /^replications\/[^/]+\/hypotheses\/[^/]+$/;
+
+const holdsMaterial = (state: unknown): boolean =>
+  typeof state === "object" && state !== null && MATERIAL_FIELDS.some((field) => field in state);
+
+/** A state of a hypothesis without the sealed fields, in its imported values and its field sources as well. */
+const withoutMaterial = (state: unknown): unknown => {
+  if (typeof state !== "object" || state === null) return state;
+  const kept: Record<string, unknown> = { ...(state as Record<string, unknown>) };
+  for (const field of MATERIAL_FIELDS) delete kept[field];
+  for (const nested of ["importedValues", "fieldSources"]) {
+    const inner = kept[nested];
+    if (typeof inner !== "object" || inner === null) continue;
+    const rest: Record<string, unknown> = { ...(inner as Record<string, unknown>) };
+    for (const field of MATERIAL_FIELDS) delete rest[field];
+    kept[nested] = rest;
+  }
+  return kept;
+};
+
+/** Whether a path names a document link to the market's own documents. */
+const isMaterialLink = (path: string): boolean =>
+  path.startsWith(`${COLLECTIONS.documentLinks.collectionPath()}/`) &&
+  MATERIAL_SLOTS.some((slot) => path.endsWith(`__${slot}`));
 
 /** Writes in batches of a bounded size. */
 class Writer {
@@ -101,6 +143,8 @@ export async function migrateSealedOutcomes(
   const summary = {
     moved: [] as string[],
     cleared: [] as string[],
+    materialMoved: [] as string[],
+    linksRemoved: 0,
     entriesSealed: 0,
     entriesMarked: 0,
     itemsSealed: 0,
@@ -153,6 +197,79 @@ export async function migrateSealedOutcomes(
     });
   }
 
+  // Step 1a: the null-significance labels and the links on the hypotheses, and the document links to the market.
+  for (const replication of replications.sort((a, b) => (a.id < b.id ? -1 : 1))) {
+    const studyKey = replication.id;
+    const hypotheses = await db.collection(COLLECTIONS.replicationHypotheses.collectionPath(studyKey)).get();
+    if (!hypotheses.docs.some((hypothesis) => holdsMaterial(hypothesis.data()))) continue;
+    summary.materialMoved.push(studyKey);
+    if (!options.apply) continue;
+    const sealedReference = db.doc(COLLECTIONS.predictionMarketOutcomes.docPath(studyKey));
+    await db.runTransaction(async (transaction) => {
+      const current = await Promise.all(hypotheses.docs.map((hypothesis) => transaction.get(hypothesis.ref)));
+      const holding = current.filter((hypothesis) => holdsMaterial(hypothesis.data()));
+      if (holding.length === 0) return;
+      const sealed = await transaction.get(sealedReference);
+      const stored = sealed.exists ? (sealed.data() ?? {}) : {};
+      const nullSigs: Record<string, unknown> = { ...((stored.nullSigSource as Record<string, unknown>) ?? {}) };
+      let description: unknown = stored.studyDescriptionUrl;
+      let infosheet: unknown = stored.infosheetUrl;
+      const recordIds = new Set<string>(Array.isArray(stored.sourceRecordIds) ? stored.sourceRecordIds : []);
+      for (const hypothesis of holding) {
+        const sig: unknown = hypothesis.get("nullSigSource");
+        if (sig !== undefined && !(hypothesis.id in nullSigs)) nullSigs[hypothesis.id] = sig;
+        description ??= hypothesis.get("studyDescriptionUrl");
+        infosheet ??= hypothesis.get("infosheetUrl");
+        const records: unknown = hypothesis.get("sourceRecordIds");
+        if (Array.isArray(records)) for (const id of records) if (typeof id === "string") recordIds.add(id);
+      }
+      const material = {
+        ...(Object.keys(nullSigs).length === 0 ? {} : { nullSigSource: nullSigs }),
+        ...(description === undefined ? {} : { studyDescriptionUrl: description }),
+        ...(infosheet === undefined ? {} : { infosheetUrl: infosheet }),
+        materialSealedBy: SEALED_MARKET_MATERIAL_DECISION,
+      };
+      const document = COLLECTIONS.predictionMarketOutcomes.schema.parse({
+        schemaVersion: INITIAL_SCHEMA_VERSION,
+        createdAt: at,
+        createdBy: SEALED_OUTCOMES_MIGRATION_ACTOR,
+        archivedAt: null,
+        replicationId: studyKey,
+        labelsSource: {},
+        sealedBy: SEALED_OUTCOMES_DECISION,
+        ...stored,
+        ...material,
+        ...(recordIds.size === 0 ? {} : { sourceRecordIds: [...recordIds].sort() }),
+        updatedAt: at,
+        updatedBy: SEALED_OUTCOMES_MIGRATION_ACTOR,
+        writeContext: systemWriteContext(),
+      });
+      transaction.set(sealedReference, document);
+      for (const hypothesis of holding) {
+        const imported = hypothesis.get("importedValues") as Record<string, unknown> | undefined;
+        const sources = hypothesis.get("fieldSources") as Record<string, unknown> | undefined;
+        const removal: Record<string, unknown> = {};
+        for (const field of MATERIAL_FIELDS) {
+          if (hypothesis.get(field) !== undefined) removal[field] = FieldValue.delete();
+          if (imported !== undefined && field in imported) removal[`importedValues.${field}`] = FieldValue.delete();
+          if (sources !== undefined && field in sources) removal[`fieldSources.${field}`] = FieldValue.delete();
+        }
+        transaction.update(hypothesis.ref, {
+          ...removal,
+          updatedAt: at,
+          updatedBy: SEALED_OUTCOMES_MIGRATION_ACTOR,
+          writeContext: systemWriteContext(),
+        });
+      }
+    });
+  }
+  const links = await db.collection(COLLECTIONS.documentLinks.collectionPath()).listDocuments();
+  for (const link of links.filter((reference) => isMaterialLink(reference.path))) {
+    if (!(await link.get()).exists) continue;
+    summary.linksRemoved += 1;
+    if (options.apply) await link.delete();
+  }
+
   const writer = new Writer(db);
   // Step 2: the change log. An entry that names a detail document holds the labels in its states.
   const batches = await db.collection(COLLECTIONS.importBatches.collectionPath()).listDocuments();
@@ -161,7 +278,25 @@ export async function migrateSealedOutcomes(
     for (const entry of entries.docs) {
       const before: unknown = entry.get("before");
       const after: unknown = entry.get("after");
-      if (holdsLabels(before) || holdsLabels(after)) {
+      const documentPath = String(entry.get("documentPath"));
+      if (isMaterialLink(documentPath) && (entry.get("sealed") !== true || !isMarker(before) || !isMarker(after))) {
+        // A link to the market's own documents: both states become the marker of a sealed document.
+        summary.entriesSealed += 1;
+        if (options.apply)
+          await writer.update(entry.ref.path, {
+            before: before === null ? null : SEALED_MARKER,
+            after: after === null ? null : SEALED_MARKER,
+            sealed: true,
+          });
+      } else if (HYPOTHESIS_PATH.test(documentPath) && (holdsMaterial(before) || holdsMaterial(after))) {
+        summary.entriesSealed += 1;
+        if (options.apply)
+          await writer.update(entry.ref.path, {
+            before: withoutMaterial(before),
+            after: withoutMaterial(after),
+            sealed: true,
+          });
+      } else if (holdsLabels(before) || holdsLabels(after)) {
         summary.entriesSealed += 1;
         if (options.apply)
           await writer.update(entry.ref.path, {

@@ -86,4 +86,4 @@ Every endpoint the application and the functions use outside the emulators is HT
 
 ## When the migration is marked verified
 
-Marking the migration verified on the governance page of the console starts the year of question 20 of `docs/MIGRATION_PLAN.md`, section 11. The same moment is the one that decision 8 of `docs/DECISIONS.md` names: the owners of source F and of the contributor sheets restrict their link sharing then, and record the date in the private operations log. The portal cannot do this for them, because those files live outside it.
+Marking the migration verified on the governance page of the console starts the three years of questions 20 and 21 of `docs/MIGRATION_PLAN.md`, section 11, after which the retention sweep deletes the outreach records of people who never joined and nothing else. The same moment is the one that decision 8 of `docs/DECISIONS.md` names: the owners of source F and of the contributor sheets restrict their link sharing then, and record the date in the private operations log. The portal cannot do this for them, because those files live outside it.

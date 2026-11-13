@@ -919,14 +919,11 @@ const DEFINITIONS = {
             "outcomeMeasure",
             "analysisSpecification",
             "preregistrationUrl",
-            "nullSigSource",
             "analysisStatus",
-            "studyDescriptionUrl",
-            "infosheetUrl",
             "archivedAt",
           ],
           condition:
-            "Once a result is reviewed or the hypothesis is verified, a lead changes the three addresses alone.",
+            "Once a result is reviewed or the hypothesis is verified, a lead changes the address of the preregistration alone.",
         }),
       ],
       ["{studyKey}"],
@@ -1006,8 +1003,8 @@ const DEFINITIONS = {
     path: "historicalAggregates/{metricKey__sourceRecordId}",
     schema: replications.historicalAggregateDocSchema,
     id: built("historicalAggregateId", ["metricKey", "sourceRecordId"]),
-    // The summary figures of source F are sealed by a decision of the programme (question 14). The project seals the
-    // figures of the coordination workbook A alike, as a safeguard of its own, until the programme lead says otherwise.
+    // The summary figures of source F are sealed by a decision of the programme (question 14). The project sealed the
+    // figures of the coordination workbook A alike, as a safeguard, and the answer to question 24 keeps them sealed.
     read: adminRead("sealed.read"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
@@ -1018,7 +1015,8 @@ const DEFINITIONS = {
     path: "predictionMarketOutcomes/{studyKey}",
     schema: replications.predictionMarketOutcomeDocSchema,
     id: key("study identifier", "replicationId"),
-    // The outcome labels are sealed by a decision of the programme (question 7).
+    // The outcome labels are sealed by a decision of the programme (question 7), and the null-significance labels and
+    // the links to the market's study description and information sheet by another (question 22).
     read: adminRead("sealed.read"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
@@ -1833,7 +1831,7 @@ const DEFINITIONS = {
     schema: outputs.contributorDocSchema,
     id: auto,
     // The team of the replication reads its contributor lists, by a decision of the programme (question 10). Programme
-    // staff read them as they read every scoped record, which is the portal's model and an open question, not the decision.
+    // staff read them as they read every scoped record, which the answer to question 23 confirms.
     read: read(["SCOPED"], ["scopeKeys"]),
     write: client(
       [
@@ -2036,9 +2034,9 @@ const DEFINITIONS = {
     path: "sourceRecords/{id}",
     schema: provenance.sourceRecordDocSchema,
     id: built("sourceRecordId", ["sourceKey", "tabKey", "rowKey", "rawHash"]),
-    // The raw rows of sources E and F hold the values that the programme sealed (questions 7 and 14). The project
-    // seals the raw rows of every source alike, as a safeguard of its own: one rule leaves no row that holds a sealed
-    // value readable by a mistake in its source key. Whether the programme wants the wider seal is an open question.
+    // The raw rows of sources E and F hold the values that the programme sealed (questions 7, 14 and 22). The project
+    // sealed the raw rows of every source alike, as a safeguard: one rule leaves no row that holds a sealed value
+    // readable by a mistake in its source key. The answer to question 24 keeps the wider seal.
     read: adminRead("sealed.read"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",

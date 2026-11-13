@@ -12,6 +12,9 @@ import { administratorBrowser, reviewPage } from "./identity-support";
 import { ALPHA, BEN, IVY, leadBrowser, signInAsIvy } from "./registry-support";
 import { expect, test } from "./support";
 
+/** What a reader without the capability `sealed.read` sees in place of a sealed value. */
+const SEALED_NOTE = "Sealed by a decision of the programme and shown to programme administrators only";
+
 const TABS = [
   "Overview",
   "Leadership",
@@ -74,12 +77,15 @@ test("the replication page shows each section that has content, with every value
 
   await page.getByRole("tab", { name: "Hypotheses" }).click();
   const first = page.getByTestId("hypothesis").first();
-  await expect(first).toContainText("sig");
-  await expect(first).toContainText("Unverified source value");
   await expect(first).toContainText("Not scientifically reviewed");
-  // The historical "replicated" label is sealed: programme administrators alone read it.
-  await expect(first).toContainText("Sealed by a decision of the programme and shown to programme administrators only");
+  // The historical "replicated" and null-significance labels are sealed: programme administrators alone read them
+  // (questions 7 and 22), and so are the links to the market's study description and information sheet.
+  await expect(first.locator("dt:text-is('Replicated') + dd")).toHaveText(SEALED_NOTE);
+  await expect(first.locator("dt:text-is('Null or significant') + dd")).toHaveText(SEALED_NOTE);
+  await expect(first).not.toContainText("Unverified source value");
   await expect(first).not.toContainText("partially");
+  await expect(panel).not.toContainText("Prediction-market study description");
+  await expect(panel).not.toContainText("demo-market");
 
   await page.getByRole("tab", { name: "Outputs" }).click();
   await expect(panel).toContainText("In-principle acceptance");
@@ -127,7 +133,7 @@ test("the replication page shows each section that has content, with every value
   await reviewPage(page, "replication-leadership");
 });
 
-test("a programme administrator reads the sealed figures and outcome labels, and the team reads its contributor list", async ({
+test("a programme administrator reads the sealed figures, outcome and null-significance labels and market links, and the team reads its contributor list", async ({
   browser,
   baseURL,
 }) => {
@@ -149,6 +155,14 @@ test("a programme administrator reads the sealed figures and outcome labels, and
     await expect(historical).not.toContainText("460");
     await adminPage.getByRole("tab", { name: "Hypotheses" }).click();
     await expect(adminPage.getByTestId("hypothesis").filter({ hasText: "partially" })).toHaveCount(1);
+    // The null-significance labels and the links to the market's documents are sealed with them (question 22).
+    const nullSigOf = (index: number) =>
+      adminPage.getByTestId("hypothesis").nth(index).locator("dt:text-is('Null or significant') + dd");
+    await expect(nullSigOf(0)).toContainText("sig");
+    await expect(nullSigOf(0)).toContainText("Unverified source value");
+    await expect(nullSigOf(1)).toContainText("null");
+    await expect(panel.getByRole("link", { name: /demo-alpha-study-description/ })).toBeVisible();
+    await expect(panel.getByRole("link", { name: /demo-alpha-information-sheet/ })).toBeVisible();
     await adminPage.getByRole("tab", { name: "Contributors" }).click();
     await expect(panel).toContainText(
       "Conceptualization, Methodology, Writing – original draft (unverified source value: x)",
@@ -166,6 +180,10 @@ test("a programme administrator reads the sealed figures and outcome labels, and
     await expect(lead.page.getByRole("tabpanel")).toContainText("Conceptualization");
     await lead.page.getByRole("tab", { name: "Hypotheses" }).click();
     await expect(lead.page.getByRole("tabpanel")).not.toContainText("partially");
+    await expect(lead.page.getByRole("tabpanel")).not.toContainText("demo-market");
+    await expect(
+      lead.page.getByTestId("hypothesis").first().locator("dt:text-is('Null or significant') + dd"),
+    ).toHaveText(SEALED_NOTE);
     await lead.page.getByRole("tab", { name: "Laboratories" }).click();
     await expect(lead.page.getByTestId("historical-figures")).toHaveCount(0);
   } finally {

@@ -610,7 +610,7 @@ function targetLabel(target: string): string {
 
 /**
  * The retention of the raw material of the migration, which the programme decided
- * (docs/MIGRATION_PLAN.md, section 11, question 20), and the mark that starts its year.
+ * (docs/MIGRATION_PLAN.md, section 11, questions 20 and 21), and the mark that starts its three years.
  */
 function MigrationRetentionSection({
   migration,
@@ -625,7 +625,7 @@ function MigrationRetentionSection({
   return (
     <Section
       title="Raw material of the migration"
-      description="The programme lead decided on 13 November 2026 that raw source records and exported files are kept until the migration is marked verified, and for one year after. Then the outreach records of people who never joined are deleted. What happens to the other raw records after that year has not been decided, so the portal keeps them. The audit log is never swept."
+      description="The programme lead decided on 13 November 2026 that raw source records and exported files are kept until the migration is marked verified, and that the outreach records of people who never joined are deleted three years after. Every other raw source record and exported file is kept. The audit log is never swept."
     >
       <div className="grid gap-2" data-testid="migration-retention">
         {marked ? (
@@ -664,8 +664,8 @@ function MigrationRetentionSection({
         title={marked ? "Move the mark later?" : "Mark the migration verified?"}
         description={
           marked
-            ? "The year of the retention starts again now. A mark moves later and never earlier, so the records are kept longer and never shorter."
-            : "The year of the retention starts now. One year later the sweep deletes the outreach records of people who never joined. A mark can later be moved to a later moment, never to an earlier one. Then restrict link sharing on source F and the contributor sheets, as decision 8 says."
+            ? "The three years of the retention start again now. A mark moves later and never earlier, so the records are kept longer and never shorter."
+            : "The three years of the retention start now. Three years later the sweep deletes the outreach records of people who never joined. A mark can later be moved to a later moment, never to an earlier one. Then restrict link sharing on source F and the contributor sheets, as decision 8 says."
         }
         label={marked ? "Why the mark moves" : "Note on what was verified"}
         lengthMessage={

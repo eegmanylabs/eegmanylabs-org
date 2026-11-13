@@ -1422,14 +1422,16 @@ service cloud.firestore {
       // clears the review or signs it anew, so a review never stays on something its reviewer
       // did not see. A lead writes the content until it is reviewed or verified, and neither
       // sets the review status nor the review, because a lead does not review its own result.
+      // The null-significance label and the links to the market's study description and
+      // information sheet are sealed prediction-market data (docs/MIGRATION_PLAN.md, section 11,
+      // question 22), held in predictionMarketOutcomes, and no field of a hypothesis.
       // Reads: 2 (access, the replication).
       match /hypotheses/{hypothesisId} {
         function replicationHypothesesFields() {
           return [
             'replicationId', 'hypothesisNumber', 'text', 'expectedEffect', 'outcomeMeasure', 'analysisSpecification',
-            'preregistrationUrl', 'originalStatistics', 'originalStatisticsProvenance', 'nullSigSource',
-            'scientificReviewStatus', 'analysisStatus', 'resultSummary', 'resultProvenance', 'resultReviewedBy',
-            'resultReviewedAt', 'studyDescriptionUrl', 'infosheetUrl'
+            'preregistrationUrl', 'originalStatistics', 'originalStatisticsProvenance', 'scientificReviewStatus',
+            'analysisStatus', 'resultSummary', 'resultProvenance', 'resultReviewedBy', 'resultReviewedAt'
           ];
         }
         // An original statistic and a result, each with its provenance, which a callable
@@ -1446,23 +1448,21 @@ service cloud.firestore {
         function replicationHypothesesEditable() {
           return [
             'text', 'expectedEffect', 'outcomeMeasure', 'analysisSpecification', 'preregistrationUrl',
-            'nullSigSource', 'scientificReviewStatus', 'analysisStatus', 'resultReviewedBy', 'resultReviewedAt',
-            'studyDescriptionUrl', 'infosheetUrl'
+            'scientificReviewStatus', 'analysisStatus', 'resultReviewedBy', 'resultReviewedAt'
           ];
         }
         function replicationHypothesesEditableByReplicationLead() {
           return [
             'text', 'expectedEffect', 'outcomeMeasure', 'analysisSpecification', 'preregistrationUrl',
-            'nullSigSource', 'analysisStatus', 'studyDescriptionUrl', 'infosheetUrl', 'archivedAt'
+            'analysisStatus', 'archivedAt'
           ];
         }
-        function replicationHypothesesVerbatim() { return ['nullSigSource']; }
 
         // What a review covers.
         function reviewedContent() {
           return [
             'text', 'expectedEffect', 'outcomeMeasure', 'analysisSpecification', 'originalStatistics',
-            'nullSigSource', 'scientificReviewStatus', 'analysisStatus', 'resultSummary'
+            'scientificReviewStatus', 'analysisStatus', 'resultSummary'
           ];
         }
 
@@ -1477,12 +1477,9 @@ service cloud.firestore {
             && richText(d.get('analysisSpecification', ''))
             && webAddress(d.get('preregistrationUrl', 'https://example.org'))
             && longText(d.get('originalStatistics', 'x'))
-            && verbatim(d.get('nullSigSource', ''))
             && d.scientificReviewStatus in ['unverified', 'underReview', 'verified']
             && d.analysisStatus in ['notStarted', 'inProgress', 'completed']
-            && richText(d.get('resultSummary', ''))
-            && webAddress(d.get('studyDescriptionUrl', 'https://example.org'))
-            && webAddress(d.get('infosheetUrl', 'https://example.org'));
+            && richText(d.get('resultSummary', ''));
         }
 
         // The review after a change by a reviewer.
@@ -1495,7 +1492,7 @@ service cloud.firestore {
         // Whether a lead may still change the content: nobody has reviewed or verified it.
         function openToItsLead(stored) {
           return (stored.resultReviewedBy == null && stored.scientificReviewStatus != 'verified')
-            || changed().hasOnly(touchFields().concat(['preregistrationUrl', 'studyDescriptionUrl', 'infosheetUrl']));
+            || changed().hasOnly(touchFields().concat(['preregistrationUrl']));
         }
 
         // The identifier is `h` and the two-digit number of the hypothesis, as `hypothesisId`
@@ -1529,7 +1526,6 @@ service cloud.firestore {
                 replicationHypothesesRequired()
               )
               && openToItsLead(resource.data)))
-          && sourceValuesKept(replicationHypothesesVerbatim())
           && validHypothesis(incoming());
       }
 
@@ -1733,15 +1729,18 @@ service cloud.firestore {
     }
 
     // The summary figures of source F, sealed by a decision of the programme (docs/MIGRATION_PLAN.md,
-    // section 11, question 14), and those of the coordination workbook, which the project seals
-    // alike as a safeguard of its own: programme administrators alone read them.
+    // section 11, question 14), and those of the coordination workbook, which the project sealed
+    // alike as a safeguard and the answer to question 24 keeps sealed: programme administrators
+    // alone read them.
     // Reads: 1 (access).
     match /historicalAggregates/{aggregateId} {
       allow read: if isMember() && canForProgramme('sealedRead') && boundedRead();
     }
 
-    // The outcome labels of the prediction market, sealed by a decision of the programme
-    // (docs/MIGRATION_PLAN.md, section 11, question 7): programme administrators alone read them.
+    // The sealed data of the prediction market for one replication: its outcome labels (question 7),
+    // and its null-significance labels and the links to its study description and information
+    // sheet (question 22), sealed by decisions of the programme (docs/MIGRATION_PLAN.md, section
+    // 11): programme administrators alone read them.
     // Reads: 1 (access).
     match /predictionMarketOutcomes/{studyKey} {
       allow read: if isMember() && canForProgramme('sealedRead') && boundedRead();
@@ -3310,8 +3309,7 @@ service cloud.firestore {
 
       // The team of the replication reads its contributor lists, which the programme decided
       // (docs/MIGRATION_PLAN.md, section 11, question 10). Programme staff read them as they read
-      // every record within a scope: that is the portal's model and no part of the decision, and
-      // whether the programme lead wants it is an open question of the same section.
+      // every record within a scope, which the answer to question 23 confirms.
       allow read: if isMember()
         && (core() || holdsScopeOf(resource.data) || onTeam(resource.data.replicationId))
         && boundedRead();
@@ -3515,9 +3513,9 @@ service cloud.firestore {
       allow read: if isMember() && canForProgramme('importsRun') && boundedRead();
     }
 
-    // The raw rows of sources E and F hold the values that the programme sealed (questions 7 and
-    // 14). The project seals the raw rows of every source alike, as a safeguard of its own, so
-    // programme administrators alone read them.
+    // The raw rows of sources E and F hold the values that the programme sealed (questions 7, 14
+    // and 22). The project sealed the raw rows of every source alike, as a safeguard, and the
+    // answer to question 24 keeps that seal, so programme administrators alone read them.
     // Reads: 1 (access).
     match /sourceRecords/{recordId} {
       allow read: if isMember() && canForProgramme('sealedRead') && boundedRead();

@@ -3,7 +3,7 @@
 //
 // | Attempt                                                                       | Decision            |
 // |-------------------------------------------------------------------------------|---------------------|
-// | The retention of question 20 meets an outreach contact as the importer writes it | Question 20       |
+// | The retention of questions 20 and 21 meets an outreach contact as the importer writes it | Questions 20 and 21 |
 // | A production procedure accepts one person as operator and approver            | Deployment roles    |
 // | The candidate keys of items about sealed labels let a reader compare outcomes | Question 7          |
 //
@@ -22,7 +22,7 @@ beforeEach(resetWorld);
 
 const DAY = 86_400_000;
 
-describe("the retention of the raw material of the migration (question 20)", () => {
+describe("the retention of the raw material of the migration (questions 20 and 21)", () => {
   /**
    * An outreach contact of source F as the recruitment importer writes it for a person who never
    * joined: the plan leaves `personId` undefined, so the stored document has no such field at all.
@@ -53,10 +53,18 @@ describe("the retention of the raw material of the migration (question 20)", () 
     expect(outreachContactDocSchema.shape.personId.safeParse(null).success).toBe(false);
   });
 
-  it("deletes the contact of a person who never joined once the year after verification has passed", async () => {
+  it("deletes the contact of a person who never joined once the three years after verification have passed", async () => {
     await outsiderAsImported("contact-outsider");
     const verifiedAt = new Date("2027-03-01T00:00:00Z");
-    const later = new Date(verifiedAt.getTime() + 400 * DAY);
+    const before = await sweepRetention(
+      adminDb,
+      { retention: {}, migrationVerifiedAt: verifiedAt },
+      new Date(verifiedAt.getTime() + 1_096 * DAY - 1),
+      false,
+    );
+    expect(before.find((outcome) => outcome.target === "outreachNeverJoined")).toMatchObject({ deleted: 0 });
+    expect((await adminDb.doc(COLLECTIONS.outreachContacts.docPath("contact-outsider")).get()).exists).toBe(true);
+    const later = new Date(verifiedAt.getTime() + 1_096 * DAY + 1);
     const outcomes = await sweepRetention(adminDb, { retention: {}, migrationVerifiedAt: verifiedAt }, later, false);
     expect(outcomes.find((outcome) => outcome.target === "outreachNeverJoined")).toMatchObject({ deleted: 1 });
     expect((await adminDb.doc(COLLECTIONS.outreachContacts.docPath("contact-outsider")).get()).exists).toBe(false);

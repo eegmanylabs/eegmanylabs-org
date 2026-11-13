@@ -29,9 +29,10 @@ export const RETENTION_TARGET_LABELS: Readonly<Record<RetentionTarget, string>> 
 
 /**
  * The target of the retention that the programme decided for the raw material of the migration
- * (question 20 of docs/MIGRATION_PLAN.md, section 11): the outreach records of source F for
- * people who never joined. Its period is a decision and no setting, it counts from the day the
- * migration was marked verified, and before that day nothing of it is deleted.
+ * (questions 20 and 21 of docs/MIGRATION_PLAN.md, section 11): the outreach records of source F
+ * for people who never joined. Its period, three calendar years, is a decision and no setting, it
+ * counts from the day the migration was marked verified, and before that day nothing of it is
+ * deleted.
  */
 export const OUTREACH_RETENTION_TARGET = "outreachNeverJoined";
 

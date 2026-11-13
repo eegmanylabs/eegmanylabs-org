@@ -414,9 +414,9 @@ export interface DemoHypothesis {
   readonly replicationId: string;
   readonly number: number;
   readonly text: string;
-  /** The verbatim null-significance label of a source. */
+  /** The verbatim null-significance label of a source, kept in the sealed document of the replication. */
   readonly nullSigSource?: string;
-  /** The verbatim and unverified "replicated" label of a source, kept in the restricted detail. */
+  /** The verbatim and unverified "replicated" label of a source, kept in the sealed document of the replication. */
   readonly replicatedSource?: string;
 }
 
@@ -441,6 +441,19 @@ export const DEMO_HYPOTHESES: readonly DemoHypothesis[] = [
     text: "The imagined rhythm grows with the number of items held in mind.",
   },
 ];
+
+/**
+ * The links of a replication to the prediction market's description of the study and its
+ * information sheet, which are sealed like the labels (question 22). Invented addresses.
+ */
+export const DEMO_MARKET_LINKS: Readonly<
+  Record<string, { readonly studyDescriptionUrl: string; readonly infosheetUrl: string }>
+> = {
+  DemoAlpha2001: {
+    studyDescriptionUrl: "https://example.org/demo-market/demo-alpha-study-description.pdf",
+    infosheetUrl: "https://example.org/demo-market/demo-alpha-information-sheet",
+  },
+};
 
 export interface DemoManuscript {
   readonly id: string;

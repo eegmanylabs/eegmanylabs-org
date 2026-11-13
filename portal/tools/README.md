@@ -67,7 +67,7 @@ A review item is raised once, under its fingerprint. Two things keep the queue a
 
 The sources are imported in the order of `docs/MIGRATION_PLAN.md`, section 5, and the order is enforced: a run is refused while a source that the plan puts ahead of it (`after` in its definition) has no applied batch. B, D, the contributor sheets and G follow H; E and F follow H and D; A follows F.
 
-Some outputs are withheld until the maintainers have answered a question of the plan (`src/import/withheld.ts`): the candidate documents of D (question 9), the `replicated` labels of E (question 7), the apply of a contributor sheet (question 10) and the apply of G (question 20). A preview is always possible. A real project never receives a withheld output; an emulator receives one only where `rehearse` in the private configuration names it.
+Some outputs were withheld until the maintainers had answered a question of the plan (`src/import/withheld.ts`): the candidate documents of D (question 9), the `replicated` labels of E (question 7), the links to the market's study descriptions and information sheets and the null-significance labels of E (question 22), the apply of a contributor sheet (question 10) and the apply of G (question 20). The answers of 13 November 2026 released all but the candidate documents: the labels and links of E are written sealed, to `predictionMarketOutcomes`. A preview is always possible. A real project never receives a withheld output; an emulator receives one only where `rehearse` in the private configuration names it.
 
 A guard reads every planned document before anything is compared or written (`src/import/privacy-guard.ts`). It blocks the batch, at the preview already, where a document that members can read would hold an email-shaped text, where an identifier would hold a word of a name or an address of its own row, or where a special-category cell would stand outside a special-category document or in an item.
 
@@ -124,7 +124,7 @@ The repository is public, so it names a source by letter and title only (`src/im
 | `contributorSheets.<name>.externalId` | The identifier that the host gives a contributor sheet. The key of the sheet in the registry, `ctable-` and a hash, is derived from it, so the identifier itself reaches no path and no log. |
 | `contributorSheets.<name>.replicationId` | The replication whose manuscript the sheet lists the contributors of. Nothing inside a sheet names it, and a sheet that is not registered here is refused. |
 | `contributorSheets.<name>.url`, `.exportUrl` | As for a lettered source. |
-| `rehearse` | The withheld outputs that an emulator writes all the same, for a rehearsal: `candidateStudies`, `replicatedLabels`, `contributorLists`, `demographics`. Ignored for a real project. |
+| `rehearse` | The withheld outputs that an emulator writes all the same, for a rehearsal: `candidateStudies`, `replicatedLabels`, `predictionMarketMaterial`, `contributorLists`, `demographics`. A released output is written whether named or not. Ignored for a real project. |
 | `expectedStudies` | The number of studies of the programme, which `import verify` compares once the list of studies is applied. |
 | `sources.<key>.baseline`, `contributorSheets.<name>.baseline` | The rows of each class that each tab holds, by tab title or tab key. `import verify` fails until the reading equals it, so a change of the source is explained by stating the new numbers. |
 | `sources.g.confirmedHeaders` | The header list of a tab whose columns no description states, as a maintainer has confirmed it. |

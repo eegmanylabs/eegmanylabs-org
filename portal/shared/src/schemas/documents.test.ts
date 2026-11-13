@@ -405,13 +405,12 @@ describe("a replication and what belongs to it", () => {
     expect(accepts("replications", { ...replication, ...change })).toBe(false);
   });
 
-  it("keeps the verbatim cells of a hypothesis, including the text null", () => {
+  it("keeps the verbatim cells of a hypothesis, and no sealed prediction-market value on it", () => {
     const hypothesis = {
       ...base,
       replicationId: "SyntheticStudy2001",
       hypothesisNumber: "1",
       text: "A synthetic hypothesis.",
-      nullSigSource: "null",
       scientificReviewStatus: "unverified",
       analysisStatus: "notStarted",
       resultReviewedBy: null,
@@ -420,6 +419,28 @@ describe("a replication and what belongs to it", () => {
     expect(schemaOf("replicationHypotheses").parse(hypothesis)).toEqual(hypothesis);
     expect(accepts("replicationHypotheses", { ...hypothesis, hypothesisNumber: 1 })).toBe(false);
     expect(accepts("replicationHypotheses", { ...hypothesis, replicated: "yes" })).toBe(false);
+    // The null-significance label and the links to the market's documents are sealed (question 22).
+    expect(accepts("replicationHypotheses", { ...hypothesis, nullSigSource: "null" })).toBe(false);
+    expect(accepts("replicationHypotheses", { ...hypothesis, studyDescriptionUrl: "https://example.org/d" })).toBe(
+      false,
+    );
+    expect(accepts("replicationHypotheses", { ...hypothesis, infosheetUrl: "https://example.org/i" })).toBe(false);
+  });
+
+  it("keeps the sealed prediction-market data of a replication verbatim, including the text null", () => {
+    const sealed = {
+      ...base,
+      replicationId: "SyntheticStudy2001",
+      labelsSource: { h01: "yes" },
+      sealedBy: { decidedBy: "programmeLead", decidedOn: "2026-11-13", reference: "a synthetic reference" },
+      nullSigSource: { h01: "null", h02: "sig" },
+      studyDescriptionUrl: "https://example.org/study-description",
+      infosheetUrl: "https://example.org/information-sheet",
+      materialSealedBy: { decidedBy: "programmeLead", decidedOn: "2026-11-13", reference: "a synthetic reference" },
+    };
+    expect(schemaOf("predictionMarketOutcomes").parse(sealed)).toEqual(sealed);
+    expect(accepts("predictionMarketOutcomes", { ...sealed, nullSigSource: { h01: null } })).toBe(false);
+    expect(accepts("predictionMarketOutcomes", { ...sealed, infosheetUrl: "not an address" })).toBe(false);
   });
 
   it("keeps an alias as written beside its folded form", () => {

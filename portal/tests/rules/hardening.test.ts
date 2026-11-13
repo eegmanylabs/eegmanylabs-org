@@ -286,12 +286,13 @@ describe("a value that an import took verbatim from a source", () => {
     return "Another value";
   };
 
-  it("is kept in six collections that clients write to", () => {
+  it("is kept in five collections that clients write to", () => {
+    // The null-significance label of a hypothesis was the sixth. It is sealed (question 22) and held in
+    // predictionMarketOutcomes, which no client writes.
     expect(withVerbatim.map((entry) => entry.key).sort()).toEqual([
       "contributors",
       "personAffiliations",
       "persons",
-      "replicationHypotheses",
       "replications",
       "vocabularyTerms",
     ]);
@@ -557,11 +558,9 @@ describe("the largest write of a collection", () => {
       analysisSpecification: "A linear mixed model.",
       preregistrationUrl: "https://example.org/preregistration",
       // An original statistic and a result are written with their provenance by a callable
-      // function, never by a client, so the largest client write leaves them out.
-      nullSigSource: "sig",
+      // function, never by a client, so the largest client write leaves them out. The null-significance label and the
+      // links to the market's documents are sealed elsewhere (question 22), and no field of a hypothesis.
       analysisStatus: "completed",
-      studyDescriptionUrl: "https://example.org/study-description",
-      infosheetUrl: "https://example.org/information-sheet",
     };
     const core = uidOfCaller("coreTeam");
     const version = `${REPLICATION}/protocolVersions/${autoId("versionFull")}`;
