@@ -30,7 +30,7 @@ export default defineConfig({
   },
   webServer: {
     name: "pages",
-    command: "node scripts/pages-server.mjs",
+    command: "node scripts/pages-server.mjs --stop-with-emulators",
     url: baseURL,
     // Never attach to a server that another run started with a different build.
     reuseExistingServer: false,

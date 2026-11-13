@@ -12,8 +12,15 @@
 // accident.
 //
 //   node scripts/pages-server.mjs [--root <directory>] [--port <number>] [--mount /portal/]
+//                                 [--stop-with-emulators]
+//
+// With --stop-with-emulators the server exits once the emulator hub of its port base has been
+// unreachable for three checks in a row. Playwright starts the server in a process group of its
+// own, so a test run that ends abnormally can leave it behind, holding the preview port and
+// refusing the next run (the browser tests run in three batches, one after another).
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
+import net from "node:net";
 import path from "node:path";
 import { PREVIEW_MOUNT, webOutputDirectory } from "./paths.mjs";
 import { LOCAL_HOST, portsFor, resolvePortBase } from "./ports.mjs";
@@ -134,10 +141,27 @@ if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
   server.listen(port, LOCAL_HOST, () => {
     console.log(`pages-server: serving ${root} at http://${LOCAL_HOST}:${port}${mount}`);
   });
-  for (const signal of /** @type {const} */ (["SIGINT", "SIGTERM"])) {
-    process.on(signal, () => {
-      server.close(() => process.exit(0));
-      server.closeAllConnections();
-    });
+  const stop = () => {
+    server.close(() => process.exit(0));
+    server.closeAllConnections();
+  };
+  for (const signal of /** @type {const} */ (["SIGINT", "SIGTERM"])) process.on(signal, stop);
+  if (process.argv.includes("--stop-with-emulators")) {
+    let misses = 0;
+    setInterval(() => {
+      const probe = net.connect({ host: LOCAL_HOST, port: ports.hub });
+      probe.setTimeout(2_000);
+      const settle = (/** @type {boolean} */ reachable) => {
+        probe.destroy();
+        misses = reachable ? 0 : misses + 1;
+        if (misses >= 3) {
+          console.log("pages-server: the emulators have stopped, so the server stops too.");
+          stop();
+        }
+      };
+      probe.once("connect", () => settle(true));
+      probe.once("error", () => settle(false));
+      probe.once("timeout", () => settle(false));
+    }, 5_000).unref();
   }
 }
