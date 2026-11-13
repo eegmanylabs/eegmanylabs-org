@@ -223,7 +223,25 @@ Two independent reviews examined phase 10 before this run, a security red team a
 
 No Firebase or Google Cloud project was contacted, no `gcloud` command or deploying `firebase` command was run, and `.github/workflows/deploy.yml` was not touched.
 
-## 10. Public-site entry
+## 10. The programme's answers of 13 November 2026
+
+Run on 13 November 2026 by the orchestrating session, independently of the engineers, from `portal/` with port base 9300 on the tree committed as "Apply the programme's answers: statuses, leads, sealed data, consent, retention, approvals and draft DPIA and privacy notice", with no change to it. `npm run typecheck` and `npm run lint` exited 0, with 1,136 files checked and no findings, and `npm test` exited 0 in one uninterrupted run.
+
+| Suite | Files | Tests passed | Tests failed |
+|---|---|---|---|
+| Unit and component tests | 169 | 2,491 | 0 |
+| Emulator-backed rules and tools tests | 73 | 4,382 | 0 |
+| Emulator-backed functions tests, in two batches | 46 (23 and 23) | 480 (265 and 215) | 0 |
+| Browser tests (Playwright, Chromium), in three batches | | 150 (50, 50 and 50) | 0 |
+| Restore rehearsal | | passed, on 321 documents, 3 accounts and 1 object | 0 |
+
+Memory in use peaked at 11.9 GB of the 16 GB available.
+
+The change applied the answers recorded in `docs/DECISIONS.md` and `docs/MIGRATION_PLAN.md` section 11: the four study statuses as recorded programme decisions, confirmation of agreed leads, the sealing of prediction-market outcome labels and of raw source rows to programme administrators, the administrator-only summary figures of sources A and F, contributor lists of unpublished manuscripts limited to the replication team and programme staff, the shared Amodio dataset, the alpha-asymmetry related project, the retention of outreach records after the migration is verified, imports from local exports outside the repository, explicit and withdrawable consent for gender and ethnicity, notification email switched off, and single-person approval of staging steps with two named approvers required for production. It also drafted `docs/DPIA_DRAFT.md` and `docs/PRIVACY_NOTICE_DRAFT.md` for the data protection officer. Every one of the 18 web addresses cited in the impact assessment was opened on 13 November 2026 and returned the page cited; the text of UK GDPR Article 44A was read and matches the use made of it.
+
+Two independent reviews examined the change before this run, a security red team and a check against the programme's answers, and reported 24 findings (6 high, 12 medium and 6 low), all fixed with tests or recorded as new questions for the programme lead. The high findings were that review-queue items about sealed values stayed readable by the core team, that the retention sweep looked for a field the importer never writes and so would never have deleted anything, that the website importer judged "every source agrees" before the other sources had been imported, that prediction-market data beyond the outcome labels was left unsealed, and that the two drafts contradicted the built consent feature and access rules.
+
+## 11. Public-site entry
 
 The gated Members' portal entry was verified by building the public site in scratch copies, never inside the repository.
 
@@ -237,7 +255,7 @@ The gated Members' portal entry was verified by building the public site in scra
 
 The comparison with `main` was run twice by the orchestrating session, before the first commit of the entry and again after the review fixes, and independently by the reviewer.
 
-## 11. Architecture spikes
+## 12. Architecture spikes
 
 Two throwaway spikes were run before the build to prove the architecture. Their code is not in the repository. Their results are summarised in `docs/ARCHITECTURE.md` section 10 and `docs/DECISIONS.md` D-010.
 
@@ -246,7 +264,7 @@ Two throwaway spikes were run before the build to prove the architecture. Their 
 | Application stack | 177 emulator-backed tests and 15 browser tests passed |
 | Collaborative editor on Firestore | All suites passed: security rules 28, provider 15, two-browser collaboration 10, editor features 18, versions 9, comments 11, presence 7 |
 
-## 12. Not yet verified
+## 13. Not yet verified
 
 | Item | Why it is unverified | What will verify it |
 |---|---|---|
