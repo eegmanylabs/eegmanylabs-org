@@ -24,7 +24,7 @@ import {
   userWriteContext,
 } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import * as Y from "yjs";
 import { adminDb } from "../support/admin";
 import {
@@ -35,7 +35,6 @@ import {
   call,
   codeOf,
   eventually,
-  leaveNoTrace,
   membership,
   notificationsOf,
   person,
@@ -43,10 +42,11 @@ import {
   resetWorld,
   settle,
   standard,
+  withTriggers,
 } from "./support";
 
+withTriggers();
 beforeEach(resetWorld);
-afterAll(leaveNoTrace);
 
 const STUDY = "SyntheticWorkspace2001";
 

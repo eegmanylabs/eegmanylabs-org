@@ -13,6 +13,7 @@ import {
   systemWriteContext,
 } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
+import { executeAutomationJob } from "../../automation/jobs";
 import { createdFields } from "../../framework/documents";
 import type { WorkspaceRuntime } from "../google/adapters";
 import { MAX_CHANNEL_LIFETIME_MS } from "../google/types";
@@ -30,6 +31,8 @@ export async function executeRun(runId: string, dependencies: JobDependencies): 
   const { db, clock, logger } = dependencies;
   const run = await claimRun(db, runId, clock.now());
   if (run === null) return null;
+  // The job of an automation reaches no external system, so no connection is paused or recorded for it.
+  if (run.kind === "automation") return executeAutomationJob(run, dependencies);
   const system = JOB_SYSTEM[run.kind];
   try {
     if (await connectionPaused(db, system)) {

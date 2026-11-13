@@ -9,7 +9,6 @@ import {
   countMapSchema,
   documentBaseSchema,
   entityRefShape,
-  freeMapSchema,
   idSchema,
   keySchema,
   LIMITS,
@@ -51,6 +50,7 @@ import {
  * | `labClaim.withdrawn`            | The member withdraws their own request while it waits for review    |
  * | `correction.resolved`           | A correction request is accepted or rejected                       |
  * | `demographics.read`             | Special-category data of a person is served to a caller            |
+ * | `demographics.aggregateRead`    | Counts of a special-category field for a scope are served, with small cells suppressed |
  * | `person.orcidChanged`           | The ORCID iD of a person is set, changed or removed                |
  * | `laboratoryMember.confirmed`    | A member entry of a laboratory is confirmed                        |
  * | `replicationMembership.confirmed` | A membership of a replication is confirmed                       |
@@ -108,6 +108,26 @@ import {
  * | `bidsReport.imported`           | A bids-validator report is imported                                 |
  * | `qcAssessment.recorded`         | A quality-control assessment is recorded                            |
  * | `dataset.qcTaskOpened`          | The arrival of data opens the quality-control task of a dataset     |
+ * | `hypothesis.findingRecorded`    | An original statistic or a result of a hypothesis is recorded with its provenance |
+ * | `analysisRun.saved`             | An analysis run is recorded or changed                              |
+ * | `decision.recorded`             | An entry of the methodological decision log is recorded            |
+ * | `incident.reported`             | An incident is reported                                             |
+ * | `incident.actionRecorded`       | A corrective action, a change of status or a correction of an incident is recorded |
+ * | `authorship.saved`              | The leads save the authorship list of a manuscript                  |
+ * | `authorship.answered`           | A person confirms their entry on an authorship list or asks for a change |
+ * | `manuscript.saved`              | A manuscript is created or changed through a callable function      |
+ * | `manuscript.eventRecorded`      | A submission, a review round, a decision or another event of a manuscript is recorded |
+ * | `manuscript.milestonePlanned`   | A milestone of a manuscript is planned as a task                    |
+ * | `documentLink.osfChecked`       | An OSF link is checked against OSF                                  |
+ * | `publication.prepared`          | A public export is assembled and compared with the website's files  |
+ * | `publication.approved`          | An administrator approves a public export, and its pull request is opened |
+ * | `publication.refreshed`         | The state of a publication's pull request is read again             |
+ * | `publication.withdrawn`         | A public export is withdrawn before it is published                 |
+ * | `publication.rollbackProposed`  | A pull request that restores the files a publication replaced is opened |
+ * | `automationRule.saved`          | An automation rule is created, changed, switched on or off          |
+ * | `automationRule.run`            | An administrator runs an automation rule by hand                    |
+ * | `automation.acted`              | An automation rule acted on a record                                |
+ * | `scheduledReport.saved`         | A scheduled report is created or changed                            |
  * | `document.created`              | The audit trigger saw a document created outside a callable function |
  * | `document.updated`              | The audit trigger saw a document changed outside a callable function |
  * | `document.deleted`              | The audit trigger saw a document deleted                           |
@@ -137,6 +157,7 @@ export const AUDIT_ACTIONS = [
   "labClaim.withdrawn",
   "correction.resolved",
   "demographics.read",
+  "demographics.aggregateRead",
   "person.orcidChanged",
   "laboratoryMember.confirmed",
   "replicationMembership.confirmed",
@@ -220,6 +241,26 @@ export const AUDIT_ACTIONS = [
   "bidsReport.imported",
   "qcAssessment.recorded",
   "dataset.qcTaskOpened",
+  "hypothesis.findingRecorded",
+  "analysisRun.saved",
+  "decision.recorded",
+  "incident.reported",
+  "incident.actionRecorded",
+  "authorship.saved",
+  "authorship.answered",
+  "manuscript.saved",
+  "manuscript.eventRecorded",
+  "manuscript.milestonePlanned",
+  "documentLink.osfChecked",
+  "publication.prepared",
+  "publication.approved",
+  "publication.refreshed",
+  "publication.withdrawn",
+  "publication.rollbackProposed",
+  "automationRule.saved",
+  "automationRule.run",
+  "automation.acted",
+  "scheduledReport.saved",
 ] as const;
 export const auditActionSchema = z.enum(AUDIT_ACTIONS);
 export type AuditAction = z.output<typeof auditActionSchema>;
@@ -321,22 +362,99 @@ export const automationTriggerTypeSchema = z.enum([
   "schedule",
   "manual",
 ]);
+export type AutomationTriggerType = z.output<typeof automationTriggerTypeSchema>;
 export const automationScopeTypeSchema = z.enum(["programme", "replication", "laboratory", "group"]);
 
-/** `automationRules/{id}`: a rule that acts when a record changes, on a schedule or on request. */
+/**
+ * The events an automation can start on, each with the kind of trigger it belongs to
+ * (requirement R16.9). The list is fixed: an administrator chooses among these and never writes
+ * a trigger of their own.
+ *
+ * | Event                  | Trigger type    | Happens when                                                 |
+ * |------------------------|-----------------|--------------------------------------------------------------|
+ * | `dataset.dataArrived`  | `recordUpdated` | The first listing of a dataset finds files                   |
+ * | `laboratory.activated` | `statusChanged` | A laboratory becomes active: its registration is approved    |
+ * | `recruitment.targetMet`| `recordUpdated` | The usable participants of a replication reach its target    |
+ * | `schedule.daily`       | `schedule`      | Once a day, at night in London                               |
+ * | `schedule.weekly`      | `schedule`      | Once a week, on Monday morning in London                     |
+ * | `manual`               | `manual`        | An administrator runs the rule from its page                 |
+ */
+export const AUTOMATION_EVENTS = {
+  "dataset.dataArrived": "recordUpdated",
+  "laboratory.activated": "statusChanged",
+  "recruitment.targetMet": "recordUpdated",
+  "schedule.daily": "schedule",
+  "schedule.weekly": "schedule",
+  manual: "manual",
+} as const satisfies Record<string, AutomationTriggerType>;
+export type AutomationEventKey = keyof typeof AUTOMATION_EVENTS;
+export const AUTOMATION_EVENT_KEYS = Object.keys(AUTOMATION_EVENTS) as [AutomationEventKey, ...AutomationEventKey[]];
+export const automationEventSchema = z.enum(AUTOMATION_EVENT_KEYS);
+
+/**
+ * The actions an automation can take, a fixed list, each with the events it may follow.
+ *
+ * | Action                      | Does                                                                  | After |
+ * |-----------------------------|-----------------------------------------------------------------------|-------|
+ * | `createOnboardingChecklist` | Opens the onboarding task list of a laboratory from the onboarding checklist | `laboratory.activated` |
+ * | `createQcTask`              | Opens the quality-control task of a dataset                           | `dataset.dataArrived` |
+ * | `notifyLeads`               | Notifies the leads of the replication concerned in the portal         | Any event about one replication |
+ * | `generateProgressReport`    | Queues an update of the progress reports generated from a template    | A schedule, a target met, or a manual run |
+ * | `flagOverdueUpdates`        | Flags collecting participations without a recent report, with a follow-up task | A schedule or a manual run |
+ */
+export const AUTOMATION_ACTIONS = {
+  createOnboardingChecklist: ["laboratory.activated"],
+  createQcTask: ["dataset.dataArrived"],
+  notifyLeads: ["dataset.dataArrived", "recruitment.targetMet"],
+  generateProgressReport: ["schedule.weekly", "schedule.daily", "recruitment.targetMet", "manual"],
+  flagOverdueUpdates: ["schedule.daily", "schedule.weekly", "manual"],
+} as const satisfies Record<string, readonly AutomationEventKey[]>;
+export type AutomationActionKind = keyof typeof AUTOMATION_ACTIONS;
+export const AUTOMATION_ACTION_KINDS = Object.keys(AUTOMATION_ACTIONS) as [
+  AutomationActionKind,
+  ...AutomationActionKind[],
+];
+export const automationActionKindSchema = z.enum(AUTOMATION_ACTION_KINDS);
+
+/** The facts of an event a condition may test. */
+export const AUTOMATION_CONDITION_FIELDS = ["replicationId", "laboratoryId", "modality", "status"] as const;
+export const automationConditionSchema = z.strictObject({
+  field: z.enum(AUTOMATION_CONDITION_FIELDS),
+  operator: z.enum(["equals", "notEquals", "in"]),
+  /** One value for `equals` and `notEquals`, and up to fifty for `in`. */
+  values: z.array(z.string().min(1).max(LIMITS.identifier)).min(1).max(50),
+});
+export type AutomationCondition = z.output<typeof automationConditionSchema>;
+
+export const automationActionSchema = z.strictObject({
+  kind: automationActionKindSchema,
+  /** For `generateProgressReport`: the template whose documents are updated. */
+  templateKey: keySchema.exactOptional(),
+});
+export type AutomationAction = z.output<typeof automationActionSchema>;
+
+/**
+ * `automationRules/{id}`: a rule that acts when a record changes, on a schedule or on request.
+ * The rules that ship with the portal are defined in code (`BUILT_IN_AUTOMATION_RULES`) under a
+ * fixed key, and a stored document under that key overrides one, which is how an administrator
+ * switches it off. Written by a callable function for holders of `automations.manage`.
+ */
 export const automationRuleDocSchema = documentBaseSchema.extend({
   name: shortTextSchema,
   enabled: z.boolean(),
+  /** Whether the rule ships with the portal. Its trigger and actions are fixed; only `enabled` and `conditions` change. */
+  builtIn: z.boolean(),
   triggerType: automationTriggerTypeSchema,
-  triggerConfig: freeMapSchema,
-  conditions: z.array(freeMapSchema).max(50),
-  actions: z.array(freeMapSchema).max(50),
+  triggerConfig: z.strictObject({ event: automationEventSchema }),
+  conditions: z.array(automationConditionSchema).max(20),
+  actions: z.array(automationActionSchema).min(1).max(10),
   scopeType: automationScopeTypeSchema,
   scopeId: idSchema,
 });
 export type AutomationRuleDoc = z.output<typeof automationRuleDocSchema>;
 
-export const automationRunStatusSchema = z.enum(["running", "succeeded", "failed", "skipped"]);
+export const automationRunStatusSchema = z.enum(["queued", "running", "succeeded", "failed", "skipped"]);
+export type AutomationRunStatus = z.output<typeof automationRunStatusSchema>;
 
 /** The most log entries a run keeps: the last ones. */
 export const AUTOMATION_RUN_LOG_MAX = 50;
@@ -344,15 +462,25 @@ export const AUTOMATION_RUN_LOG_MAX = 50;
 /**
  * `automationRuns/{idempotencyKey}`: one run of a rule for one event. The identifier is the
  * idempotency key, so a rule runs once for an event however often the event is delivered.
+ * `chain` names the rules whose runs led to this one, so that a rule never runs again in a chain
+ * it started, and `depth` is the depth of the event's write context.
  */
 export const automationRunDocSchema = documentBaseSchema.extend({
   ruleId: idSchema,
   eventId: idSchema,
   idempotencyKey: idSchema,
+  event: automationEventSchema,
+  entityType: entityRefShape.entityType.nullable(),
+  entityId: entityRefShape.entityId.nullable(),
   status: automationRunStatusSchema,
   attempts: z.number().int().min(0),
+  depth: z.number().int().min(0),
+  correlationId: z.string().min(1).max(200),
+  chain: z.array(idSchema).max(20),
   log: z.array(z.string().max(2_000)).max(AUTOMATION_RUN_LOG_MAX),
   error: longTextSchema.exactOptional(),
+  /** The job of the queue that carries out the actions, which retries them. */
+  syncRunId: idSchema.exactOptional(),
   startedAt: timestampSchema,
   finishedAt: timestampSchema.nullable(),
 });
@@ -372,6 +500,10 @@ export const mailDocSchema = documentBaseSchema.extend({
   /** The template the message was made from. Templates are defined in code beside the function that sends them. */
   templateKey: keySchema,
   eventId: idSchema.exactOptional(),
+  /** The account the message is for, where it is for one. */
+  uid: uidSchema.exactOptional(),
+  /** The earliest time the message may be sent: the end of the recipient's quiet hours. */
+  notBefore: timestampSchema.exactOptional(),
   status: mailStatusSchema,
   attempts: z.number().int().min(0),
   sentAt: timestampSchema.nullable(),
@@ -391,15 +523,28 @@ export const eventFailureDocSchema = documentBaseSchema.extend({
 });
 export type EventFailureDoc = z.output<typeof eventFailureDocSchema>;
 
-/** `scheduledReports/{id}`: a report that is produced on a schedule and sent to its recipients. */
+export const scheduledReportScheduleSchema = z.enum(["weekly", "monthly"]);
+export type ScheduledReportSchedule = z.output<typeof scheduledReportScheduleSchema>;
+
+/**
+ * `scheduledReports/{id}`: a progress report that is produced on a schedule into the generated
+ * documents of phase 6 and announced to its recipients in the portal. The definition names the
+ * template and the record the report is about. Written by a callable function for holders of
+ * `automations.manage`.
+ */
 export const scheduledReportDocSchema = documentBaseSchema.extend({
   name: shortTextSchema,
-  definition: freeMapSchema,
-  /** When the report runs, as a schedule expression. */
-  schedule: z.string().min(1).max(200),
-  /** The accounts that receive the report. */
+  definition: z.strictObject({
+    templateKey: keySchema,
+    entityType: entityRefShape.entityType,
+    entityId: entityRefShape.entityId,
+  }),
+  schedule: scheduledReportScheduleSchema,
+  /** The accounts that are told in the portal when the report is updated. */
   recipients: z.array(uidSchema).max(200),
   lastRunAt: timestampSchema.nullable(),
+  /** The period of the last run, such as `2026-W46` or `2026-11`, so a period runs once. */
+  lastPeriod: z.string().min(1).max(20).nullable(),
   enabled: z.boolean(),
 });
 export type ScheduledReportDoc = z.output<typeof scheduledReportDocSchema>;
@@ -419,6 +564,9 @@ export const searchIndexDocSchema = documentBaseSchema.extend({
   title: z.string().max(1_000),
   tokens: z.array(z.string().min(1).max(100)).max(SEARCH_TOKENS_PER_PART),
   kind: keySchema,
+  /** For a comment or a document link: the record it belongs to, which a result opens. */
+  targetEntityType: entityRefShape.entityType.exactOptional(),
+  targetEntityId: entityRefShape.entityId.exactOptional(),
   ...scopeFieldsShape,
 });
 export type SearchIndexDoc = z.output<typeof searchIndexDocSchema>;

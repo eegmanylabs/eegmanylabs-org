@@ -13,6 +13,8 @@ import { adminBootstrapCommand } from "./commands/admin-bootstrap";
 import { citationsVerifyCommand } from "./commands/citations-verify";
 import { importCommand } from "./commands/import";
 import { integrityCheckCommand } from "./commands/integrity-check";
+import { migrateManuscriptIdsCommand } from "./commands/migrate-manuscript-ids";
+import { publishVerifyCommand } from "./commands/publish-verify";
 import { seedDemoCommand } from "./commands/seed-demo";
 import { seedLookupsCommand } from "./commands/seed-lookups";
 import { ToolRefusal } from "./environment";
@@ -26,6 +28,8 @@ const COMMANDS: readonly Command[] = [
   accessRebuildCommand,
   adminBootstrapCommand,
   integrityCheckCommand,
+  migrateManuscriptIdsCommand,
+  publishVerifyCommand,
 ];
 
 // | Exit status | Meaning                                                                      |

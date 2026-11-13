@@ -12,7 +12,7 @@ import {
   roleAssignmentDocSchema,
   withdrawLabClaimContract,
 } from "@eegml/shared";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { addressInDomains } from "../../functions/src/callables/requestLabClaim";
 import {
   accessOf,
@@ -29,18 +29,17 @@ import {
   grantRole,
   institution,
   laboratory,
-  leaveNoTrace,
   memberEntry,
   memberEntryPath,
   notificationsOf,
   person,
   refusal,
   resetWorld,
+  withTriggers,
 } from "./support";
 
+withTriggers();
 beforeEach(resetWorld);
-
-afterAll(leaveNoTrace);
 
 const CLAIM = "uid-member__lab-a";
 const claimOf = async (id = CLAIM) => labClaimDocSchema.parse(await dataOf(`labClaims/${id}`));

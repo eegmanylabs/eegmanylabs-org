@@ -66,6 +66,7 @@ import {
   DEMO_PARTICIPATIONS,
   DEMO_PAUSE,
   DEMO_PERSONS,
+  DEMO_PROTOCOL,
   DEMO_REPLICATIONS,
   DEMO_REPORTS,
   DEMO_REQUIREMENTS,
@@ -75,6 +76,7 @@ import {
   DEMO_SYNC_MAPPINGS,
   DEMO_SYNC_SOURCES,
   DEMO_TARGETS,
+  DEMO_TEAM_MEMBERS,
   DEMO_WORKSPACE,
 } from "../fixtures/demo-world";
 import { emulatorHashKey } from "../hash-key";
@@ -551,8 +553,52 @@ export function demoDocuments(now: Date, hashKey: string): DemoDocument[] {
         statusHistoryId: null,
         ...targetsOf(participationId(participation.replicationId, participation.laboratoryId)),
         readinessStatus: participation.readinessStatus,
+        ...((DEMO_PROTOCOL.participations as readonly string[]).includes(
+          participationId(participation.replicationId, participation.laboratoryId),
+        )
+          ? { protocolId: DEMO_PROTOCOL.id }
+          : {}),
         custom: {},
         dataOrigin: "demo",
+      },
+    );
+  }
+  add("replicationProtocols", COLLECTIONS.replicationProtocols.docPath(DEMO_PROTOCOL.replicationId, DEMO_PROTOCOL.id), {
+    replicationId: DEMO_PROTOCOL.replicationId,
+    title: DEMO_PROTOCOL.title,
+    description: DEMO_PROTOCOL.description,
+    currentVersionId: DEMO_PROTOCOL.versionId,
+  });
+  add(
+    "replicationProtocolVersions",
+    COLLECTIONS.replicationProtocolVersions.docPath(DEMO_PROTOCOL.replicationId, DEMO_PROTOCOL.versionId),
+    {
+      replicationId: DEMO_PROTOCOL.replicationId,
+      protocolId: DEMO_PROTOCOL.id,
+      versionLabel: DEMO_PROTOCOL.versionLabel,
+      effectiveDate: DEMO_PROTOCOL.effectiveDate,
+      status: "approved",
+      changeSummary: DEMO_PROTOCOL.changeSummary,
+      approvedBy: SEED_DEMO_ACTOR,
+      approvedAt: timestamp,
+    },
+  );
+  const participationOfTeam = new Map(
+    DEMO_PARTICIPATIONS.map((item) => [participationId(item.replicationId, item.laboratoryId), item] as const),
+  );
+  for (const member of DEMO_TEAM_MEMBERS) {
+    const participation = participationOfTeam.get(member.participationId);
+    if (participation === undefined) continue;
+    add(
+      "participationTeamMembers",
+      COLLECTIONS.participationTeamMembers.docPath(member.participationId, member.personId),
+      {
+        participationId: member.participationId,
+        personId: member.personId,
+        role: member.role,
+        replicationId: participation.replicationId,
+        laboratoryId: participation.laboratoryId,
+        scopeKeys: unitScopeKeys(participation.replicationId, participation.laboratoryId),
       },
     );
   }

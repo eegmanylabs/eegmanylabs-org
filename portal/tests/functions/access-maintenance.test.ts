@@ -3,7 +3,7 @@
 // Fixtures are synthetic: fictitious accounts and units, with addresses on the example.org domain.
 import { COLLECTIONS, can, capabilityGrantId, roleAssignmentId } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { expireAccess } from "../../functions/src/access/expiry";
 import { rebuildAccess, rebuildAllAccess } from "../../functions/src/access/maintain";
 import { adminDb } from "../support/admin";
@@ -14,17 +14,16 @@ import {
   grantCapability,
   grantRole,
   laboratory,
-  leaveNoTrace,
   person,
   resetWorld,
   standard,
+  withTriggers,
 } from "./support";
 
 const logger = { info: () => undefined, warn: () => undefined, error: () => undefined };
 
+withTriggers();
 beforeEach(resetWorld);
-
-afterAll(leaveNoTrace);
 
 describe("the access document after a change that no callable function made", () => {
   it("loses the scope of a role once the role is revoked", async () => {

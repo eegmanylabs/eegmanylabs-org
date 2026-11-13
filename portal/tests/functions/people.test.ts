@@ -16,7 +16,7 @@ import {
   setPersonOrcidContract,
 } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { adminDb } from "../support/admin";
 import {
   accessOf,
@@ -34,7 +34,6 @@ import {
   grantCapability,
   grantRole,
   laboratory,
-  leaveNoTrace,
   memberEntry,
   memberEntryPath,
   membership,
@@ -46,11 +45,11 @@ import {
   resetWorld,
   settle,
   standard,
+  withTriggers,
 } from "./support";
 
+withTriggers();
 beforeEach(resetWorld);
-
-afterAll(leaveNoTrace);
 
 /** A member whose account is linked to a person. */
 async function linkedMember(uid: string, personId: string, fields: Record<string, unknown> = {}): Promise<Caller> {

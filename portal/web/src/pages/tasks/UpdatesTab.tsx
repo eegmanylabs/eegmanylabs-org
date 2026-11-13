@@ -3,7 +3,6 @@
 // post updates, which never change, and those who follow the record are told of each.
 import {
   commentSegments,
-  entityRefId,
   PROGRESS_UPDATE_MENTIONS_MAX,
   type ProgressUpdateEntityType,
   postProgressUpdateContract,
@@ -11,18 +10,10 @@ import {
 import { Pin } from "lucide-react";
 import { useState } from "react";
 import { LiveView } from "@/components/feedback/live-view";
+import { FollowButton } from "@/components/registry/follow-button";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import {
-  callFunction,
-  type LiveQuery,
-  type RecordOf,
-  retryFailedLiveData,
-  setFollowing,
-  useLiveDocument,
-  useLiveQuery,
-} from "@/data";
+import { callFunction, type LiveQuery, type RecordOf, retryFailedLiveData, useLiveQuery } from "@/data";
 import { CommentComposer } from "@/pages/workspace/CommentComposer";
 import { useMembers } from "@/pages/workspace/members";
 import type { Viewer } from "@/registry/viewer";
@@ -99,38 +90,6 @@ function Entry({
   );
 }
 
-function FollowButton({ viewer, entityType, entityId }: Omit<UpdatesTabProps, "canPost">) {
-  const subscription = useLiveDocument("userSubscriptions", [viewer.uid, entityRefId(entityType, entityId)]);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  if (subscription.status !== "ready") return null;
-  const following = subscription.data !== null && subscription.data.level === "all";
-  return (
-    <div className="flex items-center gap-2">
-      <Button
-        size="sm"
-        variant="outline"
-        aria-pressed={following}
-        disabled={busy}
-        onClick={() => {
-          setBusy(true);
-          setError(null);
-          setFollowing(viewer.uid, entityType, entityId, !following)
-            .catch(() => setError("The change was not saved."))
-            .finally(() => setBusy(false));
-        }}
-      >
-        {following ? "Stop following" : "Follow updates"}
-      </Button>
-      {error === null ? null : (
-        <span role="alert" className="text-xs text-fg-accent">
-          {error}
-        </span>
-      )}
-    </div>
-  );
-}
-
 export function UpdatesTab({ viewer, entityType, entityId, canPost }: UpdatesTabProps) {
   const updates = useLiveQuery(updatesOf(entityType, entityId));
   const members = useMembers(true);
@@ -143,7 +102,7 @@ export function UpdatesTab({ viewer, entityType, entityId, canPost }: UpdatesTab
         <p className="text-sm text-fg-secondary">
           A dated log of progress. Those who follow it are told of each update.
         </p>
-        <FollowButton viewer={viewer} entityType={entityType} entityId={entityId} />
+        <FollowButton uid={viewer.uid} entityType={entityType} entityId={entityId} />
       </div>
       {canPost ? (
         <div className="grid gap-2 rounded-tile border border-border bg-surface p-3">

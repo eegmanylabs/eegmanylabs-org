@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import { defineConfig } from "vitest/config";
+import { BaseSequencer, type TestSpecification } from "vitest/node";
 
 // One configuration, five projects. `npm run test:unit` runs the first two, which need nothing
 // running. The other three expect the emulators and are started through
@@ -18,8 +20,24 @@ const emulated = {
   fileParallelism: false,
 } as const;
 
+/**
+ * The order of the test files. A file of the functions suite that needs the Firestore triggers
+ * declares it with `withTriggers()`, and those files run after every other file, so the suite
+ * switches the triggers on once (tests/support/triggers.ts explains why each switch on costs
+ * every later write). Within each group the default order holds.
+ */
+class TriggerSequencer extends BaseSequencer {
+  override async sort(files: TestSpecification[]): Promise<TestSpecification[]> {
+    const sorted = await super.sort(files);
+    const later = new Set(sorted.filter((file) => /^withTriggers\(\);$/m.test(readFileSync(file.moduleId, "utf8"))));
+    return [...sorted.filter((file) => !later.has(file)), ...sorted.filter((file) => later.has(file))];
+  }
+}
+
 export default defineConfig({
   test: {
+    // The files of the functions suite that need the triggers run last.
+    sequence: { sequencer: TriggerSequencer },
     projects: [
       {
         test: {

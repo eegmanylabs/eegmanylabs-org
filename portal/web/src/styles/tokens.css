@@ -217,9 +217,14 @@
     outline: 3px solid var(--focus-ring);
     outline-offset: 3px;
   }
-  /* Keyboard shortcuts are set in DM Sans like all other text, never in a monospace face. */
-  kbd {
+  /* Keyboard shortcuts, commands, commits, file names and parameters are set in DM Sans like all
+     other text, never in a monospace face, with figures of one width so that they line up. */
+  kbd,
+  code,
+  pre,
+  samp {
     font-family: var(--sans);
+    font-variant-numeric: tabular-nums;
   }
   /* The browser's own clear button of a search field is blue and off the palette. A search is
      cleared with Escape, by deleting the text, or with the page's own control. */

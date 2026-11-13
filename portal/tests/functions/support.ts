@@ -32,9 +32,11 @@ import {
   userNotificationDocSchema,
 } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
+import { afterAll, beforeAll } from "vitest";
 import { rebuildAccess } from "../../functions/src/access/maintain";
 import { adminDb } from "../support/admin";
-import { clearAuth, clearFirestore, FUNCTIONS_URL, PROJECT_ID, setBackgroundTriggers } from "../support/emulators";
+import { clearAuth, clearFirestore, FUNCTIONS_URL, PROJECT_ID } from "../support/emulators";
+import { ensureTriggers, triggerState } from "../support/triggers";
 
 /** Who a call claims to come from. */
 export interface Caller {
@@ -192,7 +194,8 @@ export async function eventually<T>(
 const pause = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 /**
- * Empties the emulators before a test. The triggers stay on, so what the previous test left
+ * Empties the emulators before a test. Whether the deletions reach the triggers depends on the
+ * file: in a file that runs with the triggers on (`withTriggers`), what the previous test left
  * queued, and the deletions of the clear itself, can still reach them while the next test runs.
  * The triggers that derive a value read the documents as they are when they run, so they do no
  * harm. The audit trigger records such a deletion, which is why a test that reads the audit
@@ -203,55 +206,44 @@ export async function resetWorld(): Promise<void> {
 }
 
 /**
- * Empties the emulators at the end of a test file, with the triggers switched off around the
- * clear. Switching them off waits for the work that is queued, and what arrives while they are
- * off, the deletions of the clear included, is ignored. The next file therefore starts with an
- * empty database and no late deliveries. Switching the triggers on again makes the functions
- * emulator load them anew, which takes a few seconds, so this is done once for a file.
+ * Declares that the tests of a file need the Firestore triggers: the audit trigger, access
+ * maintenance, the workspace and the integrations. The suite runs these files after the files
+ * that need none (`TriggerSequencer` in `vitest.config.ts`), so the triggers are switched on once, by the first of them,
+ * and stay on: each switch on adds deliveries to every later write (`tests/support/triggers.ts`).
+ *
+ * Before the first test the work that an earlier file left is waited for and the emulators are
+ * emptied, and after the last the work of this file is waited for, so neither the documents nor
+ * the late deliveries of one file reach the next.
  */
-export async function leaveNoTrace(): Promise<void> {
-  await setBackgroundTriggers(false);
-  await resetWorld();
-  await pause(100);
-  await warmTriggers();
+export function withTriggers(): void {
+  beforeAll(async () => {
+    if ((await triggerState()) === "off") {
+      // The clear reaches no trigger while they are off.
+      await resetWorld();
+      await ensureTriggers("on");
+    } else {
+      await settle();
+      await resetWorld();
+    }
+  });
+  afterAll(async () => {
+    await settle();
+    await resetWorld();
+  });
 }
 
-/** How many times the triggers are switched on again before a file's clean-up gives up. */
-const WARM_ATTEMPTS = 3;
-
 /**
- * Waits until the triggers that were just switched on answer again: a sentinel write has been
- * audited and the sentinel removed. The emulator loads its triggers anew when they are switched
- * on, so without this the first events of the next file would pay for that load.
+ * Declares that the tests of a file need no trigger: what they prove is done by the callable
+ * functions, which answer whatever the triggers do. The file runs with the triggers off, so its
+ * writes start no trigger work that could slow its calls down or arrive in another file, and its
+ * clears reach no trigger. Switching them off waits for the work an earlier file left.
  */
-async function warmTriggers(): Promise<void> {
-  // The hub can refuse or drop the request that switches the triggers on, and with more
-  // triggers to register it takes longer to answer. A switch that did not take is made again,
-  // with a fresh sentinel, a bounded number of times.
-  for (let attempt = 1; ; attempt += 1) {
-    const switched = await setBackgroundTriggers(true);
-    sentinels += 1;
-    const sentinel = adminDb.doc(`countCategories/zz-warm-${process.pid}-${sentinels}`);
-    await sentinel.set({
-      ...standard(),
-      key: "zzWarm",
-      label: "Warm",
-      definition: "A sentinel.",
-      position: 999,
-      isCore: false,
-    });
-    try {
-      await eventually(
-        async () => (await adminDb.collection("auditEvents").where("documentPath", "==", sentinel.path).get()).size > 0,
-        `the audit entry of the sentinel${switched ? "" : " (the hub did not confirm the switch)"}`,
-      );
-      await sentinel.delete();
-      return;
-    } catch (error) {
-      await sentinel.delete();
-      if (attempt >= WARM_ATTEMPTS) throw error;
-    }
-  }
+export function withoutTriggers(): void {
+  beforeAll(async () => {
+    await ensureTriggers("off");
+    await resetWorld();
+  });
+  afterAll(resetWorld);
 }
 
 let sentinels = 0;

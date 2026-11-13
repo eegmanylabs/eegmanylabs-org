@@ -207,12 +207,13 @@ test("Home shows the member's work and a live snapshot of the programme whose fi
   await expect(page).toHaveURL(/#\/replications\?status=planning$/);
   await expect(page.getByTestId("result-count")).toHaveText("Showing 1 of 4 replications");
   await page.goBack();
-  await snapshot
-    .getByRole("region", { name: "Members by country" })
-    .getByRole("link", { name: /^Germany:/ })
-    .click();
-  await expect(page).toHaveURL(/#\/members\?country=DE$/);
-  await expect(page.getByTestId("result-count")).toHaveText(/Showing 2 of 12 members/);
+  // Every country of the synthetic world has fewer than five members, so none is named with its
+  // count, as on the analysis page: they are counted together and lead to the whole directory.
+  const byCountry = snapshot.getByRole("region", { name: "Members by country" });
+  await expect(byCountry.getByRole("link", { name: /^Germany:/ })).toHaveCount(0);
+  await byCountry.getByRole("link", { name: /countries with fewer than 5 members each/ }).click();
+  await expect(page).toHaveURL(/#\/members$/);
+  await expect(page.getByTestId("result-count")).toHaveText(/12 members/);
   await page.goBack();
   await snapshot
     .getByRole("region", { name: "Publications by status" })
@@ -223,16 +224,16 @@ test("Home shows the member's work and a live snapshot of the programme whose fi
 });
 
 test("a deep link opened signed out leads through sign-in to the record and its tab", async ({ page }) => {
-  await page.goto("./#/replications/DemoBeta2005?tab=publications");
+  await page.goto("./#/replications/DemoBeta2005?tab=outputs");
   await expect(page).toHaveURL(/#\/login\?next=/);
   await requestSignInLink(page, IVY.email);
   await page.goto(await latestSignInLink(IVY.email));
   await expect(page.getByRole("heading", { level: 1, name: "DemoBeta2005" })).toBeVisible();
-  await expect(page).toHaveURL(/#\/replications\/DemoBeta2005\?tab=publications$/);
-  await expect(page.getByRole("tab", { name: "Publications" })).toHaveAttribute("aria-selected", "true");
+  await expect(page).toHaveURL(/#\/replications\/DemoBeta2005\?tab=outputs$/);
+  await expect(page.getByRole("tab", { name: "Outputs" })).toHaveAttribute("aria-selected", "true");
   // A reload keeps the record and the tab.
   await page.reload();
-  await expect(page.getByRole("tab", { name: "Publications" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "Outputs" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tabpanel")).toContainText("a planned synthetic report");
 
   // An address that names no replication says so, with a way back.

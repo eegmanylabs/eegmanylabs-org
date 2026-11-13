@@ -26,9 +26,16 @@ export function AppShell() {
     <PaletteActionsProvider>
       <div className="flex min-h-dvh">
         <SkipLink />
-        {refused ? null : <Sidebar collapsed={collapsed} onToggle={toggleCollapsed} />}
+        {refused ? null : (
+          <div data-print="hide" className="contents">
+            <Sidebar collapsed={collapsed} onToggle={toggleCollapsed} />
+          </div>
+        )}
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-30 flex h-(--shell-topbar) items-center gap-3 border-b border-border bg-background px-4">
+          <header
+            data-print="hide"
+            className="sticky top-0 z-30 flex h-(--shell-topbar) items-center gap-3 border-b border-border bg-background px-4"
+          >
             {refused ? null : <MobileNavigation />}
             <Breadcrumbs />
             <div className="ml-auto flex items-center gap-1">

@@ -4,13 +4,12 @@
 // Fixtures are synthetic: fictitious accounts and studies on the example.org domain.
 import { COLLECTIONS, editReplicationCitationContract } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { adminDb } from "../support/admin";
-import { account, auditOf, call, codeOf, dataOf, grantRole, leaveNoTrace, replication, resetWorld } from "./support";
+import { account, auditOf, call, codeOf, dataOf, grantRole, replication, resetWorld, withoutTriggers } from "./support";
 
+withoutTriggers();
 beforeEach(resetWorld);
-
-afterAll(leaveNoTrace);
 
 const STUDY = "SyntheticStudy2001";
 const PATH = COLLECTIONS.replications.docPath(STUDY);

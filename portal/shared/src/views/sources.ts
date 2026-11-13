@@ -14,12 +14,28 @@ import {
   bidsStatusSchema,
   datasetAvailabilitySchema,
   datasetModalitySchema,
+  processingRunKindSchema,
+  processingRunStatusSchema,
   qcStatusSchema,
+  reproducibilityStatusSchema,
+  runQcStatusSchema,
 } from "../schemas/datasets";
+import {
+  decisionStatusSchema,
+  incidentStatusSchema,
+  manuscriptKindSchema,
+  manuscriptStatusSchema,
+  riskLevelSchema,
+} from "../schemas/outputs";
 import { participationStatusSchema, readinessStatusSchema } from "../schemas/participation";
 import { laboratoryStatusSchema } from "../schemas/programme";
 import { reportEntryKindSchema, reportKindSchema } from "../schemas/recruitment";
-import { recruitmentBasisSchema, replicationSelectionStatusSchema } from "../schemas/replications";
+import {
+  analysisStatusSchema,
+  recruitmentBasisSchema,
+  replicationSelectionStatusSchema,
+  scientificReviewStatusSchema,
+} from "../schemas/replications";
 import { taskKindSchema, taskPrioritySchema } from "../schemas/tasks";
 import type { PropertyType } from "../schemas/workspace";
 import { isFirestoreTimestamp } from "../timestamp";
@@ -82,6 +98,11 @@ export const CORE_SOURCE_KEYS = [
   "core:recruitmentReports",
   "core:recruitment",
   "core:datasets",
+  "core:hypotheses",
+  "core:manuscripts",
+  "core:analysisRuns",
+  "core:decisions",
+  "core:incidents",
 ] as const;
 export type CoreSourceKey = (typeof CORE_SOURCE_KEYS)[number];
 
@@ -665,6 +686,212 @@ export const CORE_SOURCES: Readonly<Record<CoreSourceKey, CoreSource>> = {
       boardProperty: "status",
     },
   },
+  "core:hypotheses": {
+    key: "core:hypotheses",
+    label: "Hypotheses",
+    selectable: true,
+    entityType: "hypothesis",
+    titleProperty: "label",
+    customKey: null,
+    // A hypothesis lives beneath its replication, so a relation names it by both identifiers.
+    reference: (id, document) => ({
+      entityType: "hypothesis",
+      entityId: nestedEntityId(typeof document.replicationId === "string" ? document.replicationId : "", id),
+    }),
+    fields: () => [
+      field("label", "Hypothesis", "text", (document, id) =>
+        text(`${typeof document.replicationId === "string" ? document.replicationId : ""} ${id}`.trim()),
+      ),
+      field("replication", "Replication", "relation", (document) => references("replication", document.replicationId), {
+        config: { relation: { target: "core:replications" } },
+      }),
+      field("text", "Statement", "text", (document) => text(document.text)),
+      field("expectedEffect", "Expected effect", "text", (document) => text(document.expectedEffect)),
+      field("outcomeMeasure", "Outcome measure", "text", (document) => text(document.outcomeMeasure)),
+      field("preregistrationUrl", "Preregistration", "url", (document) => text(document.preregistrationUrl)),
+      field("originalStatistics", "Original statistics", "text", (document) => text(document.originalStatistics)),
+      field("analysisStatus", "Analysis", "select", (document) => text(document.analysisStatus), {
+        config: { options: optionsOf(analysisStatusSchema.options) },
+      }),
+      field(
+        "scientificReviewStatus",
+        "Scientific review",
+        "select",
+        (document) => text(document.scientificReviewStatus),
+        {
+          config: { options: optionsOf(scientificReviewStatusSchema.options) },
+        },
+      ),
+      field("resultSummary", "Result", "text", (document) => text(document.resultSummary)),
+      dataOrigin(),
+    ],
+    defaultConfig: { sorts: [{ property: "label", direction: "ascending" }], boardProperty: "analysisStatus" },
+  },
+  "core:manuscripts": {
+    key: "core:manuscripts",
+    label: "Outputs",
+    selectable: true,
+    entityType: "manuscript",
+    titleProperty: "title",
+    customKey: null,
+    reference: (id) => ({ entityType: "manuscript", entityId: id }),
+    fields: () => [
+      field("title", "Title", "text", (document) => text(document.title)),
+      field("replication", "Replication", "relation", (document) => references("replication", document.replicationId), {
+        config: { relation: { target: "core:replications" } },
+      }),
+      field("kind", "Kind", "select", (document) => text(document.kind), {
+        config: { options: optionsOf(manuscriptKindSchema.options) },
+      }),
+      field("status", "Status", "status", (document) => text(document.status), {
+        config: { options: optionsOf(manuscriptStatusSchema.options, (key) => MANUSCRIPT_STATUS_GROUPS[key]) },
+      }),
+      field("journal", "Journal", "text", (document) => text(document.journal)),
+      field("doi", "DOI", "text", (document) => text(document.doi)),
+      field("osfUrl", "OSF", "url", (document) => text(document.osfUrl)),
+      field(
+        "stage1",
+        "Stage 1 report",
+        "relation",
+        (document) => references("manuscript", document.stage1ManuscriptId),
+        {
+          config: { relation: { target: "core:manuscripts" } },
+        },
+      ),
+      field("submittedAt", "Submitted", "date", (document) => instantText(document.submittedAt)),
+      field("acceptedAt", "Accepted", "date", (document) => instantText(document.acceptedAt)),
+      field("publishedAt", "Published", "date", (document) => instantText(document.publishedAt)),
+      dataOrigin(),
+    ],
+    defaultConfig: { sorts: [{ property: "title", direction: "ascending" }], boardProperty: "status" },
+  },
+  "core:analysisRuns": {
+    key: "core:analysisRuns",
+    label: "Analysis runs",
+    selectable: true,
+    entityType: "processingRun",
+    titleProperty: "title",
+    customKey: null,
+    reference: (id) => ({ entityType: "processingRun", entityId: id }),
+    fields: () => [
+      field("title", "Run", "text", (document) => text(document.title) ?? text(document.pipelineName)),
+      field("replication", "Replication", "relation", (document) => references("replication", document.replicationId), {
+        config: { relation: { target: "core:replications" } },
+      }),
+      field("laboratory", "Laboratory", "relation", (document) => references("laboratory", document.laboratoryId), {
+        config: { relation: { target: "core:laboratories" } },
+      }),
+      field("kind", "Kind", "select", (document) => text(document.kind), {
+        config: { options: optionsOf(processingRunKindSchema.options) },
+      }),
+      field("pipelineName", "Pipeline", "text", (document) => text(document.pipelineName)),
+      field("version", "Version", "text", (document) => text(document.version)),
+      field("codeCommit", "Commit", "text", (document) => text(document.codeCommit)),
+      field("status", "Status", "status", (document) => text(document.status), {
+        config: { options: optionsOf(processingRunStatusSchema.options, (key) => RUN_STATUS_GROUPS[key]) },
+      }),
+      field("inputs", "Input datasets", "relation", (document) => references("dataset", document.inputDatasetIds), {
+        config: { relation: { target: "core:datasets" } },
+      }),
+      field("qcStatus", "QC", "select", (document) => text(document.qcStatus), {
+        config: { options: optionsOf(runQcStatusSchema.options) },
+      }),
+      field("reproducibilityStatus", "Reproducibility", "select", (document) => text(document.reproducibilityStatus), {
+        config: { options: optionsOf(reproducibilityStatusSchema.options) },
+      }),
+      field("finishedAt", "Finished", "date", (document) => instantText(document.finishedAt)),
+    ],
+    defaultConfig: { sorts: [{ property: "finishedAt", direction: "descending" }], boardProperty: "status" },
+  },
+  "core:decisions": {
+    key: "core:decisions",
+    label: "Decision log",
+    selectable: true,
+    entityType: "decision",
+    titleProperty: "title",
+    customKey: null,
+    reference: (id) => ({ entityType: "decision", entityId: id }),
+    // A view reads a decision as it stands: its latest correction, with the status that a later
+    // decision gives it (`decisionStates`).
+    fields: () => [
+      field("title", "Decision", "text", (document) => text(document.title)),
+      field("scopeType", "Scope", "select", (document) => text(document.scopeType), {
+        config: { options: optionsOf(["programme", "replication", "laboratory"]) },
+      }),
+      field("replication", "Replication", "relation", (document) => references("replication", document.replicationId), {
+        config: { relation: { target: "core:replications" } },
+      }),
+      field("summary", "Summary", "text", (document) => text(document.summary)),
+      field("status", "Status", "status", (document) => text(document.status), {
+        config: { options: optionsOf(decisionStatusSchema.options, (key) => DECISION_STATUS_GROUPS[key]) },
+      }),
+      field("decidedAt", "Decided", "date", (document) => text(document.decidedAt)),
+      field("corrections", "Corrections", "number", (document) => numeric(document.corrections)),
+    ],
+    defaultConfig: { sorts: [{ property: "decidedAt", direction: "descending" }], boardProperty: "status" },
+  },
+  "core:incidents": {
+    key: "core:incidents",
+    label: "Incidents",
+    selectable: true,
+    entityType: "incident",
+    titleProperty: "title",
+    customKey: null,
+    reference: (id) => ({ entityType: "incident", entityId: id }),
+    // A view reads an incident as it stands after its actions (`incidentState`).
+    fields: () => [
+      field("title", "Incident", "text", (document) => text(document.title)),
+      field("replication", "Replication", "relation", (document) => references("replication", document.replicationId), {
+        config: { relation: { target: "core:replications" } },
+      }),
+      field("laboratory", "Laboratory", "relation", (document) => references("laboratory", document.laboratoryId), {
+        config: { relation: { target: "core:laboratories" } },
+      }),
+      field("severity", "Severity", "select", (document) => text(document.severity), {
+        config: { options: optionsOf(riskLevelSchema.options) },
+      }),
+      field("status", "Status", "status", (document) => text(document.status), {
+        config: { options: optionsOf(incidentStatusSchema.options, (key) => INCIDENT_STATUS_GROUPS[key]) },
+      }),
+      field("occurredAt", "Occurred", "date", (document) => text(document.occurredAt)),
+      field("correctiveActions", "Corrective actions", "number", (document) => numeric(document.correctiveActions)),
+    ],
+    defaultConfig: { sorts: [{ property: "occurredAt", direction: "descending" }], boardProperty: "status" },
+  },
+};
+
+const MANUSCRIPT_STATUS_GROUPS: Readonly<Record<string, PropertyOption["group"]>> = {
+  planned: "toDo",
+  drafting: "inProgress",
+  submitted: "inProgress",
+  underReview: "inProgress",
+  revising: "inProgress",
+  inPrincipleAcceptance: "inProgress",
+  accepted: "complete",
+  published: "complete",
+  rejected: "complete",
+  withdrawn: "complete",
+};
+
+const RUN_STATUS_GROUPS: Readonly<Record<string, PropertyOption["group"]>> = {
+  planned: "toDo",
+  running: "inProgress",
+  succeeded: "complete",
+  failed: "complete",
+  cancelled: "complete",
+};
+
+const DECISION_STATUS_GROUPS: Readonly<Record<string, PropertyOption["group"]>> = {
+  proposed: "toDo",
+  accepted: "complete",
+  rejected: "complete",
+  superseded: "complete",
+};
+
+const INCIDENT_STATUS_GROUPS: Readonly<Record<string, PropertyOption["group"]>> = {
+  open: "toDo",
+  investigating: "inProgress",
+  resolved: "complete",
 };
 
 export function isCoreSourceKey(key: string): key is CoreSourceKey {

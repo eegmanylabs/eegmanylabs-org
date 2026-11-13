@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { type LiveQuery, type RecordOf, retryFailedLiveData, useLiveQuery } from "@/data";
 import { activityVerb, changedFieldsText } from "@/registry/activity-text";
 import type { Viewer } from "@/registry/viewer";
+import { DrillDown, GroupDrillDown } from "./DrillDown";
 import { basesOf, originNote, statedCount } from "./origins";
 import { useViewData, type ViewData } from "./use-view-data";
 import { settingsOf, type ViewSettings, ViewSurface } from "./ViewSurface";
@@ -65,6 +66,7 @@ function KpiWidget({ widget, viewer, secondFactor }: WidgetProps) {
   const { config } = widget;
   return (
     <KpiFigure
+      title={config.title}
       collectionKey={config.collectionKey}
       config={config.config}
       scope={config.scope}
@@ -76,6 +78,7 @@ function KpiWidget({ widget, viewer, secondFactor }: WidgetProps) {
 }
 
 function KpiFigure(props: {
+  readonly title: string;
   readonly collectionKey: string;
   readonly config: ViewConfig;
   readonly scope: ViewScope | null;
@@ -109,32 +112,40 @@ function KpiFigure(props: {
         const stated = measured === null ? total : statedCount(result.records, measured);
         const bases = measured === null ? [] : basesOf(result.records, measured);
         return (
-          <p className="text-3xl text-fg" data-testid="kpi-value">
-            {formatFigure(value)}
-            {value === null ? "" : unit}
-            {bases.length === 0 ? null : (
-              <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
-                {bases.map((basis) => (
-                  <Badge key={basis} tone="outline" data-basis={basis}>
-                    {FIGURE_BASIS_LABELS[basis]}
-                  </Badge>
-                ))}
+          <div className="grid gap-1">
+            <p className="text-3xl text-fg" data-testid="kpi-value">
+              {formatFigure(value)}
+              {value === null ? "" : unit}
+              {bases.length === 0 ? null : (
+                <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
+                  {bases.map((basis) => (
+                    <Badge key={basis} tone="outline" data-basis={basis}>
+                      {FIGURE_BASIS_LABELS[basis]}
+                    </Badge>
+                  ))}
+                </span>
+              )}
+              <span className="block text-xs text-fg-muted">
+                {MEASURE_LABELS[props.measure.kind]} over {total} {total === 1 ? "record" : "records"}
               </span>
-            )}
-            <span className="block text-xs text-fg-muted">
-              {MEASURE_LABELS[props.measure.kind]} over {total} {total === 1 ? "record" : "records"}
-            </span>
-            {stated < total ? (
-              <span className="block text-xs text-fg-secondary" data-testid="kpi-incomplete">
-                Incomplete: {stated} of {total} stated
-              </span>
-            ) : null}
-            {origin === null ? null : (
-              <span className="block text-xs text-fg-secondary" data-testid="origin-note">
-                {origin}
-              </span>
-            )}
-          </p>
+              {stated < total ? (
+                <span className="block text-xs text-fg-secondary" data-testid="kpi-incomplete">
+                  Incomplete: {stated} of {total} stated
+                </span>
+              ) : null}
+              {origin === null ? null : (
+                <span className="block text-xs text-fg-secondary" data-testid="origin-note">
+                  {origin}
+                </span>
+              )}
+            </p>
+            <DrillDown
+              title={props.title}
+              records={result.records}
+              collection={data.collection}
+              context={data.context}
+            />
+          </div>
         );
       }}
     </LiveView>
@@ -236,6 +247,13 @@ function ChartWidget({ widget, viewer, secondFactor }: WidgetProps) {
         return (
           <div className="grid gap-1">
             <BarChart title={chart.title} buckets={buckets} />
+            <GroupDrillDown
+              title={chart.title}
+              records={records}
+              groupBy={groupBy}
+              collection={data.collection}
+              context={data.context}
+            />
             {origin === null ? null : (
               <p className="text-xs text-fg-secondary" data-testid="origin-note">
                 {origin}

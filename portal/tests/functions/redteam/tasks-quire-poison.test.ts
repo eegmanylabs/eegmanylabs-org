@@ -22,8 +22,9 @@ import { importer as quire } from "../../../tools/src/import/sources/quire";
 import { adminDb } from "../../support/admin";
 import { PROJECT_ID } from "../../support/emulators";
 import { removeTemporaryDirectories, run, temporaryDirectory } from "../../tools/import-support";
-import { leaveNoTrace, resetWorld } from "../support";
+import { resetWorld, withoutTriggers } from "../support";
 
+withoutTriggers();
 beforeEach(async () => {
   await resetWorld();
   await seedLookups(adminDb, PROJECT_ID);
@@ -31,7 +32,6 @@ beforeEach(async () => {
 
 afterAll(async () => {
   removeTemporaryDirectories();
-  await leaveNoTrace();
 });
 
 const SELF = "TskPoisonSelfParent00001";

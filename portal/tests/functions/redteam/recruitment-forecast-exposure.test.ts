@@ -13,9 +13,9 @@ import {
   generateForecastContract,
   unitScopeKeys,
 } from "@eegml/shared";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { adminDb } from "../../support/admin";
-import { account, call, grantRole, laboratory, leaveNoTrace, replication, resetWorld, standard } from "../support";
+import { account, call, grantRole, laboratory, replication, resetWorld, standard, withoutTriggers } from "../support";
 
 const STUDY = "RedTeamRecruit2001";
 const LAB_A = "lab-redteam-recruit-a";
@@ -25,8 +25,8 @@ const PB = `${STUDY}__${LAB_B}`;
 const TODAY = new Date().toISOString().slice(0, 10);
 const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
 
+withoutTriggers();
 beforeEach(resetWorld);
-afterAll(leaveNoTrace);
 
 async function participation(id: string, laboratoryId: string) {
   await adminDb.doc(COLLECTIONS.participations.docPath(id)).set({

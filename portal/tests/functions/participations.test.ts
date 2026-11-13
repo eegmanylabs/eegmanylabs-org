@@ -12,7 +12,7 @@ import {
   statusHistoryDocSchema,
 } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { adminDb } from "../support/admin";
 import {
   account,
@@ -24,17 +24,16 @@ import {
   dataOf,
   grantRole,
   laboratory,
-  leaveNoTrace,
   person,
   refusal,
   replication,
   resetWorld,
   standard,
+  withoutTriggers,
 } from "./support";
 
+withoutTriggers();
 beforeEach(resetWorld);
-
-afterAll(leaveNoTrace);
 
 const STUDY = "SyntheticStudy2001";
 const LAB = "lab-synthetic";

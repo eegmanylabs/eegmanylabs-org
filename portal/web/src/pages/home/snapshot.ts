@@ -1,7 +1,7 @@
 // The figures of the programme snapshot on Home, counted from live documents. Each figure says
 // which filtered list it was counted from, so that it can link there. Pure, so that it is
 // tested by itself.
-import type { DataOrigin } from "@eegml/shared";
+import { type DataOrigin, SMALL_CELL_THRESHOLD } from "@eegml/shared";
 import { DEFAULT_MEMBER_STATE, NO_COUNTRY, serialiseMemberState } from "@/pages/members/member-list";
 import {
   DEFAULT_REPLICATION_STATE,
@@ -85,8 +85,10 @@ export function replicationsByStage(rows: readonly Pick<ReplicationRow, "stageNu
 }
 
 /**
- * The members in each country, most first. The countries beyond `top` are counted together and
- * link to the whole directory. Members without a country are counted apart.
+ * The members in each country, most first. A country with fewer members than the threshold of
+ * small groups is never named with its count, as on the analysis page: such countries are counted
+ * together. The countries beyond `top` are counted together and link to the whole directory.
+ * Members without a country are counted apart.
  */
 export function membersByCountry(
   persons: readonly { readonly countryCode: string | null }[],
@@ -101,15 +103,23 @@ export function membersByCountry(
     if (person.countryCode === null) none += 1;
     else counts.set(person.countryCode, (counts.get(person.countryCode) ?? 0) + 1);
   }
-  const sorted = [...counts.entries()].sort(
-    ([codeA, a], [codeB, b]) => b - a || countryName(codeA).localeCompare(countryName(codeB)),
-  );
+  const small = [...counts.values()].filter((count) => count < SMALL_CELL_THRESHOLD);
+  const sorted = [...counts.entries()]
+    .filter(([, count]) => count >= SMALL_CELL_THRESHOLD)
+    .sort(([codeA, a], [codeB, b]) => b - a || countryName(codeA).localeCompare(countryName(codeB)));
   const figures: Figure[] = sorted
     .slice(0, top)
     .map(([code, count]) => ({ key: code, label: countryName(code), count, to: membersWith(code) }));
   const rest = sorted.slice(top).reduce((sum, [, count]) => sum + count, 0);
   if (rest > 0)
     figures.push({ key: "other", label: `${sorted.length - top} other countries`, count: rest, to: "/members" });
+  if (small.length > 0)
+    figures.push({
+      key: "small",
+      label: `${small.length === 1 ? "1 country" : `${small.length} countries`} with fewer than ${SMALL_CELL_THRESHOLD} members each`,
+      count: small.reduce((sum, count) => sum + count, 0),
+      to: "/members",
+    });
   if (none > 0)
     figures.push({ key: NO_COUNTRY, label: "No country recorded", count: none, to: membersWith(NO_COUNTRY) });
   return figures;

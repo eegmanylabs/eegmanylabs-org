@@ -24,9 +24,11 @@ import {
   type TestClient,
 } from "../support/client";
 import { clearAuth, clearFirestore } from "../support/emulators";
+import { withoutTriggers } from "./support";
 
 let client: TestClient;
 
+withoutTriggers();
 beforeEach(async () => {
   await Promise.all([clearFirestore(), clearAuth()]);
   client = createTestClient();

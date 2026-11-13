@@ -100,8 +100,12 @@ function RegistrationFailure({ failure }: { failure: Extract<RegistrationState, 
   );
 }
 
-/** Who is signed in and whether the account is linked to a member profile. Real data only. */
-export function AccountPanel() {
+/**
+ * Who is signed in and whether the account is linked to a member profile. Real data only.
+ * `lookingUp` is set while the claim page is still asking the server for the profile, so that the
+ * panel says so instead of saying that the account is not linked.
+ */
+export function AccountPanel({ lookingUp = false }: { lookingUp?: boolean }) {
   const signedIn = useSignedInUser();
   const { access, registration } = useAuth();
   const user = useUserRecord(signedIn.uid);
@@ -123,7 +127,7 @@ export function AccountPanel() {
             errorTitle="Your account could not be loaded."
             onRetry={retryFailedLiveData}
           >
-            {(records) => <AccountDetails records={records} />}
+            {(records) => <AccountDetails records={records} lookingUp={lookingUp} />}
           </LiveView>
         )}
       </div>
@@ -132,9 +136,17 @@ export function AccountPanel() {
 }
 
 /** What the panel says about an account that is not linked, from the state of its claim. */
-function NotLinked({ uid }: { uid: string }) {
+function NotLinked({ uid, lookingUp }: { uid: string; lookingUp: boolean }) {
   const claim = useLiveDocument("accountClaims", [uid]);
   const waiting = claim.status === "ready" && claim.data?.status === "pendingReview";
+  if (lookingUp && !waiting) {
+    return (
+      <>
+        <Badge tone="neutral">Looking for your member profile</Badge>
+        <p className="mt-1.5 text-fg-secondary">The portal is matching this account to the programme's records.</p>
+      </>
+    );
+  }
   return (
     <>
       <Badge tone="neutral">{waiting ? "Waiting for an administrator" : "Not linked yet"}</Badge>
@@ -147,7 +159,7 @@ function NotLinked({ uid }: { uid: string }) {
   );
 }
 
-function AccountDetails({ records }: { records: AccountRecords }) {
+function AccountDetails({ records, lookingUp }: { records: AccountRecords; lookingUp: boolean }) {
   return (
     <dl className="-my-3" data-testid="account-details">
       <Row term="Signed in as">
@@ -161,7 +173,7 @@ function AccountDetails({ records }: { records: AccountRecords }) {
       <Row term="Account status">{records.user.status === "active" ? "Active" : "Suspended"}</Row>
       <Row term="Member profile">
         {records.access.personId === null ? (
-          <NotLinked uid={records.user.id} />
+          <NotLinked uid={records.user.id} lookingUp={lookingUp} />
         ) : (
           <Badge tone="accent">Linked to a member profile</Badge>
         )}

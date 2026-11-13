@@ -53,6 +53,9 @@ import { z } from "./zod";
  * | `syncReviewItem`         | `syncReviewItems/{id}`                                 |
  * | `documentTemplate`       | `documentTemplates/{key}`                              |
  * | `generatedDocument`      | `generatedDocuments/{templateKey__entityType__entityId}` |
+ * | `publicationBatch`       | `publicationBatches/{id}`                              |
+ * | `automationRule`         | `automationRules/{id}`                                 |
+ * | `scheduledReport`        | `scheduledReports/{id}`                                |
  *
  * The identifier of an entity in a subcollection joins the identifier of its parent document
  * to its own with two underscores, as in `AmodioJost2007__h01` for a hypothesis. Build it with
@@ -104,6 +107,9 @@ export const ENTITY_TYPES = [
   "syncReviewItem",
   "documentTemplate",
   "generatedDocument",
+  "publicationBatch",
+  "automationRule",
+  "scheduledReport",
 ] as const;
 export const entityTypeSchema = z.enum(ENTITY_TYPES);
 export type EntityType = z.output<typeof entityTypeSchema>;

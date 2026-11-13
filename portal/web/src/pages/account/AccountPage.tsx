@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 import { type AccessRecord, CallableError, retryFailedLiveData } from "@/data";
+import { NotificationPreferences } from "./NotificationPreferences";
 import { SecondFactorSection } from "./SecondFactorSection";
 
 function Row({ term, children }: { term: string; children: ReactNode }) {
@@ -217,6 +218,7 @@ export function AccountPage() {
                   <RolesList access={record} />
                 )}
               </Panel>
+              {record?.member === true ? <NotificationPreferences uid={user.uid} /> : null}
               <SecondFactorSection
                 accountName={user.email ?? user.uid}
                 required={record?.secondFactorRequired === true || (record?.programmeRoles.length ?? 0) > 0}

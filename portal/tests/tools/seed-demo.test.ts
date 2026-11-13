@@ -37,7 +37,7 @@ function runCli(args: string[], environment: Record<string, string | undefined>)
 const withEmulators = emulatorEnvironment(PORTS, PROJECT_ID);
 
 /** What a first run creates: every document of the world, and an account and an access document for each demonstration account. */
-const WORLD_SIZE = 249;
+const WORLD_SIZE = 255;
 
 /** Every document names the command as its author, as trusted code acting by itself. */
 const STANDARD = {

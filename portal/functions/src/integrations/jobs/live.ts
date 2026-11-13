@@ -28,6 +28,11 @@ function portalUrl(): string {
   return portalUrlParameter.value();
 }
 
+/** The address of the portal, which messages and pull requests link back to. */
+export function portalAddress(): string {
+  return runningInEmulator() ? "https://portal.eegmanylabs.org/" : portalUrl();
+}
+
 /** The address Drive sends notifications to, or null where none is configured. The emulator has none. */
 export function receiverUrl(): string | null {
   if (runningInEmulator()) return null;
@@ -51,6 +56,6 @@ export function liveDependencies(runtime: WorkspaceRuntime = workspaceRuntime())
         setTimeout(resolve, emulated ? Math.min(milliseconds, EMULATOR_LONGEST_WAIT_MS) : milliseconds),
       ),
     random: Math.random,
-    portalUrl: emulated ? "https://portal.eegmanylabs.org/" : portalUrl(),
+    portalUrl: portalAddress(),
   };
 }

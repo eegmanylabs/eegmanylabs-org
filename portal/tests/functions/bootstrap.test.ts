@@ -13,21 +13,20 @@ import {
   userDocSchema,
 } from "@eegml/shared";
 import { connectFirestoreEmulator, doc, getDoc, getFirestore, setDoc } from "firebase/firestore";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { bootstrapAdministrator } from "../../tools/src/commands/admin-bootstrap";
 import { adminDb } from "../support/admin";
 import { createTestClient, signInWithEmailLinkFromEmulator } from "../support/client";
 import { HOST, PORTS } from "../support/emulators";
-import { accessOf, account, auditOf, type Caller, call, codeOf, dataOf, leaveNoTrace, resetWorld } from "./support";
+import { accessOf, account, auditOf, type Caller, call, codeOf, dataOf, resetWorld, withoutTriggers } from "./support";
 
 const ADDRESS = "First.Administrator@example.org";
 const recordPath = (email: string) => bootstrapAdminPath(bootstrapAdminId(email, DEMO_IDENTITY_HASH_KEY));
 const ASSIGNMENT = "roleAssignments/uid-first__programme_admin__programme__eegmanylabs";
 const first: Caller = { uid: "uid-first", email: ADDRESS };
 
+withoutTriggers();
 beforeEach(resetWorld);
-
-afterAll(leaveNoTrace);
 
 describe("a bootstrap record", () => {
   it("is stored under the keyed hash of the address and holds no address", async () => {

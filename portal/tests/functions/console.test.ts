@@ -9,7 +9,7 @@ import {
   setUserStatusContract,
 } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { adminAuth, adminDb } from "../support/admin";
 import {
   accessOf,
@@ -24,15 +24,15 @@ import {
   grantCapability,
   grantRole,
   laboratory,
-  leaveNoTrace,
   person,
   refusal,
   resetWorld,
   standard,
+  withoutTriggers,
 } from "./support";
 
+withoutTriggers();
 beforeEach(resetWorld);
-afterAll(leaveNoTrace);
 
 /** Gives an account a name, as sessionStart would from its sign-in token. */
 async function named(uid: string, displayName: string): Promise<void> {

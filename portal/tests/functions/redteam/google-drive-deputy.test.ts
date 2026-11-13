@@ -22,17 +22,18 @@ import {
   call,
   codeOf,
   grantRole,
-  leaveNoTrace,
   person,
   replication,
   resetWorld,
   settle,
+  withTriggers,
 } from "../support";
 
 const ALPHA = "DemoAlpha2001";
 const folderAddress = (id: string) => `https://drive.google.com/drive/folders/${id}`;
 const sheetAddress = (id: string) => `https://docs.google.com/spreadsheets/d/${id}/edit`;
 
+withTriggers();
 beforeEach(async () => {
   await resetWorld();
   resetWorkspace();
@@ -43,7 +44,6 @@ beforeEach(async () => {
 
 afterAll(async () => {
   resetWorkspace();
-  await leaveNoTrace();
 });
 
 async function member(uid: string): Promise<Caller> {

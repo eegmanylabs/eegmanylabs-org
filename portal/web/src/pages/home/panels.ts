@@ -7,11 +7,13 @@ import type { Capability } from "@eegml/shared";
 import type { ComponentType } from "react";
 import { AccountPanel } from "./AccountPanel";
 import { AdminQueuesPanel } from "./AdminQueuesPanel";
+import { AuthorshipPanel } from "./AuthorshipPanel";
 import { LaboratoriesPanel } from "./LaboratoriesPanel";
 import { PendingItemsPanel } from "./PendingItemsPanel";
 import { PendingRolesPanel } from "./PendingRolesPanel";
 import { ProfilePanel } from "./ProfilePanel";
 import { ProgrammeSnapshotPanel } from "./ProgrammeSnapshotPanel";
+import { YourWorkPanel } from "./YourWorkPanel";
 
 export interface HomePanel {
   /** Stable identifier, unique in the registry. */
@@ -29,6 +31,8 @@ export const HOME_PANELS: readonly HomePanel[] = [
   { id: "profile", order: 50, requires: "portal.use", Component: ProfilePanel },
   { id: "laboratories", order: 55, requires: "portal.use", Component: LaboratoriesPanel },
   { id: "pending-items", order: 45, requires: "portal.use", Component: PendingItemsPanel },
+  { id: "authorship", order: 47, requires: "portal.use", Component: AuthorshipPanel },
+  { id: "your-work", order: 48, requires: "portal.use", Component: YourWorkPanel },
   { id: "pending-roles", order: 60, requires: "portal.use", Component: PendingRolesPanel },
   { id: "snapshot", order: 70, requires: "portal.use", Component: ProgrammeSnapshotPanel },
   { id: "account", order: 100, requires: "portal.use", Component: AccountPanel },

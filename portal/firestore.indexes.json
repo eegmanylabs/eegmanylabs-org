@@ -1,6 +1,34 @@
 {
   "indexes": [
     {
+      "collectionGroup": "acknowledgements",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "replicationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scopeKeys",
+          "arrayConfig": "CONTAINS"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "actions",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "replicationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scopeKeys",
+          "arrayConfig": "CONTAINS"
+        }
+      ]
+    },
+    {
       "collectionGroup": "activity",
       "queryScope": "COLLECTION",
       "fields": [
@@ -107,6 +135,20 @@
       ]
     },
     {
+      "collectionGroup": "authorshipLists",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "replicationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scopeKeys",
+          "arrayConfig": "CONTAINS"
+        }
+      ]
+    },
+    {
       "collectionGroup": "correctionRequests",
       "queryScope": "COLLECTION",
       "fields": [
@@ -149,6 +191,20 @@
       ]
     },
     {
+      "collectionGroup": "deviations",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "replicationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scopeKeys",
+          "arrayConfig": "CONTAINS"
+        }
+      ]
+    },
+    {
       "collectionGroup": "documentLinks",
       "queryScope": "COLLECTION",
       "fields": [
@@ -168,6 +224,20 @@
     },
     {
       "collectionGroup": "documentLinks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "replicationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scopeKeys",
+          "arrayConfig": "CONTAINS"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "entries",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -204,6 +274,20 @@
         },
         {
           "fieldPath": "entityId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scopeKeys",
+          "arrayConfig": "CONTAINS"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "incidents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "replicationId",
           "order": "ASCENDING"
         },
         {
@@ -278,6 +362,20 @@
       "fields": [
         {
           "fieldPath": "kind",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scopeKeys",
+          "arrayConfig": "CONTAINS"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "processingRuns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "replicationId",
           "order": "ASCENDING"
         },
         {
@@ -413,6 +511,20 @@
       ]
     },
     {
+      "collectionGroup": "taskLists",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "replicationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scopeKeys",
+          "arrayConfig": "CONTAINS"
+        }
+      ]
+    },
+    {
       "collectionGroup": "tasks",
       "queryScope": "COLLECTION",
       "fields": [
@@ -423,6 +535,20 @@
         {
           "fieldPath": "parentId",
           "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "teamMembers",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "replicationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scopeKeys",
+          "arrayConfig": "CONTAINS"
         }
       ]
     },
@@ -515,8 +641,57 @@
       ]
     },
     {
+      "collectionGroup": "actions",
+      "fieldPath": "replicationId",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "actions",
+      "fieldPath": "scopeKeys",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    },
+    {
       "collectionGroup": "auditEvents",
       "fieldPath": "changes",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "automationRuns",
+      "fieldPath": "log",
       "indexes": []
     },
     {
@@ -697,6 +872,28 @@
       "indexes": []
     },
     {
+      "collectionGroup": "entries",
+      "fieldPath": "personId",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    },
+    {
       "collectionGroup": "equipment",
       "fieldPath": "isCurrent",
       "indexes": [
@@ -726,6 +923,11 @@
     {
       "collectionGroup": "generatedDocuments",
       "fieldPath": "managedSections",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "incidents",
+      "fieldPath": "description",
       "indexes": []
     },
     {
@@ -884,6 +1086,11 @@
     {
       "collectionGroup": "private",
       "fieldPath": "metadata",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "processingRuns",
+      "fieldPath": "parameters",
       "indexes": []
     },
     {

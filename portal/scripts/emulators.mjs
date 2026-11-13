@@ -136,7 +136,19 @@ async function runFirebase(firebaseCommand, only, web, extra) {
   runToCompletion(path.join(PORTAL_ROOT, "scripts", "fb.sh"), args, {
     spawnOptions: {
       cwd: logs,
-      env: { ...process.env, PORTAL_PORT_BASE: String(base), TMPDIR: temporary },
+      // The functions emulator discovers the functions by loading the bundle in a process of its
+      // own, at start and whenever the tests switch the triggers on again, and gives up after
+      // ten seconds. On a loaded machine that load can take longer, and a discovery that gives up
+      // leaves every trigger off while the hub reports success, so the limit is raised.
+      env: {
+        ...process.env,
+        PORTAL_PORT_BASE: String(base),
+        TMPDIR: temporary,
+        // The fake of the website repository starts from the committed data files of the public
+        // site, which it reads and never changes (docs/INTEGRATIONS.md, section 6).
+        EEGML_WEBSITE_ROOT: path.resolve(PORTAL_ROOT, ".."),
+        FUNCTIONS_DISCOVERY_TIMEOUT: process.env.FUNCTIONS_DISCOVERY_TIMEOUT ?? "60",
+      },
     },
     // Runs when nothing of this run is left: what remains would otherwise look like a run in progress.
     cleanup() {

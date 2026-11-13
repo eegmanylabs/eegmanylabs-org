@@ -765,6 +765,14 @@ export function eventFailureId(consumer: string, eventId: string): string {
   return compose([consumer, eventId], 1);
 }
 
+/**
+ * The hash of a rule and of the event it answers: the idempotency key of the run, so that a rule
+ * acts once on an event however often the event is delivered.
+ */
+export function automationRunId(ruleId: string, eventId: string): string {
+  return shortHash(lines([ruleId, eventId]));
+}
+
 /** `entityType__entityId__part`. The entity identifier may contain the separator. */
 export function searchIndexId(entityType: EntityType, entityId: string, part: number): string {
   return compose([entityType, entityId, sequenceId(part)], 1);
@@ -795,6 +803,11 @@ export function recruitmentFollowUpListId(laboratoryId: string): string {
   return compose(["recruitmentFollowUp", shortHash(laboratoryId)]);
 }
 
+/** The onboarding task list of a laboratory, which an automation creates once: `onboarding__` and the hash of the laboratory. */
+export function onboardingListId(laboratoryId: string): string {
+  return compose(["onboarding", shortHash(laboratoryId)]);
+}
+
 /** The quality-control task of a dataset, opened when its data first arrives: `datasetQc__` and the hash of the dataset key. */
 export function datasetQcTaskId(datasetKey: string): string {
   return compose(["datasetQc", shortHash(datasetKey)]);
@@ -803,6 +816,17 @@ export function datasetQcTaskId(datasetKey: string): string {
 /** The task list of a replication that holds the quality-control tasks of its datasets: `datasetQcList__` and the hash of the replication. */
 export function datasetQcListId(replicationId: string): string {
   return compose(["datasetQcList", shortHash(replicationId)]);
+}
+
+/**
+ * `web__PublicationId`: the identifier of a manuscript that the importer of the public website
+ * writes, from the website's `PublicationId` as written (docs/MIGRATION_PLAN.md). The prefix
+ * namespaces it: a client creates a manuscript only under an identifier that Firestore generates,
+ * twenty letters and digits, which never holds the separator, so no client can take the
+ * identifier of a publication before the importer writes it, however the publication is named.
+ */
+export function websiteManuscriptId(publicationId: string): string {
+  return compose(["web", publicationId]);
 }
 
 /**
@@ -857,11 +881,14 @@ export const ID_BUILDERS = {
   notificationId,
   mailId,
   eventFailureId,
+  automationRunId,
   searchIndexId,
   scopeDashboardId,
   inactivityFollowUpTaskId,
   recruitmentFollowUpListId,
   datasetQcTaskId,
   datasetQcListId,
+  onboardingListId,
+  websiteManuscriptId,
 } as const;
 export type IdBuilderName = keyof typeof ID_BUILDERS;

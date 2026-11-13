@@ -29,7 +29,7 @@ const FILE_COLUMNS: readonly RecordColumn<File & { readonly key: string }, "path
     header: "Path",
     sortKey: "path",
     className: "min-w-64",
-    cell: (file) => <span className="break-all font-mono text-xs">{file.relativePath}</span>,
+    cell: (file) => <span className="break-all tabular-nums text-xs">{file.relativePath}</span>,
   },
   {
     id: "status",
@@ -53,7 +53,7 @@ const FILE_COLUMNS: readonly RecordColumn<File & { readonly key: string }, "path
       file.checksum === undefined ? (
         <Unknown>None held</Unknown>
       ) : (
-        <span className="font-mono text-xs" title={file.checksum}>
+        <span className="tabular-nums text-xs" title={file.checksum}>
           {file.checksumAlgorithm} {file.checksum.slice(0, 12)}
         </span>
       ),
@@ -213,7 +213,7 @@ export function UploadManifestDialog({
           <Textarea
             {...control}
             rows={8}
-            className="font-mono text-xs"
+            className="tabular-nums text-xs"
             value={text}
             onChange={(event) => setText(event.target.value)}
           />

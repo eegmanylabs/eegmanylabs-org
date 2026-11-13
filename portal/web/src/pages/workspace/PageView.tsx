@@ -26,6 +26,7 @@ import { formatDateTime } from "@/app/labels";
 import { ErrorState } from "@/components/feedback/error-state";
 import { LiveView } from "@/components/feedback/live-view";
 import { LoadingState } from "@/components/feedback/loading-state";
+import { FollowButton } from "@/components/registry/follow-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -457,6 +458,9 @@ function PageBody({
             <History aria-hidden="true" strokeWidth={1.8} />
             History
           </Button>
+          {viewer.access.member ? (
+            <FollowButton uid={viewer.uid} entityType="page" entityId={page.id} label="Follow" />
+          ) : null}
           <Button size="sm" variant="ghost" aria-pressed={panel === "activity"} onClick={() => togglePanel("activity")}>
             <ListTree aria-hidden="true" strokeWidth={1.8} />
             Activity

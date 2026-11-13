@@ -1107,7 +1107,17 @@ export const savePageVersionContract = {
  */
 export const searchWorkspaceContract = {
   name: "searchWorkspace",
-  input: z.strictObject({ query: z.string().trim().min(1).max(200) }),
+  input: z.strictObject({
+    query: z.string().trim().min(1).max(200),
+    /** The kinds of indexed result kept, or every kind where absent. Records are found by the client in what it reads. */
+    kinds: z
+      .array(z.enum(["page", "comment", "document"]))
+      .min(1)
+      .max(3)
+      .optional(),
+    /** Keeps only the results of one replication. */
+    replicationId: idSchema.optional(),
+  }),
   output: z.strictObject({
     results: z
       .array(
@@ -1116,6 +1126,9 @@ export const searchWorkspaceContract = {
           entityId: idSchema,
           title: z.string().max(1_000),
           kind: keySchema,
+          /** For a comment or a document: the record it belongs to, which the result opens. */
+          targetEntityType: entityTypeSchema.optional(),
+          targetEntityId: idSchema.optional(),
         }),
       )
       .max(50),

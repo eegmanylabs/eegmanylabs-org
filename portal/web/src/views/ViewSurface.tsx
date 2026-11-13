@@ -26,6 +26,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select } from "@/components/ui/select";
 import { CallableError, callFunction, deleteView, type RecordOf, retryFailedLiveData, useLiveQuery } from "@/data";
 import type { Viewer } from "@/registry/viewer";
+import { ExportMenu, viewTable } from "./ExportMenu";
 import { BoardView, CalendarView, GalleryView, ListView, TimelineView } from "./layouts";
 import { PropertyDialog } from "./PropertyDialog";
 import { RecordDialog, type RecordEditing } from "./RecordDialog";
@@ -481,6 +482,7 @@ function Surface(props: ViewSurfaceProps & { readonly data: ViewData }) {
             <SavedViews {...props} />
           </ToolbarPopover>
         )}
+        <ExportMenu table={() => viewTable(caption, result.records, properties, data.context)} />
         {data.canAddRows ? (
           <form
             className="ml-auto flex items-center gap-1"

@@ -212,6 +212,43 @@ export type ReplicationMembershipDoc = z.output<typeof replicationMembershipDocS
 export const scientificReviewStatusSchema = z.enum(["unverified", "underReview", "verified"]);
 export const analysisStatusSchema = z.enum(["notStarted", "inProgress", "completed"]);
 
+/**
+ * | Source                  | Where a value was taken from                                      |
+ * |-------------------------|-------------------------------------------------------------------|
+ * | `originalArticle`       | The published article of the original study                       |
+ * | `supplementaryMaterial` | The supplementary material of that article                        |
+ * | `authorCorrespondence`  | A written answer of the original authors                          |
+ * | `reanalysis`            | A reanalysis of the original data                                 |
+ * | `analysisRun`           | An analysis run of the replication recorded in the portal         |
+ * | `manuscript`            | An output of the replication                                      |
+ */
+export const findingSourceSchema = z.enum([
+  "originalArticle",
+  "supplementaryMaterial",
+  "authorCorrespondence",
+  "reanalysis",
+  "analysisRun",
+  "manuscript",
+]);
+export type FindingSource = z.output<typeof findingSourceSchema>;
+
+/**
+ * Where an original statistic or a result of a hypothesis comes from, and who recorded it when.
+ * A value is never entered without it, so a figure that nobody can trace back is never shown as
+ * a finding.
+ */
+export const findingProvenanceSchema = z.strictObject({
+  source: findingSourceSchema,
+  /** Where in the source: a table, a page, a figure or a section, as the recorder wrote it. */
+  locator: shortTextSchema,
+  url: urlSchema.exactOptional(),
+  analysisRunId: idSchema.exactOptional(),
+  manuscriptId: idSchema.exactOptional(),
+  recordedBy: actorSchema,
+  recordedAt: timestampSchema,
+});
+export type FindingProvenance = z.output<typeof findingProvenanceSchema>;
+
 /** `replications/{studyKey}/hypotheses/{hNN}`: one hypothesis of a replication. */
 export const replicationHypothesisDocSchema = documentBaseSchema.extend({
   replicationId: idSchema,
@@ -222,12 +259,16 @@ export const replicationHypothesisDocSchema = documentBaseSchema.extend({
   outcomeMeasure: longTextSchema.exactOptional(),
   analysisSpecification: richTextSchema.exactOptional(),
   preregistrationUrl: urlSchema.exactOptional(),
+  /** Written through a callable function together with its provenance, or by an import. */
   originalStatistics: longTextSchema.exactOptional(),
+  originalStatisticsProvenance: findingProvenanceSchema.exactOptional(),
   /** Verbatim. The text `null` is a real value here and is never read as missing. */
   nullSigSource: verbatimSchema.exactOptional(),
   scientificReviewStatus: scientificReviewStatusSchema,
   analysisStatus: analysisStatusSchema,
+  /** Written through a callable function together with its provenance. */
   resultSummary: richTextSchema.exactOptional(),
+  resultProvenance: findingProvenanceSchema.exactOptional(),
   resultReviewedBy: actorSchema.nullable(),
   resultReviewedAt: timestampSchema.nullable(),
   studyDescriptionUrl: urlSchema.exactOptional(),

@@ -14,7 +14,7 @@ import {
   sequenceId,
 } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { runIntegrityCheck } from "../../functions/src/integrity/run";
 import { adminDb } from "../support/admin";
 import {
@@ -28,7 +28,6 @@ import {
   emailIndexPath,
   grantRole,
   laboratory,
-  leaveNoTrace,
   memberEntry,
   membership,
   membershipPath,
@@ -38,11 +37,11 @@ import {
   replication,
   resetWorld,
   standard,
+  withoutTriggers,
 } from "./support";
 
+withoutTriggers();
 beforeEach(resetWorld);
-
-afterAll(leaveNoTrace);
 
 const STUDY = "SyntheticStudy2001";
 const BATCH = "run__20260101T000000000Z__aaaaaaaaaaaa";

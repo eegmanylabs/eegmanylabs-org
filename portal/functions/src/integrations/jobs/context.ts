@@ -70,8 +70,10 @@ export function syncStamp(at: Date, mappingOrDocumentId: string, runId: string, 
   return { at, actor: SYNC_ACTOR, writeContext };
 }
 
-/** The connection that serves each kind of job. */
-export const JOB_SYSTEM: Readonly<Record<SyncJobKind, "googleSheets" | "googleDocs" | "googleDrive">> = {
+/** The connection that serves each kind of job of Google. A job of an automation needs none. */
+export const JOB_SYSTEM: Readonly<
+  Record<Exclude<SyncJobKind, "automation">, "googleSheets" | "googleDocs" | "googleDrive">
+> = {
   sheetSync: "googleSheets",
   documentUpdate: "googleDocs",
   driveChanges: "googleDrive",

@@ -13,7 +13,7 @@ import {
   setRoleCapabilityOverrideContract,
   setUserStatusContract,
 } from "@eegml/shared";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { adminAuth, adminDb } from "../support/admin";
 import {
   accessOf,
@@ -28,17 +28,16 @@ import {
   eventually,
   grantRole,
   laboratory,
-  leaveNoTrace,
   notificationsOf,
   refusal,
   replication,
   resetWorld,
   standard,
+  withTriggers,
 } from "./support";
 
+withTriggers();
 beforeEach(resetWorld);
-
-afterAll(leaveNoTrace);
 
 const assignmentOf = async (id: string) => roleAssignmentDocSchema.parse(await dataOf(`roleAssignments/${id}`));
 const LAB_ROLE = { uid: "uid-target", role: "lab_coordinator", scopeType: "laboratory", scopeId: "lab-a" } as const;

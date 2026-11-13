@@ -109,8 +109,14 @@ describe("the same mistake elsewhere", () => {
       ],
       "ownLead: points it at another DOI": ["denied", update("ownLead", manuscript, { doi: "10.5555/another" })],
       "ownLead: names another journal": ["denied", update("ownLead", manuscript, { journal: "Synthetic Journal" })],
-      "ownLead: records when it was submitted": [
+      // What the citation does not cover stays the lead's to change.
+      "ownLead: records its OSF page": [
         "allowed",
+        update("ownLead", manuscript, { osfUrl: "https://example.org/osf/synthetic" }),
+      ],
+      // The dates move only with the status, through recordManuscriptEvent.
+      "ownLead: records when it was submitted": [
+        "denied",
         update("ownLead", manuscript, { submittedAt: serverTimestamp() }),
       ],
     });

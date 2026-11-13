@@ -18,7 +18,7 @@ import {
   roleAssignmentId,
   saveEquipmentConfigurationContract,
 } from "@eegml/shared";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { adminDb } from "../support/admin";
 import {
   account,
@@ -32,16 +32,15 @@ import {
   grantRole,
   institution,
   laboratory,
-  leaveNoTrace,
   person,
   refusal,
   resetWorld,
   standard,
+  withoutTriggers,
 } from "./support";
 
+withoutTriggers();
 beforeEach(resetWorld);
-
-afterAll(leaveNoTrace);
 
 const NEW_INSTITUTION = {
   kind: "new",

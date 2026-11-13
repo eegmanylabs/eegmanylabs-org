@@ -15,7 +15,7 @@
 // | Databases and views | `createDatabase`, `saveProperty`, `saveRecords`, `saveView`, `openDashboard`, `saveDashboard` |
 // | Tasks               | `createTaskList`, `updateTaskList`, `createTask`, `updateTasks`, `moveTask`, `setTaskStatus`, `setReminder` |
 // | Progress updates    | `postProgressUpdate`                                                       |
-// | Recruitment         | `fileRecruitmentReports`, `saveCountCategory`, `generateForecast`, and the scheduled `recruitmentInactivitySweep` |
+// | Recruitment         | `fileRecruitmentReports`, `saveCountCategory`, `generateForecast`; overdue updates are flagged by the built-in automation `overdueUpdatesDaily` |
 // | Google Drive        | `linkDriveResource`, `checkDriveLink`, `browseDriveFolder`, `previewDriveFile`, and the public receiver `driveNotifications` |
 // | Sheet synchronisation | `saveSyncMapping`, `controlSyncMapping`, `requestSyncRun`, `controlSyncRun`, `resolveSyncConflict`, `resolveSyncReviewItem` |
 // | Generated documents | `saveDocumentTemplate`, `generateDocument`                                  |
@@ -24,9 +24,19 @@
 // | Datasets            | `registerDataset`, `updateDataset`, `setDatasetStatus`, `saveDatasetWorkflow`, `importBidsReport`, `recordQcAssessment` |
 // | Copies of datasets  | `addStorageRef`, `changeStorageRef`, `scanStorageRef`, `recordManifest`, `getStorageLocation`, `saveViewerLink`, `openViewerLink` |
 // | Transfers           | `requestTransfer`, `advanceTransfer`, which record and approve transfers that people carry out |
+// | Hypotheses          | `recordHypothesisFinding`, which records an original statistic or a result with its provenance |
+// | Analysis runs       | `saveAnalysisRun`                                                          |
+// | Decisions and incidents | `recordDecision`, `reportIncident`, `recordIncidentAction`             |
+// | Authorship          | `saveAuthorshipList`, `respondToAuthorshipEntry`, `listMyAuthorshipEntries` |
+// | Outputs             | `saveManuscript`, `recordManuscriptEvent`, `planManuscriptMilestone`, `checkOsfLink` |
 // | Integration triggers | `integrationsOnRunWritten`, which runs queued jobs, and `syncOnLaboratoryWritten` and `syncOnEquipmentWritten`, which enqueue them |
 // | Task triggers       | `tasksOnTaskWritten`, and the scheduled `remindersSweep`                   |
 // | Workspace triggers  | `pagesOnUpdateCreated`, `pagesOnPageWritten`, `threadsOnCommentWritten`   |
+// | Publishing          | `preparePublication`, `approvePublication`, `refreshPublication`, `withdrawPublication`, `proposePublicationRollback`, and the scheduled `publicationsSweep` |
+// | Automations         | `saveAutomationRule`, `runAutomationRule`, `saveScheduledReport`, the triggers whose names begin with `automationsOn`, and the scheduled `automationsSchedule` |
+// | Analysis            | `getDemographicAggregates`, beside `getPersonDemographics` in the same audited module |
+// | Mail                | `mailOnNotificationCreated`, `mailOnQueued` and the scheduled `mailSweep` |
+// | Search and followers | `searchOnCommentWritten`, `searchOnDocumentLinkWritten`, `followersOnActivityCreated`, `notifyOnProtocolVersionWritten`, `notifyOnManuscriptWritten` |
 // | Audit trigger       | `auditDocumentWrites`                                                      |
 // | Access maintenance  | The triggers whose names begin with `accessOn`, and the scheduled `accessExpirySweep` |
 // | Derived directory   | The triggers whose names begin with `personUnitsOn`                        |
@@ -40,9 +50,11 @@ setGlobalOptions({ region: FUNCTIONS_REGION, maxInstances: 10, memory: "256MiB" 
 
 export { addStorageRef } from "./callables/addStorageRef";
 export { advanceTransfer } from "./callables/advanceTransfer";
+export { approvePublication } from "./callables/approvePublication";
 export { browseDriveFolder } from "./callables/browseDriveFolder";
 export { changeStorageRef } from "./callables/changeStorageRef";
 export { checkDriveLink } from "./callables/checkDriveLink";
+export { checkOsfLink } from "./callables/checkOsfLink";
 export { checkStorageEndpoint } from "./callables/checkStorageEndpoint";
 export { claimProfile } from "./callables/claimProfile";
 export { confirmLaboratoryMembership } from "./callables/confirmLaboratoryMembership";
@@ -62,24 +74,34 @@ export { fileRecruitmentReports } from "./callables/fileRecruitmentReports";
 export { generateDocument } from "./callables/generateDocument";
 export { generateForecast } from "./callables/generateForecast";
 export { getPageSharing } from "./callables/getPageSharing";
-export { getPersonDemographics } from "./callables/getPersonDemographics";
+export { getDemographicAggregates, getPersonDemographics } from "./callables/getPersonDemographics";
 export { getStorageEndpointConnection } from "./callables/getStorageEndpointConnection";
 export { getStorageLocation } from "./callables/getStorageLocation";
 export { importBidsReport } from "./callables/importBidsReport";
 export { linkDriveResource } from "./callables/linkDriveResource";
 export { listAccountClaims } from "./callables/listAccountClaims";
 export { listAuditEvents } from "./callables/listAuditEvents";
+export { listMyAuthorshipEntries } from "./callables/listMyAuthorshipEntries";
 export { listUsers } from "./callables/listUsers";
 export { movePage } from "./callables/movePage";
 export { moveTask } from "./callables/moveTask";
 export { openDashboard } from "./callables/openDashboard";
 export { openEntityPage } from "./callables/openEntityPage";
 export { openViewerLink } from "./callables/openViewerLink";
+export { planManuscriptMilestone } from "./callables/planManuscriptMilestone";
 export { postProgressUpdate } from "./callables/postProgressUpdate";
+export { preparePublication } from "./callables/preparePublication";
 export { previewDriveFile } from "./callables/previewDriveFile";
+export { proposePublicationRollback } from "./callables/proposePublicationRollback";
+export { recordDecision } from "./callables/recordDecision";
+export { recordHypothesisFinding } from "./callables/recordHypothesisFinding";
+export { recordIncidentAction } from "./callables/recordIncidentAction";
 export { recordManifest } from "./callables/recordManifest";
+export { recordManuscriptEvent } from "./callables/recordManuscriptEvent";
 export { recordQcAssessment } from "./callables/recordQcAssessment";
+export { refreshPublication } from "./callables/refreshPublication";
 export { registerDataset } from "./callables/registerDataset";
+export { reportIncident } from "./callables/reportIncident";
 export { requestAccess } from "./callables/requestAccess";
 export { requestLabClaim } from "./callables/requestLabClaim";
 export { requestSyncRun } from "./callables/requestSyncRun";
@@ -88,17 +110,24 @@ export { resolveCorrectionRequest } from "./callables/resolveCorrectionRequest";
 export { resolveReconciliationItem } from "./callables/resolveReconciliationItem";
 export { resolveSyncConflict } from "./callables/resolveSyncConflict";
 export { resolveSyncReviewItem } from "./callables/resolveSyncReviewItem";
+export { respondToAuthorshipEntry } from "./callables/respondToAuthorshipEntry";
 export { reviewAccountClaim } from "./callables/reviewAccountClaim";
 export { reviewLabClaim } from "./callables/reviewLabClaim";
 export { rollbackImportBatch } from "./callables/rollbackImportBatch";
+export { runAutomationRule } from "./callables/runAutomationRule";
+export { saveAnalysisRun } from "./callables/saveAnalysisRun";
+export { saveAuthorshipList } from "./callables/saveAuthorshipList";
+export { saveAutomationRule } from "./callables/saveAutomationRule";
 export { saveCountCategory } from "./callables/saveCountCategory";
 export { saveDashboard } from "./callables/saveDashboard";
 export { saveDatasetWorkflow } from "./callables/saveDatasetWorkflow";
 export { saveDocumentTemplate } from "./callables/saveDocumentTemplate";
 export { saveEquipmentConfiguration } from "./callables/saveEquipmentConfiguration";
+export { saveManuscript } from "./callables/saveManuscript";
 export { savePageVersion } from "./callables/savePageVersion";
 export { saveProperty } from "./callables/saveProperty";
 export { saveRecords } from "./callables/saveRecords";
+export { saveScheduledReport } from "./callables/saveScheduledReport";
 export { saveStorageEndpoint } from "./callables/saveStorageEndpoint";
 export { saveSyncMapping } from "./callables/saveSyncMapping";
 export { saveView } from "./callables/saveView";
@@ -122,6 +151,7 @@ export { updateDataset } from "./callables/updateDataset";
 export { updateTaskList } from "./callables/updateTaskList";
 export { updateTasks } from "./callables/updateTasks";
 export { withdrawLabClaim } from "./callables/withdrawLabClaim";
+export { withdrawPublication } from "./callables/withdrawPublication";
 export {
   accessOnCapabilityGrantWritten,
   accessOnGroupWritten,
@@ -134,6 +164,12 @@ export {
 } from "./triggers/access";
 export { accessExpirySweep } from "./triggers/access-expiry";
 export { auditDocumentWrites } from "./triggers/audit";
+export {
+  automationsOnDatasetWritten,
+  automationsOnLaboratoryWritten,
+  automationsOnSummaryWritten,
+  automationsSchedule,
+} from "./triggers/automations";
 export { storageSweep } from "./triggers/datasets";
 export {
   driveNotifications,
@@ -143,10 +179,18 @@ export {
   syncOnLaboratoryWritten,
 } from "./triggers/integrations";
 export { integritySweep } from "./triggers/integrity-sweep";
+export { mailOnNotificationCreated, mailOnQueued, mailSweep } from "./triggers/mail";
 export { pagesOnPageWritten, pagesOnUpdateCreated, threadsOnCommentWritten } from "./triggers/pages";
 export {
   personUnitsOnLaboratoryMemberWritten,
   personUnitsOnReplicationMembershipWritten,
 } from "./triggers/person-units";
-export { recruitmentInactivitySweep } from "./triggers/recruitment";
+export { publicationsSweep } from "./triggers/publishing";
+export {
+  followersOnActivityCreated,
+  notifyOnManuscriptWritten,
+  notifyOnProtocolVersionWritten,
+  searchOnCommentWritten,
+  searchOnDocumentLinkWritten,
+} from "./triggers/search";
 export { remindersSweep, tasksOnTaskWritten } from "./triggers/tasks";

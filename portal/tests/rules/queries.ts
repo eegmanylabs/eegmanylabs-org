@@ -805,4 +805,86 @@ export const QUERY_CATALOGUE: readonly CataloguedQuery[] = [
     orderBy: [["effectiveAt", "desc"]],
     limit: LIMIT,
   }),
+  // The scientific workflows of phase 8 (web/src/registry/scientific-queries.ts): what is read
+  // within scope is asked for by replication together with the caller's keys, or by replication
+  // alone for programme staff.
+  ...(
+    [
+      ["the analysis runs of a replication", "processingRuns", []],
+      ["the incidents of a replication", "incidents", []],
+      ["the actions of the incidents of a replication", "incidentActions", "group"],
+      ["the authorship lists of a replication", "authorshipLists", []],
+      ["the entries of an authorship list", "authorshipEntries", ["manuscript-1"]],
+      ["the teams of the participations of a replication", "participationTeamMembers", "group"],
+      ["the protocol acknowledgements of a replication", "participationAcknowledgements", "group"],
+      ["the deviations of a replication", "participationDeviations", "group"],
+      ["the task lists of a replication, for planning a milestone", "taskLists", []],
+    ] as const
+  ).flatMap(([purpose, collection, within]) => [
+    // A member of a laboratory of the replication, who is not on its team, reads by the keys alone.
+    catalogued(`${purpose}, within a scope the caller holds`, "ownLabMember", "scopeKeys", {
+      collection,
+      within,
+      where: [
+        ["replicationId", "==", OWN_REPLICATION],
+        ["scopeKeys", "array-contains-any", heldBy("ownLabMember")],
+      ],
+      limit: LIMIT,
+    } as LiveQuery<typeof collection>),
+    catalogued(`${purpose}, for the programme`, "admin", null, {
+      collection,
+      within,
+      where: [["replicationId", "==", OWN_REPLICATION]],
+      limit: LIMIT,
+    } as LiveQuery<typeof collection>),
+  ]),
+  // The views of these records (web/src/registry/scientific-data.ts) read them across
+  // replications: within the keys the caller holds, or all of them for programme staff.
+  ...(
+    [
+      ["the analysis runs", "processingRuns", []],
+      ["the incidents", "incidents", []],
+      ["the actions of the incidents", "incidentActions", "group"],
+    ] as const
+  ).flatMap(([purpose, collection, within]) => [
+    catalogued(`${purpose} of every scope a caller holds, for a view`, "ownLabMember", "scopeKeys", {
+      collection,
+      within,
+      where: [["scopeKeys", "array-contains-any", heldBy("ownLabMember")]],
+      limit: LIMIT,
+    } as LiveQuery<typeof collection>),
+    catalogued(`${purpose} of the programme, for a view`, "admin", null, {
+      collection,
+      within,
+      limit: LIMIT,
+    } as LiveQuery<typeof collection>),
+  ]),
+  catalogued("a person's entries on every authorship list, for listMyAuthorshipEntries", null, null, {
+    collection: "authorshipEntries",
+    within: "group",
+    where: [["personId", "==", "person-ivy"]],
+    limit: 500,
+  }),
+  catalogued("the decision log of the programme, for a view, which every member reads", "member", null, {
+    collection: "decisions",
+    within: [],
+    limit: LIMIT,
+  }),
+  catalogued("the hypotheses of every replication, for a view, which every member reads", "member", null, {
+    collection: "replicationHypotheses",
+    within: "group",
+    limit: LIMIT,
+  }),
+  catalogued("the decision log of a replication, which every member reads", "member", null, {
+    collection: "decisions",
+    within: [],
+    where: [["scopeId", "==", OWN_REPLICATION]],
+    limit: LIMIT,
+  }),
+  catalogued("the prediction-market questions of a replication, which every member reads", "member", null, {
+    collection: "predictionMarketItems",
+    within: [],
+    where: [["replicationId", "==", OWN_REPLICATION]],
+    limit: LIMIT,
+  }),
 ];

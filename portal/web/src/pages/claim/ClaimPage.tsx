@@ -141,7 +141,7 @@ export function ClaimPage() {
             onRequested={retry}
           />
         )}
-        <AccountPanel />
+        <AccountPanel lookingUp={view === "checking"} />
       </div>
     </>
   );

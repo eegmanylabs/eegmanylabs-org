@@ -32,7 +32,8 @@ export function Section({
   return (
     <section
       aria-labelledby={id}
-      className="grid gap-2 rounded-tile border border-border bg-surface px-4 py-3"
+      // A table inside scrolls by itself: the section never grows wider than its column.
+      className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 rounded-tile border border-border bg-surface px-4 py-3"
       data-testid={testId}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">

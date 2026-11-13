@@ -845,9 +845,8 @@ describe("a replication", () => {
           ...hypothesis("3"),
           scientificReviewStatus: "verified",
         }),
-        "a result and its review, by the lead": update("ownLead", `${hypotheses}/h01`, {
+        "a completed analysis and its review, by the lead": update("ownLead", `${hypotheses}/h01`, {
           analysisStatus: "completed",
-          resultSummary: "The synthetic effect was found.",
           resultReviewedBy: lead,
           resultReviewedAt: serverTimestamp(),
         }),
@@ -870,10 +869,39 @@ describe("a replication", () => {
           resultReviewedAt: serverTimestamp(),
         }),
       ],
-      "a result, by the lead": [
+      // A result and an original statistic are recorded with their provenance by a callable
+      // function, so the lead changes the analysis and its state directly, and never a result.
+      "a completed analysis, by the lead": [
         "allowed",
         update("ownLead", `${hypotheses}/h01`, {
           analysisStatus: "completed",
+          analysisSpecification: "A synthetic two-sided test.",
+        }),
+      ],
+      "a result without its provenance, by the lead": [
+        "denied",
+        update("ownLead", `${hypotheses}/h01`, { resultSummary: "The synthetic effect was found." }),
+      ],
+      "an original statistic without its provenance, by the core team": [
+        "denied",
+        update("coreTeam", `${hypotheses}/h01`, { originalStatistics: "t(23) = 2.5" }),
+      ],
+      "a provenance that a client writes itself, by an administrator": [
+        "denied",
+        update("admin", `${hypotheses}/h01`, {
+          resultSummary: "The synthetic effect was found.",
+          resultProvenance: {
+            source: "originalArticle",
+            locator: "Table 2",
+            recordedBy: uidOfCaller("admin"),
+            recordedAt: serverTimestamp(),
+          },
+        }),
+      ],
+      "a hypothesis created with a result": [
+        "denied",
+        create("coreTeam", `${hypotheses}/h04`, {
+          ...hypothesis("4"),
           resultSummary: "The synthetic effect was found.",
         }),
       ],
@@ -887,9 +915,9 @@ describe("a replication", () => {
       ],
       // The review covers the content. Its lead changes nothing but the addresses any more, and
       // a reviewer who changes the content clears the review or signs it anew.
-      "another result under the review, by the lead": [
+      "another analysis under the review, by the lead": [
         "denied",
-        update("ownLead", `${hypotheses}/h01`, { resultSummary: "The synthetic effect was not found." }),
+        update("ownLead", `${hypotheses}/h01`, { analysisSpecification: "A synthetic one-sided test." }),
       ],
       "an archive of the reviewed hypothesis, by the lead": [
         "denied",
@@ -899,14 +927,14 @@ describe("a replication", () => {
         "allowed",
         update("ownLead", `${hypotheses}/h01`, { studyDescriptionUrl: "https://example.org/study-description" }),
       ],
-      "another result under the review of someone else, by an administrator": [
+      "another analysis under the review of someone else, by an administrator": [
         "denied",
-        update("admin", `${hypotheses}/h01`, { resultSummary: "The synthetic effect was not found." }),
+        update("admin", `${hypotheses}/h01`, { analysisSpecification: "A synthetic one-sided test." }),
       ],
-      "another result that the administrator signs anew": [
+      "another analysis that the administrator signs anew": [
         "allowed",
         update("admin", `${hypotheses}/h01`, {
-          resultSummary: "The synthetic effect was not found.",
+          analysisSpecification: "A synthetic one-sided test.",
           resultReviewedBy: uidOfCaller("admin"),
           resultReviewedAt: serverTimestamp(),
         }),

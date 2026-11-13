@@ -22,7 +22,7 @@ import {
   updateTasksContract,
 } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { REMINDERS_PER_RUN, sendDueReminders } from "../../../functions/src/tasks/reminders";
 import { adminDb } from "../../support/admin";
 import {
@@ -32,13 +32,14 @@ import {
   codeOf,
   grantRole,
   laboratory,
-  leaveNoTrace,
   notificationsOf,
   replication,
   resetWorld,
   standard,
+  withoutTriggers,
 } from "../support";
 
+withoutTriggers();
 beforeEach(async () => {
   await resetWorld();
   for (const [position, status] of TASK_STATUSES.entries()) {
@@ -55,8 +56,6 @@ beforeEach(async () => {
   await replication("RedTeamTasks2001");
   await laboratory("lab-redteam-tasks");
 });
-
-afterAll(leaveNoTrace);
 
 async function memberOf(uid: string): Promise<Caller> {
   const caller = await account(uid);

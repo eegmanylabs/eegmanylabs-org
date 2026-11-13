@@ -135,6 +135,47 @@ Every Google and storage behaviour in this section was exercised against in-memo
 
 Two independent reviews examined this work and reported 24 findings, all critical, high and medium ones fixed with tests. The most serious were that a holder of a management right could make the portal's storage scanning account or its Drive account reach paths and files outside that holder's unit, that a line break in a copy's path could add a command to an SFTP listing, that the core team could move a server that names a stored secret to another host, that a transfer could be recorded as verified when no data had moved, and that every generated document was readable by all members whatever its template held.
 
+## 7a. Scientific workflows (phase 8) and the reliability of the functions suite
+
+Run on 12 November 2026 by the engineer, from `portal/` with port base 9200, on the working tree of phase 8 (uncommitted). `npm run typecheck`, `npm run lint` (968 files, no findings) and `npm run build` exited 0.
+
+| Suite | Files | Tests passed | Tests failed |
+|---|---|---|---|
+| Unit and component tests | 148 | 2,277 | 0 |
+| Emulator-backed rules and tools tests | 61 | 4,192 | 0 |
+| Emulator-backed functions tests | 35 | 387 | 0 |
+| Browser tests (Playwright, Chromium) | | 132 | 0 |
+
+The functions suite was run in full three times after its fix: once on its own (34 files, 376 tests, 10 minutes 50 seconds, before the scientific tests were added) and twice inside `npm test` (35 files, 387 tests, about 11 minutes each). Before the fix it took about 22 minutes and its last files timed out waiting for the audit trigger. The cause was measured: each time the tests switched the triggers on, the functions emulator registered them again under new names and the Firestore emulator went on posting every write to every earlier registration, so a burst of 200 writes took 3.2 seconds at first and 13.9 seconds after twelve switches. The tests now switch the triggers off once and on once per run (`tests/support/triggers.ts`, `vitest.config.ts`).
+
+`tests/e2e/identity-admin.spec.ts`, whose test of suspending a member had timed out on "Loading your account", was run three times on its own after the browser tests began to drain the trigger work of the seed before the first test: 5 of 5 passed each time. In the first full `npm test` one tools test failed because it still named a manuscript by its bare identifier, which phase 8 replaced; the test was corrected. In the second, 131 of 132 browser tests passed and one, "a personal view is its owner's alone until it is shared" in `tests/e2e/views.spec.ts`, timed out waiting for the sign-in page in a second browser; that file then passed twice on its own, and the failure is recorded as intermittent and unexplained. The third full `npm test`, whose counts the table gives, exited 0 with every suite passing (41 minutes).
+
+`tests/e2e/scientific.spec.ts` covers a lead preparing the authorship list of a report from its contributor table with a member added from the directory, the member confirming her own entry from Home and the export for the journal; a Stage 1 Registered Report linked to its OSF registration and checked through the OSF fake, followed by a Stage 2 report with a milestone in a task list, a submission, a decision of a review round and the acceptance that reaches the milestone; an analysis run recorded against a dataset of the registry with its provenance exported as JSON-LD and its bundle manifest; and an incident reported for a laboratory, given a corrective action and resolved. Each page was checked with axe and for sideways scrolling at every supported width. OSF was reached only through the in-memory fake; the real OSF adapter has never been executed.
+
+## 7b. Reporting, publishing and automation (phase 9)
+
+Run on 12 November 2026 by the engineer, from `portal/` with port base 9200, on the working tree of phase 9 (uncommitted). `npm run typecheck`, `npm run lint` (1,038 files, no findings) and `npm run build` exited 0.
+
+| Suite | Files | Tests passed | Tests failed |
+|---|---|---|---|
+| Unit and component tests | 154 | 2,324 | 0 |
+| Emulator-backed rules and tools tests | 63 | 4,231 | 0 |
+| Emulator-backed functions tests | 36 | 405 | 0 |
+| Browser tests (Playwright, Chromium) | | 137 in all; see below | |
+
+No full `npm test` run passed from start to finish. The unit, rules, tools and functions suites passed in full in each of the last two runs. The browser tests did not:
+
+- In the first of those runs, 133 of 137 browser tests passed. Two failures were defects of the new tests and were fixed: a locator in the drill-down test also matched the label of a region, and the automation test registered a dataset in the folder of the Munich fake that AS-8 registers next, so AS-8 was refused. The automation test now has a synthetic folder of its own. The other two failures were in `tests/e2e/views.spec.ts`, one of them "Target crashed", while the kernel was killing processes for lack of memory.
+- In the last run the kernel killed the Firestore emulator part-way through the browser tests, and the log records "Firestore Emulator has exited upon receiving signal: SIGKILL". 122 tests had passed. The 8 that failed after that point were one test of `tasks.spec.ts` and seven of `views.spec.ts`, and the seven tests of the two workspace files did not run.
+- The affected files were then run on their own: `reporting.spec.ts` and `research-data.spec.ts` (7 of 7 passed), `tasks.spec.ts` and `views.spec.ts` (12 of 12), and `workspace.spec.ts` (6 of 6).
+- `workspace.table-performance.spec.ts` passed as the last test of the first run. It failed twice when run on its own straight after the emulators started, both times on a Content-Security-Policy report: the Firestore SDK's own connectivity probe asked for `https://www.google.com/images/cleardot.gif`, and the policy blocked it. The SDK sends that probe when one of its channel requests fails. The cause on a cold emulator has not been established, and the failure is recorded as open.
+
+`tests/e2e/reporting.spec.ts` covers AS-13 against the GitHub fake: an administrator prepares an export, sees the difference, the staging build is run with Syrinx in a scratch copy through `publish:verify`, the approval with a second factor opens a pull request, and neither the files nor the body hold a planted private value. It also covers a view exported as CSV and Excel, drill-down from a dashboard figure and the programme overview with a past date, a change of digest preferences with a search and a saved search, and an automation that opens the quality-control task when data arrives, with its run logged. axe ran on each page and the absence of sideways scrolling was checked at every supported width.
+
+`tests/functions/reporting.test.ts` (18 tests) covers the publishing route against the GitHub fake, including the one-open-request rule, a moved `main`, lost access, the merge, the rollback proposal and the withdrawal; the mail outbox against the fake sender, with quiet hours, an outage, a rejected address and a weekly digest; automations with the depth limit and a chain; demographic aggregates with suppression and the audit entry; the search of comments and linked documents; notifications to followers, of protocol updates and of milestones; and a scheduled report run once in its period. `tests/tools/publish-verify.test.ts` builds with a stand-in for Syrinx, so that the tools suite does not need Python, and `tests/architecture/website-contract.test.ts` regenerates the committed website files byte for byte.
+
+GitHub and the mail sender were reached only through their in-memory fakes. The real GitHub adapter has never been executed, and no mail provider adapter exists.
+
 ## 8. Public-site entry
 
 The gated Members' portal entry was verified by building the public site in scratch copies, never inside the repository.
@@ -177,3 +218,6 @@ Two throwaway spikes were run before the build to prove the architecture. Their 
 | Every call of the real Google Drive, Sheets and Docs adapters and of the real storage adapters | No service account and no server account exist, so the adapters have never run | Credentials for a staging project and a test server, with an administrator's approval |
 | The scheduled sweeps of the job queue and of storage scans firing on their schedule | The emulator suite has no Pub/Sub emulator in this configuration, so the sweeps are tested by calling them directly | The staging project |
 | Any import of sources A, G or Quire | No access | Access as described in `docs/IMPLEMENTATION_STATUS.md` |
+| Every call of the real GitHub adapter, the protection of `main`, and a real pull request redeploying the shared staging site | No repository credential exists, so the adapter has never run | A credential limited to branches and pull requests, a test repository first, and an administrator's approval of each live pull request |
+| Email delivery, digests by email and the provider's handling of rejected addresses | No mail provider has been chosen, and no provider adapter exists | A provider, its key and the DNS records of the sending domain |
+| The scheduled sweeps of publishing, mail, automations and reports firing on their schedule | Tested by calling them directly, as for the sweeps of phases 6 and 7 | The staging project |

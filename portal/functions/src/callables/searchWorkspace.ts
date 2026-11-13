@@ -15,7 +15,9 @@ const READ_PER_WORD = 300;
 const RESULTS = 50;
 
 /**
- * Searches the index of the workspace (docs/DATA_MODEL.md, section 13). Capability: membership.
+ * Searches the index of the workspace (docs/DATA_MODEL.md, section 13): pages, comments and the
+ * metadata of linked documents, narrowed where the caller asks to some kinds or to one
+ * replication. Capability: membership.
  * No client reads the index: this function finds the entries that hold every word of the query,
  * by its first letters, and returns only those whose audience the caller holds in this session,
  * as the security rules decide for the record itself. Programme administrators and the core team
@@ -48,11 +50,17 @@ export const searchWorkspace = defineCallable(searchWorkspaceContract, {
         if (!parsed.success) continue;
         const entry = parsed.data;
         if (!staff && !entry.scopeKeys.some((key) => held.has(key))) continue;
+        const kind = entry.kind === "comment" || entry.kind === "document" ? entry.kind : "page";
+        if (input.kinds !== undefined && !input.kinds.includes(kind)) continue;
+        if (input.replicationId !== undefined && entry.replicationId !== input.replicationId) continue;
         records.set(`${entry.entityType}/${entry.entityId}`, {
           entityType: entry.entityType,
           entityId: entry.entityId,
           title: entry.title,
           kind: entry.kind,
+          ...(entry.targetEntityType === undefined || entry.targetEntityId === undefined
+            ? {}
+            : { targetEntityType: entry.targetEntityType, targetEntityId: entry.targetEntityId }),
         });
       }
       matching = first ? records : new Map([...matching].filter(([key]) => records.has(key)));

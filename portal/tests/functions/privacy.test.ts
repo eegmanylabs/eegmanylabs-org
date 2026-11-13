@@ -39,11 +39,11 @@ import {
   grantCapability,
   institution,
   laboratory,
-  leaveNoTrace,
   memberEntry,
   person,
   settle,
   standard,
+  withTriggers,
 } from "./support";
 
 const logged = vi.hoisted(() => [] as unknown[][]);
@@ -120,14 +120,13 @@ const ADDRESSES = [
 ];
 const DEMOGRAPHIC_VALUES = ["synthetic gender term Q", "synthetic ethnicity term Z", "self-described synthetic term"];
 
+withTriggers();
 beforeAll(async () => {
   process.env[IDENTITY_HASH_KEY_NAME] = DEMO_IDENTITY_HASH_KEY;
-  await leaveNoTrace();
 });
 
 afterAll(async () => {
   delete process.env[IDENTITY_HASH_KEY_NAME];
-  await leaveNoTrace();
 });
 
 describe("what the functions leave behind", () => {

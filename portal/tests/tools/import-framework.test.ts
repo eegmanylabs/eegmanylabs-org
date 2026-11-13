@@ -735,11 +735,11 @@ describe("rollback", () => {
   it("refuses as a whole, and lists the documents, when a document has changed since the batch wrote it", async () => {
     const applied = await run(website, input(), "apply");
     await adminDb.doc("replications/Delta1999").update({ theme: "Edited in the portal" });
-    await adminDb.doc("manuscripts/Kept2025").update({ journal: "Edited too" });
+    await adminDb.doc("manuscripts/web__Kept2025").update({ journal: "Edited too" });
     const before = await allDocuments();
     expect(await rollbackBatch(adminDb, applied.batchId)).toEqual({
       status: "refused",
-      changedDocuments: ["manuscripts/Kept2025", "replications/Delta1999"],
+      changedDocuments: ["manuscripts/web__Kept2025", "replications/Delta1999"],
     });
     // Nothing was reversed.
     expect(differences(before, await allDocuments())).toEqual({ created: [], removed: [], rewritten: [] });

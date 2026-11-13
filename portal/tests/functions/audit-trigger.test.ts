@@ -32,15 +32,15 @@ import {
 import { adminDb } from "../support/admin";
 import { createTestClient, signInWithEmailLinkFromEmulator, type TestClient } from "../support/client";
 import { FUNCTIONS_URL, HOST, PORTS, PROJECT_ID } from "../support/emulators";
-import { auditOfPath, eventually, laboratory, leaveNoTrace, resetWorld, settle, standard } from "./support";
+import { auditOfPath, eventually, laboratory, resetWorld, settle, standard, withTriggers } from "./support";
 
 const logger = { info: () => undefined, warn: () => undefined, error: () => undefined };
 const clients: TestClient[] = [];
 
+withTriggers();
 beforeEach(resetWorld);
 
 afterAll(async () => {
-  await leaveNoTrace();
   await Promise.all(clients.map((client) => client.close()));
 });
 

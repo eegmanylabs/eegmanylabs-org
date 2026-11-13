@@ -42,6 +42,8 @@
     "access:rebuild": "node scripts/emulators.mjs run npm run --silent -w @eegml/tools cli -- access:rebuild",
     "integrity:check": "node scripts/emulators.mjs run npm run --silent -w @eegml/tools cli -- integrity:check",
     "admin:bootstrap": "node scripts/emulators.mjs run npm run --silent -w @eegml/tools cli -- admin:bootstrap",
+    "publish:verify": "node scripts/emulators.mjs run npm run --silent -w @eegml/tools cli -- publish:verify",
+    "site:setup": "node scripts/site-build.mjs ensure",
     "fb": "scripts/fb.sh"
   },
   "devDependencies": {

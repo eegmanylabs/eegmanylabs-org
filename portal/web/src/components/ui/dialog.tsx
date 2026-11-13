@@ -1,6 +1,6 @@
 import { X } from "lucide-react";
 import { Dialog as RadixDialog, VisuallyHidden } from "radix-ui";
-import type { ReactNode } from "react";
+import { type ReactNode, useRef } from "react";
 import { cn } from "@/utils/cn";
 import { Button } from "./button";
 
@@ -17,8 +17,8 @@ export interface DialogContentProps {
   placement?: "center" | "left";
   className?: string;
   /**
-   * The control that focus returns to when the dialog closes, for a dialog opened from state
-   * rather than from a trigger, which Radix cannot find by itself. Null leaves focus to Radix.
+   * The control that focus returns to when the dialog closes, where it is not the control that
+   * had focus when the dialog opened, which is the default. Null leaves focus to that default.
    */
   returnFocus?: () => HTMLElement | null;
   children: ReactNode;
@@ -38,22 +38,31 @@ export function DialogContent({
   children,
 }: DialogContentProps) {
   const heading = <RadixDialog.Title className="text-xl tracking-title text-fg">{title}</RadixDialog.Title>;
+  // The control that had focus when the dialog opened, read as the panel mounts and before focus
+  // moves into it. Radix returns focus to a trigger only, so a dialog opened from state would
+  // otherwise leave focus on the page itself when it closes.
+  const opener = useRef<Element | null>(null);
   return (
     <RadixDialog.Portal>
       <RadixDialog.Overlay className="fixed inset-0 z-40 bg-scrim" />
       <RadixDialog.Content
         // Without a description Radix expects this attribute to be cleared explicitly.
         {...(description ? {} : { "aria-describedby": undefined })}
-        {...(returnFocus === undefined
-          ? {}
-          : {
-              onCloseAutoFocus: (event: Event) => {
-                const target = returnFocus();
-                if (target === null || !target.isConnected) return;
-                event.preventDefault();
-                target.focus();
-              },
-            })}
+        onOpenAutoFocus={() => {
+          opener.current = document.activeElement;
+        }}
+        onCloseAutoFocus={(event: Event) => {
+          const named = returnFocus?.() ?? null;
+          const target =
+            named?.isConnected === true
+              ? named
+              : opener.current instanceof HTMLElement && opener.current.isConnected && opener.current !== document.body
+                ? opener.current
+                : null;
+          if (target === null) return;
+          event.preventDefault();
+          target.focus();
+        }}
         className={cn(
           "fixed z-50 border-border bg-surface text-fg",
           placement === "center" &&

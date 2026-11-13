@@ -42,7 +42,7 @@ import {
   taskDocSchema,
   updateDatasetContract,
 } from "@eegml/shared";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { sweepEndpoints } from "../../functions/src/datasets/endpoints";
 import type { StorageFake } from "../../functions/src/integrations/storage/fake";
 import {
@@ -69,10 +69,10 @@ import {
   call,
   codeOf,
   dataOf,
-  leaveNoTrace,
   notificationsOf,
   refusal,
   resetWorld,
+  withoutTriggers,
 } from "./support";
 
 const BREMEN_KEY = "DataStudy2001-bremen-main";
@@ -81,13 +81,12 @@ const MUNICH_KEY = "DataStudy2001-munich-main";
 let world: DatasetWorld;
 let fake: StorageFake;
 
+withoutTriggers();
 beforeEach(async () => {
   await resetWorld();
   fake = freshStorageFake();
   world = await datasetWorld();
 });
-
-afterAll(leaveNoTrace);
 
 type Registration = CallableInput<typeof registerDatasetContract>;
 

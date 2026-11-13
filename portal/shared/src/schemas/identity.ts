@@ -128,6 +128,23 @@ export const userSubscriptionDocSchema = documentBaseSchema.extend({
 });
 export type UserSubscriptionDoc = z.output<typeof userSubscriptionDocSchema>;
 
+/** The kinds of result a search can be narrowed to. */
+export const SEARCH_RESULT_KINDS = ["record", "page", "comment", "document"] as const;
+export const searchResultKindSchema = z.enum(SEARCH_RESULT_KINDS);
+export type SearchResultKind = z.output<typeof searchResultKindSchema>;
+
+/** `users/{uid}/savedSearches/{id}`: a search the user keeps, with its filters. */
+export const userSavedSearchDocSchema = documentBaseSchema.extend({
+  uid: uidSchema,
+  name: z.string().min(1).max(100),
+  query: z.string().min(1).max(200),
+  /** The kinds of result kept, or none for every kind. */
+  kinds: z.array(searchResultKindSchema).max(SEARCH_RESULT_KINDS.length),
+  /** The replication the results are limited to, or null. */
+  replicationId: idSchema.nullable(),
+});
+export type UserSavedSearchDoc = z.output<typeof userSavedSearchDocSchema>;
+
 export const digestFrequencySchema = z.enum(["off", "daily", "weekly"]);
 
 const clockTimeSchema = z

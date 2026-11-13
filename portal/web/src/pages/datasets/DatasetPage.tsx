@@ -23,6 +23,7 @@ import { LiveView } from "@/components/feedback/live-view";
 import { LoadingState } from "@/components/feedback/loading-state";
 import { Detail, Details } from "@/components/registry/details";
 import { FavouriteButton } from "@/components/registry/favourite-button";
+import { FollowButton } from "@/components/registry/follow-button";
 import { OriginBadge } from "@/components/registry/origin-badge";
 import { Unknown } from "@/components/registry/unknown";
 import { Badge } from "@/components/ui/badge";
@@ -454,7 +455,9 @@ function DatasetRecord({ dataset, viewer }: { dataset: RecordOf<"datasets">; vie
                           ? "The connection of a server"
                           : "A viewer link"}
                     </TableCell>
-                    <TableCell className="font-mono text-xs">{event.uid === viewer.uid ? "You" : event.uid}</TableCell>
+                    <TableCell className="tabular-nums text-xs">
+                      {event.uid === viewer.uid ? "You" : event.uid}
+                    </TableCell>
                   </TableRow>
                 ))}
             </TableBody>
@@ -537,7 +540,10 @@ function DatasetRecord({ dataset, viewer }: { dataset: RecordOf<"datasets">; vie
             </div>
           </div>
           {viewer.access.member ? (
-            <FavouriteButton uid={viewer.uid} entityType="dataset" entityId={dataset.id} name={dataset.datasetKey} />
+            <div className="flex flex-wrap gap-2">
+              <FavouriteButton uid={viewer.uid} entityType="dataset" entityId={dataset.id} name={dataset.datasetKey} />
+              <FollowButton uid={viewer.uid} entityType="dataset" entityId={dataset.id} label="Follow" />
+            </div>
           ) : null}
         </div>
       </header>

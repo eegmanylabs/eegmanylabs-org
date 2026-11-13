@@ -12,3 +12,21 @@
 html[data-framed] body {
   display: none;
 }
+
+/*
+ * The print stylesheet, through which a page is saved as PDF (requirement R15.6): the frame of the
+ * portal, the toolbars and the controls are left out, and the content fills the page in black on
+ * white.
+ */
+@media print {
+  html [data-print="hide"],
+  html [role="toolbar"],
+  html button {
+    display: none;
+  }
+
+  html body,
+  html main {
+    background: var(--paper-strong);
+  }
+}

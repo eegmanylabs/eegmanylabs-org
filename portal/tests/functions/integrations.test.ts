@@ -51,12 +51,12 @@ import {
   dataset,
   eventually,
   grantRole,
-  leaveNoTrace,
   person,
   refusal,
   replication,
   resetWorld,
   settle,
+  withTriggers,
 } from "./support";
 
 const ALPHA = "DemoAlpha2001";
@@ -80,6 +80,7 @@ async function quietRuns(): Promise<void> {
   }, "the runs to end");
 }
 
+withTriggers();
 beforeEach(async () => {
   await quietRuns();
   await resetWorld();
@@ -93,7 +94,6 @@ beforeEach(async () => {
 afterAll(async () => {
   await quietRuns();
   resetWorkspace();
-  await leaveNoTrace();
 });
 
 /** A member linked to a person of the directory. */

@@ -28,7 +28,7 @@ import {
   vocabularyTermId,
 } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { AppError } from "../../functions/src/framework/errors";
 import { flagInactiveParticipations } from "../../functions/src/recruitment/inactivity";
 import {
@@ -49,11 +49,11 @@ import {
   dataOf,
   grantRole,
   laboratory,
-  leaveNoTrace,
   notificationsOf,
   replication,
   resetWorld,
   standard,
+  withoutTriggers,
 } from "./support";
 
 const STUDY = "RecruitStudy2001";
@@ -166,9 +166,8 @@ async function summary() {
   );
 }
 
+withoutTriggers();
 beforeEach(resetWorld);
-
-afterAll(leaveNoTrace);
 
 describe("fileRecruitmentReports", () => {
   it("files the main experiment, the resting state and unique participants apart, and never adds them", async () => {

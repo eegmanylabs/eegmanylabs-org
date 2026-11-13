@@ -15,7 +15,7 @@ import {
   saveStorageEndpointContract,
   scanStorageRefContract,
 } from "@eegml/shared";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { FAKE_BASE_PATHS, FAKE_DATASET_PATHS } from "../../../functions/src/integrations/storage/fixtures";
 import { remotePath } from "../../../functions/src/integrations/storage/real/credentials";
 import { adminDb } from "../../support/admin";
@@ -28,20 +28,19 @@ import {
   LAB_MUNICH,
   STUDY,
 } from "../datasets-world";
-import { type Caller, call, codeOf, leaveNoTrace, resetWorld } from "../support";
+import { type Caller, call, codeOf, resetWorld, withoutTriggers } from "../support";
 
 const BREMEN_KEY = "DataStudy2001-redteam-bremen";
 const MUNICH_KEY = "DataStudy2001-redteam-munich";
 
 let world: DatasetWorld;
 
+withoutTriggers();
 beforeEach(async () => {
   await resetWorld();
   freshStorageFake();
   world = await datasetWorld();
 });
-
-afterAll(leaveNoTrace);
 
 type Registration = CallableInput<typeof registerDatasetContract>;
 

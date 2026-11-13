@@ -43,6 +43,7 @@ import {
   recruitmentCollections,
   useRecruitmentData,
 } from "@/registry/recruitment-data";
+import { SCIENTIFIC_SOURCES, useScientificDocuments } from "@/registry/scientific-data";
 import { roleOnTask, type TaskData, taskCollection, taskLookups, useTaskData } from "@/registry/task-data";
 import type { Viewer } from "@/registry/viewer";
 
@@ -113,9 +114,15 @@ function mayChangeCore(
     case "core:recruitmentReports":
     case "core:recruitment":
     case "core:datasets":
+    case "core:hypotheses":
+    case "core:manuscripts":
+    case "core:analysisRuns":
+    case "core:decisions":
+    case "core:incidents":
       // The functions of tasks decide who changes a task, which `taskEditable` asks, a
-      // recruitment report is never changed, since a correction is a new report, and a dataset
-      // changes through the functions of the registry on its own page.
+      // recruitment report is never changed, since a correction is a new report, a dataset
+      // changes through the functions of the registry on its own page, and the records of the
+      // scientific workflows change through their functions on the page of their replication.
       return false;
   }
 }
@@ -127,6 +134,7 @@ const WITHOUT_CUSTOM: ReadonlySet<CoreSourceKey> = new Set([
   "core:recruitmentReports",
   "core:recruitment",
   "core:datasets",
+  ...SCIENTIFIC_SOURCES,
 ]);
 
 /** The sources of recruitment, which read the reports. */
@@ -164,6 +172,10 @@ export function useViewData(collectionKey: string | null, viewer: Viewer, second
   const taskData = useTaskData(coreKey === "core:tasks" ? viewer : null);
   const recruitmentData = useRecruitmentData(coreKey !== null && RECRUITMENT_SOURCES.has(coreKey) ? viewer : null);
   const datasets = useLiveCollection(coreKey === "core:datasets" ? ALL_DATASETS : null);
+  const scientific = useScientificDocuments(
+    coreKey !== null && SCIENTIFIC_SOURCES.has(coreKey) ? coreKey : null,
+    viewer,
+  );
   const schema = useLiveDocument(
     "collectionSchemas",
     coreSource?.customKey === null || coreSource === null ? null : [coreSource.customKey],
@@ -247,6 +259,7 @@ export function useViewData(collectionKey: string | null, viewer: Viewer, second
       orIdleTasks(taskData),
       orIdleRecruitment(recruitmentData),
       orEmptyPaged(datasets),
+      scientific,
     ] as const,
     (...values) => values,
   );
@@ -277,6 +290,7 @@ export function useViewData(collectionKey: string | null, viewer: Viewer, second
       tasks,
       recruitment,
       datasetList,
+      scientificDocuments,
     ] = ready.data;
     const names = new Map<string, string>();
     for (const person of personList.items) if (person.userId !== null) names.set(person.userId, person.displayName);
@@ -328,6 +342,9 @@ export function useViewData(collectionKey: string | null, viewer: Viewer, second
     ]);
     if (tasks !== null) collections.set("core:tasks", taskCollection(tasks, lookups));
     if (coreKey === "core:datasets") collections.set("core:datasets", core("core:datasets", datasetList.items));
+    if (coreKey !== null && scientificDocuments !== null) {
+      collections.set(coreKey, coreCollection(CORE_SOURCES[coreKey], scientificDocuments.documents, {}, lookups));
+    }
     const now = new Date();
     if (recruitment !== null) {
       const built = recruitmentCollections(recruitment, participationList.items, lookups, todayIso(now));
@@ -400,7 +417,12 @@ export function useViewData(collectionKey: string | null, viewer: Viewer, second
 
     if (coreKey === null) return { status: "error", error: { code: "not-found", message: "No such collection." } };
     const collection = collections.get(coreKey) as CollectionData;
-    if (coreKey === "core:recruitmentReports" || coreKey === "core:recruitment" || coreKey === "core:datasets") {
+    if (
+      coreKey === "core:recruitmentReports" ||
+      coreKey === "core:recruitment" ||
+      coreKey === "core:datasets" ||
+      scientificDocuments !== null
+    ) {
       return {
         status: "ready",
         fromCache: false,
@@ -412,7 +434,12 @@ export function useViewData(collectionKey: string | null, viewer: Viewer, second
           canEdit: () => false,
           canAddRows: false,
           canManageProperties: false,
-          truncated: coreKey === "core:datasets" ? datasetList.truncated : (recruitment?.truncated ?? false),
+          truncated:
+            scientificDocuments !== null
+              ? scientificDocuments.truncated
+              : coreKey === "core:datasets"
+                ? datasetList.truncated
+                : (recruitment?.truncated ?? false),
           people,
         },
       };
@@ -434,14 +461,18 @@ export function useViewData(collectionKey: string | null, viewer: Viewer, second
         },
       };
     }
+    const editableRecords: Partial<Record<CoreSourceKey, readonly { readonly id: string }[]>> = {
+      "core:replications": replicationList.items,
+      "core:persons": personList.items,
+      "core:laboratories": laboratoryList.items,
+      "core:participations": participationList.items,
+      "core:checklistItems": checklistList,
+    };
     const sourceData = new Map(
-      {
-        "core:replications": replicationList.items,
-        "core:persons": personList.items,
-        "core:laboratories": laboratoryList.items,
-        "core:participations": participationList.items,
-        "core:checklistItems": checklistList,
-      }[coreKey].map((record) => [record.id, record as unknown as Readonly<Record<string, unknown>>]),
+      (editableRecords[coreKey] ?? []).map((record) => [
+        record.id,
+        record as unknown as Readonly<Record<string, unknown>>,
+      ]),
     );
     return {
       status: "ready",

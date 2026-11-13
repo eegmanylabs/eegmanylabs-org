@@ -22,7 +22,7 @@ import {
   updateTasksContract,
 } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { createNextOccurrence, occurrenceId } from "../../functions/src/tasks/recurrence";
 import { sendDueReminders } from "../../functions/src/tasks/reminders";
 import { adminDb } from "../support/admin";
@@ -38,15 +38,16 @@ import {
   eventually,
   grantRole,
   laboratory,
-  leaveNoTrace,
   notificationsOf,
   person,
   refusal,
   replication,
   resetWorld,
   standard,
+  withTriggers,
 } from "./support";
 
+withTriggers();
 beforeEach(async () => {
   await resetWorld();
   for (const [position, status] of TASK_STATUSES.entries()) {
@@ -64,8 +65,6 @@ beforeEach(async () => {
   await replication("StudyB2002");
   await laboratory("lab-a");
 });
-
-afterAll(leaveNoTrace);
 
 /** A lead of a replication, who manages its task lists. */
 async function leadOf(studyKey: string, uid: string): Promise<Caller> {

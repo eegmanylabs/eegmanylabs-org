@@ -12,25 +12,23 @@ import {
   sessionStartContract,
   setRoleAssignmentContract,
 } from "@eegml/shared";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { seedDemo } from "../../tools/src/commands/seed-demo";
 import { DEMO_ACCOUNTS } from "../../tools/src/fixtures/demo-accounts";
 import { DEMO_BOOTSTRAP_ADMIN_EMAIL } from "../../tools/src/fixtures/demo-world";
 import { adminAuth, adminDb } from "../support/admin";
 import { PROJECT_ID } from "../support/emulators";
-import { accessOf, type Caller, call, codeOf, dataOf, leaveNoTrace, notificationsOf, settle } from "./support";
+import { accessOf, type Caller, call, codeOf, dataOf, notificationsOf, settle, withTriggers } from "./support";
 
 const admin: Caller = { uid: "uid-demo-admin", email: DEMO_BOOTSTRAP_ADMIN_EMAIL };
 const ben: Caller = { uid: "uid-demo-ben", email: "ben.sample@example.org" };
 const twin: Caller = { uid: "uid-demo-twin", email: "shared.mock@example.org" };
 const stranger: Caller = { uid: "uid-demo-stranger", email: "nobody.in.particular@example.org" };
 
+withTriggers();
 beforeAll(async () => {
-  await leaveNoTrace();
   await seedDemo({ db: adminDb, auth: adminAuth }, PROJECT_ID);
 });
-
-afterAll(leaveNoTrace);
 
 describe("the demonstration world with the functions running", () => {
   it("is left as the seed wrote it: the triggers find every derived value in place", async () => {

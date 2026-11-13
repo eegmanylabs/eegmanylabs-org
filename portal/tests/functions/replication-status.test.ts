@@ -12,7 +12,7 @@ import {
   statusHistoryDocSchema,
 } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { adminDb } from "../support/admin";
 import {
   account,
@@ -23,16 +23,17 @@ import {
   coreTeamMember,
   dataOf,
   grantRole,
-  leaveNoTrace,
   refusal,
   replication,
   resetWorld,
   standard,
+  withoutTriggers,
 } from "./support";
 
 const STUDY = "StatusStudy2001";
 const OTHER_STUDY = "StatusStudy2002";
 
+withoutTriggers();
 beforeEach(async () => {
   await resetWorld();
   await Promise.all([replication(STUDY), replication(OTHER_STUDY)]);
@@ -57,8 +58,6 @@ beforeEach(async () => {
     ),
   );
 });
-
-afterAll(leaveNoTrace);
 
 const change = (fromStatusKey: string | null, toStatusKey: string, replicationId = STUDY) => ({
   replicationId,

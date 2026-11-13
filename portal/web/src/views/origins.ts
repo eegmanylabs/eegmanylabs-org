@@ -12,9 +12,16 @@ const isOrigin = (value: unknown): value is DataOrigin =>
  * records carry no origin, as the rows of a database do.
  */
 export function originNote(records: readonly ViewRecord[]): string | null {
+  return originNoteOf(records.map((record) => record.values.dataOrigin));
+}
+
+/**
+ * The same line for the origins of documents read directly, as the overview and the analysis
+ * pages count them: one origin for each document behind a figure.
+ */
+export function originNoteOf(origins: readonly unknown[]): string | null {
   const counts = new Map<DataOrigin, number>();
-  for (const record of records) {
-    const origin = record.values.dataOrigin;
+  for (const origin of origins) {
     if (isOrigin(origin)) counts.set(origin, (counts.get(origin) ?? 0) + 1);
   }
   const labelled = [...counts].filter(([origin]) => origin !== "live");

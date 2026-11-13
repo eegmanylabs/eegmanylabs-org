@@ -2,12 +2,16 @@ import {
   COLLECTIONS,
   capabilityGrantDocSchema,
   capabilityGrantId,
+  getDemographicAggregatesContract,
   getPersonDemographicsContract,
   type PersonDemographics,
   parseStoredDocument,
   personDemographicsDocSchema,
+  releaseDemographicCounts,
+  SMALL_CELL_THRESHOLD,
   SPECIAL_CATEGORY_FIELDS,
 } from "@eegml/shared";
+import type { DocumentSnapshot } from "firebase-admin/firestore";
 import {
   AppError,
   defineCallable,
@@ -17,6 +21,17 @@ import {
   withheldChanges,
   writeAudit,
 } from "../framework";
+
+/** Whether a named grant of `demographics.read` to the caller is in force at an instant. */
+function grantInForce(snapshot: DocumentSnapshot | undefined, at: Date): boolean {
+  const grant = snapshot?.exists ? parseStoredDocument(capabilityGrantDocSchema, snapshot.data()) : null;
+  return (
+    grant?.success === true &&
+    grant.data.revokedAt === null &&
+    grant.data.expiresAt !== null &&
+    grant.data.expiresAt.toMillis() > at.getTime()
+  );
+}
 
 /**
  * Serves the special-category data of one person: gender and ethnicity (decision D-006 and
@@ -46,15 +61,7 @@ export const getPersonDemographics = defineCallable(getPersonDemographicsContrac
       const own = person?.exists === true && person.get("userId") === uid && !access.suspended;
       if (!own) {
         requireCapability(context, access, "demographics.read", "programme");
-        const grant = grantSnapshot?.exists
-          ? parseStoredDocument(capabilityGrantDocSchema, grantSnapshot.data())
-          : null;
-        const inForce =
-          grant?.success === true &&
-          grant.data.revokedAt === null &&
-          grant.data.expiresAt !== null &&
-          grant.data.expiresAt.toMillis() > at.getTime();
-        if (!inForce) throw new AppError("permission-denied", NOT_ALLOWED_MESSAGE);
+        if (!grantInForce(grantSnapshot, at)) throw new AppError("permission-denied", NOT_ALLOWED_MESSAGE);
         if (person?.exists !== true) throw new AppError("not-found", "This person does not exist.");
       }
 
@@ -88,5 +95,75 @@ export const getPersonDemographics = defineCallable(getPersonDemographicsContrac
       );
       return { personId: input.personId, demographics };
     });
+  },
+});
+
+/** The text that stands for a person with nothing recorded in a field. */
+const NOT_RECORDED = "Not recorded";
+
+/**
+ * Serves counts of one special-category field for the people of a scope, for the analysis views
+ * (requirement R15.10). It is the second route of this audited function and takes the same
+ * authorisation as the reading of another person's data: `demographics.read`, a named grant of
+ * it that is neither revoked nor expired, and the second factor, programme administrators
+ * included. Nobody is served their own record this way. What is released follows
+ * `releaseDemographicCounts`: nothing for a scope of fewer people than `SMALL_CELL_THRESHOLD`,
+ * suppressed groups folded into one unnamed cell, no value named unless two values reach the
+ * threshold, and neither the people nor the total wherever a group is suppressed, so that no
+ * person's value can be read from the reply. Every call writes an audit entry that names the reader, the
+ * scope and the field, never a value or a count. Nothing of the data is logged.
+ */
+export const getDemographicAggregates = defineCallable(getDemographicAggregatesContract, {
+  handler: async (input, context) => {
+    const { uid, db } = context;
+    const at = context.clock.now();
+    const grantReference = db.doc(COLLECTIONS.capabilityGrants.docPath(capabilityGrantId(uid, "demographics.read")));
+    const access = await readAccessDocument(db, uid);
+    requireCapability(context, access, "demographics.read", "programme");
+    if (!grantInForce(await grantReference.get(), at)) throw new AppError("permission-denied", NOT_ALLOWED_MESSAGE);
+
+    const persons = db.collection(COLLECTIONS.persons.collectionPath());
+    const query =
+      input.scopeType === "replication"
+        ? persons.where("replicationIds", "array-contains", input.scopeId)
+        : input.scopeType === "laboratory"
+          ? persons.where("laboratoryIds", "array-contains", input.scopeId)
+          : persons;
+    const people = (await query.limit(5_000).get()).docs.filter((document) => document.get("archivedAt") === null);
+    const counts: Record<string, number> = {};
+    for (let start = 0; start < people.length; start += 300) {
+      const chunk = people.slice(start, start + 300);
+      if (chunk.length === 0) continue;
+      const special = await db.getAll(
+        ...chunk.map((document) => db.doc(COLLECTIONS.personDemographics.docPath(document.id))),
+      );
+      for (const snapshot of special) {
+        const parsed = snapshot.exists ? parseStoredDocument(personDemographicsDocSchema, snapshot.data()) : null;
+        const value = parsed?.success === true ? parsed.data[input.field] : undefined;
+        const category = value === undefined || value === "" ? NOT_RECORDED : value.slice(0, 100);
+        counts[category] = (counts[category] ?? 0) + 1;
+      }
+    }
+    const release = releaseDemographicCounts(counts, new Set([NOT_RECORDED]));
+    await db.runTransaction(async (transaction) => {
+      writeAudit(
+        transaction,
+        {
+          action: "demographics.aggregateRead",
+          actor: { kind: "user", uid },
+          entityType: input.scopeType,
+          entityId: input.scopeId,
+          changes: withheldChanges([input.field]),
+          at,
+        },
+        db,
+      );
+    });
+    return {
+      threshold: SMALL_CELL_THRESHOLD,
+      people: release.people,
+      cells: release.cells.slice(0, 100),
+      total: release.total,
+    };
   },
 });

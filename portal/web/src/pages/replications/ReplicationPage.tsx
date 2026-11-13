@@ -14,10 +14,23 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { type Live, type RecordOf, retryFailedLiveData, useLiveDocument, useLiveQuery } from "@/data";
+import {
+  type Live,
+  type RecordOf,
+  retryFailedLiveData,
+  useLiveDocument,
+  useLiveDocumentsAt,
+  useLiveQuery,
+} from "@/data";
 import { ScopeDashboard } from "@/pages/dashboards/ScopeDashboard";
 import { DatasetsTab } from "@/pages/datasets/DatasetsTab";
 import { RecruitmentTab } from "@/pages/recruitment/RecruitmentTab";
+import { AnalysisTab } from "@/pages/science/AnalysisTab";
+import { DecisionsTab } from "@/pages/science/DecisionsTab";
+import { IncidentsTab } from "@/pages/science/IncidentsTab";
+import type { OutputContext } from "@/pages/science/OutputCard";
+import { OutputsTab, ReportsTab } from "@/pages/science/OutputsTabs";
+import { ProtocolTab } from "@/pages/science/ProtocolTab";
 import { EntityTasksTab } from "@/pages/tasks/EntityTasksTab";
 import { UpdatesTab } from "@/pages/tasks/UpdatesTab";
 import { NotesTab } from "@/pages/workspace/NotesTab";
@@ -43,6 +56,21 @@ import {
   useReplicationStatuses,
   useRequirements,
 } from "@/registry/queries";
+import {
+  acknowledgementsOfReplication,
+  analysisRunsOfReplication,
+  authorshipListsOfReplication,
+  decisionsOfReplication,
+  deviationsOfReplication,
+  incidentActionsOfReplication,
+  incidentsOfReplication,
+  predictionItemsOfReplication,
+  protocolsOfReplication,
+  protocolVersionsOfReplication,
+  type ReadScope,
+  taskListsOfReplication,
+  teamMembersOfReplication,
+} from "@/registry/scientific-queries";
 import { useRecordVisit } from "@/registry/use-record-visit";
 import { useViewer, type Viewer } from "@/registry/viewer";
 import { LeadsText } from "./replication-display";
@@ -56,7 +84,6 @@ import { HypothesesTab } from "./tabs/HypothesesTab";
 import { LaboratoriesTab } from "./tabs/LaboratoriesTab";
 import { LeadershipTab, leadsUndecided } from "./tabs/LeadershipTab";
 import { OverviewTab } from "./tabs/OverviewTab";
-import { PublicationsTab } from "./tabs/PublicationsTab";
 
 const TAB_IDS = [
   "overview",
@@ -65,7 +92,12 @@ const TAB_IDS = [
   "recruitment",
   "datasets",
   "hypotheses",
-  "publications",
+  "protocol",
+  "reports",
+  "analysis",
+  "outputs",
+  "decisions",
+  "incidents",
   "contributors",
   "documents",
   "activity",
@@ -83,7 +115,12 @@ const TAB_LABELS: Readonly<Record<TabId, string>> = {
   recruitment: "Recruitment",
   datasets: "Datasets",
   hypotheses: "Hypotheses",
-  publications: "Publications",
+  protocol: "Protocol",
+  reports: "Registered Reports",
+  analysis: "Analysis",
+  outputs: "Outputs",
+  decisions: "Decisions",
+  incidents: "Incidents",
   contributors: "Contributors",
   documents: "Documents",
   activity: "Activity",
@@ -118,9 +155,18 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
   const member = viewer.access.member;
   const addsLaboratories =
     member && replication.archivedAt === null && viewer.can("participations.manage", { replicationId: studyKey });
-  // The directory serves the choice of a local lead when a laboratory is added, so only those who
-  // add laboratories read it.
-  const persons = useDirectoryItems(addsLaboratories ? ALL_PERSONS : null);
+  // Those who manage the replication manage its outputs and their authorship lists too, which
+  // the functions decide again.
+  const managesOutputs =
+    member && replication.archivedAt === null && viewer.can("replications.manage", { replicationId: studyKey });
+  // The directory serves the choice of a local lead when a laboratory is added, and of an author
+  // who is in no contributor table, so only those who do either read it.
+  // A coordinator of a laboratory chooses the team of its participation from the directory too.
+  const managesTeams =
+    member &&
+    replication.archivedAt === null &&
+    (addsLaboratories || viewer.access.coordinatorLaboratoryIds.length > 0);
+  const persons = useDirectoryItems(addsLaboratories || managesOutputs || managesTeams ? ALL_PERSONS : null);
   const laboratories = useLaboratories();
   const allParticipations = useParticipations();
   const allManuscripts = useManuscripts();
@@ -141,6 +187,28 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
     ),
   );
   const history = useLiveQuery(statusHistoryOfReplication(studyKey));
+
+  // The scientific workflows. What is read within scope is read by the keys the viewer holds, and
+  // not at all by a viewer who holds none.
+  const readScope: ReadScope | null = viewer.staff
+    ? "all"
+    : viewer.queryScopeKeys.length === 0
+      ? null
+      : viewer.queryScopeKeys;
+  const scoped = <T,>(query: (studyKey: string, scope: ReadScope) => T): T | null =>
+    readScope === null ? null : query(studyKey, readScope);
+  const protocols = useLiveQuery(protocolsOfReplication(studyKey));
+  const protocolVersions = useLiveQuery(protocolVersionsOfReplication(studyKey));
+  const decisions = useLiveQuery(decisionsOfReplication(studyKey));
+  const predictionItems = useLiveQuery(predictionItemsOfReplication(studyKey));
+  const runs = orEmpty(useLiveQuery(scoped(analysisRunsOfReplication)));
+  const incidents = orEmpty(useLiveQuery(scoped(incidentsOfReplication)));
+  const incidentActions = orEmpty(useLiveQuery(scoped(incidentActionsOfReplication)));
+  const authorshipLists = orEmpty(useLiveQuery(scoped(authorshipListsOfReplication)));
+  const teamMembers = orEmpty(useLiveQuery(scoped(teamMembersOfReplication)));
+  const acknowledgements = orEmpty(useLiveQuery(scoped(acknowledgementsOfReplication)));
+  const deviations = orEmpty(useLiveQuery(scoped(deviationsOfReplication)));
+  const taskLists = orEmpty(useLiveQuery(managesOutputs ? scoped(taskListsOfReplication) : null));
 
   const memberships = useMemo<Live<readonly RecordOf<"replicationMemberships">[]>>(() => {
     if (team) return teamMemberships;
@@ -177,6 +245,20 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
     [allManuscripts, studyKey],
   );
 
+  const milestoneIds = useMemo(
+    () =>
+      ready(manuscripts).flatMap((manuscript) =>
+        Object.values(manuscript.milestoneTaskIds ?? {}).map((id) => [id] as [string]),
+      ),
+    [manuscripts],
+  );
+  const watchedMilestones = useLiveDocumentsAt("tasks", milestoneIds);
+  // No milestone planned is no milestone to read.
+  const milestoneTasks: Live<ReadonlyMap<string, RecordOf<"tasks">>> =
+    watchedMilestones.status === "idle"
+      ? { status: "ready", data: new Map(), fromCache: false, hasPendingWrites: false }
+      : watchedMilestones;
+
   // Only the people the page names are read: the leads, the team and the local leads.
   const names = usePersonNames([
     ...replication.leadPersonIds,
@@ -205,6 +287,19 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
     replication.archivedAt === null &&
     viewer.can("replications.manage", { replicationId: studyKey });
   const aggregatesLive = hasAny(aggregates);
+  const laboratoryNames = new Map(ready(laboratories).map((laboratory) => [laboratory.id, laboratory.name]));
+  const outputContext: OutputContext = {
+    studyKey,
+    readScope: readScope ?? [],
+    uid: viewer.uid,
+    manages: managesOutputs,
+    manuscripts: ready(manuscripts),
+    hypotheses: ready(hypotheses),
+    datasets: ready(datasets),
+    links: ready(links),
+    lists: ready(taskLists),
+    milestones: milestoneTasks.status === "ready" ? milestoneTasks.data : new Map(),
+  };
 
   const tabs: readonly TabSpec[] = [
     {
@@ -268,15 +363,99 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
       live: team && detail.status === "loading" ? { status: "loading" } : hasAny(hypotheses),
       render: () => (
         <HypothesesTab
+          studyKey={studyKey}
           hypotheses={ready(hypotheses)}
           replicatedLabels={team && detail.status === "ready" ? (detail.data?.replicatedSource ?? {}) : null}
+          runs={ready(runs)}
+          manuscripts={ready(manuscripts)}
+          predictionItems={ready(predictionItems)}
+          canRecord={managesOutputs}
+        />
+      ),
+    },
+    // Every replication has a protocol, Registered Reports, analyses, outputs, a decision log and
+    // an incident registry, which say so while they are empty.
+    {
+      id: "protocol",
+      live: combineLive(
+        [protocols, protocolVersions, participations, teamMembers, acknowledgements, deviations, laboratories] as const,
+        () => true,
+      ),
+      render: () => (
+        <ProtocolTab
+          studyKey={studyKey}
+          viewer={viewer}
+          protocols={ready(protocols)}
+          versions={ready(protocolVersions)}
+          participations={ready(participations)}
+          laboratoryNames={laboratoryNames}
+          teamMembers={ready(teamMembers)}
+          acknowledgements={ready(acknowledgements)}
+          deviations={ready(deviations)}
+          persons={ready(persons)}
         />
       ),
     },
     {
-      id: "publications",
-      live: hasAny(manuscripts),
-      render: () => <PublicationsTab manuscripts={ready(manuscripts)} />,
+      id: "reports",
+      live: combineLive([manuscripts, links, taskLists, milestoneTasks] as const, () => true),
+      render: () => <ReportsTab context={outputContext} />,
+    },
+    {
+      id: "analysis",
+      live: combineLive([runs, datasets, hypotheses] as const, () => true),
+      render: () => (
+        <AnalysisTab
+          studyKey={studyKey}
+          viewer={viewer}
+          runs={ready(runs)}
+          datasets={ready(datasets)}
+          hypotheses={ready(hypotheses)}
+        />
+      ),
+    },
+    {
+      id: "outputs",
+      live: combineLive(
+        [manuscripts, links, authorshipLists, contributors, taskLists, milestoneTasks, orEmpty(persons)] as const,
+        () => true,
+      ),
+      render: () => (
+        <OutputsTab
+          context={outputContext}
+          lists={new Map(ready(authorshipLists).map((list) => [list.manuscriptId, list]))}
+          contributors={ready(contributors)}
+          persons={ready(persons)}
+        />
+      ),
+    },
+    {
+      id: "decisions",
+      live: combineLive([decisions, deviations] as const, () => true),
+      render: () => (
+        <DecisionsTab
+          studyKey={studyKey}
+          viewer={viewer}
+          entries={ready(decisions)}
+          deviations={ready(deviations)}
+          laboratoryNames={laboratoryNames}
+        />
+      ),
+    },
+    {
+      id: "incidents",
+      live: combineLive([incidents, incidentActions, participations, deviations, laboratories] as const, () => true),
+      render: () => (
+        <IncidentsTab
+          studyKey={studyKey}
+          viewer={viewer}
+          incidents={ready(incidents)}
+          actions={ready(incidentActions)}
+          participations={ready(participations)}
+          laboratoryNames={laboratoryNames}
+          deviations={ready(deviations)}
+        />
+      ),
     },
     {
       id: "contributors",

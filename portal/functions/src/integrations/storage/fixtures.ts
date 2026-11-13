@@ -28,6 +28,8 @@ export const FAKE_BASE_PATHS = {
 export const FAKE_DATASET_PATHS = {
   alphaAttention: "DemoAlpha2001/attention-main",
   alphaSignal: "DemoAlpha2001/signal-main",
+  /** A second folder on the Munich server, which the browser test of automations registers. */
+  alphaAutomation: "DemoAlpha2001/automation-check",
 } as const;
 
 const MODIFIED = "2026-10-05T14:30:00.000Z";
@@ -91,6 +93,7 @@ export function initialStorageState(): StorageFakeState {
   const attention = syntheticBidsFiles(["01", "02", "03"], "flanker");
   // The Munich copy is incomplete: the third participant's recording has not arrived.
   const signal = syntheticBidsFiles(["01", "02"], "flanker");
+  const automation = syntheticBidsFiles(["01"], "flanker");
   return {
     schema: 1,
     requestTimeoutMs: 2_000,
@@ -104,13 +107,16 @@ export function initialStorageState(): StorageFakeState {
           objectChecksums: false,
         }),
       ),
-      [FAKE_SERVERS.munich]: server(
-        "ftps",
-        tree(`${FAKE_BASE_PATHS.munich}/${FAKE_DATASET_PATHS.alphaSignal}`, signal, {
+      [FAKE_SERVERS.munich]: server("ftps", {
+        ...tree(`${FAKE_BASE_PATHS.munich}/${FAKE_DATASET_PATHS.alphaSignal}`, signal, {
           checksumFile: true,
           objectChecksums: false,
         }),
-      ),
+        ...tree(`${FAKE_BASE_PATHS.munich}/${FAKE_DATASET_PATHS.alphaAutomation}`, automation, {
+          checksumFile: true,
+          objectChecksums: false,
+        }),
+      }),
       [FAKE_SERVERS.central]: server(
         "s3",
         tree(`${FAKE_BASE_PATHS.central}/${FAKE_DATASET_PATHS.alphaAttention}`, attention, {

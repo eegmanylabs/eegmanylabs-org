@@ -19,7 +19,12 @@ const TABS = [
   "Recruitment",
   "Datasets",
   "Hypotheses",
-  "Publications",
+  "Protocol",
+  "Registered Reports",
+  "Analysis",
+  "Outputs",
+  "Decisions",
+  "Incidents",
   "Contributors",
   "Documents",
   "Activity",
@@ -82,7 +87,7 @@ test("the replication page shows each section that has content, with every value
   await expect(first).toContainText("Shown to the team of the replication and to the programme only");
   await expect(first).not.toContainText("partially");
 
-  await page.getByRole("tab", { name: "Publications" }).click();
+  await page.getByRole("tab", { name: "Outputs" }).click();
   await expect(panel).toContainText("In-principle acceptance");
   await expect(panel).toContainText("Journal of Examples");
   await expect(panel).toContainText("2024");
@@ -100,13 +105,19 @@ test("the replication page shows each section that has content, with every value
   await expect(page).toHaveURL(/tab=activity/);
   await reviewPage(page, "replication-activity");
 
-  // A replication with nothing but its overview shows nothing else but its recruitment, tasks, updates and notes,
-  // which every replication has, and says what is unknown.
+  // A replication with nothing but its overview shows nothing else but the sections every replication has,
+  // which say so while they are empty, and says what is unknown.
   await page.goto("./#/replications/DemoDelta2015");
   await expect(page.getByRole("tab")).toHaveText([
     "Overview",
     "Recruitment",
     "Datasets",
+    "Protocol",
+    "Registered Reports",
+    "Analysis",
+    "Outputs",
+    "Decisions",
+    "Incidents",
     "Tasks",
     "Updates",
     "Notes",

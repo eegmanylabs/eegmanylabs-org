@@ -35,6 +35,7 @@ export interface EnqueueRequest {
   readonly kind: SyncJobKind;
   readonly mappingId?: string;
   readonly generatedDocumentId?: string;
+  readonly automationRunId?: string;
   readonly mode: IntegrationMode;
   readonly trigger: SyncRunDoc["trigger"];
   /** The event, the scheduled time or the request that starts the run. With the subject, it names the run. */
@@ -44,8 +45,10 @@ export interface EnqueueRequest {
 }
 
 /** The subject of a run: the mapping, the generated document, or the Drive change feed. */
-export function runSubject(request: Pick<EnqueueRequest, "kind" | "mappingId" | "generatedDocumentId">): string {
-  return request.mappingId ?? request.generatedDocumentId ?? request.kind;
+export function runSubject(
+  request: Pick<EnqueueRequest, "kind" | "mappingId" | "generatedDocumentId" | "automationRunId">,
+): string {
+  return request.mappingId ?? request.generatedDocumentId ?? request.automationRunId ?? request.kind;
 }
 
 /**
@@ -86,6 +89,7 @@ export async function enqueueRun(db: Firestore, request: EnqueueRequest): Promis
     kind: request.kind,
     ...(request.mappingId === undefined ? {} : { mappingId: request.mappingId }),
     ...(request.generatedDocumentId === undefined ? {} : { generatedDocumentId: request.generatedDocumentId }),
+    ...(request.automationRunId === undefined ? {} : { automationRunId: request.automationRunId }),
     mode: request.mode,
     trigger: request.trigger,
     status: "queued",

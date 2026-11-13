@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   AUTO_ID_PATTERN,
   acknowledgementId,
+  automationRunId,
   candidateStudyId,
   capabilityGrantId,
   contributorId,
@@ -42,6 +43,7 @@ import {
   nameFold,
   nestedEntityId,
   notificationId,
+  onboardingListId,
   opaquePersonSlug,
   organisationKey,
   outreachContactId,
@@ -86,6 +88,7 @@ import {
   unitScopeKeys,
   userScopeKey,
   vocabularyTermId,
+  websiteManuscriptId,
 } from "./ids";
 
 const SECRET = "synthetic-secret-for-tests-only-0123456789";
@@ -243,6 +246,7 @@ const GOLDEN: { readonly [Name in IdBuilderName]: readonly [actual: string | nul
   notificationId: [notificationId("mention", "event-1"), "e6decc8170bd9debfd53"],
   mailId: [mailId("synthetic.person@example.org", "claimDecision", "event-1", SECRET), "fe02e91bf82aeebfc6dc"],
   eventFailureId: [eventFailureId("searchIndexer", "0a1b2c3d-event"), "searchIndexer__0a1b2c3d-event"],
+  automationRunId: [automationRunId("qcTaskOnArrival", "event-1"), "c155bc9a8303fd5547a0"],
   searchIndexId: [searchIndexId("page", "replication__AmodioJost2007", 0), "page__replication__AmodioJost2007__000000"],
   scopeDashboardId: [scopeDashboardId("laboratory", "lab__0f3a"), "laboratory__lab__0f3a"],
   inactivityFollowUpTaskId: [
@@ -252,6 +256,8 @@ const GOLDEN: { readonly [Name in IdBuilderName]: readonly [actual: string | nul
   recruitmentFollowUpListId: [recruitmentFollowUpListId("lab__0f3a"), "recruitmentFollowUp__e6274d880e0bed504d50"],
   datasetQcTaskId: [datasetQcTaskId("AmodioJost2007-bremen-main"), "datasetQc__efe1bc3ce24ba653a499"],
   datasetQcListId: [datasetQcListId("AmodioJost2007"), "datasetQcList__8b1eb44b495a600d1a3c"],
+  onboardingListId: [onboardingListId("lab__0f3a"), "onboarding__e6274d880e0bed504d50"],
+  websiteManuscriptId: [websiteManuscriptId("Synthetic2027Stage1"), "web__Synthetic2027Stage1"],
 };
 
 describe("the identifier builders", () => {
@@ -279,12 +285,29 @@ describe("the identifier builders", () => {
       "contributorTableId",
       "contributorId",
       "predictionMarketItemId",
+      "websiteManuscriptId",
     ];
     for (const name of derivedBesideClientRecords) {
       const actual = GOLDEN[name][0] ?? "";
       expect(isAutoId(actual), name).toBe(false);
       expect(actual, name).toContain("__");
     }
+  });
+});
+
+describe("the identifier of a manuscript of the public website", () => {
+  it("is namespaced, so a publication named like an identifier Firestore generates is never one a client can take", () => {
+    // The residual risk of docs/SECURITY.md: a publication identifier of exactly twenty letters
+    // and digits had the shape that the rules let a client choose for a new manuscript.
+    const publication = "AbCdEfGhIjKlMnOpQrSt";
+    expect(isAutoId(publication)).toBe(true);
+    expect(websiteManuscriptId(publication)).toBe("web__AbCdEfGhIjKlMnOpQrSt");
+    expect(isAutoId(websiteManuscriptId(publication))).toBe(false);
+  });
+
+  it("refuses a publication identifier that would break the composite form", () => {
+    expect(() => websiteManuscriptId("")).toThrow(RangeError);
+    expect(() => websiteManuscriptId("two__parts")).toThrow(RangeError);
   });
 });
 

@@ -132,6 +132,20 @@ Measurement of the built public site showed that DM Sans is the only typeface re
 
 A recruitment report is submitted through a callable function that checks the caller's scope, validates every category and count against the configured categories, writes the report, updates the replication's summary and writes the audit entry in one transaction. A change of a replication's status is likewise a callable function that writes the status history entry in the same transaction. Clients can read these records within their scope and can never create, edit or delete them directly, which gives stronger validation than security rules can express and keeps the history complete.
 
+## D-020 The scientific records are append-only and written by callable functions
+
+**Status:** accepted. This refines D-009 and D-019.
+
+Analysis runs, the methodological decision log, incidents and their actions, authorship lists and their entries, and the findings of a hypothesis are written only by callable functions, which check the caller's capability in the scope of the record, validate references to datasets, deviations and manuscripts of the same replication, and write the audit entry in the same transaction. The decision log and the incident registry are append-only: a correction, a replacement, a corrective action or a change of status is a new document that names what it follows, and views read each record as it stands after them. An original statistic or a result of a hypothesis is never stored without its provenance (source, locator, recorder and time), so nothing is presented as a finding that nobody vouched for. Each contributor answers only their own authorship entry, for the revision they read. External services such as OSF are reached through an interface with an in-memory fake; the real adapter is written but unverified until staging.
+
+## D-021 Publishing goes through an allow-list and a pull request, and automations are built-in rules run through the job queue
+
+**Status:** recommended. This applies D-014 to publishing and automation.
+
+An export to the public website reads only the fields named on an allow-list for each output and parses the result with a strict schema, so a field the data model gains later is never published, and a test plants private values and finds none in any file, the pull request or its body. The files are previewed against `main`, built with the site's own Syrinx build in a scratch copy by a person on a trusted machine (`npm run publish:verify`), and approved with a second factor against the hash of the files that were built. The portal then opens a pull request, which deploys the shared staging site, and never merges: a maintainer does, as today. A rollback is proposed as a pull request that restores the previous files. The GitHub adapter is reached only through an interface with an in-memory fake; the real adapter is written and has never been executed.
+
+Automations are five built-in rules defined in code (onboarding checklist, QC task, leads told when a target is met, progress reports and overdue updates), which an administrator switches on or off, limits to a replication or runs on demand. Administrators choose among fixed events and actions and never write a trigger or a script. Each run is a logged document and a job of the existing queue, so retries, backoff and failures follow phase 6. A chain of automations stops at depth 3 and never runs a rule twice in one chain. Email leaves only through the `mail` outbox, behind a sender interface with a fake; no provider exists until decision 7 is taken. Counts of people in an analysis are suppressed below five, and demographic counts are served only by the audited function to holders of a named grant. No AI feature is built, because no model provider has been approved.
+
 ## Decisions needed from the programme administrators
 
 1. Confirm a billing account on the Firebase Blaze plan, with a named owner and budget alerts, and the upgrade to Authentication with Identity Platform.

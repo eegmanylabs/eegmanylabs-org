@@ -400,9 +400,57 @@ export type DatasetViewerLinkDoc = z.output<typeof datasetViewerLinkDocSchema>;
 export const processingRunKindSchema = z.enum(["preprocessing", "analysis", "qualityControl", "other"]);
 export const processingRunStatusSchema = z.enum(["planned", "running", "succeeded", "failed", "cancelled"]);
 
-/** `processingRuns/{id}`: a preprocessing or analysis run, with what it read and what it produced. */
+export const runQcStatusSchema = z.enum(["notAssessed", "passed", "flagged", "failed"]);
+export const reproducibilityStatusSchema = z.enum([
+  "notAttempted",
+  "reproduced",
+  "partiallyReproduced",
+  "notReproduced",
+]);
+export const runOutputKindSchema = z.enum(["statistics", "figure", "table", "derivedData", "report", "other"]);
+
+/** The most inputs and outputs one run records. */
+export const RUN_INPUTS_MAX = 50;
+export const RUN_OUTPUTS_MAX = 100;
+
+/**
+ * One dataset a run read: a dataset of the registry, the copy it was read from, and the listing
+ * of that copy at the time, as numbers. The listing itself stays with the dataset, where only
+ * those who may read paths read it.
+ */
+export const analysisRunInputSchema = z.strictObject({
+  datasetId: keySchema,
+  storageRefId: idSchema.exactOptional(),
+  manifest: z
+    .strictObject({
+      manifestId: idSchema,
+      fileCount: countSchema,
+      totalSizeBytes: countSchema,
+      checksumCount: countSchema,
+      listedAt: timestampSchema,
+    })
+    .exactOptional(),
+});
+export type AnalysisRunInput = z.output<typeof analysisRunInputSchema>;
+
+/** One thing a run produced, where it is kept and its checksum, as the analyst states them. */
+export const analysisRunOutputSchema = z.strictObject({
+  label: shortTextSchema,
+  kind: runOutputKindSchema,
+  uri: urlSchema.exactOptional(),
+  checksum: z.strictObject({ algorithm: z.string().min(1).max(32), value: z.string().min(1).max(256) }).exactOptional(),
+});
+export type AnalysisRunOutput = z.output<typeof analysisRunOutputSchema>;
+
+/**
+ * `processingRuns/{id}`: a preprocessing or analysis run, with what it read and what it
+ * produced, its quality control and whether it has been reproduced. Written through a callable
+ * function, which checks that every dataset, copy and hypothesis it names belongs to its
+ * replication and copies the listing of each copy as it stands.
+ */
 export const processingRunDocSchema = documentBaseSchema.extend({
   kind: processingRunKindSchema,
+  title: shortTextSchema.exactOptional(),
   pipelineName: shortTextSchema,
   codeUrl: urlSchema.exactOptional(),
   codeCommit: z.string().min(1).max(64).exactOptional(),
@@ -413,12 +461,22 @@ export const processingRunDocSchema = documentBaseSchema.extend({
   startedAt: timestampSchema.exactOptional(),
   finishedAt: timestampSchema.exactOptional(),
   runBy: actorSchema.exactOptional(),
+  /** The person of the account in `runBy`, where the account is linked to one, for the provenance export. */
+  runByPersonId: idSchema.exactOptional(),
+  inputs: z.array(analysisRunInputSchema).max(RUN_INPUTS_MAX),
+  /** The datasets of `inputs`, for a query by dataset. */
   inputDatasetIds: idListSchema,
+  outputs: z.array(analysisRunOutputSchema).max(RUN_OUTPUTS_MAX),
   outputDatasetIds: idListSchema,
   /** Hypotheses of `replicationId`. */
   hypothesisIds: idListSchema,
   /** Document links. */
   outputLinkIds: idListSchema,
+  qcStatus: runQcStatusSchema,
+  qcNotes: longTextSchema.exactOptional(),
+  reproducibilityStatus: reproducibilityStatusSchema,
+  /** The earlier run that this one repeats to reproduce it. */
+  reproducesRunId: idSchema.exactOptional(),
   reproducibilityNotes: longTextSchema.exactOptional(),
   ...scopeFieldsShape,
 });

@@ -556,10 +556,10 @@ describe("the largest write of a collection", () => {
       outcomeMeasure: "The amplitude of a component.",
       analysisSpecification: "A linear mixed model.",
       preregistrationUrl: "https://example.org/preregistration",
-      originalStatistics: "t(23) = 2.5",
+      // An original statistic and a result are written with their provenance by a callable
+      // function, never by a client, so the largest client write leaves them out.
       nullSigSource: "sig",
       analysisStatus: "completed",
-      resultSummary: "The synthetic effect was found.",
       studyDescriptionUrl: "https://example.org/study-description",
       infosheetUrl: "https://example.org/information-sheet",
     };
@@ -685,9 +685,6 @@ describe("the largest write of a collection", () => {
           preprintDoi: "10.31234/osf.io/synth",
           osfUrl: "https://example.org/osf/synth",
           authorsShort: "Synthetic et al.",
-          submittedAt: serverTimestamp(),
-          acceptedAt: serverTimestamp(),
-          publishedAt: serverTimestamp(),
           custom: { round: 2 },
           scopeKeys: [REPLICATION_KEY],
         }),

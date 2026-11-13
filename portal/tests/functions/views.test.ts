@@ -18,7 +18,7 @@ import {
   saveViewContract,
   userScopeKey,
 } from "@eegml/shared";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { adminDb } from "../support/admin";
 import {
   account,
@@ -31,16 +31,16 @@ import {
   eventually,
   grantRole,
   laboratory,
-  leaveNoTrace,
   person,
   refusal,
   replication,
   resetWorld,
   standard,
+  withTriggers,
 } from "./support";
 
+withTriggers();
 beforeEach(resetWorld);
-afterAll(leaveNoTrace);
 
 const STUDY = "SyntheticViews2001";
 const LAB = "lab-synthetic-views";

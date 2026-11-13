@@ -20,6 +20,7 @@ import {
 } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { migrateManuscriptIds } from "../../tools/src/commands/migrate-manuscript-ids";
 import { createdFields } from "../../tools/src/import/context";
 import { type WebsiteFixture, websiteFixture, writeWebsiteFixture } from "../../tools/src/import/fixtures/website";
 import { importer as website } from "../../tools/src/import/sources/website-data";
@@ -290,7 +291,7 @@ describe("the website importer on the synthetic fixture", () => {
 
   it("creates a manuscript for each publication, with its links in named slots", async () => {
     await run(website, input(), "apply");
-    const example = await data("manuscripts/Example2023");
+    const example = await data("manuscripts/web__Example2023");
     expect(example).toMatchObject({
       websitePublicationId: "Example2023",
       replicationId: "AlphaBeta2001",
@@ -305,10 +306,10 @@ describe("the website importer on the synthetic fixture", () => {
       scopeKeys: ["rep:AlphaBeta2001"],
     });
     expect(example?.publishedAt.toDate().toISOString()).toBe("2023-12-01T00:00:00.000Z");
-    expect(await data("manuscripts/Sample2024")).toMatchObject({ kind: "stage1Rr", status: "underReview" });
-    expect(await data("manuscripts/Kept2025")).toMatchObject({ kind: "article", status: "published" });
+    expect(await data("manuscripts/web__Sample2024")).toMatchObject({ kind: "stage1Rr", status: "underReview" });
+    expect(await data("manuscripts/web__Kept2025")).toMatchObject({ kind: "article", status: "published" });
     // A programme-level output belongs to no replication.
-    const programme = await data("manuscripts/Programme2022");
+    const programme = await data("manuscripts/web__Programme2022");
     expect(programme).toMatchObject({ kind: "preprint", status: "published", scopeKeys: ["programme"] });
     expect(programme).not.toHaveProperty("replicationId");
     expect(
@@ -317,17 +318,17 @@ describe("the website importer on the synthetic fixture", () => {
       ),
     ).toMatchObject({
       entityType: "manuscript",
-      entityId: "Kept2025",
+      entityId: "web__Kept2025",
     });
 
     const links = await documentsOf("documentLinks");
     const slot = (owner: string, name: string) => links.get(documentLinkSlotId(owner, name));
-    expect([...links.keys()].filter((id) => id.startsWith("manuscript__Example2023__")).sort()).toEqual(
-      ["code", "data", "data2", "osf", "pdf", "url"].map((name) => `manuscript__Example2023__${name}`),
+    expect([...links.keys()].filter((id) => id.startsWith("manuscript__web__Example2023__")).sort()).toEqual(
+      ["code", "data", "data2", "osf", "pdf", "url"].map((name) => `manuscript__web__Example2023__${name}`),
     );
-    expect(slot("manuscript__Example2023", "pdf")).toMatchObject({
+    expect(slot("manuscript__web__Example2023", "pdf")).toMatchObject({
       entityType: "manuscript",
-      entityId: "Example2023",
+      entityId: "web__Example2023",
       url: "https://eegmanylabs.org/assets/pdfs/Example2023.pdf",
       kind: "pdf",
       replicationId: "AlphaBeta2001",
@@ -410,7 +411,7 @@ describe("the website importer on the synthetic fixture", () => {
     expect(links.join()).toContain("Gone2022");
     expect(links.join()).toContain("Kept2025");
     // The manuscript keeps what its own row says, and the study's cell stays in its source record.
-    expect((await data("manuscripts/Kept2025"))?.replicationId).toBe("Delta1999");
+    expect((await data("manuscripts/web__Kept2025"))?.replicationId).toBe("Delta1999");
     // A publication row that contradicts itself.
     expect(about("valueConflict", "publicationYear").join()).toContain("Kept2025");
     expect(about("valueConflict", "authorsShort").join()).toContain("Madeup2021");
@@ -472,7 +473,7 @@ describe("the website importer on the synthetic fixture", () => {
     const report = await run(website, source, "apply");
     expect(report.tabs.map((tab) => tab.tabKey)).toEqual(["replications", "publications", "people", "members"]);
     expect(report.tabs.at(-1)?.rows).toMatchObject({ data: 7, blank: 1 });
-    expect((await documentsOf("documentLinks")).has("manuscript__Example2023__pdf")).toBe(false);
+    expect((await documentsOf("documentLinks")).has("manuscript__web__Example2023__pdf")).toBe(false);
   });
 });
 
@@ -537,6 +538,42 @@ describe("the website importer when the files change", () => {
     expect((await documentsOf("replications")).size).toBe(0);
   });
 
+  it("writes a manuscript only at its namespaced identifier, and moves one of an earlier import first", async () => {
+    await run(website, input(), "apply");
+    // An earlier import wrote the manuscript at the bare publication identifier, with a link in
+    // a named slot of that owner. The regression of docs/SECURITY.md: a client could take an
+    // identifier of that form before the importer wrote it.
+    const moved = adminDb.doc("manuscripts/web__Example2023");
+    const original = (await moved.get()).data() ?? {};
+    const pdfLink = adminDb.doc("documentLinks/manuscript__web__Example2023__pdf");
+    const linkData = (await pdfLink.get()).data() ?? {};
+    await adminDb.doc("manuscripts/Example2023").set(original);
+    await adminDb.doc("documentLinks/manuscript__Example2023__pdf").set({ ...linkData, entityId: "Example2023" });
+    await moved.delete();
+    await pdfLink.delete();
+
+    await expect(run(website, input(), "apply")).rejects.toThrow(/migrate:manuscript-ids/);
+
+    const dryRun = await migrateManuscriptIds(adminDb, { apply: false });
+    expect(dryRun.moved).toEqual(["Example2023 -> web__Example2023"]);
+    expect((await documentsOf("manuscripts")).has("Example2023")).toBe(true);
+
+    const applied = await migrateManuscriptIds(adminDb, { apply: true });
+    expect(applied.moved).toEqual(["Example2023 -> web__Example2023"]);
+    const manuscripts = await documentsOf("manuscripts");
+    expect(manuscripts.has("Example2023")).toBe(false);
+    expect(manuscripts.get("web__Example2023")).toMatchObject({ websitePublicationId: "Example2023" });
+    const links = await documentsOf("documentLinks");
+    expect(links.has("manuscript__Example2023__pdf")).toBe(false);
+    expect(links.get("manuscript__web__Example2023__pdf")).toMatchObject({ entityId: "web__Example2023" });
+    // A second run finds nothing to move, and the import runs again without a second manuscript.
+    expect(await migrateManuscriptIds(adminDb, { apply: true })).toEqual({ moved: [], refused: [], rewritten: 0 });
+    await run(website, input(), "apply");
+    expect([...(await documentsOf("manuscripts")).keys()].filter((id) => id.endsWith("Example2023"))).toEqual([
+      "web__Example2023",
+    ]);
+  });
+
   it("creates no second manuscript when a publication identifier is renamed, and asks a reviewer", async () => {
     await run(website, input(), "apply");
     const renamed = input((fixture) => {
@@ -544,11 +581,11 @@ describe("the website importer when the files change", () => {
     });
     const report = await run(website, renamed, "apply");
     expect([...(await documentsOf("manuscripts")).keys()].sort()).toEqual([
-      "Example2023",
-      "Kept2025",
-      "Madeup2021",
-      "Programme2022",
-      "Sample2024",
+      "web__Example2023",
+      "web__Kept2025",
+      "web__Madeup2021",
+      "web__Programme2022",
+      "web__Sample2024",
     ]);
     expect(report.tabs.find((tab) => tab.tabKey === "publications")).toMatchObject({ imported: 4, queued: 1 });
     // The two rows differ in their identifier alone, so one item names both, and the manuscript of the earlier row.
@@ -570,7 +607,7 @@ describe("the website importer when the files change", () => {
       sample.StatusText = "Stage 1 accepted";
     });
     const report = await run(website, renamed, "apply");
-    expect((await documentsOf("manuscripts")).has("Sample2025")).toBe(false);
+    expect((await documentsOf("manuscripts")).has("web__Sample2025")).toBe(false);
     expect(report.tabs.find((tab) => tab.tabKey === "publications")).toMatchObject({ imported: 4, queued: 1 });
     // More than the identifier differs, so the importer itself recognises the manuscript and names the new identifier.
     const renames = (await reconciliationItems()).filter((item) => item.kind === "missingFromSource");
@@ -589,7 +626,7 @@ describe("the website importer when the files change", () => {
       row(fixture.publications, "PublicationId", "Sample2024").StatusText = "Stage 1 accepted";
     });
     const report = await run(website, accepted, "apply");
-    expect((await data("manuscripts/Sample2024"))?.status).toBe("underReview");
+    expect((await data("manuscripts/web__Sample2024"))?.status).toBe("underReview");
     expect(report.items.raise).toMatchObject({ statusQuestion: 1 });
     const [item] = (await reconciliationItems()).filter((candidate) => candidate.kind === "statusQuestion");
     expect(item?.candidates.map((candidate: { valueSource: string }) => candidate.valueSource)).toEqual([
@@ -606,7 +643,7 @@ describe("the website importer when the files change", () => {
       }),
       "apply",
     );
-    expect((await documentsOf("manuscripts")).has("Programme2022")).toBe(false);
+    expect((await documentsOf("manuscripts")).has("web__Programme2022")).toBe(false);
     expect(report.tabs.find((tab) => tab.tabKey === "publications")).toMatchObject({ imported: 4, queued: 1 });
     expect((await itemCounts()).vocabularyReview).toBe(5);
   });

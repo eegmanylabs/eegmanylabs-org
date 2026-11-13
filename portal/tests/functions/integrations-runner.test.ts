@@ -18,7 +18,7 @@ import {
   syncRunDocSchema,
 } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   FAKE_FILES,
   FAKE_TEMPLATES,
@@ -29,7 +29,6 @@ import { receiveDriveNotification } from "../../functions/src/integrations/jobs/
 import { renewDriveChannel } from "../../functions/src/integrations/jobs/runner";
 import { DEMO_DOCUMENT_TEMPLATES, DEMO_SYNC_SOURCES, DEMO_WORKSPACE } from "../../tools/src/fixtures/demo-world";
 import { adminDb } from "../support/admin";
-import { setBackgroundTriggers } from "../support/emulators";
 import {
   DIRECTORY_MAPPING,
   EQUIPMENT_MAPPING,
@@ -40,7 +39,7 @@ import {
   TestClock,
   workspaceFake,
 } from "./integrations-world";
-import { auditOf, leaveNoTrace, replication, resetWorld, standard } from "./support";
+import { auditOf, replication, resetWorld, standard, withoutTriggers } from "./support";
 
 const DIRECTORY = FAKE_FILES.laboratoryDirectory;
 const REGISTER = FAKE_FILES.equipmentRegister;
@@ -51,9 +50,7 @@ const NOTES = 4;
 // Columns of the register: key, laboratory, configuration, channels, rates, cap, formula, notes.
 const CHANNELS = 3;
 
-beforeAll(async () => {
-  await setBackgroundTriggers(false);
-});
+withoutTriggers();
 
 beforeEach(async () => {
   await resetWorld();
@@ -63,7 +60,6 @@ beforeEach(async () => {
 
 afterAll(async () => {
   resetWorkspace();
-  await leaveNoTrace();
 });
 
 async function laboratory(id: string) {

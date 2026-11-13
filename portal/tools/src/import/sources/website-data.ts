@@ -31,8 +31,10 @@ import {
   replicationMembershipId,
   replicationScopeKey,
   shortHash,
+  websiteManuscriptId,
 } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
+import { ToolRefusal } from "../../environment";
 import { personEvidence } from "../identity";
 import type {
   ImporterDefinition,
@@ -383,7 +385,9 @@ interface StoredManuscript {
 const person = (personId: string) => ({ entityType: "person", entityId: personId }) as const satisfies EntityRef;
 const replication = (studyId: string) =>
   ({ entityType: "replication", entityId: studyId }) as const satisfies EntityRef;
-const manuscript = (id: string) => ({ entityType: "manuscript", entityId: id }) as const satisfies EntityRef;
+/** The manuscript of a publication of the website, by its publication identifier. */
+const manuscript = (publicationId: string) =>
+  ({ entityType: "manuscript", entityId: websiteManuscriptId(publicationId) }) as const satisfies EntityRef;
 
 /** The folded words of a name: the first and the last are compared, and nothing in between. */
 const nameWords = (name: string): string[] =>
@@ -1060,15 +1064,26 @@ class WebsitePlan {
     const { db } = this.#context;
     const rows = this.#rows("publications");
     for (const row of rows) this.#publicationIds.add(cellText(row, "PublicationId") ?? "");
-    const stored: StoredManuscript[] = (await db.collection(COLLECTIONS.manuscripts.collectionPath()).get()).docs
-      .filter((doc) => typeof doc.get("websitePublicationId") === "string")
-      .map((doc) => ({
-        id: doc.id,
-        replicationId: (doc.get("replicationId") as string | undefined) ?? null,
-        doi: typeof doc.get("doi") === "string" ? doiKey(doc.get("doi") as string) : null,
-        kind: String(doc.get("kind")),
-        status: String(doc.get("status")),
-      }));
+    const imported = (await db.collection(COLLECTIONS.manuscripts.collectionPath()).get()).docs.filter(
+      (doc) => typeof doc.get("websitePublicationId") === "string",
+    );
+    // A manuscript that an earlier import wrote under the bare publication identifier is moved by
+    // `migrate:manuscript-ids` first, so the import never writes a second document beside it.
+    const unmigrated = imported.filter(
+      (doc) => doc.id !== websiteManuscriptId(String(doc.get("websitePublicationId"))),
+    );
+    if (unmigrated.length > 0) {
+      throw new ToolRefusal(
+        `${unmigrated.length} manuscript(s) of the website still have the identifier of an earlier import. Run migrate:manuscript-ids, then import again.`,
+      );
+    }
+    const stored: StoredManuscript[] = imported.map((doc) => ({
+      id: String(doc.get("websitePublicationId")),
+      replicationId: (doc.get("replicationId") as string | undefined) ?? null,
+      doi: typeof doc.get("doi") === "string" ? doiKey(doc.get("doi") as string) : null,
+      kind: String(doc.get("kind")),
+      status: String(doc.get("status")),
+    }));
     const dois = new Map<string, number>();
     for (const row of rows) {
       const key = doiKey(cellText(row, "DOI") ?? "");
@@ -1197,7 +1212,7 @@ class WebsitePlan {
 
     builder.document({
       collection: "manuscripts",
-      ids: [id],
+      ids: [websiteManuscriptId(id)],
       fixed: {
         websitePublicationId: id,
         kind: reading.kind,

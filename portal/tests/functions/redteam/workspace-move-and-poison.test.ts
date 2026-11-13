@@ -21,7 +21,7 @@ import {
   userWriteContext,
 } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import * as Y from "yjs";
 import { adminDb } from "../../support/admin";
 import {
@@ -30,15 +30,15 @@ import {
   call,
   codeOf,
   eventually,
-  leaveNoTrace,
   notificationsOf,
   person,
   resetWorld,
   settle,
+  withTriggers,
 } from "../support";
 
+withTriggers();
 beforeEach(resetWorld);
-afterAll(leaveNoTrace);
 
 async function member(uid: string, name: string): Promise<Caller> {
   const personId = `person-${uid}`;

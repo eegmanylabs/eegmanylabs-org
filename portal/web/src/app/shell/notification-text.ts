@@ -1,8 +1,8 @@
 // What a notification says, and where it leads, from its type and its payload. A notification
 // leads only to a page that exists. Pure, so that it is tested by itself.
-import type { Role } from "@eegml/shared";
+import { type EntityType, entityTypeSchema, type Role } from "@eegml/shared";
 import { ROLE_LABELS } from "@/app/labels";
-import { pagePath, participationRecruitmentPath } from "@/registry/paths";
+import { recordPath as pageOfRecord, pagePath, participationRecruitmentPath, replicationPath } from "@/registry/paths";
 
 export interface NotificationText {
   readonly title: string;
@@ -161,6 +161,81 @@ export function describeNotification(payload: Payload): NotificationText {
         to: participationId === null ? null : participationRecruitmentPath(participationId),
       };
     }
+    case "integrationFailed":
+      return {
+        title: text(payload.message) ?? "An integration failed",
+        detail:
+          payload.system === "github"
+            ? "Publishing to the website"
+            : payload.system === "mail"
+              ? "The mail outbox"
+              : "Automations",
+        to:
+          payload.system === "github"
+            ? "/admin/publishing"
+            : payload.system === "automation"
+              ? "/admin/automations"
+              : "/admin/integrations",
+      };
+    case "followedRecordChanged": {
+      const entityId = text(payload.entityId);
+      const parsed = entityTypeSchema.safeParse(payload.entityType);
+      const entityType: EntityType | null = parsed.success ? parsed.data : null;
+      return {
+        title: "Something you follow changed",
+        detail: text(payload.title),
+        to:
+          entityId === null || entityType === null
+            ? null
+            : entityType === "task"
+              ? `/tasks?task=${encodeURIComponent(entityId)}`
+              : pageOfRecord(entityType, entityId),
+      };
+    }
+    case "protocolUpdated":
+      return {
+        title: "A protocol was updated",
+        detail:
+          typeof payload.replicationId === "string"
+            ? `${payload.replicationId}: ${text(payload.title)} approved`
+            : `${text(payload.title)} approved`,
+        to: text(payload.to),
+      };
+    case "manuscriptMilestone":
+      return {
+        title:
+          payload.status === "published"
+            ? "An output was published"
+            : payload.status === "accepted"
+              ? "An output was accepted"
+              : "An output received in-principle acceptance",
+        detail: text(payload.title),
+        to: text(payload.to),
+      };
+    case "recruitmentTargetMet":
+      return {
+        title: "A replication reached its recruitment target",
+        detail: text(payload.title),
+        to: text(payload.replicationId) === null ? null : replicationPath(String(payload.replicationId)),
+      };
+    case "datasetArrived":
+      return {
+        title: "The data of a dataset arrived",
+        detail: text(payload.datasetId),
+        to: text(payload.datasetId) === null ? null : `/datasets/${encodeURIComponent(String(payload.datasetId))}`,
+      };
+    case "onboardingChecklistCreated":
+      return {
+        title: "The onboarding checklist of your laboratory was created",
+        detail: text(payload.title),
+        to: "/tasks",
+      };
+    case "scheduledReportQueued":
+      return {
+        title: "A scheduled progress report is being updated",
+        detail: text(payload.title),
+        to: text(payload.to),
+      };
     case "storageUnreachable":
       return {
         title: "A storage server did not answer",

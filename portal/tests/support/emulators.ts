@@ -14,7 +14,7 @@ export const FIRESTORE_URL = `http://${HOST}:${PORTS.firestore}`;
 export const FUNCTIONS_URL = `http://${HOST}:${PORTS.functions}`;
 export const STORAGE_URL = `http://${HOST}:${PORTS.storage}`;
 
-const HUB_URL = `http://${HOST}:${PORTS.hub}`;
+export const HUB_URL = `http://${HOST}:${PORTS.hub}`;
 
 /** The status of a clear that found a transaction in progress: a trigger that is still writing, for example. */
 const CONFLICT = 409;
@@ -46,12 +46,14 @@ export async function clearFirestore(projectId: string = PROJECT_ID): Promise<vo
  * Switches the Firestore triggers of the functions emulator off or on, through the emulator
  * hub. Switching them off first waits for the trigger work that is queued, so it is also the
  * way to wait for the triggers to finish. Returns false when the functions emulator is not
- * running, in which case there are no triggers to switch.
+ * running, in which case there are no triggers to switch, and when the hub does not answer within
+ * `timeoutMs`.
  */
-export async function setBackgroundTriggers(enabled: boolean): Promise<boolean> {
+export async function setBackgroundTriggers(enabled: boolean, timeoutMs = 120_000): Promise<boolean> {
   const action = enabled ? "enableBackgroundTriggers" : "disableBackgroundTriggers";
   try {
-    return (await fetch(`${HUB_URL}/functions/${action}`, { method: "PUT" })).ok;
+    return (await fetch(`${HUB_URL}/functions/${action}`, { method: "PUT", signal: AbortSignal.timeout(timeoutMs) }))
+      .ok;
   } catch {
     return false;
   }

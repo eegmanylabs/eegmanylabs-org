@@ -83,14 +83,14 @@ function LocationDialog({ datasetKey, refId, onClose }: { datasetKey: string; re
                 {location.endpointName} ({PROTOCOL_LABELS[location.protocol]})
               </dd>
               <dt className="text-fg-secondary">Host</dt>
-              <dd className="break-all font-mono">
+              <dd className="break-all tabular-nums">
                 {location.host ?? <Unknown />}
                 {location.port === null ? "" : `:${location.port}`}
               </dd>
               <dt className="text-fg-secondary">Base path</dt>
-              <dd className="break-all font-mono">{location.basePath ?? <Unknown>None</Unknown>}</dd>
+              <dd className="break-all tabular-nums">{location.basePath ?? <Unknown>None</Unknown>}</dd>
               <dt className="text-fg-secondary">Path of the copy</dt>
-              <dd className="break-all font-mono">{location.uri}</dd>
+              <dd className="break-all tabular-nums">{location.uri}</dd>
             </dl>
           )}
         </div>

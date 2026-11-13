@@ -451,7 +451,8 @@ service cloud.firestore {
         'databaseRow', 'view', 'dashboard', 'storageEndpoint', 'dataset', 'processingRun', 'manuscript',
         'contributorTable', 'contributor', 'decision', 'risk', 'incident', 'meeting', 'progressReport',
         'documentLink', 'source', 'importBatch', 'integrationConnection', 'syncMapping', 'syncRun', 'syncConflict',
-        'syncReviewItem', 'documentTemplate', 'generatedDocument'
+        'syncReviewItem', 'documentTemplate', 'generatedDocument', 'publicationBatch', 'automationRule',
+        'scheduledReport'
       ];
     }
 
@@ -590,6 +591,35 @@ service cloud.firestore {
           && updatedNow(incoming(), stampFields().concat(userSubscriptionsEditable()), userSubscriptionsRequired())
           && incoming().uid == uid
           && incoming().level in ['all', 'mentions', 'none'];
+        allow delete: if isMember() && request.auth.uid == uid;
+      }
+
+      // A search the user keeps, with its filters. The kinds are a fixed list and the replication
+      // a reference that nobody but the user reads, so no other document is consulted.
+      // Reads: 1 (access).
+      match /savedSearches/{searchId} {
+        function userSavedSearchesFields() { return ['uid', 'name', 'query', 'kinds', 'replicationId']; }
+        function userSavedSearchesRequired() { return ['uid', 'name', 'query', 'kinds', 'replicationId']; }
+        function userSavedSearchesEditable() { return ['uid', 'name', 'query', 'kinds']; }
+
+        // SEARCH_RESULT_KINDS of portal/shared/src/schemas/identity.ts.
+        function validSavedSearch(d) {
+          return d.uid == uid
+            && d.name.matches('(?s)^.{1,100}$')
+            && d.query.matches('(?s)^.{1,200}$')
+            && d.kinds is list
+            && d.kinds.size() <= 4
+            && d.kinds.hasOnly(['record', 'page', 'comment', 'document'])
+            && (d.replicationId == null || docId(d.replicationId));
+        }
+
+        allow read: if isOwner(uid) && boundedRead();
+        allow create: if isMember() && request.auth.uid == uid && autoId(searchId)
+          && createdNow(incoming(), userSavedSearchesFields(), userSavedSearchesRequired())
+          && validSavedSearch(incoming());
+        allow update: if isMember() && request.auth.uid == uid
+          && updatedNow(incoming(), stampFields().concat(userSavedSearchesEditable()), userSavedSearchesRequired())
+          && validSavedSearch(incoming());
         allow delete: if isMember() && request.auth.uid == uid;
       }
 
@@ -1381,9 +1411,15 @@ service cloud.firestore {
         function replicationHypothesesFields() {
           return [
             'replicationId', 'hypothesisNumber', 'text', 'expectedEffect', 'outcomeMeasure', 'analysisSpecification',
-            'preregistrationUrl', 'originalStatistics', 'nullSigSource', 'scientificReviewStatus', 'analysisStatus',
-            'resultSummary', 'resultReviewedBy', 'resultReviewedAt', 'studyDescriptionUrl', 'infosheetUrl'
+            'preregistrationUrl', 'originalStatistics', 'originalStatisticsProvenance', 'nullSigSource',
+            'scientificReviewStatus', 'analysisStatus', 'resultSummary', 'resultProvenance', 'resultReviewedBy',
+            'resultReviewedAt', 'studyDescriptionUrl', 'infosheetUrl'
           ];
+        }
+        // An original statistic and a result, each with its provenance, which a callable
+        // function writes together so that neither is ever stored without the other.
+        function findingsWithProvenance() {
+          return ['originalStatistics', 'originalStatisticsProvenance', 'resultSummary', 'resultProvenance'];
         }
         function replicationHypothesesRequired() {
           return [
@@ -1394,15 +1430,14 @@ service cloud.firestore {
         function replicationHypothesesEditable() {
           return [
             'text', 'expectedEffect', 'outcomeMeasure', 'analysisSpecification', 'preregistrationUrl',
-            'originalStatistics', 'nullSigSource', 'scientificReviewStatus', 'analysisStatus', 'resultSummary',
-            'resultReviewedBy', 'resultReviewedAt', 'studyDescriptionUrl', 'infosheetUrl'
+            'nullSigSource', 'scientificReviewStatus', 'analysisStatus', 'resultReviewedBy', 'resultReviewedAt',
+            'studyDescriptionUrl', 'infosheetUrl'
           ];
         }
         function replicationHypothesesEditableByReplicationLead() {
           return [
             'text', 'expectedEffect', 'outcomeMeasure', 'analysisSpecification', 'preregistrationUrl',
-            'originalStatistics', 'nullSigSource', 'analysisStatus', 'resultSummary', 'studyDescriptionUrl',
-            'infosheetUrl', 'archivedAt'
+            'nullSigSource', 'analysisStatus', 'studyDescriptionUrl', 'infosheetUrl', 'archivedAt'
           ];
         }
         function replicationHypothesesVerbatim() { return ['nullSigSource']; }
@@ -1457,6 +1492,7 @@ service cloud.firestore {
               && incoming().resultReviewedBy == null
               && incoming().resultReviewedAt == null))
           && createdNow(incoming(), replicationHypothesesFields(), replicationHypothesesRequired())
+          && !incoming().keys().hasAny(findingsWithProvenance())
           && incoming().replicationId == studyKey
           && hypothesisId.matches('^h(0[1-9]|[1-9][0-9])$')
           && incoming().hypothesisNumber == (hypothesisId[1:2] == '0' ? hypothesisId[2:3] : hypothesisId[1:3])
@@ -2989,7 +3025,46 @@ service cloud.firestore {
       allow read: if isMember() && canForDataset('datasetsPathsRead', resource.data) && boundedRead();
     }
 
+    // A preprocessing or analysis run, written through a callable function, which checks every
+    // dataset, copy and hypothesis it names against its replication.
+    // Reads: 1 (access).
+    match /processingRuns/{runId} {
+      allow read: if isMember() && (core() || withinUnit(resource.data)) && boundedRead();
+    }
+
     // ===== Scientific outputs and governance (section 11) =====
+
+    // The methodological decision log, which every member reads. It is append-only: a callable
+    // function writes each entry, and a correction is a new entry.
+    // Reads: 1 (access).
+    match /decisions/{decisionId} {
+      allow read: if isMember() && boundedRead();
+    }
+
+    // The incident registry of a replication or a laboratory and what follows each report,
+    // append-only and written through callable functions.
+    // Reads: 1 (access).
+    match /incidents/{incidentId} {
+      allow read: if isMember() && (core() || withinUnit(resource.data)) && boundedRead();
+    }
+
+    // Reads: 1 (access).
+    match /{path=**}/actions/{actionId} {
+      allow read: if isMember() && (core() || withinUnit(resource.data)) && boundedRead();
+    }
+
+    // The authorship list of a manuscript and its entries, which the leads prepare and the people
+    // on it answer, through callable functions. A person outside the scope reads their own entry
+    // through a callable function too.
+    // Reads: 1 (access).
+    match /authorshipLists/{manuscriptId} {
+      allow read: if isMember() && (core() || withinUnit(resource.data)) && boundedRead();
+    }
+
+    // Reads: 1 (access).
+    match /{path=**}/entries/{personId} {
+      allow read: if isMember() && (core() || withinUnit(resource.data)) && boundedRead();
+    }
 
     // The scope fields of an output that names a replication are that replication's key, and
     // the replication exists. An output of the programme as a whole carries none.
@@ -3006,20 +3081,26 @@ service cloud.firestore {
         return [
           'replicationId', 'websitePublicationId', 'title', 'kind', 'status', 'statusHistoryId', 'journal', 'doi',
           'preprintDoi', 'osfUrl', 'authorsShort', 'submittedAt', 'acceptedAt', 'publishedAt', 'citationStatus',
-          'citationMetadata', 'custom', 'scopeKeys'
+          'citationMetadata', 'stage1ManuscriptId', 'hypothesisIds', 'datasetIds', 'repositoryUrl', 'outputVersion',
+          'milestoneTaskIds', 'custom', 'scopeKeys'
         ];
+      }
+      // The references to other records and the milestone tasks, which a callable function
+      // checks against the replication and writes.
+      function checkedReferences() {
+        return ['stage1ManuscriptId', 'hypothesisIds', 'datasetIds', 'repositoryUrl', 'outputVersion', 'milestoneTaskIds'];
       }
       function manuscriptsRequired() { return ['title', 'kind', 'status', 'statusHistoryId', 'custom', 'scopeKeys']; }
+      // The dates of submission, acceptance and publication change only with the status, through
+      // `recordManuscriptEvent`, so no output carries a date its status does not support.
       function manuscriptsEditable() {
-        return [
-          'title', 'kind', 'journal', 'doi', 'preprintDoi', 'osfUrl', 'authorsShort', 'submittedAt', 'acceptedAt',
-          'publishedAt', 'custom'
-        ];
+        return ['title', 'kind', 'journal', 'doi', 'preprintDoi', 'osfUrl', 'authorsShort', 'custom'];
       }
+      function manuscriptsDatedByEvents() { return ['submittedAt', 'acceptedAt', 'publishedAt']; }
 
       function validManuscript(d) {
         return d.title.matches('(?s)^.{1,1000}$')
-          && d.kind in ['stage1Rr', 'stage2Rr', 'preprint', 'article', 'dataPaper', 'software', 'other']
+          && d.kind in ['stage1Rr', 'stage2Rr', 'preprint', 'article', 'dataPaper', 'software', 'dataset', 'other']
           && shortText(d.get('journal', 'x'))
           && doi(d.get('doi', '10.1000/x'))
           && doi(d.get('preprintDoi', '10.1000/x'))
@@ -3040,6 +3121,8 @@ service cloud.firestore {
         && incoming().status == 'planned'
         && incoming().statusHistoryId == null
         && !incoming().keys().hasAny(['websitePublicationId', 'citationStatus', 'citationMetadata'])
+        && !incoming().keys().hasAny(checkedReferences())
+        && !incoming().keys().hasAny(manuscriptsDatedByEvents())
         && validManuscript(incoming());
       // A citation that has been checked describes the manuscript as it was checked, so what
       // the check covers stays as it is while the check says anything but unverified.
@@ -3262,7 +3345,8 @@ service cloud.firestore {
       function documentLinksFields() {
         return [
           'entityType', 'entityId', 'kind', 'url', 'externalId', 'title', 'accessStatus', 'httpStatus',
-          'lastCheckedAt', 'ownerName', 'modifiedAt', 'restricted', 'replicationId', 'laboratoryId', 'scopeKeys'
+          'lastCheckedAt', 'ownerName', 'modifiedAt', 'withdrawnAt', 'restricted', 'replicationId', 'laboratoryId',
+          'scopeKeys'
         ];
       }
       function documentLinksRequired() {
@@ -3352,7 +3436,7 @@ service cloud.firestore {
         && createdNow(incoming(), documentLinksFields(), documentLinksRequired())
         && incoming().accessStatus == 'unknown'
         && incoming().lastCheckedAt == null
-        && !incoming().keys().hasAny(['httpStatus', 'ownerName', 'modifiedAt'])
+        && !incoming().keys().hasAny(['httpStatus', 'ownerName', 'modifiedAt', 'withdrawnAt'])
         && validLink(incoming());
       // The target and the audience of a link never change through a client.
       allow update: if isMember()
@@ -3462,6 +3546,18 @@ service cloud.firestore {
       allow read: if isMember() && canForProgramme('integrationsManage') && boundedRead();
     }
 
+    // The publishing log and the files of each export: read by whoever prepares exports, and
+    // written by the publishing functions alone.
+    // Reads: 1 (access).
+    match /publicationBatches/{batchId} {
+      allow read: if isMember() && canForProgramme('publishingPrepare') && boundedRead();
+    }
+
+    // Reads: 1 (access).
+    match /{path=**}/files/{fileKey} {
+      allow read: if isMember() && canForProgramme('publishingPrepare') && boundedRead();
+    }
+
     // A generated document is read as the record it was generated for, whose audience it copies.
     // Reads: 1 (access).
     match /generatedDocuments/{documentId} {
@@ -3478,6 +3574,29 @@ service cloud.firestore {
     // Reads: 1 (access).
     match /activity/{eventId} {
       allow read: if isMember() && (core() || holdsScopeOf(resource.data)) && boundedRead();
+    }
+
+    // Automation rules, their runs, the events a consumer could not handle and scheduled reports:
+    // read by whoever manages automations, and written by trusted code alone, since a rule's
+    // conditions and actions are lists of maps that no rule can check element by element.
+    // Reads: 1 (access).
+    match /automationRules/{ruleId} {
+      allow read: if isMember() && canForProgramme('automationsManage') && boundedRead();
+    }
+
+    // Reads: 1 (access).
+    match /automationRuns/{runId} {
+      allow read: if isMember() && canForProgramme('automationsManage') && boundedRead();
+    }
+
+    // Reads: 1 (access).
+    match /eventFailures/{failureId} {
+      allow read: if isMember() && canForProgramme('automationsManage') && boundedRead();
+    }
+
+    // Reads: 1 (access).
+    match /scheduledReports/{reportId} {
+      allow read: if isMember() && canForProgramme('automationsManage') && boundedRead();
     }
 
     // Reads: 1 (access).

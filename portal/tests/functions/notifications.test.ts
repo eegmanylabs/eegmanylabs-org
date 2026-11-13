@@ -24,17 +24,17 @@ import {
   administrator,
   call,
   laboratory,
-  leaveNoTrace,
   notificationsOf,
   resetWorld,
+  withoutTriggers,
 } from "./support";
 
 const clients: TestClient[] = [];
 
+withoutTriggers();
 beforeEach(resetWorld);
 
 afterAll(async () => {
-  await leaveNoTrace();
   await Promise.all(clients.map((client) => client.close()));
 });
 

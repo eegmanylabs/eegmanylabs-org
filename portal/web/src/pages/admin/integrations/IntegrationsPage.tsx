@@ -768,7 +768,9 @@ function Console() {
             ? (mappingNames.get(run.mappingId) ?? run.mappingId)
             : run.generatedDocumentId !== undefined
               ? (documentNames.get(run.generatedDocumentId) ?? run.generatedDocumentId)
-              : "Google Drive";
+              : run.automationRunId !== undefined
+                ? `Run ${run.automationRunId}`
+                : "Google Drive";
         return (
           <Tabs value={tab} onValueChange={(value) => show(value as TabId)}>
             <HorizontalScroll>

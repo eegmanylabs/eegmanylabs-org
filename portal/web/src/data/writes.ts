@@ -2,11 +2,14 @@
 // fields the rules allow, with the caller as its author and the server's time as its instant.
 // Everything else that changes state goes through a callable function.
 import {
+  acknowledgementId,
   COLLECTIONS,
+  type CollectionKey,
   correctableFieldSchema,
   type EntityType,
   entityRefId,
   lookupFold,
+  MEMBERS_SCOPE_KEY,
   tagId,
   unitScopeKeys,
   userWriteContext,
@@ -19,6 +22,7 @@ import {
   runTransaction,
   serverTimestamp,
   setDoc,
+  Timestamp,
   updateDoc,
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -299,7 +303,7 @@ export async function updateDatabaseFields(
 }
 
 /** The standard fields of a document that the signed-in account creates directly. */
-const created = (key: "tags" | "userSubscriptions", uid: string) => ({
+const created = (key: CollectionKey, uid: string) => ({
   schemaVersion: COLLECTIONS[key].schemaVersion,
   createdAt: serverTimestamp(),
   updatedAt: serverTimestamp(),
@@ -396,4 +400,308 @@ export async function updatePlannedPause(
     ...(patch.archive === true ? { archivedAt: serverTimestamp() } : {}),
     ...touched(uid),
   });
+}
+
+// ----- Protocols, acknowledgements, deviations and links of the scientific workflows -----
+
+/**
+ * Creates a protocol of a replication, which has no version yet. The security rules accept it
+ * from those who hold `replications.manage` for the replication.
+ */
+export async function createProtocol(
+  uid: string,
+  studyKey: string,
+  input: { readonly title: string; readonly description: string | null },
+): Promise<string> {
+  const reference = doc(collection(db, COLLECTIONS.replicationProtocols.collectionPath(studyKey)));
+  await setDoc(reference, {
+    ...created("replicationProtocols", uid),
+    replicationId: studyKey,
+    title: input.title,
+    ...(input.description === null ? {} : { description: input.description }),
+    currentVersionId: null,
+  });
+  return reference.id;
+}
+
+/** Adds a draft version to a protocol. The rules accept it from the same writers as the protocol. */
+export async function createProtocolVersion(
+  uid: string,
+  studyKey: string,
+  input: {
+    readonly protocolId: string;
+    readonly versionLabel: string;
+    readonly effectiveDate: string | null;
+    readonly changeSummary: string | null;
+  },
+): Promise<string> {
+  const reference = doc(collection(db, COLLECTIONS.replicationProtocolVersions.collectionPath(studyKey)));
+  await setDoc(reference, {
+    ...created("replicationProtocolVersions", uid),
+    replicationId: studyKey,
+    protocolId: input.protocolId,
+    versionLabel: input.versionLabel,
+    ...(input.effectiveDate === null ? {} : { effectiveDate: input.effectiveDate }),
+    status: "draft",
+    ...(input.changeSummary === null ? {} : { changeSummary: input.changeSummary }),
+    approvedBy: null,
+    approvedAt: null,
+  });
+  return reference.id;
+}
+
+/**
+ * Approves a draft version of a protocol in the caller's name at the request time, supersedes the
+ * version approved before it and makes it the protocol's current version, in one transaction.
+ * The rules allow each of the three changes to the writers of the protocol and no one else.
+ */
+export async function approveProtocolVersion(
+  uid: string,
+  studyKey: string,
+  protocolId: string,
+  versionId: string,
+  supersededIds: readonly string[],
+): Promise<void> {
+  await runTransaction(db, async (transaction) => {
+    transaction.update(doc(db, COLLECTIONS.replicationProtocolVersions.docPath(studyKey, versionId)), {
+      status: "approved",
+      approvedBy: uid,
+      approvedAt: serverTimestamp(),
+      ...touched(uid),
+    });
+    for (const id of supersededIds) {
+      transaction.update(doc(db, COLLECTIONS.replicationProtocolVersions.docPath(studyKey, id)), {
+        status: "superseded",
+        ...touched(uid),
+      });
+    }
+    transaction.update(doc(db, COLLECTIONS.replicationProtocols.docPath(studyKey, protocolId)), {
+      currentVersionId: versionId,
+      ...touched(uid),
+    });
+  });
+}
+
+/**
+ * Acknowledges an approved version of a protocol for the caller's own person, who is on the team
+ * of the participation. The rules accept it once, from that person alone, at the request time.
+ */
+export async function acknowledgeProtocolVersion(
+  uid: string,
+  input: {
+    readonly participationId: string;
+    readonly replicationId: string;
+    readonly laboratoryId: string;
+    readonly personId: string;
+    readonly protocolId: string;
+    readonly protocolVersionId: string;
+  },
+): Promise<void> {
+  await setDoc(
+    doc(
+      db,
+      COLLECTIONS.participationAcknowledgements.docPath(
+        input.participationId,
+        acknowledgementId(input.personId, input.protocolVersionId),
+      ),
+    ),
+    {
+      schemaVersion: 1,
+      createdAt: serverTimestamp(),
+      createdBy: uid,
+      writeContext: userWriteContext(),
+      participationId: input.participationId,
+      protocolId: input.protocolId,
+      protocolVersionId: input.protocolVersionId,
+      personId: input.personId,
+      acknowledgedAt: serverTimestamp(),
+      replicationId: input.replicationId,
+      laboratoryId: input.laboratoryId,
+      scopeKeys: unitScopeKeys(input.replicationId, input.laboratoryId),
+    },
+  );
+}
+
+/**
+ * Names the protocol a participation follows, or none. The version it followed belonged to the
+ * protocol named before, so it is cleared with it. The rules accept the change from those who
+ * hold `participations.manage` for the participation, for a protocol of its replication.
+ */
+export async function setParticipationProtocol(
+  uid: string,
+  participationId: string,
+  protocolId: string | null,
+): Promise<void> {
+  await updateDoc(doc(db, COLLECTIONS.participations.docPath(participationId)), {
+    protocolId: protocolId ?? deleteField(),
+    protocolVersionId: deleteField(),
+    ...touched(uid),
+  });
+}
+
+/**
+ * Puts a person on the team of a participation in a role, or changes their role, or brings back
+ * someone who was removed. The rules accept it from those who hold `participations.manage` for
+ * the participation, for a person of the directory.
+ */
+export async function saveTeamMember(
+  uid: string,
+  input: {
+    readonly participationId: string;
+    readonly replicationId: string;
+    readonly laboratoryId: string;
+    readonly personId: string;
+    readonly role: "localLead" | "experimenter" | "analyst" | "dataManager" | "member";
+  },
+  stored: "absent" | "active" | "archived",
+): Promise<void> {
+  const reference = doc(db, COLLECTIONS.participationTeamMembers.docPath(input.participationId, input.personId));
+  // A restoration changes nothing else, so a person taken off the team is first put back and
+  // then given the role.
+  if (stored === "archived") await updateDoc(reference, { archivedAt: null, ...touched(uid) });
+  if (stored !== "absent") {
+    await updateDoc(reference, { role: input.role, ...touched(uid) });
+    return;
+  }
+  await setDoc(reference, {
+    ...created("participationTeamMembers", uid),
+    participationId: input.participationId,
+    personId: input.personId,
+    role: input.role,
+    replicationId: input.replicationId,
+    laboratoryId: input.laboratoryId,
+    scopeKeys: unitScopeKeys(input.replicationId, input.laboratoryId),
+  });
+}
+
+/** Takes a person off the team of a participation, which archives their entry under the same rules. */
+export async function removeTeamMember(uid: string, participationId: string, personId: string): Promise<void> {
+  await updateDoc(doc(db, COLLECTIONS.participationTeamMembers.docPath(participationId, personId)), {
+    archivedAt: serverTimestamp(),
+    ...touched(uid),
+  });
+}
+
+/** Reports a deviation from the protocol for a participation, in the caller's name. */
+export async function reportDeviation(
+  uid: string,
+  input: {
+    readonly participationId: string;
+    readonly replicationId: string;
+    readonly laboratoryId: string;
+    readonly description: string;
+    readonly severity: "minor" | "major" | "critical";
+    readonly occurredAt: Date;
+  },
+): Promise<string> {
+  const reference = doc(collection(db, COLLECTIONS.participationDeviations.collectionPath(input.participationId)));
+  await setDoc(reference, {
+    ...created("participationDeviations", uid),
+    participationId: input.participationId,
+    description: input.description,
+    severity: input.severity,
+    occurredAt: Timestamp.fromDate(input.occurredAt),
+    reportedBy: uid,
+    status: "open",
+    replicationId: input.replicationId,
+    laboratoryId: input.laboratoryId,
+    scopeKeys: unitScopeKeys(input.replicationId, input.laboratoryId),
+  });
+  return reference.id;
+}
+
+/**
+ * Follows up a deviation: its corrective action and its status. Its reporter resolves it; the
+ * other managers of the participation add the corrective action and put it under review.
+ */
+export async function followUpDeviation(
+  uid: string,
+  participationId: string,
+  deviationId: string,
+  patch: { readonly correctiveAction: string | null; readonly status: "open" | "underReview" | "resolved" },
+): Promise<void> {
+  await updateDoc(doc(db, COLLECTIONS.participationDeviations.docPath(participationId, deviationId)), {
+    status: patch.status,
+    correctiveAction: patch.correctiveAction === null ? deleteField() : patch.correctiveAction,
+    ...touched(uid),
+  });
+}
+
+/**
+ * Links an external document, such as an OSF page or a draft, to a manuscript of a replication.
+ * Every member reads it, as they read the manuscript. The link starts unchecked; trusted code
+ * checks it.
+ */
+export async function linkDocumentToManuscript(
+  uid: string,
+  input: {
+    readonly manuscriptId: string;
+    readonly replicationId: string;
+    readonly kind: "googleDoc" | "osf" | "github" | "pdf" | "url";
+    readonly url: string;
+    readonly title: string;
+  },
+): Promise<string> {
+  const reference = doc(collection(db, COLLECTIONS.documentLinks.collectionPath()));
+  await setDoc(reference, {
+    ...created("documentLinks", uid),
+    entityType: "manuscript",
+    entityId: input.manuscriptId,
+    kind: input.kind,
+    url: input.url,
+    title: input.title,
+    accessStatus: "unknown",
+    lastCheckedAt: null,
+    restricted: false,
+    replicationId: input.replicationId,
+    laboratoryId: null,
+    scopeKeys: [...unitScopeKeys(input.replicationId, null), MEMBERS_SCOPE_KEY],
+  });
+  return reference.id;
+}
+
+/** A search the signed-in account keeps. The rules accept the fixed kinds, the caps and a generated identifier. */
+export interface SavedSearchInput {
+  readonly name: string;
+  readonly query: string;
+  readonly kinds: readonly ("record" | "page" | "comment" | "document")[];
+  readonly replicationId: string | null;
+}
+
+export async function saveSearch(uid: string, search: SavedSearchInput): Promise<string> {
+  const reference = doc(collection(db, COLLECTIONS.userSavedSearches.collectionPath(uid)));
+  await setDoc(reference, {
+    ...created("userSavedSearches", uid),
+    uid,
+    name: search.name,
+    query: search.query,
+    kinds: [...search.kinds],
+    replicationId: search.replicationId,
+  });
+  return reference.id;
+}
+
+export async function removeSavedSearch(uid: string, searchId: string): Promise<void> {
+  await deleteDoc(doc(db, COLLECTIONS.userSavedSearches.docPath(uid, searchId)));
+}
+
+/** The notification preferences of the signed-in account, which it alone reads and writes. */
+export interface PreferencesInput {
+  readonly channels: { readonly inApp: boolean; readonly email: boolean };
+  readonly digestFrequency: "off" | "daily" | "weekly";
+  readonly quietHours: { readonly start: string; readonly end: string; readonly timeZone: string } | null;
+  readonly typeSwitches: Readonly<Record<string, boolean>>;
+}
+
+/** Saves the preferences: creates the document the first time, and changes its four fields after. */
+export async function savePreferences(uid: string, preferences: PreferencesInput, exists: boolean): Promise<void> {
+  const reference = doc(db, COLLECTIONS.userPreferences.docPath(uid));
+  const fields = {
+    channels: { ...preferences.channels },
+    digestFrequency: preferences.digestFrequency,
+    quietHours: preferences.quietHours === null ? null : { ...preferences.quietHours },
+    typeSwitches: { ...preferences.typeSwitches },
+  };
+  if (exists) await updateDoc(reference, { ...fields, ...touched(uid) });
+  else await setDoc(reference, { ...created("userPreferences", uid), ...fields });
 }

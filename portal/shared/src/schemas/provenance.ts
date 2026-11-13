@@ -508,8 +508,9 @@ export type SyncLeaseDoc = z.output<typeof syncLeaseDocSchema>;
  * | `sheetSync`      | One run of a mapping                                                 |
  * | `documentUpdate` | Creating or updating one generated document                          |
  * | `driveChanges`   | Reading the Drive change feed and starting the runs it calls for     |
+ * | `automation`     | Carrying out the actions of one run of an automation rule            |
  */
-export const syncJobKindSchema = z.enum(["sheetSync", "documentUpdate", "driveChanges"]);
+export const syncJobKindSchema = z.enum(["sheetSync", "documentUpdate", "driveChanges", "automation"]);
 export type SyncJobKind = z.output<typeof syncJobKindSchema>;
 export const syncTriggerSchema = z.enum(["event", "schedule", "manual"]);
 
@@ -580,6 +581,8 @@ export const syncRunDocSchema = documentBaseSchema.extend({
   kind: syncJobKindSchema,
   mappingId: idSchema.exactOptional(),
   generatedDocumentId: idSchema.exactOptional(),
+  /** For a job of the kind `automation`: the run of the rule whose actions it carries out. */
+  automationRunId: idSchema.exactOptional(),
   mode: integrationModeSchema,
   trigger: syncTriggerSchema,
   status: syncRunStatusSchema,
@@ -734,37 +737,137 @@ export const generatedDocumentDocSchema = documentBaseSchema.extend({
 });
 export type GeneratedDocumentDoc = z.output<typeof generatedDocumentDocSchema>;
 
+/**
+ * The states of a public export (docs/INTEGRATIONS.md, section 6).
+ *
+ * | State        | What has happened                                                              |
+ * |--------------|--------------------------------------------------------------------------------|
+ * | `previewed`  | The approved public fields were assembled into files and compared with the website's files, row by row. Nothing has left the portal |
+ * | `verified`   | The site was built from the files in a scratch copy with its own build command, and the result passed its checks |
+ * | `staged`     | An administrator approved the live write with a second factor; a branch, a commit and a pull request were made, which deploys the shared staging site |
+ * | `published`  | A maintainer merged the pull request                                           |
+ * | `rolledBack` | A pull request that restores the files the publication replaced was merged     |
+ * | `withdrawn`  | An administrator withdrew the export before it was published, or its pull request was closed unmerged |
+ * | `failed`     | A check failed: the build, the privacy guard, or the website adapter. The reason is stated |
+ */
 export const publicationBatchStatusSchema = z.enum([
-  "draft",
   "previewed",
+  "verified",
   "staged",
-  "approved",
   "published",
   "rolledBack",
+  "withdrawn",
+  "failed",
 ]);
+export type PublicationBatchStatus = z.output<typeof publicationBatchStatusSchema>;
 
-const storagePathSchema = z.string().min(1).max(1_024);
+const sha256HexSchema = z
+  .string()
+  .max(64)
+  .regex(/^[0-9a-f]{64}$/, { error: "Expected a SHA-256 hash in hexadecimal" });
 
-/** `publicationBatches/{id}`: one entry of the public publishing log. The export itself is a file in Cloud Storage. */
+export const publicationCheckSchema = z.strictObject({
+  key: keySchema,
+  passed: z.boolean(),
+  /** Counts and paths only, never a value of a record. */
+  detail: z.string().max(1_000),
+});
+
+/**
+ * `publicationBatches/{id}`: one entry of the public publishing log. The files of the export
+ * are documents beneath it, so the log keeps exactly what was proposed.
+ */
 export const publicationBatchDocSchema = documentBaseSchema.extend({
-  kind: keySchema,
-  payloadPath: storagePathSchema.exactOptional(),
-  payloadSha256: z
-    .string()
-    .max(64)
-    .regex(/^[0-9a-f]{64}$/, { error: "Expected a SHA-256 hash in hexadecimal" })
-    .exactOptional(),
-  diffPath: storagePathSchema.exactOptional(),
-  diffSummary: countMapSchema.exactOptional(),
+  /** The target of the export: the website's data files. */
+  kind: z.literal("website"),
+  /** The candidate outputs the export holds. */
+  outputs: z
+    .array(z.enum(["members", "laboratories", "replications", "publications", "milestones", "recruitment"]))
+    .min(1)
+    .max(6),
+  /** Whether the export was made from demonstration data in the emulator, which it says on every page and in its pull request. */
+  syntheticData: z.boolean(),
+  /** The commit of the website's main branch the files were compared with. */
+  baseCommit: z.string().min(1).max(200),
+  /** The SHA-256 of the files, in the order of their paths, which the approval and the commit must match. */
+  payloadSha256: sha256HexSchema,
+  /** File key to the counts of its difference: added, removed and changed rows. */
+  diffSummary: boundedRecord(mapKeySchema, countMapSchema, 20),
+  /** What the generator left out and why, naming records and never a value. */
+  notes: z.array(z.string().max(500)).max(200),
   status: publicationBatchStatusSchema,
+  statusReason: longTextSchema.exactOptional(),
   requestedBy: actorSchema,
   requestedAt: timestampSchema,
+  /** The report of the build in a scratch copy. */
+  verification: z
+    .strictObject({
+      checkedAt: timestampSchema,
+      passed: z.boolean(),
+      payloadSha256: sha256HexSchema,
+      buildCommand: z.string().min(1).max(200),
+      checks: z.array(publicationCheckSchema).max(50),
+    })
+    .nullable(),
   approvedBy: actorSchema.nullable(),
   approvedAt: timestampSchema.nullable(),
+  branch: z.string().min(1).max(200).exactOptional(),
+  commitRef: z.string().min(1).max(200).exactOptional(),
+  pullRequestNumber: z.number().int().min(1).exactOptional(),
+  pullRequestUrl: urlSchema.exactOptional(),
   publishedAt: timestampSchema.nullable(),
+  /** The pull request that restores the files this export replaced, once proposed. */
+  rollbackPullRequestNumber: z.number().int().min(1).exactOptional(),
+  rollbackPullRequestUrl: urlSchema.exactOptional(),
   rolledBackBy: actorSchema.nullable(),
   rolledBackAt: timestampSchema.nullable(),
-  commitRef: z.string().min(1).max(200).exactOptional(),
-  pullRequestUrl: urlSchema.exactOptional(),
 });
 export type PublicationBatchDoc = z.output<typeof publicationBatchDocSchema>;
+
+/** The most rows of a file's difference that the log keeps for the preview. */
+export const PUBLICATION_DIFF_ROWS_MAX = 500;
+
+/**
+ * `publicationBatches/{id}/files/{fileKey}`: one file of an export: its full text, the text it
+ * replaces on the main branch, and the difference between the two, row by row and field by field.
+ */
+export const publicationFileDocSchema = documentBaseSchema.extend({
+  batchId: idSchema,
+  fileKey: keySchema,
+  path: z.string().min(1).max(200),
+  content: z.string().max(900_000),
+  sha256: sha256HexSchema,
+  /** The text on the main branch, or null for a file that does not exist there yet. */
+  baseContent: z.string().max(900_000).nullable(),
+  baseSha256: sha256HexSchema.nullable(),
+  diff: z.strictObject({
+    created: z.boolean(),
+    bytesChanged: z.boolean(),
+    columnsChanged: z.boolean(),
+    counts: z.strictObject({
+      added: z.number().int().min(0),
+      removed: z.number().int().min(0),
+      changed: z.number().int().min(0),
+      unchanged: z.number().int().min(0),
+    }),
+    rows: z
+      .array(
+        z.strictObject({
+          key: z.string().max(500),
+          kind: z.enum(["added", "removed", "changed"]),
+          fields: z
+            .array(
+              z.strictObject({
+                column: z.string().max(100),
+                before: z.string().max(10_000),
+                after: z.string().max(10_000),
+              }),
+            )
+            .max(50),
+        }),
+      )
+      .max(PUBLICATION_DIFF_ROWS_MAX),
+    rowsOmitted: z.number().int().min(0),
+  }),
+});
+export type PublicationFileDoc = z.output<typeof publicationFileDocSchema>;

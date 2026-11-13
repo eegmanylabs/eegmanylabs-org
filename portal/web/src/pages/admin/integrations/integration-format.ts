@@ -66,6 +66,7 @@ export const JOB_KIND_LABELS: Readonly<Record<SyncJobKind, string>> = {
   sheetSync: "Sheet synchronisation",
   documentUpdate: "Generated document",
   driveChanges: "Drive change feed",
+  automation: "Automation",
 };
 
 export const RUN_STATUS_LABELS: Readonly<Record<SyncRunStatus, string>> = {

@@ -67,7 +67,7 @@ const parameterNames = (path: string) => [...path.matchAll(/\{([^{}]+)\}/g)].map
 
 describe("the registry", () => {
   it("has one entry for every collection, subcollection and fixed-name document of the data model", () => {
-    expect(COLLECTION_KEYS).toHaveLength(149);
+    expect(COLLECTION_KEYS).toHaveLength(154);
     expect(COLLECTION_ENTRIES.map((entry) => entry.key)).toEqual(COLLECTION_KEYS);
   });
 
@@ -158,24 +158,13 @@ describe("the enforcement of an entry", () => {
         // Attachments. Pages and their threads are built (D-010), and so are databases, custom
         // properties, views and dashboards (D-011).
         "attachments",
-        // Processing runs, which the scientific workflows of a later phase build on the registry.
-        "processingRuns",
-        // Governance records.
-        "decisions",
+        // Governance records beside the decision log and the incident registry of phase 8.
         "risks",
-        "incidents",
         "meetings",
         "progressReports",
-        // Publishing and automation.
-        "publicationBatches",
-        "automationRules",
-        "automationRuns",
-        "scheduledReports",
-        // Written by triggers of the first slice, and read by features that come later.
-        "eventFailures",
       ].sort(),
     );
-    expect(COLLECTION_ENTRIES.filter((entry) => entry.enforcement === "enforced")).toHaveLength(133);
+    expect(COLLECTION_ENTRIES.filter((entry) => entry.enforcement === "enforced")).toHaveLength(146);
   });
 
   it("never opens a document beneath a parent that is still closed", () => {
@@ -236,6 +225,11 @@ describe("the identifier rule of an entry", () => {
       // The quality-control task of a dataset and the list that holds them, likewise.
       "datasetQcTaskId",
       "datasetQcListId",
+      // The onboarding task list of a laboratory that an automation opens, likewise.
+      "onboardingListId",
+      // The manuscript that the importer of the public website writes, which the registry calls
+      // opaque beside the manuscripts made in the portal.
+      "websiteManuscriptId",
     ]);
   });
 });
@@ -344,6 +338,7 @@ describe("the access rules of an entry", () => {
         "reminders",
         "userFavourites",
         "userRecents",
+        "userSavedSearches",
         "userSubscriptions",
         "views",
       ].sort(),
@@ -408,6 +403,12 @@ describe("the access rules of an entry", () => {
       "datasetQcAssessments",
       "datasetAccessEvents",
       "datasetViewerLinks",
+      "processingRuns",
+      "decisions",
+      "incidents",
+      "incidentActions",
+      "authorshipLists",
+      "authorshipEntries",
       "sources",
       "sourceLocation",
       "sourceTabs",
@@ -432,14 +433,17 @@ describe("the access rules of an entry", () => {
       "documentTemplates",
       "generatedDocuments",
       "publicationBatches",
+      "publicationFiles",
       "auditEvents",
       "activity",
+      "automationRules",
       "automationRuns",
       "mail",
       "eventFailures",
       "searchIndex",
       "integrityReports",
       "integrityReportFindings",
+      "scheduledReports",
       "systemSettings",
     ];
     const actual = COLLECTION_ENTRIES.filter((entry) => entry.write.mode === "function").map((entry) => entry.key);
@@ -518,8 +522,11 @@ describe("the access rules of an entry", () => {
       "lastCheckedAt",
       "ownerName",
       "modifiedAt",
+      "withdrawnAt",
     ]);
-    expect(reserved("manuscripts")).toEqual(expect.arrayContaining(["citationStatus", "citationMetadata"]));
+    expect(reserved("manuscripts")).toEqual(
+      expect.arrayContaining(["citationStatus", "citationMetadata", "submittedAt", "acceptedAt", "publishedAt"]),
+    );
   });
 
   it("keep every field whose elements no rule can check for trusted code", () => {
@@ -547,9 +554,20 @@ describe("the access rules of an entry", () => {
             (grant) => grant.writers.includes("replication_lead") && grant.operations.includes("update"),
           )
         : undefined;
-    expect(lead?.onlyFields).toEqual(expect.arrayContaining(["text", "resultSummary", "analysisStatus"]));
+    expect(lead?.onlyFields).toEqual(expect.arrayContaining(["text", "analysisStatus"]));
     for (const field of ["scientificReviewStatus", "resultReviewedBy", "resultReviewedAt"]) {
       expect(lead?.onlyFields).not.toContain(field);
+    }
+  });
+
+  it("let no client write a finding of a hypothesis without its provenance", () => {
+    // An original statistic and a result are recorded with their provenance by a callable
+    // function, never directly, so neither can be stored without the other.
+    const { write } = COLLECTIONS.replicationHypotheses;
+    const findings = ["originalStatistics", "originalStatisticsProvenance", "resultSummary", "resultProvenance"];
+    expect(write.mode === "client" ? write.functionOnlyFields : []).toEqual(expect.arrayContaining(findings));
+    for (const grant of write.mode === "client" ? write.grants : []) {
+      for (const field of findings) expect(grant.onlyFields ?? []).not.toContain(field);
     }
   });
 
@@ -695,6 +713,7 @@ describe("the flags of an entry", () => {
         "pagePresence",
         "pageVersionChunks",
         "datasetManifestFileChunks",
+        "publicationFiles",
       ].sort(),
     );
   });

@@ -26,7 +26,7 @@ import {
   unlinkAccountClaimContract,
 } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { bootstrapAdministrator } from "../../../tools/src/commands/admin-bootstrap";
 import { adminDb } from "../../support/admin";
 import {
@@ -43,18 +43,17 @@ import {
   grantCapability,
   grantRole,
   laboratory,
-  leaveNoTrace,
   memberEntry,
   person,
   rebuild,
   refusal,
   resetWorld,
   standard,
+  withoutTriggers,
 } from "../support";
 
+withoutTriggers();
 beforeEach(resetWorld);
-
-afterAll(leaveNoTrace);
 
 const NO_ERROR = "(no error)";
 const DEMOGRAPHICS = { genderSource: "synthetic gender term Q", ethnicitySource: "synthetic ethnicity term Z" };

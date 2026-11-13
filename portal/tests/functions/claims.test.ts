@@ -13,7 +13,7 @@ import {
   unlinkAccountClaimContract,
 } from "@eegml/shared";
 import type { Timestamp } from "firebase-admin/firestore";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { adminDb } from "../support/admin";
 import {
   accessOf,
@@ -30,7 +30,6 @@ import {
   grantCapability,
   grantRole,
   laboratory,
-  leaveNoTrace,
   memberEntry,
   membership,
   notificationsOf,
@@ -38,11 +37,11 @@ import {
   refusal,
   replication,
   resetWorld,
+  withoutTriggers,
 } from "./support";
 
+withoutTriggers();
 beforeEach(resetWorld);
-
-afterAll(leaveNoTrace);
 
 const claimOf = async (uid: string) => {
   const data = await dataOf(`accountClaims/${uid}`);

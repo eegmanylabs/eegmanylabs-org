@@ -22,9 +22,10 @@ describe("the navigation registry", () => {
     }
   });
 
-  it("shows Home, the directory, recruitment, the tasks, the datasets, the dashboards and the account page to a signed-in account and nothing to anyone else", () => {
+  it("shows Home, the directory, recruitment, the tasks, the datasets, the overview, the dashboards, the analysis, search and the account page to a signed-in account and nothing to anyone else", () => {
     expect(visibleNavigation(new Set<Capability>(["portal.use"])).map((item) => item.label)).toEqual([
       "Home",
+      "Search",
       "Replications",
       "Laboratories",
       "Members",
@@ -32,7 +33,9 @@ describe("the navigation registry", () => {
       "Recruitment",
       "Tasks",
       "Datasets",
+      "Programme overview",
       "Dashboards",
+      "Analysis",
       "Account and security",
     ]);
     expect(visibleNavigation(new Set())).toEqual([]);
@@ -44,6 +47,7 @@ describe("the navigation registry", () => {
     expect(visibleNavigation(held, NAVIGATION, false).map((item) => item.to)).toEqual(["/claim", "/account"]);
     expect(visibleNavigation(held, NAVIGATION, true).map((item) => item.to)).toEqual([
       "/",
+      "/search",
       "/replications",
       "/labs",
       "/members",
@@ -51,7 +55,9 @@ describe("the navigation registry", () => {
       "/recruitment",
       "/tasks",
       "/datasets",
+      "/overview",
       "/dashboards",
+      "/analysis",
       "/account",
     ]);
   });
@@ -69,10 +75,13 @@ describe("the navigation registry", () => {
       "/admin/imports": "imports.run",
       "/admin/review-queue": "reconciliation.resolve",
       "/admin/integrations": "integrations.manage",
+      "/admin/publishing": "publishing.prepare",
+      "/admin/automations": "automations.manage",
       "/admin/integrity": "audit.read",
     });
     expect(visibleNavigation(new Set<Capability>(["portal.use", "audit.read"])).map((item) => item.id)).toEqual([
       "home",
+      "search",
       "replications",
       "laboratories",
       "members",
@@ -80,7 +89,9 @@ describe("the navigation registry", () => {
       "recruitment",
       "tasks",
       "datasets",
+      "overview",
       "dashboards",
+      "analysis",
       "account",
       "admin-audit",
       "admin-integrity",

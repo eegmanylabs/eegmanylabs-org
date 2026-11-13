@@ -6,15 +6,22 @@
 // received and opens the quality-control task. A failed scan writes no listing: the copy keeps
 // its last one and the time it was last seen, and is marked unavailable with the reason.
 import {
+  automationRuleDocSchema,
+  automationRunDocSchema,
+  automationRunId,
+  COLLECTIONS,
   compareManifest,
   type DatasetDoc,
+  decideAutomations,
+  effectiveRules,
   type ManifestFileStatus,
   manifestMatches,
+  parseStoredDocument,
   receivedCount,
   type StorageScanStatus,
 } from "@eegml/shared";
 import { type Firestore, Timestamp, type Transaction } from "firebase-admin/firestore";
-import { touchedFields, type WriteStamp } from "../framework/documents";
+import { createdFields, touchedFields, type WriteStamp } from "../framework/documents";
 import type { ListedFile } from "../integrations/storage/types";
 import {
   availabilityOf,
@@ -27,11 +34,43 @@ import {
 } from "./model";
 import { prepareQcTask, type QcParticipants, type QcTaskPlan, writeQcTask } from "./qc-task";
 
+/**
+ * The built-in automation that opens the quality-control task when the data of a dataset first
+ * arrives (`BUILT_IN_AUTOMATION_RULES` of the shared package). It acts in the transaction of the
+ * listing, so the task is there the moment the data is, and its run is logged like any other.
+ */
+export const QC_RULE_ID = "qcTaskOnArrival";
+
+/** The event of the arrival of the data of a dataset, which names the run of the rule. */
+export function dataArrivalEventId(datasetId: string): string {
+  return `dataset.dataArrived:${datasetId}`;
+}
+
 /** What a listing needs to have read in its transaction before the first write. */
 export interface ListingReads {
   readonly refs: readonly StoredRef[];
   readonly expected: readonly { readonly relativePath: string }[] | null;
+  /** The plan of the quality-control task, or null where it exists or the rule does not act. */
   readonly qc: QcTaskPlan | null;
+}
+
+/** Whether the built-in rule acts on the arrival of the data of a dataset, as an administrator configured it. */
+async function qcRuleActs(db: Firestore, transaction: Transaction, dataset: StoredDataset): Promise<boolean> {
+  const stored = parseStoredDocument(
+    automationRuleDocSchema,
+    (await transaction.get(db.doc(COLLECTIONS.automationRules.docPath(QC_RULE_ID)))).data(),
+  );
+  const rules = effectiveRules(stored.success ? [{ id: QC_RULE_ID, data: stored.data }] : []).filter(
+    (rule) => rule.id === QC_RULE_ID,
+  );
+  const [decision] = decideAutomations(rules, {
+    id: dataArrivalEventId(dataset.id),
+    event: "dataset.dataArrived",
+    facts: { replicationId: dataset.data.replicationId, laboratoryId: dataset.data.laboratoryId },
+    depth: 0,
+    chain: [],
+  });
+  return decision?.outcome === "act";
 }
 
 export async function readForListing(
@@ -44,7 +83,9 @@ export async function readForListing(
     dataset.data.expectedManifestId === null
       ? null
       : await readManifestFiles(db, transaction, dataset.id, dataset.data.expectedManifestId);
-  const qc = await prepareQcTask(db, transaction, dataset.id, dataset.data.replicationId);
+  const qc = (await qcRuleActs(db, transaction, dataset))
+    ? await prepareQcTask(db, transaction, dataset.id, dataset.data.replicationId)
+    : null;
   return { refs, expected, qc };
 }
 
@@ -128,6 +169,7 @@ export function applyListing(
     qcStarts && reads.qc !== null
       ? writeQcTask(db, transaction, reads.qc, dataset, input.participants, input.auditEventId, stamp)
       : null;
+  if (taskId !== null) recordQcRun(db, transaction, dataset.id, taskId, stamp);
   return { manifestId, counts: comparison.counts, taskId };
 }
 
@@ -149,4 +191,39 @@ export function applyScanFailure(
     candidate.id === input.ref.id ? { ...candidate.data, ...refChanges } : candidate.data,
   );
   transaction.update(input.dataset.reference, { ...availabilityOf(refs), ...touchedFields(input.stamp) });
+}
+
+/** The log of the run of the built-in rule that opened the task, in the transaction that opened it. */
+function recordQcRun(
+  db: Firestore,
+  transaction: Transaction,
+  datasetId: string,
+  taskId: string,
+  stamp: WriteStamp,
+): void {
+  const eventId = dataArrivalEventId(datasetId);
+  const runId = automationRunId(QC_RULE_ID, eventId);
+  const now = Timestamp.fromDate(stamp.at);
+  transaction.set(
+    db.doc(COLLECTIONS.automationRuns.docPath(runId)),
+    automationRunDocSchema.parse({
+      ...createdFields("automationRuns", stamp),
+      ruleId: QC_RULE_ID,
+      eventId,
+      idempotencyKey: runId,
+      event: "dataset.dataArrived",
+      entityType: "dataset",
+      entityId: datasetId,
+      status: "succeeded",
+      attempts: 1,
+      depth: stamp.writeContext.depth,
+      correlationId: stamp.writeContext.correlationId ?? eventId,
+      chain: [QC_RULE_ID],
+      log: [
+        `${stamp.at.toISOString()} The data of the dataset arrived. createQcTask: opened the quality-control task ${taskId}.`,
+      ],
+      startedAt: now,
+      finishedAt: now,
+    }),
+  );
 }

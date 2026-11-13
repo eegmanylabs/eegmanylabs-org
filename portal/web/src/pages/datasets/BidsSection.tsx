@@ -71,7 +71,7 @@ function ImportDialog({ datasetKey, onClose }: { datasetKey: string; onClose: ()
           <Textarea
             {...control}
             rows={5}
-            className="font-mono text-xs"
+            className="tabular-nums text-xs"
             value={report}
             onChange={(event) => setReport(event.target.value)}
           />
@@ -164,7 +164,7 @@ function ConversionDialog({
             <Textarea
               {...control}
               rows={4}
-              className="font-mono text-xs"
+              className="tabular-nums text-xs"
               value={mapping}
               onChange={(event) => setMapping(event.target.value)}
             />
@@ -266,7 +266,7 @@ export function BidsSection({
             {(detail.bidsMissingMetadata ?? []).length === 0 ? (
               <p className="text-sm text-fg-secondary">Nothing is recorded as missing.</p>
             ) : (
-              <ul className="grid gap-1 font-mono text-xs">
+              <ul className="grid gap-1 tabular-nums text-xs">
                 {(detail.bidsMissingMetadata ?? []).map((item) => (
                   <li key={item} className="break-all">
                     {item}
@@ -279,7 +279,7 @@ export function BidsSection({
             {(detail.bidsNamingMap ?? []).length === 0 ? (
               <p className="text-sm text-fg-secondary">No mapping is recorded.</p>
             ) : (
-              <ul className="grid gap-1 font-mono text-xs">
+              <ul className="grid gap-1 tabular-nums text-xs">
                 {(detail.bidsNamingMap ?? []).map((entry) => (
                   <li key={entry.source} className="break-all">
                     {entry.source} to {entry.bids}

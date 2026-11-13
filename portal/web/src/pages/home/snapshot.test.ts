@@ -1,4 +1,5 @@
 // The figures of the programme snapshot on Home. Identifiers and countries are synthetic.
+import { SMALL_CELL_THRESHOLD } from "@eegml/shared";
 import { describe, expect, it } from "vitest";
 import {
   membersByCountry,
@@ -37,22 +38,37 @@ describe("the programme snapshot", () => {
     expect(replicationsByStage([])).toEqual([]);
   });
 
-  it("counts members by country, most first, with the rest together and the unknown apart", () => {
+  it("counts members by country, most first, with small groups and the rest together and the unknown apart", () => {
     const people = [
-      ...Array.from({ length: 3 }, () => ({ countryCode: "GB" })),
-      ...Array.from({ length: 2 }, () => ({ countryCode: "DE" })),
-      { countryCode: "NL" },
-      { countryCode: "FR" },
+      ...Array.from({ length: 7 }, () => ({ countryCode: "GB" })),
+      ...Array.from({ length: 6 }, () => ({ countryCode: "DE" })),
+      ...Array.from({ length: 5 }, () => ({ countryCode: "FR" })),
+      ...Array.from({ length: 2 }, () => ({ countryCode: "NL" })),
+      { countryCode: "ES" },
       { countryCode: null },
     ];
     const name = (code: string) =>
-      ({ GB: "United Kingdom", DE: "Germany", NL: "Netherlands", FR: "France" })[code] ?? code;
+      ({ GB: "United Kingdom", DE: "Germany", NL: "Netherlands", FR: "France", ES: "Spain" })[code] ?? code;
     expect(membersByCountry(people, name, 2)).toEqual([
-      { key: "GB", label: "United Kingdom", count: 3, to: "/members?country=GB" },
-      { key: "DE", label: "Germany", count: 2, to: "/members?country=DE" },
-      { key: "other", label: "2 other countries", count: 2, to: "/members" },
+      { key: "GB", label: "United Kingdom", count: 7, to: "/members?country=GB" },
+      { key: "DE", label: "Germany", count: 6, to: "/members?country=DE" },
+      { key: "other", label: "1 other countries", count: 5, to: "/members" },
+      { key: "small", label: "2 countries with fewer than 5 members each", count: 3, to: "/members" },
       { key: "none", label: "No country recorded", count: 1, to: "/members?country=none" },
     ]);
+  });
+
+  it("never names a country with fewer members than the threshold of small groups", () => {
+    const people = [
+      ...Array.from({ length: 3 }, () => ({ countryCode: "NL" })),
+      ...Array.from({ length: 4 }, () => ({ countryCode: "GB" })),
+      ...Array.from({ length: SMALL_CELL_THRESHOLD }, () => ({ countryCode: "DE" })),
+    ];
+    const figures = membersByCountry(people, (code) => code);
+    for (const figure of figures.filter((item) => !["small", "other", "none"].includes(item.key))) {
+      expect(figure.count).toBeGreaterThanOrEqual(SMALL_CELL_THRESHOLD);
+    }
+    expect(figures.map((figure) => figure.key)).toEqual(["DE", "small"]);
   });
 
   it("counts publications by status in the order of the statuses, each linked to the replications that have one", () => {

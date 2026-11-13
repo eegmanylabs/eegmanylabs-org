@@ -330,8 +330,9 @@ export const DEMO_REPLICATIONS: readonly DemoReplication[] = [
       plainLanguageDescription: "We test whether an invented brain response is larger when people pay attention.",
       theme: "Attention",
       psychConstruct: "Selective attention",
-      publicStageNumber: 3,
-      publicStageName: "Data collection",
+      // The website's own stage keys (`WEBSITE_STAGES` of the shared package).
+      publicStageNumber: 6,
+      publicStageName: "data_collection",
       signupUrl: "https://example.org/signup/demo-alpha",
       signupActive: true,
       originalNSource: "24 (12 per group)",
@@ -357,8 +358,8 @@ export const DEMO_REPLICATIONS: readonly DemoReplication[] = [
       citationStatus: "mismatch",
       theme: "Memory",
       psychConstruct: "Working memory",
-      publicStageNumber: 2,
-      publicStageName: "Recruiting laboratories",
+      publicStageNumber: 4,
+      publicStageName: "stage1_prep",
       signupUrl: "https://example.org/signup/demo-beta",
       signupActive: false,
     },
@@ -380,8 +381,8 @@ export const DEMO_REPLICATIONS: readonly DemoReplication[] = [
       citationStatus: "unverified",
       theme: "Cognitive control",
       psychConstruct: "Error monitoring",
-      publicStageNumber: 1,
-      publicStageName: "Planning",
+      publicStageNumber: 4,
+      publicStageName: "stage1_prep",
     },
     aliases: [
       { scheme: "website", alias: "DemoGamma2010" },
@@ -625,6 +626,36 @@ export const DEMO_PARTICIPATIONS: readonly DemoParticipation[] = [
     readinessStatus: "notStarted",
   },
   { replicationId: "DemoGamma2010", laboratoryId: "demo-lab-cognition", status: "ready", readinessStatus: "approved" },
+];
+
+/**
+ * The protocol that the attention laboratory follows in the Alpha study, with an approved
+ * version, and the team of that participation, who are asked to acknowledge it. The second
+ * laboratory of the study follows no protocol yet, so its compliance reads as such.
+ */
+export const DEMO_PROTOCOL = {
+  id: "demo-protocol-alpha",
+  replicationId: "DemoAlpha2001",
+  title: "Demonstration protocol (synthetic)",
+  description: "Synthetic: the shared procedure of the Alpha study, for local development.",
+  versionId: "demo-protocol-alpha-v1",
+  versionLabel: "1.0",
+  effectiveDate: "2026-09-01",
+  changeSummary: "Synthetic: the first version.",
+  participations: ["DemoAlpha2001__demo-lab-attention"],
+} as const;
+
+export interface DemoTeamMember {
+  readonly participationId: string;
+  readonly personId: string;
+  readonly role: "localLead" | "experimenter" | "analyst" | "dataManager" | "member";
+}
+
+export const DEMO_TEAM_MEMBERS: readonly DemoTeamMember[] = [
+  { participationId: "DemoAlpha2001__demo-lab-attention", personId: "demo-person-ben", role: "localLead" },
+  { participationId: "DemoAlpha2001__demo-lab-attention", personId: "demo-person-eli", role: "analyst" },
+  { participationId: "DemoBeta2005__demo-lab-cognition", personId: "demo-person-gus", role: "localLead" },
+  { participationId: "DemoBeta2005__demo-lab-cognition", personId: "demo-person-ivy", role: "experimenter" },
 ];
 
 export interface DemoEquipment {

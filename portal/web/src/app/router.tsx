@@ -124,6 +124,11 @@ export function portalRoutes(signInLink: string | null): RouteObject[] {
                   element: <RequireLinked />,
                   children: [
                     {
+                      path: "/search",
+                      ...lazyPage(async () => (await import("@/pages/search/SearchPage")).SearchPage),
+                      ...titled("Search"),
+                    },
+                    {
                       path: "/replications",
                       ...titled("Replications"),
                       children: [
@@ -249,6 +254,16 @@ export function portalRoutes(signInLink: string | null): RouteObject[] {
                       handle: { title: "Database", crumb: DatabaseCrumb, trail: DatabaseTrail } satisfies RouteHandle,
                     },
                     {
+                      path: "/overview",
+                      ...lazyPage(async () => (await import("@/pages/overview/OverviewPage")).OverviewPage),
+                      ...titled("Programme overview"),
+                    },
+                    {
+                      path: "/analysis",
+                      ...lazyPage(async () => (await import("@/pages/analysis/AnalysisPage")).AnalysisPage),
+                      ...titled("Analysis"),
+                    },
+                    {
                       path: "/dashboards",
                       ...titled("Dashboards"),
                       children: [
@@ -358,6 +373,28 @@ export function portalRoutes(signInLink: string | null): RouteObject[] {
                       ...titled("Conflicts"),
                     },
                   ],
+                },
+                {
+                  path: "/admin/publishing",
+                  ...titled("Publishing"),
+                  children: [
+                    {
+                      index: true,
+                      ...lazyPage(async () => (await import("@/pages/admin/publishing/PublishingPage")).PublishingPage),
+                    },
+                    {
+                      path: ":batchId",
+                      ...lazyPage(
+                        async () => (await import("@/pages/admin/publishing/PublicationPage")).PublicationPage,
+                      ),
+                      ...titled("Export"),
+                    },
+                  ],
+                },
+                {
+                  path: "/admin/automations",
+                  ...lazyPage(async () => (await import("@/pages/admin/automations/AutomationsPage")).AutomationsPage),
+                  ...titled("Automations"),
                 },
                 {
                   path: "/admin/integrity",

@@ -83,12 +83,13 @@ export const MANUSCRIPT_STATUS_LABELS = {
 } as const;
 
 export const MANUSCRIPT_KIND_LABELS = {
-  stage1Rr: "Stage 1 registered report",
-  stage2Rr: "Stage 2 registered report",
+  stage1Rr: "Stage 1 Registered Report",
+  stage2Rr: "Stage 2 Registered Report",
   preprint: "Preprint",
   article: "Article",
   dataPaper: "Data paper",
   software: "Software",
+  dataset: "Dataset",
   other: "Other output",
 } as const;
 
@@ -110,6 +111,19 @@ export const DOCUMENT_ACCESS_LABELS = {
   restricted: "Restricted",
   unreachable: "Could not be reached",
 } as const;
+
+/**
+ * How the access of a link reads. A check of an OSF link that finds nothing means OSF answered
+ * that the page is gone, since an outage leaves the link as it was, so it says so instead of
+ * reading like a network problem.
+ */
+export function linkAccessLabel(link: {
+  readonly kind: keyof typeof DOCUMENT_KIND_LABELS;
+  readonly accessStatus: keyof typeof DOCUMENT_ACCESS_LABELS;
+}): string {
+  if (link.kind === "osf" && link.accessStatus === "unreachable") return "Not found on OSF (deleted or wrong address)";
+  return DOCUMENT_ACCESS_LABELS[link.accessStatus];
+}
 
 export const SCIENTIFIC_REVIEW_LABELS = {
   unverified: "Not scientifically reviewed",

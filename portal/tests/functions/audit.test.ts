@@ -5,7 +5,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { type AuditEntry, auditEventId, withheldChanges, writeAudit } from "../../functions/src/framework/audit";
 import { adminDb } from "../support/admin";
 import { clearFirestore } from "../support/emulators";
+import { withoutTriggers } from "./support";
 
+withoutTriggers();
 beforeEach(async () => {
   await clearFirestore();
 });
