@@ -8,6 +8,7 @@ import {
   orderBetween,
   parseRecurrenceRule,
   type RecurrenceFrequency,
+  splitNestedEntityId,
   type TaskPatch,
   WEEKDAYS,
   type Weekday,
@@ -346,17 +347,38 @@ const LINK_KINDS = [
   ["person", "Member"],
   ["page", "Page"],
   ["dataset", "Dataset"],
+  ["hypothesis", "Hypothesis"],
+  ["protocol", "Protocol"],
+  ["manuscript", "Manuscript"],
 ] as const satisfies readonly (readonly [EntityType, string])[];
 
-export interface LinkTargets {
-  readonly replication: readonly { readonly id: string; readonly name: string }[];
-  readonly laboratory: readonly { readonly id: string; readonly name: string }[];
-  readonly person: readonly { readonly id: string; readonly name: string }[];
-  readonly page: readonly { readonly id: string; readonly name: string }[];
-  readonly dataset: readonly { readonly id: string; readonly name: string }[];
+type LinkKind = (typeof LINK_KINDS)[number][0];
+
+/** A record that a task may link to: its name and, where it is known, the address that opens it. */
+export interface LinkTarget {
+  readonly id: string;
+  readonly name: string;
+  readonly address?: string;
 }
 
-export function linkAddress(entityType: string, entityId: string): string | null {
+export type LinkTargets = { readonly [K in LinkKind]: readonly LinkTarget[] };
+
+/** The tab of its replication that shows a hypothesis or a protocol, from the identifier of the record. */
+function replicationTab(entityId: string, tab: string): string | null {
+  try {
+    const [studyKey] = splitNestedEntityId(entityId);
+    return `/replications/${encodeURIComponent(studyKey)}?tab=${tab}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Where a linked record opens. A manuscript opens where its target says, since its identifier does
+ * not name its replication; one the viewer has not loaded, or one of the programme, has no address.
+ */
+function linkAddress(entityType: string, entityId: string, target: LinkTarget | undefined): string | null {
+  if (target?.address !== undefined) return target.address;
   switch (entityType) {
     case "replication":
       return `/replications/${encodeURIComponent(entityId)}`;
@@ -368,6 +390,10 @@ export function linkAddress(entityType: string, entityId: string): string | null
       return `/pages/${encodeURIComponent(entityId)}`;
     case "dataset":
       return `/datasets/${encodeURIComponent(entityId)}`;
+    case "hypothesis":
+      return replicationTab(entityId, "hypotheses");
+    case "protocol":
+      return replicationTab(entityId, "protocol");
     default:
       return null;
   }
@@ -386,17 +412,18 @@ export function Links({
   readonly onChange: (patch: TaskPatch) => Promise<void>;
 }) {
   const change = useChange();
-  const [kind, setKind] = useState<(typeof LINK_KINDS)[number][0]>("replication");
+  const [kind, setKind] = useState<LinkKind>("replication");
   const [target, setTarget] = useState("");
-  const nameOf = (entityType: string, entityId: string) =>
-    targets[entityType as keyof LinkTargets]?.find((candidate) => candidate.id === entityId)?.name ?? entityId;
+  const targetOf = (entityType: string, entityId: string) =>
+    targets[entityType as LinkKind]?.find((candidate) => candidate.id === entityId);
+  const nameOf = (entityType: string, entityId: string) => targetOf(entityType, entityId)?.name ?? entityId;
   const options = targets[kind];
   return (
     <Part title="Links">
       {task.links.length === 0 ? <p className="text-xs text-fg-muted">No links.</p> : null}
       <ul className="grid gap-1">
         {task.links.map((link) => {
-          const address = linkAddress(link.entityType, link.entityId);
+          const address = linkAddress(link.entityType, link.entityId, targetOf(link.entityType, link.entityId));
           const label = LINK_KINDS.find(([key]) => key === link.entityType)?.[1] ?? link.entityType;
           return (
             <li key={`${link.entityType}:${link.entityId}`} className="flex items-center gap-2 text-sm">

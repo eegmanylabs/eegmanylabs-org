@@ -120,9 +120,9 @@ afterAll(async () => {
 describe("a collection whose rules are not written yet", () => {
   it("is one of many: the registry names them, and the world stores a document in each", () => {
     // The number falls as each phase builds its collections and writes their rules: after the
-    // publishing and automation of phase 9, the risk register, meetings, progress reports,
-    // attachments, institution candidates and some restricted custom values remain.
-    expect(unbuilt.length).toBe(8);
+    // publishing and automation of phase 9 and the risk register of phase 10, meetings, progress
+    // reports, attachments, institution candidates and some restricted custom values remain.
+    expect(unbuilt.length).toBe(7);
     // The stored document carries every scope and names an owner, so content is never the reason for a refusal.
     expect(placeholderDocument()).toMatchObject({ ownerUid: OWNER_UID, isShared: true });
   });

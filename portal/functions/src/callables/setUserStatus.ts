@@ -11,6 +11,7 @@ import {
   withheldChanges,
   writeAudit,
 } from "../framework";
+import { recordGovernance } from "../governance/ledger";
 import { applyAccountStatus } from "../people/account-status";
 import {
   holdsProgrammeRole,
@@ -89,6 +90,9 @@ export const setUserStatus = defineCallable(setUserStatusContract, {
       commitAccess(db, transaction, draft, stamp);
     });
 
+    if (input.status === "suspended") {
+      recordGovernance(context.logger, { kind: "accountSuspended", at: at.toISOString(), uid: input.uid });
+    }
     const outcome = await applyAccountStatus(input.uid, input.status);
     if (outcome === "noAccount") {
       context.logger.warn("the status of an account without an Authentication record was changed", { uid: input.uid });

@@ -109,10 +109,15 @@ export type ListedErasureRequest = CallableOutput<typeof listErasureRequestsCont
 /** Grants that end within this many days are marked as expiring in the access review. */
 export const ACCESS_REVIEW_EXPIRING_DAYS = 30;
 
+/** The most accounts one access review lists. A review that reaches it says so and cannot be attested. */
+export const ACCESS_REVIEW_ACCOUNTS_MAX = 2_000;
+
 /**
- * The periodic access review: every account that holds a role or a grant, what it holds, when
- * it last signed in and which grants end soon, and the attestations of the current period. The
- * hash of the listing binds an attestation to what the reviewer saw.
+ * The periodic access review: every account that holds a role, a grant, the membership of a
+ * group or the confirmed membership of a replication team, what it holds, who appointed it,
+ * when it last signed in and which grants end soon; the overrides of the capability matrix,
+ * which change what every holder of a role may do; and the attestations of the current period.
+ * The hash of the listing binds an attestation to what the reviewer saw, overrides included.
  */
 export const getAccessReviewContract = {
   name: "getAccessReview",
@@ -134,11 +139,17 @@ export const getAccessReviewContract = {
                 scopeType: roleScopeTypeSchema,
                 scopeId: z.string(),
                 status: roleAssignmentStatusSchema,
+                /** Who granted the role: an account, or trusted code; null while it awaits approval. */
+                grantedBy: z.string().nullable(),
                 expiresAt: instantSchema.nullable(),
                 expiringSoon: z.boolean(),
               }),
             )
             .max(200),
+          /** Groups whose shared records the account reads, with its role in each. */
+          groups: z.array(z.strictObject({ groupId: idSchema, name: z.string(), role: z.string() })).max(200),
+          /** Replications whose records the account reads through a confirmed team membership. */
+          teamReplicationIds: z.array(idSchema).max(200),
           grants: z
             .array(
               z.strictObject({
@@ -151,7 +162,11 @@ export const getAccessReviewContract = {
             .max(200),
         }),
       )
-      .max(2_000),
+      .max(ACCESS_REVIEW_ACCOUNTS_MAX),
+    /** True when more accounts hold rights than one review lists. Such a listing cannot be attested. */
+    truncated: z.boolean(),
+    /** The overrides of the default capability matrix, role by role. */
+    overrides: z.array(z.strictObject({ role: roleSchema, capability: z.string(), allowed: z.boolean() })).max(500),
     attestations: z
       .array(
         z.strictObject({

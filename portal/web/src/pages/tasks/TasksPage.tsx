@@ -2,7 +2,7 @@
 // the tasks of the chosen list as a tree, as views of the view engine, and as the planning views
 // of workload, risks and blockers, roadmap and dependencies across replications. "My tasks"
 // gathers every task assigned to the viewer, whatever its list. A task opens beside the list.
-import { CORE_SOURCES, type PlannedTask, updateTaskListContract, type ViewScope } from "@eegml/shared";
+import { CORE_SOURCES, nestedEntityId, type PlannedTask, updateTaskListContract, type ViewScope } from "@eegml/shared";
 import { useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { LiveView } from "@/components/feedback/live-view";
@@ -15,7 +15,16 @@ import { HorizontalScroll } from "@/components/ui/horizontal-scroll";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { callFunction, retryFailedLiveData, useLiveQuery } from "@/data";
 import { meetingPages, workspacePages } from "@/pages/workspace/queries";
-import { ALL_PERSONS, useDatasets, useDirectoryItems, useLaboratories, useReplications } from "@/registry/queries";
+import { replicationPath } from "@/registry/paths";
+import {
+  ALL_PERSONS,
+  useDatasets,
+  useDirectoryItems,
+  useLaboratories,
+  useManuscripts,
+  useReplications,
+} from "@/registry/queries";
+import { ALL_HYPOTHESES, ALL_PROTOCOLS } from "@/registry/scientific-queries";
 import {
   finishedStatus,
   managesList,
@@ -79,6 +88,9 @@ function useLinkTargets(viewer: Viewer, people: readonly Person[]): LinkTargets 
   const pages = useLiveQuery(workspacePages(viewer));
   const meetings = useLiveQuery(meetingPages(viewer));
   const datasets = useDatasets();
+  const hypotheses = useLiveQuery(ALL_HYPOTHESES);
+  const protocols = useLiveQuery(ALL_PROTOCOLS);
+  const manuscripts = useManuscripts();
   return useMemo(
     () => ({
       replication:
@@ -102,8 +114,42 @@ function useLinkTargets(viewer: Viewer, people: readonly Person[]): LinkTargets 
               .map((dataset) => ({ id: dataset.id, name: `${dataset.datasetKey}, ${dataset.title}` }))
               .sort((a, b) => a.name.localeCompare(b.name, "en"))
           : [],
+      // A hypothesis and a protocol are named by their replication, whose tab shows them.
+      hypothesis:
+        hypotheses.status === "ready"
+          ? hypotheses.data
+              .filter((hypothesis) => hypothesis.archivedAt === null)
+              .map((hypothesis) => ({
+                id: nestedEntityId(hypothesis.replicationId, hypothesis.id),
+                name: `${hypothesis.replicationId}, hypothesis ${hypothesis.hypothesisNumber}`,
+              }))
+              .sort((a, b) => a.name.localeCompare(b.name, "en", { numeric: true }))
+          : [],
+      protocol:
+        protocols.status === "ready"
+          ? protocols.data
+              .filter((protocol) => protocol.archivedAt === null)
+              .map((protocol) => ({
+                id: nestedEntityId(protocol.replicationId, protocol.id),
+                name: `${protocol.replicationId}, ${protocol.title}`,
+              }))
+              .sort((a, b) => a.name.localeCompare(b.name, "en"))
+          : [],
+      manuscript:
+        manuscripts.status === "ready"
+          ? manuscripts.data
+              .filter((manuscript) => manuscript.archivedAt === null)
+              .map((manuscript) => ({
+                id: manuscript.id,
+                name: manuscript.title,
+                ...(manuscript.replicationId === undefined
+                  ? {}
+                  : { address: `${replicationPath(manuscript.replicationId)}?tab=outputs` }),
+              }))
+              .sort((a, b) => a.name.localeCompare(b.name, "en"))
+          : [],
     }),
-    [replications, laboratories, pages, meetings, people, datasets],
+    [replications, laboratories, pages, meetings, people, datasets, hypotheses, protocols, manuscripts],
   );
 }
 

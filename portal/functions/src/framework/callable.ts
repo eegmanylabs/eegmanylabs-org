@@ -9,13 +9,14 @@ import {
   accountStanding,
   COLLECTIONS,
   FUNCTIONS_REGION,
+  FUNCTIONS_SERVICE_ACCOUNT,
   isFirestoreTimestamp,
   normaliseDisplayName,
 } from "@eegml/shared";
 import type { Firestore } from "firebase-admin/firestore";
 import { logger as functionsLogger } from "firebase-functions";
-import { type CallableFunction, onCall } from "firebase-functions/https";
-import { defineList } from "firebase-functions/params";
+import { type CallableFunction, HttpsError, onCall } from "firebase-functions/https";
+import { defineBoolean, defineList } from "firebase-functions/params";
 import { firestore } from "./admin";
 import { type AuthenticatedContext, type CallableContext, type Clock, type Logger, systemClock } from "./context";
 import {
@@ -239,20 +240,47 @@ function portalOrigins(): ReturnType<typeof defineList> {
   return portalOriginsParameter;
 }
 
+export const ENFORCE_APP_CHECK_PARAMETER = "ENFORCE_APP_CHECK";
+
+let enforceAppCheckParameter: ReturnType<typeof defineBoolean> | undefined;
+
+/**
+ * Whether every callable refuses a request without a valid App Check token, set per project at
+ * deployment (ops/README.md). It is false until App Check has been watched on staging, and is
+ * then switched on without a change of code. Declared once, as `portalOrigins` is, and never in
+ * the emulator, which cannot issue App Check tokens.
+ */
+function appCheckEnforced(): ReturnType<typeof defineBoolean> {
+  enforceAppCheckParameter ??= defineBoolean(ENFORCE_APP_CHECK_PARAMETER, {
+    default: false,
+    description: "Refuse every callable request that carries no valid App Check token",
+  });
+  return enforceAppCheckParameter;
+}
+
+export const APP_CHECK_REQUIRED_MESSAGE =
+  "This request did not come from the portal's application. Reload the page and try again.";
+
 export function defineCallable<C extends CallableContract>(
   contract: C,
   definition: CallableDefinition<C>,
 ): CallableFunction<CallableInput<C>, Promise<CallableOutput<C>>> {
   const emulated = runningInEmulator();
+  // Declared when the function is defined, so that the Firebase tools see it at deployment.
+  const enforceAppCheck = emulated ? null : appCheckEnforced();
   return onCall<CallableInput<C>, Promise<CallableOutput<C>>>(
     {
       region: FUNCTIONS_REGION,
+      serviceAccount: FUNCTIONS_SERVICE_ACCOUNT,
       // The emulator serves builds on any local port (PORTAL_PORT_BASE), so it accepts every origin.
       cors: emulated ? true : portalOrigins(),
       enforceAppCheck: definition.enforceAppCheck === true && !emulated,
       secrets: definition.usesIdentityHashKey === true && !emulated ? [identityHashKeySecret()] : [],
     },
     (request) => {
+      if (enforceAppCheck !== null && request.app === undefined && enforceAppCheck.value()) {
+        throw new HttpsError("failed-precondition", APP_CHECK_REQUIRED_MESSAGE);
+      }
       const db = firestore();
       return runCallable(contract, definition, request, {
         db,

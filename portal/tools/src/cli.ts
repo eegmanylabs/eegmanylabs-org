@@ -12,11 +12,12 @@ import { accessRebuildCommand } from "./commands/access-rebuild";
 import { adminBootstrapCommand } from "./commands/admin-bootstrap";
 import { backupCompareCommand, backupManifestCommand } from "./commands/backup-manifest";
 import { citationsVerifyCommand } from "./commands/citations-verify";
+import { governanceReplayCommand } from "./commands/governance-replay";
 import { importCommand } from "./commands/import";
 import { integrityCheckCommand } from "./commands/integrity-check";
 import { migrateManuscriptIdsCommand } from "./commands/migrate-manuscript-ids";
 import { publishVerifyCommand } from "./commands/publish-verify";
-import { restoreCaptureCommand, restoreVerifyCommand } from "./commands/restore-rehearse";
+import { restoreAfterSnapshotCommand, restoreCaptureCommand, restoreVerifyCommand } from "./commands/restore-rehearse";
 import { seedDemoCommand } from "./commands/seed-demo";
 import { seedLookupsCommand } from "./commands/seed-lookups";
 import { ToolRefusal } from "./environment";
@@ -32,7 +33,9 @@ const COMMANDS: readonly Command[] = [
   integrityCheckCommand,
   migrateManuscriptIdsCommand,
   publishVerifyCommand,
+  governanceReplayCommand,
   restoreCaptureCommand,
+  restoreAfterSnapshotCommand,
   restoreVerifyCommand,
   backupManifestCommand,
   backupCompareCommand,

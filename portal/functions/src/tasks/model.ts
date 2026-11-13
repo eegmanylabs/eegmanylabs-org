@@ -163,8 +163,9 @@ const NOT_A_DEPENDENCY_MESSAGE = "A dependency names a task that does not exist,
 
 /**
  * Whether the caller reads a record that a task links to, as the security rules decide it. The
- * replications, laboratories, members and datasets of the programme are read by every member; a
- * task or a page by its own decision; and any other record by its scope keys.
+ * replications, laboratories, members, datasets, hypotheses, protocols and manuscripts of the
+ * programme are read by every member; a task or a page by its own decision; and any other record
+ * by its scope keys.
  */
 function readsLinked(caller: TaskCaller, entityType: EntityType, data: unknown): boolean {
   const { access, session, uid } = caller;
@@ -174,6 +175,9 @@ function readsLinked(caller: TaskCaller, entityType: EntityType, data: unknown):
     case "laboratory":
     case "person":
     case "dataset":
+    case "hypothesis":
+    case "protocol":
+    case "manuscript":
       return true;
     case "task": {
       const task = parseStoredDocument(taskDocSchema, data);

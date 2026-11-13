@@ -25,6 +25,7 @@ const TABS = [
   "Outputs",
   "Decisions",
   "Incidents",
+  "Risks",
   "Contributors",
   "Documents",
   "Activity",
@@ -118,6 +119,7 @@ test("the replication page shows each section that has content, with every value
     "Outputs",
     "Decisions",
     "Incidents",
+    "Risks",
     "Tasks",
     "Updates",
     "Notes",
@@ -204,10 +206,10 @@ test("a lead edits the replication in place and changes its status; the rules an
       const pad = (value: number) => String(value).padStart(2, "0");
       return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
     });
-    await leadPage.getByLabel("Date").fill(today);
+    await leadPage.getByLabel("Date", { exact: true }).fill(today);
     await leadPage.getByRole("button", { name: "Show the status" }).click();
     await expect(leadPage.getByTestId("status-on-date")).toContainText("the status was Analysing");
-    await leadPage.getByLabel("Date").fill("2000-01-01");
+    await leadPage.getByLabel("Date", { exact: true }).fill("2000-01-01");
     await leadPage.getByRole("button", { name: "Show the status" }).click();
     await expect(leadPage.getByTestId("status-on-date")).toHaveText(
       "No status had been recorded by the end of 1 January 2000.",

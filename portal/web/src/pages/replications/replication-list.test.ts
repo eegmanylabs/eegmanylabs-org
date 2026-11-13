@@ -204,6 +204,9 @@ describe("filterOptions and stageText", () => {
   it("reads a stage with its number and its name, either of which may be missing", () => {
     expect(stageText({ stageNumber: 3, stageName: "Data collection" })).toBe("3. Data collection");
     expect(stageText({ stageNumber: 1, stageName: null })).toBe("Stage 1");
+    // A machine value from a source reads as words, and a name written for people stays as it is.
+    expect(stageText({ stageNumber: 6, stageName: "data_collection" })).toBe("6. Data collection");
+    expect(stageText({ stageNumber: null, stageName: "Stage_1 report" })).toBe("Stage_1 report");
     expect(stageText({ stageNumber: null, stageName: "Planning" })).toBe("Planning");
     expect(stageText({ stageNumber: null, stageName: null })).toBeNull();
   });

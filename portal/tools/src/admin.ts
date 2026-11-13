@@ -19,12 +19,13 @@ export function connectToEmulators(target: EmulatorTarget): AdminHandles {
 }
 
 /**
- * Connects to the Firestore of a real project with the credentials of the environment. Only the
- * importers call this, and only after `requireImportTarget` has accepted the operator's request.
+ * Connects to Firestore and Authentication of a real project with the credentials of the
+ * environment. Only the commands that accept `--production` call this, and only after
+ * `requireImportTarget` has accepted the operator's request.
  */
-export function connectToProject(projectId: string): Pick<AdminHandles, "db"> {
+export function connectToProject(projectId: string): AdminHandles {
   if (getApps().length === 0) initializeApp({ credential: applicationDefault(), projectId });
-  return { db: getFirestore() };
+  return { db: getFirestore(), auth: getAuth() };
 }
 
 /**

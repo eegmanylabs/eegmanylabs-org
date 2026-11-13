@@ -843,6 +843,7 @@ export const QUERY_CATALOGUE: readonly CataloguedQuery[] = [
       ["the analysis runs of a replication", "processingRuns", []],
       ["the incidents of a replication", "incidents", []],
       ["the actions of the incidents of a replication", "incidentActions", "group"],
+      ["the risk register of a replication", "risks", []],
       ["the authorship lists of a replication", "authorshipLists", []],
       ["the entries of an authorship list", "authorshipEntries", ["manuscript-1"]],
       ["the teams of the participations of a replication", "participationTeamMembers", "group"],
@@ -905,6 +906,16 @@ export const QUERY_CATALOGUE: readonly CataloguedQuery[] = [
     within: "group",
     limit: LIMIT,
   }),
+  catalogued(
+    "the protocols of every replication, offered as links of a task, which every member reads",
+    "member",
+    null,
+    {
+      collection: "replicationProtocols",
+      within: "group",
+      limit: LIMIT,
+    },
+  ),
   catalogued("the decision log of a replication, which every member reads", "member", null, {
     collection: "decisions",
     within: [],

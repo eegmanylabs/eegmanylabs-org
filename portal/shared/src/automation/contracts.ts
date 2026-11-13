@@ -89,5 +89,12 @@ export const getDemographicAggregatesContract = {
       .max(100),
     /** Null where any cell is suppressed. */
     total: z.number().int().min(0).nullable(),
+    /**
+     * True when nothing is released because the scope differs from an overlapping scope (a
+     * laboratory within a replication, a replication sharing laboratories, the programme) by
+     * fewer than the threshold of people with a recorded value, so that the difference of the
+     * two releases could point at someone.
+     */
+    overlapWithheld: z.boolean(),
   }),
 } as const satisfies CallableContract;

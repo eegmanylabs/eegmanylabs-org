@@ -25,6 +25,7 @@ import {
   withheldChanges,
   writeAudit,
 } from "../framework";
+import { recordGovernance } from "../governance/ledger";
 import { writeNotification } from "../notifications/notify";
 import { applyAccountStatus } from "../people/account-status";
 import { readAssignments, revokedAssignment } from "../roles/assignments";
@@ -63,7 +64,10 @@ export const recoverAccount = defineCallable(recoverAccountContract, {
     const actor = context.uid;
     const at = context.clock.now();
 
+    // The assignments revoked by the attempt of the transaction that committed.
+    let revokedIds: string[] = [];
     const outcome = await db.runTransaction(async (transaction) => {
+      revokedIds = [];
       const access = await readAccessDocument(db, actor, transaction);
       requireCapability(context, access, "claims.review", "programme");
       requireProgrammeAdministrator(access);
@@ -147,6 +151,7 @@ export const recoverAccount = defineCallable(recoverAccountContract, {
           transaction.set(stored.reference, next);
           inputs = withAssignment(inputs, next);
           revoked += 1;
+          revokedIds.push(stored.reference.id);
           writeAudit(
             transaction,
             {
@@ -267,6 +272,11 @@ export const recoverAccount = defineCallable(recoverAccountContract, {
       return { personId: input.personId, previousUid, revokedRoleAssignments: revoked };
     });
 
+    const recorded = at.toISOString();
+    recordGovernance(context.logger, { kind: "accountSuspended", at: recorded, uid: outcome.previousUid });
+    for (const assignmentId of revokedIds) {
+      recordGovernance(context.logger, { kind: "roleRevoked", at: recorded, uid: outcome.previousUid, assignmentId });
+    }
     if ((await applyAccountStatus(outcome.previousUid, "suspended")) === "noAccount") {
       context.logger.warn("the recovered account has no Authentication record", { uid: outcome.previousUid });
     }

@@ -11,6 +11,7 @@ import {
   touchedFields,
   writeAudit,
 } from "../framework";
+import { recordGovernance } from "../governance/ledger";
 import { writeNotification } from "../notifications/notify";
 import { holdsProgrammeRole, PROGRAMME_STAFF_ACCOUNT_MESSAGE } from "../roles/administrators";
 import { readAssignments, revokedAssignment } from "../roles/assignments";
@@ -32,7 +33,10 @@ export const unlinkAccountClaim = defineCallable(unlinkAccountClaimContract, {
     const actor = context.uid;
     const at = context.clock.now();
 
-    return db.runTransaction(async (transaction) => {
+    // The assignments revoked by the attempt of the transaction that committed.
+    let revokedIds: string[] = [];
+    const outcome = await db.runTransaction(async (transaction) => {
+      revokedIds = [];
       const access = await readAccessDocument(db, actor, transaction);
       requireCapability(context, access, "roles.manage", "programme");
       const records = await readClaim(db, transaction, input.uid);
@@ -83,6 +87,7 @@ export const unlinkAccountClaim = defineCallable(unlinkAccountClaimContract, {
         transaction.set(stored.reference, next);
         inputs = withAssignment(inputs, next);
         revoked += 1;
+        revokedIds.push(stored.reference.id);
         writeAudit(
           transaction,
           {
@@ -137,5 +142,9 @@ export const unlinkAccountClaim = defineCallable(unlinkAccountClaimContract, {
       }
       return { personId, revokedRoleAssignments: revoked };
     });
+    for (const assignmentId of revokedIds) {
+      recordGovernance(context.logger, { kind: "roleRevoked", at: at.toISOString(), uid: input.uid, assignmentId });
+    }
+    return outcome;
   },
 });

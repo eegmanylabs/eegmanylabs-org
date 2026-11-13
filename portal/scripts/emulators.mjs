@@ -4,8 +4,10 @@
 //
 //   node scripts/emulators.mjs start  [--only auth,firestore]      run until interrupted
 //   node scripts/emulators.mjs exec   [--only auth,firestore] [--web] [--import <dir>]
-//                                     [--export-on-exit <dir>] <npm script>
+//                                     [--export-on-exit <dir>] <npm script> [-- <arguments>]
 //                                                                   start, run the script, stop.
+//                                                                   Arguments after -- reach
+//                                                                   the script.
 //                                                                   --web says that the script
 //                                                                   starts the preview server.
 //                                                                   --import starts from an
@@ -31,6 +33,13 @@ import { writeFirebaseConfig } from "./firebase-config.mjs";
 import { DEMO_PROJECT_ID, PORTAL_ROOT, runDirectory, runTemporaryDirectory } from "./paths.mjs";
 import { emulatorEnvironment, LOCAL_HOST, nearestPortBases, portsFor, resolvePortBase } from "./ports.mjs";
 import { runToCompletion } from "./process-group.mjs";
+
+/**
+ * When set to 1, `exec` starts no emulator and runs the script with its arguments directly, and
+ * the script is expected to check its arguments and stop. The tests of ops/deploy-plan.mjs use it
+ * to prove that every command the plan names can run.
+ */
+const EXEC_DRY_RUN_VARIABLE = "PORTAL_EXEC_DRY_RUN";
 
 /** Emulators the portal uses, and the ports each one needs to be free. */
 const EMULATOR_PORTS = /** @type {const} */ ({
@@ -198,12 +207,32 @@ async function main() {
     }
     case "exec": {
       const { only, web, state, rest } = parseOptions(args);
-      const [script, ...more] = rest;
+      const separator = rest.indexOf("--");
+      const [script, ...more] = separator === -1 ? rest : rest.slice(0, separator);
+      const passed = separator === -1 ? [] : rest.slice(separator + 1);
       if (!script || more.length > 0 || !/^[\w:.-]+$/.test(script)) {
-        fail("exec needs exactly one npm script name, for example: exec emulated:rules");
+        fail("exec needs exactly one npm script name, for example: exec emulated:rules [-- arguments]");
       }
+      // The arguments become part of a command line, so only plain words are accepted.
+      const unsafe = passed.find((argument) => !/^[\w@%+=:,./-]+$/.test(argument));
+      if (unsafe !== undefined) fail(`the argument "${unsafe}" holds characters that exec does not pass on.`);
+      const suffix = passed.length === 0 ? "" : ` -- ${passed.join(" ")}`;
       // The emulators run the script from their log directory, so name the portal explicitly.
-      await runFirebase("emulators:exec", only, web, [...state, `npm --prefix "${PORTAL_ROOT}" run ${script}`]);
+      const command = `npm --prefix "${PORTAL_ROOT}" run ${script}${suffix}`;
+      if (process.env[EXEC_DRY_RUN_VARIABLE] === "1") {
+        // A check of the command line alone, for the tests of the deployment plan: the script
+        // runs, told by the same variable to check its arguments and stop, and no emulator starts.
+        runToCompletion(
+          "npm",
+          ["--prefix", PORTAL_ROOT, "run", script, ...(passed.length === 0 ? [] : ["--", ...passed])],
+          {
+            spawnOptions: { cwd: PORTAL_ROOT, env: process.env },
+            onStartFailure: (error) => console.error(`emulators: could not start npm: ${error.message}`),
+          },
+        );
+        return;
+      }
+      await runFirebase("emulators:exec", only, web, [...state, command]);
       return;
     }
     case "run": {

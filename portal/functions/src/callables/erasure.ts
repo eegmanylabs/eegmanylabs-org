@@ -12,6 +12,7 @@ import { type Firestore, Timestamp } from "firebase-admin/firestore";
 import {
   AppError,
   type AuthenticatedContext,
+  authentication,
   callerStamp,
   createdFields,
   defineCallable,
@@ -23,6 +24,8 @@ import {
   writeAudit,
 } from "../framework";
 import { applyErasure } from "../governance/erasure";
+import { recordGovernance } from "../governance/ledger";
+import { APPOINTED_BY_REQUESTER_MESSAGE, tiedByAppointment } from "../roles/appointments";
 
 /** Erasure is for programme administrators who hold `people.manage`, with the second factor. */
 async function requireAdministrator(context: AuthenticatedContext): Promise<void> {
@@ -107,7 +110,8 @@ export const requestErasure = defineCallable(requestErasureContract, {
 });
 
 /**
- * Approves or rejects a request, as a programme administrator other than the one who made it.
+ * Approves or rejects a request, as a programme administrator other than the one who made it and
+ * not tied to them by a recent appointment in either direction (roles/appointments.ts).
  * Approval records the decision with its audit entry first and then erases (governance/erasure.ts).
  * A request that was approved and not completed is completed by approving it again.
  */
@@ -127,6 +131,9 @@ export const decideErasure = defineCallable(decideErasureContract, {
           "permission-denied",
           "An erasure is decided by a programme administrator other than the one who asked for it.",
         );
+      }
+      if (await tiedByAppointment(db, transaction, request.requestedBy, uid, at)) {
+        throw new AppError("permission-denied", APPOINTED_BY_REQUESTER_MESSAGE);
       }
       const resumable = request.status === "approved" && request.appliedAt === null && input.decision === "approve";
       if (request.status !== "pendingApproval" && !resumable) {
@@ -167,12 +174,18 @@ export const decideErasure = defineCallable(decideErasureContract, {
       );
     }
     const stamp = callerStamp(uid, at, decided.writeContext.auditEventId);
-    const appliedCounts = await applyErasure(db, decided.personId, stamp);
+    const appliedCounts = await applyErasure(db, authentication(), decided.personId, stamp);
     await reference.update({
       ...touchedFields(stamp),
       status: "applied",
       appliedAt: Timestamp.fromDate(context.clock.now()),
       appliedCounts,
+    });
+    recordGovernance(context.logger, {
+      kind: "erasureApplied",
+      at: at.toISOString(),
+      personId: decided.personId,
+      requestId: input.requestId,
     });
     return { status: "applied" as const, appliedCounts };
   },

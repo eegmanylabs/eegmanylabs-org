@@ -10,7 +10,7 @@
 //
 // Every event takes an identifier that names what happened once, and a run takes its identifier
 // from its rule and its event, so a delivery that arrives twice starts nothing twice.
-import { COLLECTIONS, FUNCTIONS_REGION } from "@eegml/shared";
+import { COLLECTIONS, FUNCTIONS_REGION, FUNCTIONS_SERVICE_ACCOUNT } from "@eegml/shared";
 import { logger } from "firebase-functions";
 import { onDocumentWritten } from "firebase-functions/firestore";
 import { onSchedule as onScheduleTrigger } from "firebase-functions/scheduler";
@@ -59,7 +59,13 @@ export const automationsOnSummaryWritten = onDocumentWritten(
 );
 
 export const automationsSchedule = onScheduleTrigger(
-  { schedule: "every day 07:43", timeZone: "Europe/London", region: FUNCTIONS_REGION, retryCount: 2 },
+  {
+    schedule: "every day 07:43",
+    timeZone: "Europe/London",
+    region: FUNCTIONS_REGION,
+    serviceAccount: FUNCTIONS_SERVICE_ACCOUNT,
+    retryCount: 2,
+  },
   async (event) => {
     const db = firestore();
     const at = new Date(event.scheduleTime);

@@ -7,21 +7,75 @@
 //
 //   node ops/restore-scratch.mjs --environment production --project <id>
 //     --scratch-project <id> --scratch-project-number <number> --snapshot-time 2026-11-20T09:00:00Z
+//     [--work-directory <absolute directory outside the repository>]
 //   (add --execute to run the printed commands after typing the project identifier again)
 //
-// The moment must lie inside the 7 days of point-in-time recovery. The live database is only
-// read: a clone of it at that moment is the reference, the export of that moment is restored into
-// the scratch project, and `backup:compare` must find the two identical, as the emulator
-// rehearsal (`npm run restore:rehearse`) does locally. The clone is deleted at the end.
+// What it writes, and where:
+//
+// | Where                     | What                                                                 | Removed |
+// |---------------------------|----------------------------------------------------------------------|---------|
+// | The live project          | A temporary second database, `restore-reference`, cloned from the moment: a full copy of live data, special-category documents included | At the end, even after a failure |
+// | The backup bucket         | The export of the moment, below restore/<moment>/                    | By the bucket's lifecycle rule |
+// | The backup bucket's policy | Read access for the scratch project's Firestore agent, limited by a condition to restore/<moment>/ | At the end, even after a failure |
+// | The scratch project       | The imported database and the copied files, then the governance ledger applied to them | At the end, even after a failure |
+// | The work directory        | The export of the governance ledger and the two manifests, which list every document path | By the operator, once the result is recorded |
+//
+// The live database itself is only read. The moment must lie inside the 7 days of point-in-time
+// recovery.
+import { mkdirSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { ENVIRONMENTS, projectRefusal, REGION } from "./environments.mjs";
-import { ProcedureRefusal, requireProject, requireSupplied, runProcedure } from "./procedure.mjs";
+import { ENVIRONMENTS, GOVERNANCE_LEDGER, projectRefusal, REGION } from "./environments.mjs";
+import { PORTAL_DIRECTORY, ProcedureRefusal, requireProject, requireSupplied, runProcedure } from "./procedure.mjs";
 
 export const CLONE_DATABASE = "restore-reference";
 
 /**
+ * A directory for the files of one restore, refused inside the repository: the manifests list
+ * every document path of production.
+ * @param {string} directory
+ */
+export function requireWorkDirectory(directory) {
+  const resolved = path.resolve(directory);
+  if (!path.isAbsolute(directory)) throw new ProcedureRefusal("Refusing: --work-directory is an absolute path.");
+  const repository = path.resolve(PORTAL_DIRECTORY, "..");
+  if (resolved === repository || resolved.startsWith(`${repository}${path.sep}`)) {
+    throw new ProcedureRefusal(
+      "Refusing: the work directory lies inside the repository, where nothing of production belongs.",
+    );
+  }
+  return resolved;
+}
+
+/**
+ * The commands that export the governance ledger of a project to a file.
+ * @param {string} projectId
+ * @param {string} file
+ * @returns {import("./procedure.mjs").PlannedCommand}
+ */
+export function ledgerExportCommand(projectId, file) {
+  return {
+    program: "gcloud",
+    purpose: "Export the governance ledger, kept outside Firestore, so that what a restore undoes can be applied again",
+    args: [
+      "logging",
+      "read",
+      GOVERNANCE_LEDGER.filter,
+      `--bucket=${GOVERNANCE_LEDGER.bucket}`,
+      `--location=${REGION}`,
+      "--view=_AllLogs",
+      "--freshness=3650d",
+      "--format=json",
+      `--project=${projectId}`,
+    ],
+    stdoutFile: file,
+  };
+}
+
+/**
  * @param {import("./environments.mjs").PortalEnvironment} environment
- * @param {{ projectId: string, scratchProjectId: string, scratchProjectNumber: string, snapshotTime: string }} request
+ * @param {{ projectId: string, scratchProjectId: string, scratchProjectNumber: string, snapshotTime: string, workDirectory: string }} request
  * @returns {import("./procedure.mjs").PlannedCommand[]}
  */
 export function restoreScratchCommands(environment, request) {
@@ -47,11 +101,20 @@ export function restoreScratchCommands(environment, request) {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00Z$/.test(snapshotTime) || Number.isNaN(moment.getTime())) {
     throw new ProcedureRefusal("Refusing: --snapshot-time is a whole minute in UTC, such as 2026-11-20T09:00:00Z.");
   }
-  const bucket = `gs://${requireSupplied("the backup bucket", environment.backupBucket)}`;
-  const prefix = `${bucket}/restore/${snapshotTime.replace(/[:]/g, "")}`;
-  const scratchAgent = `service-${scratchProjectNumber}@gcp-sa-firestore.iam.gserviceaccount.com`;
+  const work = requireWorkDirectory(request.workDirectory);
+  const backupBucket = requireSupplied("the backup bucket", environment.backupBucket);
+  const liveFiles = requireSupplied("the Storage bucket", environment.storageBucket);
+  const scratchFiles = `${scratchProjectId}.firebasestorage.app`;
+  const stamp = snapshotTime.replace(/[:]/g, "");
+  const prefix = `gs://${backupBucket}/restore/${stamp}`;
+  const scratchAgent = `serviceAccount:service-${scratchProjectNumber}@gcp-sa-firestore.iam.gserviceaccount.com`;
+  // Read access for the scratch project's agent to this one export, and to nothing else in the bucket.
+  const condition = `expression=resource.name.startsWith("projects/_/buckets/${backupBucket}/objects/restore/${stamp}/"),title=restore-${stamp}`;
   const tools = ["run", "--silent", "-w", "@eegml/tools", "cli", "--"];
+  /** @param {string} name */
+  const file = (name) => path.join(work, name);
   return [
+    ledgerExportCommand(projectId, file("governance-ledger.json")),
     {
       program: "gcloud",
       purpose: "Export the live database as it stood at the moment, from point-in-time recovery",
@@ -59,7 +122,7 @@ export function restoreScratchCommands(environment, request) {
     },
     {
       program: "gcloud",
-      purpose: "Clone the same moment into a second database of the live project, as the reference",
+      purpose: `Clone the same moment into a temporary second database of the live project, ${CLONE_DATABASE}, as the reference`,
       args: [
         "firestore",
         "databases",
@@ -72,14 +135,15 @@ export function restoreScratchCommands(environment, request) {
     },
     {
       program: "gcloud",
-      purpose: "Let the scratch project read the export, and nothing more",
+      purpose: "Let the scratch project read this export, and nothing more of the backup bucket",
       args: [
         "storage",
         "buckets",
         "add-iam-policy-binding",
-        bucket,
-        `--member=serviceAccount:${scratchAgent}`,
+        `gs://${backupBucket}`,
+        `--member=${scratchAgent}`,
         "--role=roles/storage.objectViewer",
+        `--condition=${condition}`,
       ],
     },
     {
@@ -89,17 +153,25 @@ export function restoreScratchCommands(environment, request) {
     },
     {
       program: "gcloud",
-      purpose: "Copy the latest copy of the files of pages into the scratch project",
-      args: ["storage", "rsync", `${bucket}/storage`, `gs://${scratchProjectId}.firebasestorage.app`, "--recursive"],
+      purpose: "Copy the latest daily copy of the files of pages into the scratch project",
+      args: ["storage", "rsync", `gs://${backupBucket}/storage`, `gs://${scratchFiles}`, "--recursive"],
     },
     {
-      program: "firebase",
+      program: "fb",
       purpose: "Give the scratch project the rules of this repository, so that the rules check means something",
-      args: ["deploy", "--only", "firestore:rules,storage", "--project", scratchProjectId],
+      args: [
+        "deploy",
+        "--config",
+        "firebase.deploy.json",
+        "--only",
+        "firestore:rules,storage",
+        "--project",
+        scratchProjectId,
+      ],
     },
     {
       program: "npm",
-      purpose: "Manifest of the reference clone (read only)",
+      purpose: "Manifest of the reference clone and of the live files (read only)",
       args: [
         ...tools,
         "backup:manifest",
@@ -108,32 +180,84 @@ export function restoreScratchCommands(environment, request) {
         projectId,
         "--database",
         CLONE_DATABASE,
+        "--bucket",
+        liveFiles,
         "--out",
-        "reference-manifest.json",
+        file("reference-manifest.json"),
       ],
     },
     {
       program: "npm",
-      purpose: "Manifest of the restore (read only)",
+      purpose: "Manifest of the restore and of its files (read only)",
       args: [
         ...tools,
         "backup:manifest",
         "--production",
         "--project",
         scratchProjectId,
+        "--bucket",
+        scratchFiles,
         "--out",
-        "restore-manifest.json",
+        file("restore-manifest.json"),
       ],
     },
     {
       program: "npm",
-      purpose: "Every document present and identical, or the differences listed",
-      args: [...tools, "backup:compare", "reference-manifest.json", "restore-manifest.json"],
+      purpose:
+        "Every document present and identical, or the differences listed. A file changed since the last daily copy shows as a difference",
+      args: [...tools, "backup:compare", file("reference-manifest.json"), file("restore-manifest.json")],
+    },
+    {
+      program: "npm",
+      purpose: "Apply to the restored copy every erasure, revocation and suspension made after the moment",
+      args: [
+        ...tools,
+        "governance:replay",
+        "--production",
+        "--project",
+        scratchProjectId,
+        "--ledger",
+        file("governance-ledger.json"),
+        "--after",
+        snapshotTime,
+      ],
     },
     {
       program: "gcloud",
       purpose: "Remove the reference clone from the live project",
       args: ["firestore", "databases", "delete", `--database=${CLONE_DATABASE}`, `--project=${projectId}`],
+      always: true,
+      allowFailure: "the clone was never made",
+    },
+    {
+      program: "gcloud",
+      purpose: "Take back the scratch project's read access to the backup bucket",
+      args: [
+        "storage",
+        "buckets",
+        "remove-iam-policy-binding",
+        `gs://${backupBucket}`,
+        `--member=${scratchAgent}`,
+        "--role=roles/storage.objectViewer",
+        `--condition=${condition}`,
+      ],
+      always: true,
+      allowFailure: "the access was never granted",
+    },
+    {
+      program: "gcloud",
+      purpose:
+        "Remove the restored database from the scratch project: the copy of production does not outlive the rehearsal",
+      args: ["firestore", "databases", "delete", "--database=(default)", `--project=${scratchProjectId}`],
+      always: true,
+      allowFailure: "nothing was imported",
+    },
+    {
+      program: "gcloud",
+      purpose: "Remove the copied files from the scratch project",
+      args: ["storage", "rm", "--recursive", `gs://${scratchFiles}/**`],
+      always: true,
+      allowFailure: "nothing was copied",
     },
   ];
 }
@@ -145,14 +269,17 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       throw new ProcedureRefusal("Refusing: --environment is staging or production.");
     const projectId = requireProject(options);
     const scratchProjectId = requireProject(options, "scratch-project");
-    return {
+    const snapshotTime = options.get("snapshot-time") ?? "";
+    const workDirectory =
+      options.get("work-directory") ?? path.join(os.tmpdir(), `eegml-restore-${snapshotTime.replace(/[:]/g, "")}`);
+    const commands = restoreScratchCommands(ENVIRONMENTS[name], {
       projectId,
-      commands: restoreScratchCommands(ENVIRONMENTS[name], {
-        projectId,
-        scratchProjectId,
-        scratchProjectNumber: options.get("scratch-project-number") ?? "",
-        snapshotTime: options.get("snapshot-time") ?? "",
-      }),
-    };
+      scratchProjectId,
+      scratchProjectNumber: options.get("scratch-project-number") ?? "",
+      snapshotTime,
+      workDirectory,
+    });
+    mkdirSync(workDirectory, { recursive: true, mode: 0o700 });
+    return { projectId, commands };
   });
 }

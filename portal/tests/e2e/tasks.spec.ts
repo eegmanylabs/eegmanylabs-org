@@ -113,6 +113,15 @@ test("AS-6: a lead plans nested work that the assignee is told of and finds in M
     await panel.getByLabel("Record to link", { exact: true }).selectOption(DATASET_KEY);
     await panel.getByRole("button", { name: "Add link" }).click();
     await expect(panel.getByRole("link", { name: new RegExp(`^${DATASET_KEY}`) })).toBeVisible({ timeout: 20_000 });
+    // A hypothesis of the replication is linked too, and its link opens the replication's hypotheses.
+    await panel.getByLabel("Kind of record to link").selectOption("hypothesis");
+    await panel.getByLabel("Record to link", { exact: true }).selectOption({ label: `${ALPHA}, hypothesis 1` });
+    await panel.getByRole("button", { name: "Add link" }).click();
+    await expect(panel.getByRole("link", { name: `${ALPHA}, hypothesis 1` })).toHaveAttribute(
+      "href",
+      new RegExp(`/replications/${ALPHA}\\?tab=hypotheses$`),
+      { timeout: 20_000 },
+    );
     const assignees = panel.getByLabel("Add to the assignees");
     await assignees.selectOption({ label: IVY.name });
     // The first of the buttons named Add is that of the assignees, the first role of the panel.

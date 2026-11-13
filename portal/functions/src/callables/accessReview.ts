@@ -58,7 +58,14 @@ export const getAccessReview = defineCallable(getAccessReviewContract, {
         },
       ];
     });
-    return { period, listingSha256: listing.listingSha256, accounts: listing.accounts, attestations };
+    return {
+      period,
+      listingSha256: listing.listingSha256,
+      accounts: listing.accounts,
+      truncated: listing.truncated,
+      overrides: listing.overrides,
+      attestations,
+    };
   },
 });
 
@@ -77,10 +84,16 @@ export const attestAccessReview = defineCallable(attestAccessReviewContract, {
       throw new AppError("failed-precondition", "An attestation is recorded for the current quarter only.");
     }
     const listing = await accessListing(db, authentication(), at);
+    if (listing.truncated) {
+      throw new AppError(
+        "failed-precondition",
+        "More accounts hold rights than one review lists, so this review cannot be attested as complete.",
+      );
+    }
     if (listing.listingSha256 !== input.listingSha256) {
       throw new AppError(
         "failed-precondition",
-        "The roles or grants have changed since the review was opened. Reload the review and check it again.",
+        "The roles, grants, groups or overrides have changed since the review was opened. Reload the review and check it again.",
       );
     }
     const batch = db.batch();

@@ -8,12 +8,16 @@
 //   node ops/deploy-plan.mjs --environment staging --project <id>
 //   (add --execute to run the printed commands after typing the project identifier again)
 //
-// The order follows ops/README.md: the preflight first, then the rules and indexes before the
-// functions that rely on them. Production is deployed only after the same commit has passed on
+// The order follows ops/README.md: the package of the functions and the preflight first, then the
+// rules and indexes before the functions that rely on them, and last the check that the static
+// files to publish are the ones the preflight scanned. Production is deployed only after the same commit has passed on
 // staging, and only with the explicit approval of a programme administrator (R21.9).
 import { fileURLToPath } from "node:url";
 import { ENVIRONMENTS, projectRefusal } from "./environments.mjs";
 import { ProcedureRefusal, requireProject, runProcedure } from "./procedure.mjs";
+
+/** The configuration of a deployment, which has no emulator block (firebase.template.json is the emulators'). */
+export const DEPLOY_CONFIG = "firebase.deploy.json";
 
 /**
  * @param {import("./environments.mjs").PortalEnvironment} environment
@@ -28,11 +32,17 @@ export function deployCommands(environment, projectId) {
       `Refusing: "${projectId}" is not the ${environment.name} project of ops/environments.mjs.`,
     );
   }
+  const config = ["--config", DEPLOY_CONFIG];
   return [
     {
       program: "npm",
-      purpose: "The preflight: every item must pass",
-      args: ["run", "deploy:check", "--", "--environment", environment.name],
+      purpose: "Build the functions and write the package that is deployed, with no workspace package in it",
+      args: ["run", "functions:package"],
+    },
+    {
+      program: "npm",
+      purpose: `The preflight: every item must pass. It builds web/out/${environment.name} and lists its files with their SHA-256`,
+      args: ["run", `deploy:check:${environment.name}`],
     },
     {
       program: "npm",
@@ -40,19 +50,19 @@ export function deployCommands(environment, projectId) {
       args: ["test"],
     },
     {
-      program: "firebase",
+      program: "fb",
       purpose: "Rules, indexes and Storage rules, which the functions rely on",
-      args: ["deploy", "--only", "firestore:rules,firestore:indexes,storage", "--project", projectId],
+      args: ["deploy", ...config, "--only", "firestore:rules,firestore:indexes,storage", "--project", projectId],
     },
     {
-      program: "firebase",
-      purpose: "The functions, all in europe-west2",
-      args: ["deploy", "--only", "functions", "--project", projectId],
+      program: "fb",
+      purpose: "The functions, all in europe-west2, running as eegml-functions",
+      args: ["deploy", ...config, "--only", "functions", "--project", projectId],
     },
     {
       program: "npm",
-      purpose: `The static files for ${environment.siteOrigin}, which the protected Pages workflow publishes`,
-      args: ["run", environment.name === "production" ? "build:production" : "build:staging"],
+      purpose: `The static files for ${environment.siteOrigin} are the ones the preflight scanned, unchanged since`,
+      args: ["run", "deploy:artefact:verify", "--", "--environment", environment.name],
     },
   ];
 }

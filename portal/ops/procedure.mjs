@@ -9,12 +9,44 @@
 // Nothing in this repository runs a procedure with --execute: the tests call the planning
 // functions alone, and no workflow file names these scripts.
 import { spawnSync } from "node:child_process";
+import { closeSync, openSync } from "node:fs";
+import path from "node:path";
 import { createInterface } from "node:readline/promises";
+import { fileURLToPath } from "node:url";
 import { isPlaceholder } from "./environments.mjs";
+
+/** The portal's directory, where every procedure runs its commands. */
+export const PORTAL_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+/**
+ * The programs a procedure may run. `fb` is the Firebase tools at the version package.json pins,
+ * through scripts/fb.sh, never a global install. `gcloud` is the operator's Google Cloud CLI.
+ * @type {Readonly<Record<"gcloud" | "fb" | "npm", string>>}
+ */
+export const PROGRAMS = Object.freeze({
+  gcloud: "gcloud",
+  fb: path.join(PORTAL_DIRECTORY, "scripts", "fb.sh"),
+  npm: "npm",
+});
 
 /**
  * One command of a procedure: the program, its arguments, and what it is for.
- * @typedef {{ program: "gcloud" | "firebase" | "npm", args: string[], purpose: string }} PlannedCommand
+ *
+ * - `unlessSucceeds`: a read-only check run first; when it succeeds the command is skipped,
+ *   which makes a creation safe to run again (an account or a secret that exists already).
+ * - `allowFailure`: why a failure of this command does not stop the procedure.
+ * - `always`: a clean-up that runs even after an earlier command failed.
+ * - `stdoutFile`: a file outside the repository that receives what the command prints.
+ *
+ * @typedef {{
+ *   program: keyof typeof PROGRAMS,
+ *   args: string[],
+ *   purpose: string,
+ *   unlessSucceeds?: { program: keyof typeof PROGRAMS, args: string[] },
+ *   allowFailure?: string,
+ *   always?: true,
+ *   stdoutFile?: string,
+ * }} PlannedCommand
  */
 
 /** Raised when a procedure declines to go on. */
@@ -89,17 +121,59 @@ function quote(value) {
   return /^[\w@%+=:,./()-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;
 }
 
+/** @param {{ program: keyof typeof PROGRAMS, args: string[] }} command */
+function displayProgram(command) {
+  return command.program === "fb" ? "scripts/fb.sh" : command.program;
+}
+
 /** @param {PlannedCommand} command */
 export function commandLine(command) {
-  return [command.program, ...command.args].map(quote).join(" ");
+  const line = [displayProgram(command), ...command.args].map(quote).join(" ");
+  return command.stdoutFile === undefined ? line : `${line} > ${quote(command.stdoutFile)}`;
 }
 
 /** @param {readonly PlannedCommand[]} commands */
 export function printPlan(commands) {
   for (const [index, command] of commands.entries()) {
     console.log(`# ${index + 1}. ${command.purpose}`);
+    if (command.unlessSucceeds !== undefined) {
+      const check = [displayProgram(command.unlessSucceeds), ...command.unlessSucceeds.args].map(quote).join(" ");
+      console.log(`#    Skipped when this succeeds: ${check}`);
+    }
+    if (command.allowFailure !== undefined)
+      console.log(`#    A failure does not stop the procedure: ${command.allowFailure}`);
+    if (command.always === true) console.log("#    Runs even when an earlier command failed.");
     console.log(commandLine(command));
     console.log("");
+  }
+}
+
+/**
+ * Runs one command in the portal's directory and answers its exit status.
+ * @param {PlannedCommand} command
+ */
+function run(command) {
+  if (command.unlessSucceeds !== undefined) {
+    const check = spawnSync(PROGRAMS[command.unlessSucceeds.program], command.unlessSucceeds.args, {
+      cwd: PORTAL_DIRECTORY,
+      stdio: "ignore",
+    });
+    if (check.status === 0) {
+      console.log("Skipped: the check found it done already.");
+      return 0;
+    }
+  }
+  const output = command.stdoutFile === undefined ? null : openSync(command.stdoutFile, "w", 0o600);
+  try {
+    const result = spawnSync(PROGRAMS[command.program], command.args, {
+      cwd: PORTAL_DIRECTORY,
+      stdio: ["inherit", output ?? "inherit", "inherit"],
+    });
+    if (result.error !== undefined)
+      console.error(`Could not start ${displayProgram(command)}: ${result.error.message}`);
+    return result.status ?? 1;
+  } finally {
+    if (output !== null) closeSync(output);
   }
 }
 
@@ -126,15 +200,20 @@ export async function carryOut(projectId, commands, flags) {
   prompt.close();
   if (answer.trim() !== projectId)
     throw new ProcedureRefusal("Refusing: the confirmation did not match. Nothing has been run.");
+  let failed = 0;
   for (const command of commands) {
+    if (failed !== 0 && command.always !== true) continue;
     console.log(`Running: ${commandLine(command)}`);
-    const result = spawnSync(command.program, command.args, { stdio: "inherit" });
-    if (result.status !== 0) {
-      console.error(`Stopped: the command failed with status ${result.status ?? "unknown"}.`);
-      return result.status ?? 1;
+    const status = run(command);
+    if (status === 0) continue;
+    if (command.allowFailure !== undefined) {
+      console.error(`The command failed with status ${status}, which is expected when ${command.allowFailure}`);
+    } else if (failed === 0) {
+      console.error(`Stopped: the command failed with status ${status}. Only the clean-up commands still run.`);
+      failed = status;
     }
   }
-  return 0;
+  return failed;
 }
 
 /**

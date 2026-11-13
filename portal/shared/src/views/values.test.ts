@@ -1,6 +1,7 @@
 // Values of properties, the core sources and the layout of dashboards. Every name, address and
 // study here is synthetic, on the example.org domain.
 import { describe, expect, it } from "vitest";
+import { aggregate, computeView } from "./compute";
 import {
   compactLayout,
   dashboardWidgetInputSchema,
@@ -232,6 +233,44 @@ describe("the core sources", () => {
     );
     expect(items.records.map((record) => record.values.done)).toEqual([true, null, false]);
     expect(items.records[0]?.reference).toEqual({ entityType: "participation", entityId: "P1__ethics" });
+  });
+
+  it("counts the datasets of a replication that await quality control with a filtered view", () => {
+    const dataset = (id: string, replicationId: string, qcStatus: string, workflowStatusKey = "received") => ({
+      id,
+      data: {
+        datasetKey: id,
+        title: `Synthetic ${id}`,
+        replicationId,
+        laboratoryId: "lab-synthetic-own",
+        qcStatus,
+        workflowStatusKey,
+      },
+    });
+    const datasets = coreCollection(
+      CORE_SOURCES["core:datasets"],
+      [
+        dataset("DS-1", "SyntheticStudy2001", "notStarted"),
+        dataset("DS-2", "SyntheticStudy2001", "pending"),
+        dataset("DS-3", "SyntheticStudy2001", "passed"),
+        dataset("DS-4", "SyntheticStudy2001", "flagged"),
+        dataset("DS-5", "SyntheticStudy1999", "pending"),
+      ],
+      {},
+      lookups,
+    );
+    // Awaiting QC: not started or pending. A flagged dataset has been assessed and waits for a decision instead.
+    const config = viewConfigSchema.parse({
+      filter: { kind: "condition", property: "qcStatus", operator: "isAnyOf", value: ["notStarted", "pending"] },
+    });
+    const scope = { property: "replication", value: "SyntheticStudy2001" };
+    const result = computeView(datasets, config, scope, CONTEXT);
+    expect(result.records.map((record) => record.id)).toEqual(["DS-1", "DS-2"]);
+    expect(aggregate(result.records, { kind: "count" }, datasets.properties)).toBe(2);
+    // Without the scope, the dataset of the other replication is counted too.
+    expect(
+      aggregate(computeView(datasets, config, null, CONTEXT).records, { kind: "count" }, datasets.properties),
+    ).toBe(3);
   });
 
   it("reads a database with its title, its properties in order and its rows that are not archived", () => {

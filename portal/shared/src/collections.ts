@@ -1845,9 +1845,9 @@ const DEFINITIONS = {
     schema: outputs.riskDocSchema,
     id: auto,
     read: read(["SCOPED"], ["scopeKeys"]),
-    write: client([grant(MANAGERS, WRITE)], UNIT),
+    write: FUNCTION_ONLY,
     dataClass: "member",
-    enforcement: DENIED,
+    enforcement: ENFORCED,
   }),
   incidents: define({
     path: "incidents/{id}",

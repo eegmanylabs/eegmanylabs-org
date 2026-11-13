@@ -16,11 +16,13 @@ import {
   requestErasureContract,
   runRetentionSweepContract,
   setRetentionPeriodContract,
+  unlinkAccountClaimContract,
 } from "@eegml/shared";
 import { type FormEvent, useState } from "react";
 import { formatDateTime } from "@/app/labels";
 import { ErrorState } from "@/components/feedback/error-state";
 import { LiveView } from "@/components/feedback/live-view";
+import { ReplicationName, ScopeName } from "@/components/record-names";
 import { Unknown } from "@/components/registry/unknown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -225,6 +227,9 @@ function Erasure() {
   const toast = useToast();
   const { live, reload } = useCallResult(listErasureRequestsContract, {}, "erasure");
   const [personId, setPersonId] = useState<string | null>(null);
+  // The account the chosen person is linked to. Erasure is refused until it is unlinked.
+  const [linkedUid, setLinkedUid] = useState<string | null>(null);
+  const [unlinking, setUnlinking] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -237,6 +242,7 @@ function Erasure() {
       await callFunction(requestErasureContract, { personId, reason: reason.trim() });
       setReason("");
       setPersonId(null);
+      setLinkedUid(null);
       toast.show({
         title: "The erasure has been requested",
         description: "A second programme administrator decides it.",
@@ -255,7 +261,29 @@ function Erasure() {
         description="Nothing is erased until a second programme administrator approves. A person linked to an account is refused until the account is unlinked. The scientific record and the audit log keep every entry."
       >
         <form className="grid gap-3" onSubmit={(event) => void submit(event)}>
-          <PersonSearch groupName="erasure-person" chosen={personId} onChoose={setPersonId} />
+          <PersonSearch
+            groupName="erasure-person"
+            chosen={personId}
+            onChoose={(id, uid) => {
+              setPersonId(id);
+              setLinkedUid(uid);
+              setFailure(null);
+            }}
+          />
+          {linkedUid === null ? null : (
+            <div className="grid gap-2 rounded-control border border-border p-3" data-testid="erasure-linked">
+              <p>
+                This person is linked to an account. Unlink the account before asking for the erasure: the roles its
+                claim gave it are revoked, and it asks for access again at its next sign-in. Once erased, the account
+                itself is deleted with the person.
+              </p>
+              <div>
+                <Button size="sm" onClick={() => setUnlinking(true)}>
+                  Unlink the account
+                </Button>
+              </div>
+            </div>
+          )}
           <FormField label="Reason" hint="Kept with the request and withheld from the audit log.">
             {(control) => (
               <Textarea
@@ -272,13 +300,30 @@ function Erasure() {
               type="submit"
               variant="primary"
               size="sm"
-              disabled={busy || personId === null || reason.trim() === ""}
+              disabled={busy || personId === null || linkedUid !== null || reason.trim() === ""}
             >
               {busy ? "Requesting" : "Request the erasure"}
             </Button>
           </div>
         </form>
       </Section>
+      <ReasonDialog
+        open={unlinking}
+        onOpenChange={setUnlinking}
+        title="Unlink the account"
+        description="The account is no longer linked to this person. The roles its claim gave it are revoked at once."
+        label="Reason"
+        hint="Kept with the account's claim and in the audit log."
+        maxLength={2_000}
+        confirmLabel="Unlink"
+        onConfirm={async (text) => {
+          if (linkedUid === null) return;
+          await callFunction(unlinkAccountClaimContract, { uid: linkedUid, reason: text.trim() });
+          setUnlinking(false);
+          setLinkedUid(null);
+          toast.show({ title: "The account has been unlinked", description: "You can now ask for the erasure." });
+        }}
+      />
       <LiveView
         live={live}
         loadingLabel="Loading the erasure requests"
@@ -302,7 +347,15 @@ const ROLE_LABELS: Readonly<Record<string, string>> = {
 
 function ReviewListing({ review, onAttested }: { review: AccessReview; onAttested: () => void }) {
   const toast = useToast();
-  const name = useAccountNames(review.attestations.map((attestation) => attestation.reviewerUid));
+  const name = useAccountNames([
+    ...review.attestations.map((attestation) => attestation.reviewerUid),
+    ...review.accounts.flatMap((account) =>
+      account.roles.flatMap((role) =>
+        role.grantedBy === null || role.grantedBy.startsWith("system:") ? [] : [role.grantedBy],
+      ),
+    ),
+  ]);
+  const appointer = (grantedBy: string) => (grantedBy.startsWith("system:") ? "the portal" : name(grantedBy));
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -331,8 +384,11 @@ function ReviewListing({ review, onAttested }: { review: AccessReview; onAtteste
   return (
     <div className="grid gap-4">
       <p className="text-fg-secondary">
-        {review.accounts.length} accounts hold a role or a grant. {expiring}{" "}
-        {expiring === 1 ? "right ends" : "rights end"} within 30 days.
+        {review.accounts.length === 1 ? "1 account holds" : `${review.accounts.length} accounts hold`} a role, a grant,
+        the membership of a group or a place on a replication team.{" "}
+        {expiring === 0
+          ? "No right ends within 30 days."
+          : `${expiring} ${expiring === 1 ? "right ends" : "rights end"} within 30 days.`}
       </p>
       <HorizontalScroll>
         <Table caption={`Roles and grants, ${review.period}`}>
@@ -341,6 +397,7 @@ function ReviewListing({ review, onAttested }: { review: AccessReview; onAtteste
               <TableHeaderCell>Account</TableHeaderCell>
               <TableHeaderCell>Roles</TableHeaderCell>
               <TableHeaderCell>Grants</TableHeaderCell>
+              <TableHeaderCell>Groups and teams</TableHeaderCell>
               <TableHeaderCell>Last sign-in</TableHeaderCell>
             </TableRow>
           </TableHead>
@@ -356,7 +413,15 @@ function ReviewListing({ review, onAttested }: { review: AccessReview; onAtteste
                     {account.roles.map((role) => (
                       <li key={`${role.role}-${role.scopeId}`}>
                         {ROLE_LABELS[role.role] ?? role.role}
-                        {role.scopeType === "programme" ? "" : ` of ${role.scopeId}`}
+                        {role.scopeType === "programme" ? null : (
+                          <>
+                            {" of "}
+                            <ScopeName scopeType={role.scopeType} scopeId={role.scopeId} />
+                          </>
+                        )}
+                        {role.grantedBy === null ? null : (
+                          <span className="text-fg-secondary">, appointed by {appointer(role.grantedBy)}</span>
+                        )}
                         {role.status === "pendingApproval" ? " (pending)" : ""}
                         {role.expiringSoon ? <Badge tone="accent">Ends soon</Badge> : null}
                       </li>
@@ -379,6 +444,24 @@ function ReviewListing({ review, onAttested }: { review: AccessReview; onAtteste
                   )}
                 </TableCell>
                 <TableCell>
+                  {account.groups.length === 0 && account.teamReplicationIds.length === 0 ? (
+                    <Unknown>None</Unknown>
+                  ) : (
+                    <ul className="grid gap-1">
+                      {account.groups.map((group) => (
+                        <li key={`group-${group.groupId}`}>
+                          {group.name}, {group.role === "manager" ? "manager" : "member"}
+                        </li>
+                      ))}
+                      {account.teamReplicationIds.map((id) => (
+                        <li key={`team-${id}`}>
+                          Team of <ReplicationName id={id} />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </TableCell>
+                <TableCell>
                   {account.lastSignInAt === null ? <Unknown>Never</Unknown> : formatDateTime(account.lastSignInAt)}
                 </TableCell>
               </TableRow>
@@ -386,6 +469,29 @@ function ReviewListing({ review, onAttested }: { review: AccessReview; onAtteste
           </TableBody>
         </Table>
       </HorizontalScroll>
+      {review.truncated ? (
+        <ErrorState
+          title="More accounts hold rights than one review can list."
+          description="This listing is incomplete, so it cannot be attested. Ask for the review to be split before the end of the period."
+        />
+      ) : null}
+      <Section
+        title="Changes to what every holder of a role may do"
+        description="Overrides of the default capabilities of a role. They are part of what an attestation covers."
+      >
+        {review.overrides.length === 0 ? (
+          <p className="text-fg-secondary">No role differs from the default capabilities.</p>
+        ) : (
+          <ul className="grid gap-1" aria-label="Overrides of the capabilities of roles">
+            {review.overrides.map((override) => (
+              <li key={`${override.role}-${override.capability}`} data-testid="access-review-override">
+                {ROLE_LABELS[override.role] ?? override.role}: {override.capability}{" "}
+                {override.allowed ? "allowed" : "withdrawn"}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
       <Section
         title={`Attestations for ${review.period}`}
         description="Each reviewer records that they have checked the listing above. An attestation covers the listing as it stood, and is marked when roles or grants have changed since."
@@ -410,7 +516,7 @@ function ReviewListing({ review, onAttested }: { review: AccessReview; onAtteste
         </FormField>
         {failure === null ? null : <ErrorState title="Your review could not be recorded." description={failure} />}
         <div>
-          <Button variant="primary" size="sm" disabled={busy} onClick={() => void attest()}>
+          <Button variant="primary" size="sm" disabled={busy || review.truncated} onClick={() => void attest()}>
             {busy ? "Recording" : "I have reviewed this listing"}
           </Button>
         </div>

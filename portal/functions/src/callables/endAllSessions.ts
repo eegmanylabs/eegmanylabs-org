@@ -2,6 +2,7 @@ import { endAllSessionsContract } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
 import { commitAccess, draftAccess } from "../access/maintain";
 import { AppError, authentication, callerStamp, defineCallable, withheldChanges, writeAudit } from "../framework";
+import { recordGovernance } from "../governance/ledger";
 
 /**
  * Ends every session of the caller's own account, the session that makes the call included
@@ -51,6 +52,7 @@ export const endAllSessions = defineCallable(endAllSessionsContract, {
       // exists in Authentication has no tokens left to revoke.
       if ((error as { code?: unknown }).code !== "auth/user-not-found") throw error;
     }
+    recordGovernance(context.logger, { kind: "sessionsEnded", at: boundary.toISOString(), uid });
     return { sessionsValidAfter: boundary.toISOString() };
   },
 });

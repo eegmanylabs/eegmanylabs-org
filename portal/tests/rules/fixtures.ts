@@ -1644,6 +1644,26 @@ export const FIXTURES: { readonly [K in CollectionKey]?: Fixture } = {
     subject: IN_LABORATORY,
     listBy: [BY_LABORATORY_KEY, BY_LABORATORY],
   },
+  risks: {
+    ids: [autoId("stored risk")],
+    seed: document({
+      scopeType: "laboratory",
+      scopeId: OWN_LABORATORY,
+      title: "A synthetic shortage of EEG caps",
+      likelihood: "medium",
+      impact: "high",
+      mitigation: "Order synthetic caps early.",
+      status: "open",
+      identifiedAt: STORED_AT,
+      closedAt: null,
+      pageId: null,
+      replicationId: null,
+      laboratoryId: OWN_LABORATORY,
+      scopeKeys: [LABORATORY_KEY],
+    }),
+    subject: IN_LABORATORY,
+    listBy: [BY_LABORATORY_KEY, BY_LABORATORY],
+  },
   authorshipLists: {
     ids: [MANUSCRIPT],
     seed: document({

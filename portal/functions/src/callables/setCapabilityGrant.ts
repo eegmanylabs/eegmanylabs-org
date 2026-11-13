@@ -21,7 +21,9 @@ import {
   touchedFields,
   writeAudit,
 } from "../framework";
+import { recordGovernance } from "../governance/ledger";
 import { writeNotification } from "../notifications/notify";
+import { APPOINTED_BY_REQUESTER_MESSAGE, tiedByAppointment } from "../roles/appointments";
 
 const OWN_GRANT_MESSAGE = "You cannot grant a capability to your own account. Ask a programme administrator.";
 const SENSITIVE_GRANT_MESSAGE =
@@ -58,7 +60,10 @@ function earlierPeriod(grant: CapabilityGrantDoc): CapabilityGrantDoc["history"]
  * keeps the reason of the grant in `history`.
  *
  * Nobody grants a capability to their own account, so that every named grant, the grant of
- * special-category data above all, involves two people. A sensitive capability
+ * special-category data above all, involves two people. A sensitive capability is also refused
+ * between two administrators of whom one appointed the other within the cool-off period
+ * (roles/appointments.ts), so that an administrator cannot reach it through an account they
+ * have just made an administrator. A sensitive capability
  * (`SENSITIVE_CAPABILITIES`) is granted and revoked by programme administrators alone, as the
  * overrides of the capability matrix are, because a member of the core team who holds
  * `roles.manage` through an override must not hand out the other sensitive powers. Revoking a
@@ -86,12 +91,15 @@ export const setCapabilityGrant = defineCallable(setCapabilityGrantContract, {
     const id = capabilityGrantId(input.uid, input.capability);
     const reference = db.doc(COLLECTIONS.capabilityGrants.docPath(id));
 
-    return db.runTransaction(async (transaction) => {
+    const outcome = await db.runTransaction(async (transaction) => {
       const access = await readAccessDocument(db, actor, transaction);
       requireCapability(context, access, "roles.manage", "programme");
       if (input.action === "grant" && input.uid === actor) throw new AppError("permission-denied", OWN_GRANT_MESSAGE);
       if ((SENSITIVE_CAPABILITIES as readonly string[]).includes(input.capability)) {
         requireProgrammeAdministrator(access, SENSITIVE_GRANT_MESSAGE);
+        if (input.action === "grant" && (await tiedByAppointment(db, transaction, actor, input.uid, at))) {
+          throw new AppError("permission-denied", APPOINTED_BY_REQUESTER_MESSAGE);
+        }
       }
       const snapshot = await transaction.get(reference);
       let stored: CapabilityGrantDoc | null = null;
@@ -178,5 +186,14 @@ export const setCapabilityGrant = defineCallable(setCapabilityGrantContract, {
       }
       return { grantId: id, active: granting };
     });
+    if (input.action === "revoke") {
+      recordGovernance(context.logger, {
+        kind: "capabilityRevoked",
+        at: at.toISOString(),
+        uid: input.uid,
+        grantId: id,
+      });
+    }
+    return outcome;
   },
 });

@@ -4,17 +4,26 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
+import { ENVIRONMENTS } from "../../ops/environments.mjs";
 import {
+  artefactDifferences,
+  artefactManifest,
+  bundleImports,
   checkAppCheck,
   checkContentSecurityPolicy,
+  checkDeployConfig,
   checkEnvironmentSupplied,
   checkFunctionsHttps,
+  checkFunctionsPackage,
+  checkFunctionsParameters,
   checkIndexes,
   checkRegion,
   checkSecretsDeclared,
+  checkServiceAccount,
   plainHttpHosts,
   scanBundle,
 } from "../../scripts/deploy-checks";
+import { deployPackageJson } from "../../scripts/functions-package.mjs";
 
 const API_KEY = "AIzaInventedInventedInventedInventedKey0";
 const SITE_KEY = "invented-recaptcha-enterprise-site-key";
@@ -67,6 +76,33 @@ describe("the scan of a production bundle", () => {
     expect(result.details.join("\n")).toMatch(pattern);
     // A finding names its kind and file, never the value it found.
     expect(result.details.join("\n")).not.toContain(planted);
+  });
+
+  it.each([
+    [
+      "an inline source map",
+      { "assets/index.js": `${clean["assets/index.js"]}\n//# sourceMappingURL=data:application/json;base64,e30=` },
+      /source map/,
+    ],
+    [
+      "an address in an image of text",
+      { "logo.svg": `<svg><desc>${["owner", "university.invalid.edu"].join("@")}</desc></svg>` },
+      /email-shaped/,
+    ],
+    [
+      "an address in a manifest",
+      { "site.webmanifest": `{"contact":"${["owner", "university.invalid.edu"].join("@")}"}` },
+      /email-shaped/,
+    ],
+    ["an identifier of an import fixture", { "assets/extra.js": "const p='faye-notreal';" }, /fixture/],
+  ])("finds %s in a file of any kind", (_label, planted, pattern) => {
+    const result = scanBundle(bundle({ ...clean, ...planted }), expected);
+    expect(result.passed).toBe(false);
+    expect(result.details.join("\n")).toMatch(pattern);
+  });
+
+  it("leaves typefaces and images out of the scan", () => {
+    expect(scanBundle(bundle({ ...clean, "fonts/dm-sans.woff2": "binary: 127.0.0.1" }), expected).passed).toBe(true);
   });
 
   it("finds a source map and a bundle without the App Check key", () => {
@@ -131,5 +167,92 @@ describe("the checks of the repository", () => {
     const result = checkEnvironmentSupplied("production");
     expect(result.passed).toBe(false);
     expect(result.details.join("\n")).toMatch(/placeholder/);
+  });
+});
+
+describe("the artefact to publish", () => {
+  it("is listed with the SHA-256 of every file, and any later change is found", () => {
+    const directory = bundle(clean);
+    const manifest = artefactManifest(directory);
+    expect(Object.keys(manifest.files)).toEqual(["assets/index.js", "index.html"]);
+    expect(artefactDifferences(manifest, directory)).toEqual([]);
+    writeFileSync(path.join(directory, "assets/index.js"), "changed");
+    writeFileSync(path.join(directory, "added.js"), "");
+    expect(artefactDifferences(manifest, directory)).toEqual(["assets/index.js has changed.", "added.js was added."]);
+  });
+});
+
+describe("the deployment of the functions", () => {
+  function root(files: Record<string, string>): string {
+    const directory = bundle(files);
+    return directory;
+  }
+  const workspace = {
+    engines: { node: "22" },
+    dependencies: { "firebase-admin": "14.5.0", "firebase-functions": "7.4.0" },
+    devDependencies: { "@eegml/shared": "0.0.0" },
+  };
+  const deployed = JSON.stringify(deployPackageJson(workspace));
+
+  it("writes a package with the two runtime dependencies alone", () => {
+    expect(JSON.parse(deployed)).toEqual({
+      name: "eegml-portal-functions",
+      version: "0.0.0",
+      private: true,
+      type: "module",
+      main: "index.js",
+      engines: { node: "22" },
+      dependencies: { "firebase-admin": "14.5.0", "firebase-functions": "7.4.0" },
+    });
+  });
+
+  it("passes a clean package and finds a workspace dependency, an import it does not install and a source map", () => {
+    const files = (pkg: string, code: string) => ({
+      "functions/package.json": JSON.stringify(workspace),
+      ".run/deploy/functions/package.json": pkg,
+      ".run/deploy/functions/index.js": code,
+    });
+    const good =
+      'import { getApps } from "firebase-admin/app";\nimport { readFileSync } from "node:fs";\nimport path from "path";';
+    expect(checkFunctionsPackage(root(files(deployed, good)))).toMatchObject({ passed: true, details: [] });
+    const withWorkspace = JSON.stringify({ ...JSON.parse(deployed), devDependencies: { "@eegml/shared": "0.0.0" } });
+    expect(checkFunctionsPackage(root(files(withWorkspace, good))).details.join()).toMatch(/development dependencies/);
+    expect(checkFunctionsPackage(root(files(deployed, 'import y from "yjs";'))).details.join()).toMatch(/imports yjs/);
+    expect(
+      checkFunctionsPackage(root(files(deployed, `${good}\n//# sourceMappingURL=index.js.map`))).details.join(),
+    ).toMatch(/source map/);
+    expect(checkFunctionsPackage(root({ "functions/package.json": "{}" })).details.join()).toMatch(/functions:package/);
+  });
+
+  it("names the bare packages a bundle imports", () => {
+    expect(
+      bundleImports('import a from "@scope/pkg/sub"; const b = await import("other"); require("node:fs");'),
+    ).toEqual(["@scope/pkg", "other"]);
+  });
+
+  it("runs every function as the runtime account, with a deployment configuration of its own", () => {
+    expect(checkServiceAccount()).toMatchObject({ passed: true, details: [] });
+    expect(checkDeployConfig()).toMatchObject({ passed: true, details: [] });
+    const planted = root({ "functions/src/triggers/x.ts": "onSchedule({ region: FUNCTIONS_REGION, schedule: 'x' })" });
+    expect(checkServiceAccount(planted).details.join()).toMatch(/without the service account/);
+  });
+
+  it("needs the origins, the address and a clear App Check switch in the parameters of the project", () => {
+    const { projectId, siteOrigin } = ENVIRONMENTS.staging;
+    const parameters = (text: string) => root({ [`functions/.env.${projectId}`]: text });
+    const good = checkFunctionsParameters(
+      "staging",
+      parameters(`PORTAL_ORIGINS=${siteOrigin}\nPORTAL_URL=${siteOrigin}/\nENFORCE_APP_CHECK=false\n`),
+    );
+    expect(good).toMatchObject({ passed: true, details: [] });
+    expect(good.notes?.join()).toMatch(/not yet enforced/);
+    expect(checkFunctionsParameters("staging", parameters("PORTAL_ORIGINS=\n")).details.join()).toMatch(/empty/);
+    expect(
+      checkFunctionsParameters(
+        "staging",
+        parameters(`PORTAL_ORIGINS=http://insecure.example.org,${siteOrigin}\nPORTAL_URL=${siteOrigin}/`),
+      ).details.join(),
+    ).toMatch(/not HTTPS/);
+    expect(checkFunctionsParameters("staging", root({})).details.join()).toMatch(/is missing/);
   });
 });

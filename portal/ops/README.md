@@ -1,6 +1,6 @@
 # Operations runbook
 
-Everything in this directory is written and has never been run. No project, bucket or service account exists yet, every identifier in `environments.mjs` is a placeholder (`eegml-staging-PLACEHOLDER`, `eegml-production-PLACEHOLDER` and so on), and the `gcloud` and `firebase` flags follow the vendor documentation of November 2026 without having been tried against a real project. Nothing here is named by a workflow file, and nothing here deploys the public website, whose own `.github/workflows/deploy.yml` is left unchanged (D-004).
+Everything in this directory is written and has never been run. No project, bucket or service account exists yet, every identifier in `environments.mjs` is a placeholder (`eegml-staging-PLACEHOLDER`, `eegml-production-PLACEHOLDER` and so on, the address of each site included, since no decision fixes it), and the `gcloud` and Firebase flags follow the vendor documentation of November 2026 without having been tried against a real project. Nothing here is named by a workflow file, and nothing here deploys the public website, whose own `.github/workflows/deploy.yml` is left unchanged (D-004).
 
 Every procedure acts on one project that the operator names in full:
 
@@ -9,37 +9,42 @@ node ops/<procedure>.mjs --environment production --project <identifier> [option
 node ops/<procedure>.mjs --environment production --project <identifier> [options] --execute  # prints, asks, runs
 ```
 
-A procedure refuses to start without `--project`, refuses a placeholder, a demonstration project, the project of the other environment and a project named for another environment, and runs nothing until the operator has typed the project identifier again at an interactive terminal. It stops at the first command that fails.
+A procedure refuses to start without `--project`, refuses a placeholder, a demonstration project, the project of the other environment and a project named for another environment, and runs nothing until the operator has typed the project identifier again at an interactive terminal. Commands run in `portal/`. A command that creates something that may exist already, such as a service account or a secret, is skipped when a read-only check finds it, so an interrupted procedure can be run again. When a command fails the procedure stops, and only the clean-up commands marked "Runs even when an earlier command failed" still run. The Firebase tools always run through `scripts/fb.sh`, at the version `package.json` pins, never a global install.
 
 | File | What it is |
 |---|---|
-| `environments.mjs` | The staging and production environments: project, backup bucket, scratch project for restores, site origin, and the region `europe-west2`. The web build and the preflight read it as well |
-| `service-accounts.mjs` | The reviewed specification of the service accounts of the functions, their project roles and the secrets each may read |
+| `environments.mjs` | The staging and production environments: project, backup bucket, Storage bucket, scratch project for restores, site origin, the region `europe-west2`, the retention of backups and the governance ledger. The web build and the preflight read it as well |
+| `service-accounts.mjs` | The reviewed specification of the service account the functions run as, the accounts of the integrations, their roles and the secrets each may read |
 | `secret-references.mjs` | Finds every secret the functions code asks for, for the preflight and for `tests/architecture/least-privilege.test.ts` |
-| `procedure.mjs` | What every procedure shares: the explicit project, the refusals, the printed plan and the typed confirmation |
-| `iam-plan.mjs` | Creates the service accounts with exactly the roles of the specification |
-| `backup-setup.mjs`, `backup-lifecycle.json` | Point-in-time recovery, the backup schedules, the nightly managed export and the daily copy of files |
-| `restore-scratch.mjs` | A restore of a chosen minute into the scratch project, compared with a clone of the same minute |
-| `deploy-plan.mjs` | The deployment of rules, indexes, Storage rules and functions, after the preflight and the tests |
+| `procedure.mjs` | What every procedure shares: the explicit project, the refusals, the printed plan, the typed confirmation, the skip checks and the clean-up |
+| `iam-plan.mjs` | Creates the secrets, then the service accounts with exactly the roles of the specification, lets the deployer act as the runtime account and takes the editor role from the Compute Engine default account |
+| `backup-setup.mjs`, `backup-lifecycle.json` | The services, point-in-time recovery, the backup schedules, the nightly managed export, the daily copy of files with the Storage Transfer agent's access, and the locked log bucket of the governance ledger |
+| `restore-scratch.mjs` | A restore of a chosen minute into the scratch project, compared with a clone of the same minute, then cleaned up |
+| `restore-live.mjs` | A restore of the live database to a chosen minute, followed by the replay of the governance ledger |
+| `deploy-plan.mjs` | The deployment of rules, indexes, Storage rules and functions, after the package, the preflight and the tests |
 
 ## Before the first deployment
 
-These are decisions and actions of the programme administrators (`docs/DECISIONS.md`, decisions 1 to 8). Until they are taken, `npm run deploy:check` fails, as it should.
+These are decisions and actions of the programme administrators (`docs/DECISIONS.md`, decisions 1 to 8). Until they are taken, the preflight fails, as it should.
 
-1. Create the staging and production projects on the Blaze plan with Identity Platform, in `europe-west2`, and the scratch project for restore rehearsals (D-003, D-017).
-2. Replace the placeholders in `environments.mjs` and `.firebaserc` with the real identifiers, in a reviewed pull request.
+1. Create the staging and production projects on the Blaze plan with Identity Platform, in `europe-west2`, and the scratch project for restore rehearsals (D-003, D-017). Prefer an organisation that enforces the policy `iam.automaticIamGrantsForDefaultServiceAccounts`, so that the default compute account never receives the editor role.
+2. Replace the placeholders in `environments.mjs` and `.firebaserc` with the real identifiers, the site origin and the Storage bucket (`<project>.firebasestorage.app`, or `<project>.appspot.com` for a bucket made before October 2024), in a reviewed pull request.
 3. Create the reCAPTCHA Enterprise key for App Check and put the web configuration in `web/.env.production.local` and `web/.env.staging.local`, which git ignores.
-4. Run `node ops/iam-plan.mjs` and review its output before anyone runs it. Create the secrets of the specification in Secret Manager (`IDENTITY_HASH_KEY` always; `PUBLISHING_GITHUB_TOKEN` and `STORAGE_*` secrets only when those integrations are switched on).
-5. Run `node ops/backup-setup.mjs`, and set the parameter `PORTAL_ORIGINS` of the functions to the origin of the site.
-6. Run `npm run deploy:check -- --environment staging` until every item passes, then `node ops/deploy-plan.mjs --environment staging`.
+4. Write `functions/.env.<project>` for each project, which git ignores: `PORTAL_ORIGINS` (the site origin), `PORTAL_URL` (an address on it) and `ENFORCE_APP_CHECK=false` until App Check has been watched on staging.
+5. Run `node ops/iam-plan.mjs --environment staging --project <id> --project-number <number> --deployer user:<address>`, with `--integrations github,storage,google` for the integrations being switched on, and review its output before anyone runs it with `--execute`. It creates each secret in `europe-west2` before binding it; add each secret's value by hand afterwards with `gcloud secrets versions add`.
+6. Run `node ops/backup-setup.mjs --environment staging --project <id> --project-number <number>`.
+7. Run `npm run functions:package`, then `npm run deploy:check:staging` until every item passes, then `node ops/deploy-plan.mjs --environment staging --project <id>`.
 
 ## The order of a deployment
 
-1. `npm run deploy:check -- --environment <name>`: every item passes.
-2. `npm test` at the commit that is deployed: every test passes.
-3. Staging first, with the same commit, and the checks of `README.md`, "What has not been verified", repeated on staging.
-4. Production only with the explicit approval of a programme administrator (R1.12, R21.9), through `deploy-plan.mjs`.
-5. The static files reach Pages through the protected, manually started workflow that `docs/SECURITY.md`, section 8, proposes, which a repository administrator has still to create.
+1. `npm run functions:package`: the package that is uploaded, with no workspace package in it.
+2. `npm run deploy:check:<environment>`: every item passes. It builds the static files into `web/out/<environment>`, scans every one of them and writes their SHA-256 to `web/out/<environment>.sha256.json`.
+3. `npm test` at the commit that is deployed: every test passes.
+4. Rules, indexes and Storage rules, then the functions, through `scripts/fb.sh deploy --config firebase.deploy.json`. Every function runs as `eegml-functions`.
+5. `npm run deploy:artefact:verify -- --environment <environment>`: the static files to publish are the ones the preflight scanned. A build made later, with other variables or from another commit, fails here and is not published.
+6. Staging first, with the same commit, and the checks of `README.md`, "What has not been verified", repeated on staging. App Check is enforced on a project by setting `ENFORCE_APP_CHECK=true` in its `functions/.env.<project>` and deploying the functions again, once its metrics on staging show the portal's own requests carrying tokens.
+7. Production only with the explicit approval of a programme administrator (R1.12, R21.9), through `deploy-plan.mjs`.
+8. The static files of `web/out/<environment>` reach Pages through the protected, manually started workflow that `docs/SECURITY.md`, section 8, proposes, which a repository administrator has still to create. That workflow runs step 5 before it publishes.
 
 ## Backups and restore
 
@@ -49,11 +54,28 @@ These are decisions and actions of the programme administrators (`docs/DECISIONS
 | Scheduled backups | Inside Firestore, in the database's region | Daily for 7 days, weekly for 14 weeks |
 | Managed export (Cloud Scheduler calls the Firestore export at 01:17) | The backup bucket, `europe-west2`, below `firestore/` | 98 days, by `backup-lifecycle.json` |
 | Files of pages (Storage Transfer Service, daily) | The backup bucket, below `storage/` | 98 days |
-| Authentication accounts | Exported by hand with `firebase auth:export` into the backup bucket, because the file holds every member's address | As the bucket |
+| Authentication accounts | Exported by hand with `scripts/fb.sh auth:export` into the backup bucket, because the file holds every member's address | As the bucket |
+| Governance ledger | The locked log bucket `eegml-governance-ledger`, `europe-west2` | 10 years, which nobody can shorten |
 
-The periods are a proposal for the administrators to confirm (`BACKUP_RETENTION` in `environments.mjs`). Erasure has to reach these copies too: an erased person stays in backups until they expire (`docs/SECURITY.md`, section 6).
+The periods are a proposal for the administrators to confirm (`BACKUP_RETENTION` in `environments.mjs`). An erased person stays in the first five copies until they expire (`docs/SECURITY.md`, section 6). A restore from any of them would bring back an erased person, a revoked role or grant, a suspended account and ended sessions. That is what the governance ledger is for: every erasure, revocation, suspension and end of sessions is logged with identifiers only, routed outside Firestore, and applied again by `governance:replay` after every restore.
 
-A restore is rehearsed before any production rollout and repeated each quarter. `npm run restore:rehearse` does it on the emulators. `restore-scratch.mjs` does the same against the real projects: it exports the chosen minute from point-in-time recovery, clones the same minute into a second database of the live project as the reference, imports the export into the scratch project, copies the files, deploys the rules of this repository to the scratch project, and compares the two with `backup:manifest` and `backup:compare`. The live database is only read, and the reference clone is deleted at the end. Record the result beside the emulator rehearsal.
+A restore is rehearsed before any production rollout and repeated each quarter. `npm run restore:rehearse` does it on the emulators, the replay of the ledger included.
+
+### Rehearsing a restore in the scratch project
+
+`node ops/restore-scratch.mjs --environment <name> --project <id> --scratch-project <id> --scratch-project-number <number> --snapshot-time <minute> [--work-directory <directory>]` exports the governance ledger, exports the chosen minute from point-in-time recovery, clones the same minute into a temporary second database of the live project (`restore-reference`) as the reference, grants the scratch project's Firestore agent read access to that one export through a condition on its prefix, imports the export into the scratch project, copies the latest daily copy of the files, deploys the rules of this repository to the scratch project, and compares the two with `backup:manifest` and `backup:compare`, files included. A file changed since the last daily copy shows as a difference, which the record explains. It then applies the governance ledger to the restored copy. At the end, even after a failure, it deletes the clone from the live project, takes back the read access, and deletes the restored database and files from the scratch project, so that no copy of production outlives the rehearsal.
+
+So the procedure does write to the live project: the temporary clone, which is a full copy of live data, special-category documents included, and a binding on the backup bucket. Both are removed at the end. The live database itself is only read. The work directory, by default a new directory in the system's temporary directory and never inside the repository, receives the ledger export and the two manifests, which list every document path of production; delete it once the result is recorded beside the emulator rehearsal.
+
+### Restoring the live project
+
+`node ops/restore-live.mjs --environment <name> --project <id> --snapshot-time <minute> [--work-directory <directory>]` is for a recovery that the programme administrators have decided on, after the same minute has been rehearsed in the scratch project. Its steps, all mandatory and in this order:
+
+1. Export the governance ledger, which the restore cannot touch.
+2. Export the chosen minute from point-in-time recovery and import it into the live database. Every document that existed then returns to its state then; a document created later stays.
+3. `governance:replay --production --project <id> --ledger <export> --after <minute>`: every erasure, revocation of a role or a grant and suspension after the minute is applied again, every access document is resolved again from its sources, and every session that began before the replay is ended, so that no token issued before the restore outlives it.
+
+For a moment older than the 7 days of point-in-time recovery the scheduled backups are restored into a new database instead, which is a decision of its own; the replay of the ledger applies to it in the same way.
 
 ## Encryption in transit
 

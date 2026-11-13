@@ -3056,6 +3056,13 @@ service cloud.firestore {
       allow read: if isMember() && (core() || withinUnit(resource.data)) && boundedRead();
     }
 
+    // The risk register of a replication, a laboratory or the programme, written through a
+    // callable function by those who manage its scope.
+    // Reads: 1 (access).
+    match /risks/{riskId} {
+      allow read: if isMember() && (core() || withinUnit(resource.data)) && boundedRead();
+    }
+
     // Reads: 1 (access).
     match /{path=**}/actions/{actionId} {
       allow read: if isMember() && (core() || withinUnit(resource.data)) && boundedRead();

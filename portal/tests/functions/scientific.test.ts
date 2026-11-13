@@ -27,9 +27,11 @@ import {
   replicationHypothesisDocSchema,
   reportIncidentContract,
   respondToAuthorshipEntryContract,
+  riskDocSchema,
   saveAnalysisRunContract,
   saveAuthorshipListContract,
   saveManuscriptContract,
+  saveRiskContract,
   statusDefinitionId,
   TASK_STATUSES,
   taskDocSchema,
@@ -497,6 +499,106 @@ describe("the incident registry", () => {
     expect(await codeOf(call(coordinating, reportIncidentContract, { ...report, scopeId: OTHER_LAB }))).toBe(
       "permission-denied",
     );
+  });
+});
+
+describe("the risk register", () => {
+  const entry = {
+    riskId: null,
+    scopeType: "replication" as const,
+    scopeId: STUDY,
+    title: "Too few EEG caps for the autumn sessions",
+    description: null,
+    likelihood: "medium" as const,
+    impact: "high" as const,
+    mitigation: "Order synthetic caps in July.",
+    ownerPersonId: null,
+    status: "open" as const,
+    reviewAt: "2026-09-01",
+  };
+
+  it("enters a risk of a replication, changes it, closes it and opens it again, with an audit entry each time", async () => {
+    const leader = await lead();
+    await person("person-owner");
+    const { riskId } = await call(leader, saveRiskContract, { ...entry, ownerPersonId: "person-owner" });
+    const stored = riskDocSchema.parse(await dataOf(`risks/${riskId}`));
+    expect(stored).toMatchObject({
+      scopeType: "replication",
+      scopeId: STUDY,
+      replicationId: STUDY,
+      laboratoryId: null,
+      scopeKeys: unitScopeKeys(STUDY, null),
+      ownerPersonId: "person-owner",
+      mitigation: "Order synthetic caps in July.",
+      status: "open",
+      closedAt: null,
+      pageId: null,
+    });
+    expect(stored.reviewAt?.toDate().toISOString()).toBe("2026-09-01T00:00:00.000Z");
+
+    await call(leader, saveRiskContract, { ...entry, riskId, status: "closed", mitigation: null, reviewAt: null });
+    const closed = riskDocSchema.parse(await dataOf(`risks/${riskId}`));
+    expect(closed.status).toBe("closed");
+    expect(closed.closedAt).not.toBeNull();
+    expect(closed.mitigation).toBeUndefined();
+    expect(closed.reviewAt).toBeUndefined();
+    expect(closed.ownerPersonId).toBeUndefined();
+    // Closing it again keeps the first date; opening it again clears it.
+    await call(leader, saveRiskContract, { ...entry, riskId, status: "closed" });
+    expect(riskDocSchema.parse(await dataOf(`risks/${riskId}`)).closedAt?.toMillis()).toBe(closed.closedAt?.toMillis());
+    await call(leader, saveRiskContract, { ...entry, riskId, status: "mitigating" });
+    expect(riskDocSchema.parse(await dataOf(`risks/${riskId}`)).closedAt).toBeNull();
+    expect(await auditOf("risk.saved", riskId)).toHaveLength(4);
+  });
+
+  it("is kept by those who manage its scope, in the register it was entered in, with an owner from the directory", async () => {
+    const coordinating = await coordinator();
+    const { riskId } = await call(coordinating, saveRiskContract, { ...entry, scopeType: "laboratory", scopeId: LAB });
+    expect(riskDocSchema.parse(await dataOf(`risks/${riskId}`)).scopeKeys).toEqual(unitScopeKeys(null, LAB));
+    // A coordinator does not keep the register of a replication, nor of another laboratory.
+    expect(await codeOf(call(coordinating, saveRiskContract, entry))).toBe("permission-denied");
+    expect(
+      await codeOf(call(coordinating, saveRiskContract, { ...entry, scopeType: "laboratory", scopeId: OTHER_LAB })),
+    ).toBe("permission-denied");
+    // A member who manages nothing, and nobody signed out, keeps no register; nor a lead the programme's.
+    expect(await codeOf(call(await member(), saveRiskContract, entry))).toBe("permission-denied");
+    expect(await codeOf(call(null, saveRiskContract, entry))).toBe("unauthenticated");
+    expect(
+      await codeOf(call(await lead(), saveRiskContract, { ...entry, scopeType: "programme", scopeId: "programme" })),
+    ).toBe("permission-denied");
+    // A risk stays where it was entered, and names an owner who exists.
+    expect(
+      await codeOf(
+        call(coordinating, saveRiskContract, { ...entry, riskId, scopeType: "laboratory", scopeId: OTHER_LAB }),
+      ),
+    ).toBe("invalid-argument");
+    expect(
+      await codeOf(
+        call(coordinating, saveRiskContract, {
+          ...entry,
+          scopeType: "laboratory",
+          scopeId: LAB,
+          ownerPersonId: "person-nobody",
+        }),
+      ),
+    ).toBe("invalid-argument");
+    expect(
+      await codeOf(
+        call(coordinating, saveRiskContract, {
+          ...entry,
+          riskId: "risk-nowhere",
+          scopeType: "laboratory",
+          scopeId: LAB,
+        }),
+      ),
+    ).toBe("not-found");
+    // Programme staff keep every register, the programme's included.
+    const { riskId: programmeRisk } = await call(await coreTeamMember("uid-sci-core"), saveRiskContract, {
+      ...entry,
+      scopeType: "programme",
+      scopeId: "programme",
+    });
+    expect(riskDocSchema.parse(await dataOf(`risks/${programmeRisk}`)).scopeType).toBe("programme");
   });
 });
 

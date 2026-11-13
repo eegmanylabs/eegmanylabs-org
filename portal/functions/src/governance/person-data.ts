@@ -3,7 +3,7 @@
 // functions already make, so the index file serves them as it stands.
 import { COLLECTIONS, PERSON_EXPORT_MAX_DOCUMENTS } from "@eegml/shared";
 import type { Auth } from "firebase-admin/auth";
-import type { DocumentSnapshot, Firestore, Query } from "firebase-admin/firestore";
+import type { DocumentData, DocumentSnapshot, Firestore, Query } from "firebase-admin/firestore";
 import { jsonOf } from "../callables/listAuditEvents";
 
 type Json = ReturnType<typeof jsonOf>;
@@ -28,9 +28,21 @@ const LIST_MAX = 1_000;
 const instantOf = (text: string | undefined) =>
   text === undefined || text === "" ? null : new Date(text).toISOString();
 
+/** An audit entry with the values of its changes withheld, keeping which fields changed. */
+export function withholdValues(data: DocumentData): DocumentData {
+  const changes: unknown = data.changes;
+  if (!Array.isArray(changes)) return data;
+  return {
+    ...data,
+    changes: changes.map((change) => ({ field: (change as { field?: unknown }).field, withheld: true })),
+  };
+}
+
 /**
  * Every document about one person and the accounts linked to the person. The special-category
  * document is read only when `includeSpecial` is true, which the caller decides from a grant.
+ * The audit entries of the person's own actions are included with the values withheld wherever
+ * the entry is about someone or something else: those values are third-party data.
  */
 export async function gatherPersonData(
   db: Firestore,
@@ -41,17 +53,18 @@ export async function gatherPersonData(
   const seen = new Set<string>();
   const documents: { path: string; data: Json }[] = [];
   let truncated = false;
-  const add = (snapshot: DocumentSnapshot) => {
-    if (!snapshot.exists || seen.has(snapshot.ref.path)) return;
+  const add = (snapshot: DocumentSnapshot, shape: (data: DocumentData) => DocumentData = (data) => data) => {
+    const data = snapshot.data();
+    if (data === undefined || seen.has(snapshot.ref.path)) return;
     if (documents.length >= PERSON_EXPORT_MAX_DOCUMENTS) {
       truncated = true;
       return;
     }
     seen.add(snapshot.ref.path);
-    documents.push({ path: snapshot.ref.path, data: jsonOf(snapshot.data()) });
+    documents.push({ path: snapshot.ref.path, data: jsonOf(shape(data)) });
   };
-  const addAll = async (query: Query) => {
-    for (const snapshot of (await query.limit(LIST_MAX).get()).docs) add(snapshot);
+  const addAll = async (query: Query, shape?: (data: DocumentData) => DocumentData) => {
+    for (const snapshot of (await query.limit(LIST_MAX).get()).docs) add(snapshot, shape);
   };
   const addPaths = async (paths: readonly string[]) => {
     if (paths.length > 0) for (const snapshot of await db.getAll(...paths.map((path) => db.doc(path)))) add(snapshot);
@@ -109,12 +122,14 @@ export async function gatherPersonData(
     ]) {
       await addAll(db.collection(entry.collectionPath()).where("uid", "==", uid));
     }
+    // What the person did is their data; the values of what they did to others are not.
     await addAll(
       db
         .collection(COLLECTIONS.auditEvents.collectionPath())
         .where("actorUid", "==", uid)
         .orderBy("createdAt", "desc")
         .limit(AUDIT_ENTRIES_MAX),
+      (data) => (data.entityId === personId || data.entityId === uid ? data : withholdValues(data)),
     );
     try {
       const record = await auth.getUser(uid);

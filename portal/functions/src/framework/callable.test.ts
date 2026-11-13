@@ -369,11 +369,28 @@ describe("defineCallable and the origins that may call", () => {
     }
   }
 
-  it("declares the parameter with the allowed origins for a deployment, in London", async () => {
+  it("declares the parameters of the origins and of App Check for a deployment, in London, as its own account", async () => {
     const { callable, declared, PORTAL_ORIGINS_PARAMETER } = await defined(false);
     expect(PORTAL_ORIGINS_PARAMETER).toBe("PORTAL_ORIGINS");
-    expect(declared).toEqual(["PORTAL_ORIGINS"]);
+    expect(declared).toEqual(["ENFORCE_APP_CHECK", "PORTAL_ORIGINS"]);
     expect(callable.__endpoint.region).toEqual(["europe-west2"]);
+    expect(callable.__endpoint.serviceAccountEmail).toBe("eegml-functions@");
+  });
+
+  it("refuses a request without an App Check token once the parameter says so, before the handler runs", async () => {
+    const { callable } = await defined(false);
+    vi.stubEnv("ENFORCE_APP_CHECK", "true");
+    try {
+      const refused = await Promise.resolve()
+        .then(() => callable.run({ data: { text: "hello" }, rawRequest: {} as never, acceptsStreaming: false }))
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+      expect(refused).toMatchObject({ code: "failed-precondition" });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("declares it once, however many functions are defined", async () => {
@@ -386,7 +403,7 @@ describe("defineCallable and the origins that may call", () => {
       const handler = async () => ({ text: "", uid: null });
       defineCallable(echoContract, { handler });
       defineCallable({ ...echoContract, name: "echoAgain" }, { handler });
-      expect(declaredParams.map((parameter) => parameter.name)).toEqual(["PORTAL_ORIGINS"]);
+      expect(declaredParams.map((parameter) => parameter.name)).toEqual(["ENFORCE_APP_CHECK", "PORTAL_ORIGINS"]);
     } finally {
       vi.unstubAllEnvs();
     }

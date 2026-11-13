@@ -13,7 +13,13 @@ vi.mock("./AuthProvider", () => ({ useAuth: () => auth.value }));
 function renderAt(path: string) {
   const router = createMemoryRouter(
     [
-      { element: <RequireLinked />, children: [{ path: "/labs/:id", element: <p>Laboratory page</p> }] },
+      {
+        element: <RequireLinked />,
+        children: [
+          { path: "/labs/:id", element: <p>Laboratory page</p> },
+          { path: "/pages", element: <p>Workspace page</p>, handle: { title: "Workspace" } },
+        ],
+      },
       { path: "/claim", element: <p>Claim page</p> },
     ],
     { initialEntries: [path] },
@@ -43,6 +49,14 @@ describe("RequireLinked", () => {
     expect(screen.getByRole("link", { name: "Link your account" }).getAttribute("href")).toBe(
       claimPathFor("/labs/lab-1?tab=members"),
     );
+  });
+
+  it("keeps the title of the section as the heading of the refusal", () => {
+    auth.value.access = accessWith(null);
+    renderAt("/pages");
+    expect(screen.getByRole("heading", { level: 1, name: "Workspace" })).toBeTruthy();
+    renderAt("/labs/lab-1");
+    expect(screen.getByRole("heading", { level: 1, name: "Members only" })).toBeTruthy();
   });
 
   it("waits for the access document before it decides", () => {

@@ -18,6 +18,7 @@ import {
   requireProgrammeAdministrator,
   writeAudit,
 } from "../framework";
+import { recordGovernance } from "../governance/ledger";
 import { writeNotification } from "../notifications/notify";
 import { LAST_ADMINISTRATOR_MESSAGE, otherAdministrators } from "../roles/administrators";
 import { assignmentIdOf, inForce, nextAssignment, readAssignments, revokedAssignment } from "../roles/assignments";
@@ -72,7 +73,7 @@ export const setRoleAssignment = defineCallable(setRoleAssignmentContract, {
       throw new AppError("invalid-argument", ADMINISTRATOR_EXPIRY_MESSAGE);
     }
 
-    return db.runTransaction(async (transaction) => {
+    const outcome = await db.runTransaction(async (transaction) => {
       const access = await readAccessDocument(db, actor, transaction);
       requireCapability(context, access, "roles.manage", "programme");
       const id = input.action === "grant" ? assignmentIdOf(input.uid, input) : input.assignmentId;
@@ -96,10 +97,10 @@ export const setRoleAssignment = defineCallable(setRoleAssignmentContract, {
           throw new AppError("not-found", "The replication, laboratory or group of this role does not exist.");
         }
       } else if (input.action === "approve" && stored.data?.status !== "pendingApproval") {
-        if (inForce(stored.data, at)) return { assignmentId: id, status: "active" as const };
+        if (inForce(stored.data, at)) return { assignmentId: id, status: "active" as const, uid: target.uid };
         throw new AppError("failed-precondition", "This role is not waiting for approval any more.");
       } else if (input.action === "revoke" && stored.data?.status === "revoked") {
-        return { assignmentId: id, status: "revoked" as const };
+        return { assignmentId: id, status: "revoked" as const, uid: target.uid };
       }
       const draft = await draftAccess(db, transaction, target.uid, at);
       if (draft === null) {
@@ -130,7 +131,7 @@ export const setRoleAssignment = defineCallable(setRoleAssignmentContract, {
           planned,
         );
       }
-      if (next === null) return { assignmentId: id, status: stored.data?.status ?? "expired" };
+      if (next === null) return { assignmentId: id, status: stored.data?.status ?? "expired", uid: target.uid };
 
       const action = input.action === "revoke" ? "role.revoked" : "role.granted";
       const auditEventId = writeAudit(
@@ -176,7 +177,16 @@ export const setRoleAssignment = defineCallable(setRoleAssignmentContract, {
           stamp,
         );
       }
-      return { assignmentId: id, status: next.status };
+      return { assignmentId: id, status: next.status, uid: target.uid };
     });
+    if (input.action === "revoke" && outcome.status === "revoked") {
+      recordGovernance(context.logger, {
+        kind: "roleRevoked",
+        at: at.toISOString(),
+        uid: outcome.uid,
+        assignmentId: outcome.assignmentId,
+      });
+    }
+    return { assignmentId: outcome.assignmentId, status: outcome.status };
   },
 });

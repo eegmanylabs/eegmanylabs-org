@@ -467,6 +467,20 @@
       ]
     },
     {
+      "collectionGroup": "risks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "replicationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scopeKeys",
+          "arrayConfig": "CONTAINS"
+        }
+      ]
+    },
+    {
       "collectionGroup": "statusHistory",
       "queryScope": "COLLECTION",
       "fields": [
@@ -1145,6 +1159,11 @@
     {
       "collectionGroup": "replications",
       "fieldPath": "custom",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "risks",
+      "fieldPath": "description",
       "indexes": []
     },
     {

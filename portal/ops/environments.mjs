@@ -16,13 +16,22 @@ export const REGION = "europe-west2";
 /** The marker of an identifier that an administrator has still to supply. */
 export const PLACEHOLDER = "PLACEHOLDER";
 
+/** The log bucket and the sink that keep the governance ledger outside Firestore (shared/src/governance/ledger.ts). */
+export const GOVERNANCE_LEDGER = Object.freeze({
+  bucket: "eegml-governance-ledger",
+  sink: "eegml-governance-ledger",
+  filter: "jsonPayload.governanceLedger:*",
+});
+
 /**
  * @typedef {object} PortalEnvironment
  * @property {"staging" | "production"} name
  * @property {string} projectId The Firebase project.
  * @property {string} backupBucket A bucket of its own for managed exports, in REGION.
+ * @property {string} storageBucket The project's Cloud Storage for Firebase bucket, which holds the files of pages:
+ *   `<project>.firebasestorage.app` for a bucket made since October 2024, `<project>.appspot.com` for an older one.
  * @property {string} scratchProjectId The project a restore is rehearsed in, never the live one.
- * @property {string} siteOrigin The origin the portal is published at.
+ * @property {string} siteOrigin The origin the portal is published at. No decision fixes it yet, so both are placeholders.
  * @property {readonly string[]} forbiddenProjectWords Words that may not appear in this environment's project.
  */
 
@@ -32,6 +41,7 @@ export const ENVIRONMENTS = Object.freeze({
     name: "staging",
     projectId: "eegml-staging-PLACEHOLDER",
     backupBucket: "eegml-staging-backups-PLACEHOLDER",
+    storageBucket: "eegml-staging-PLACEHOLDER.firebasestorage.app",
     scratchProjectId: "eegml-staging-restore-PLACEHOLDER",
     siteOrigin: "https://staging-PLACEHOLDER.github.io",
     forbiddenProjectWords: Object.freeze(["prod", "production"]),
@@ -40,8 +50,9 @@ export const ENVIRONMENTS = Object.freeze({
     name: "production",
     projectId: "eegml-production-PLACEHOLDER",
     backupBucket: "eegml-production-backups-PLACEHOLDER",
+    storageBucket: "eegml-production-PLACEHOLDER.firebasestorage.app",
     scratchProjectId: "eegml-restore-scratch-PLACEHOLDER",
-    siteOrigin: "https://portal.eegmanylabs.org",
+    siteOrigin: "https://portal-PLACEHOLDER.example.org",
     forbiddenProjectWords: Object.freeze(["staging", "stage", "test", "scratch", "restore"]),
   }),
 });
@@ -57,6 +68,11 @@ export const BACKUP_RETENTION = Object.freeze({
   dailyBackup: "7d",
   /** Retention of the weekly scheduled backup, the longest Firestore allows. */
   weeklyBackup: "14w",
+  /**
+   * Days the governance ledger's log bucket keeps each entry. It must outlast every copy a
+   * restore could start from, and it is locked so that nobody can shorten it.
+   */
+  governanceLedgerDays: 3650,
 });
 
 /** @param {string} value */

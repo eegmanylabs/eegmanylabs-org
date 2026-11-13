@@ -8,10 +8,14 @@
 //    demonstration world, marks the audit trail, stores an object and writes a manifest of every
 //    document, account and object with a hash of each. The emulators export their state with
 //    their own export when the command ends.
-// 2. Fresh emulators start from that export and run `restore:verify`, which compares the restore
-//    with the manifest, reads the audit trail back, asks the rules whether a denied read stays
-//    denied, damages the restore on purpose to show that the comparison catches it, and writes a
-//    dated report.
+// 2. Emulators start from that export and run `restore:after-snapshot`, which erases a person and
+//    revokes a grant after the backup moment and writes both to the governance ledger file. These
+//    emulators are not exported: what they did is what a restore to the backup moment loses.
+// 3. Fresh emulators start from the same export and run `restore:verify`, which compares the
+//    restore with the manifest, reads the audit trail back, asks the rules whether a denied read
+//    stays denied, damages the restore on purpose to show that the comparison catches it, replays
+//    the governance ledger and checks that the erasure and the revocation are back in effect, and
+//    writes a dated report.
 //
 // Everything goes to .run/<port base>/restore-rehearsal/<time>/ and nothing to the repository.
 // Nothing here reaches a real project: the emulators run under the demonstration project.
@@ -51,6 +55,11 @@ const captured = session(["--export-on-exit", exported], "restore:capture");
 if (captured !== 0 || !existsSync(path.join(exported, "firebase-export-metadata.json"))) {
   console.error(`restore:rehearse: the capture or the export failed. See ${directory}.`);
   process.exit(captured === 0 ? 1 : captured);
+}
+const lost = session(["--import", exported], "restore:after-snapshot");
+if (lost !== 0) {
+  console.error(`restore:rehearse: the changes after the backup moment failed. See ${directory}.`);
+  process.exit(lost);
 }
 const verified = session(["--import", exported], "restore:verify");
 console.log(`restore:rehearse ${verified === 0 ? "passed" : "failed"}. The report is in ${directory}.`);

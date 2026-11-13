@@ -8,7 +8,7 @@
 //
 // In a real project no sender exists until a provider is chosen, so the outbox fills and nothing
 // is sent. Logs carry identifiers and counts, never an address or the text of a message.
-import { COLLECTIONS, FUNCTIONS_REGION } from "@eegml/shared";
+import { COLLECTIONS, FUNCTIONS_REGION, FUNCTIONS_SERVICE_ACCOUNT } from "@eegml/shared";
 import { logger } from "firebase-functions";
 import { onDocumentCreated } from "firebase-functions/firestore";
 import { onSchedule } from "firebase-functions/scheduler";
@@ -52,6 +52,7 @@ export const mailSweep = onSchedule(
     schedule: "every 15 minutes",
     timeZone: "Europe/London",
     region: FUNCTIONS_REGION,
+    serviceAccount: FUNCTIONS_SERVICE_ACCOUNT,
     retryCount: 1,
     secrets: secrets(),
   },

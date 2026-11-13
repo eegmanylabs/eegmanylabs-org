@@ -1,5 +1,5 @@
 // The options that every Firestore trigger of the portal shares.
-import { FUNCTIONS_REGION } from "@eegml/shared";
+import { FUNCTIONS_REGION, FUNCTIONS_SERVICE_ACCOUNT } from "@eegml/shared";
 import { firestore } from "./admin";
 
 // firebase-functions builds the snapshots of an event with the default app before a handler
@@ -13,5 +13,5 @@ firestore();
  * writes a document named after the event or brings a derived value in line with its sources.
  */
 export function documentTrigger<Path extends string>(document: Path) {
-  return { document, region: FUNCTIONS_REGION, retry: true } as const;
+  return { document, region: FUNCTIONS_REGION, serviceAccount: FUNCTIONS_SERVICE_ACCOUNT, retry: true } as const;
 }

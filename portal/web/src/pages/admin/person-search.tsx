@@ -6,7 +6,10 @@ import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { useLiveQuery } from "@/data";
 
-/** Finds a person of the directory by name and chooses one. `groupName` names the radio group. */
+/**
+ * Finds a person of the directory by name and chooses one. `groupName` names the radio group.
+ * `onChoose` also receives the account the person is linked to, or null.
+ */
 export function PersonSearch({
   groupName,
   chosen,
@@ -14,7 +17,7 @@ export function PersonSearch({
 }: {
   groupName: string;
   chosen: string | null;
-  onChoose: (id: string) => void;
+  onChoose: (id: string, linkedUid: string | null) => void;
 }) {
   const [search, setSearch] = useState("");
   const persons = useLiveQuery(search.trim().length < 2 ? null : { collection: "persons", within: [], limit: 1_000 });
@@ -43,7 +46,7 @@ export function PersonSearch({
                     name={groupName}
                     value={person.id}
                     checked={chosen === person.id}
-                    onChange={() => onChoose(person.id)}
+                    onChange={() => onChoose(person.id, person.userId)}
                   />
                   <span className="font-medium">{person.displayName}</span>
                   {person.affiliationSummary ? (

@@ -40,6 +40,8 @@ export const analysisRunsOfReplication = (studyKey: string, scope: ReadScope) =>
 export const incidentsOfReplication = (studyKey: string, scope: ReadScope) =>
   ofReplication("incidents", [], studyKey, scope);
 
+export const risksOfReplication = (studyKey: string, scope: ReadScope) => ofReplication("risks", [], studyKey, scope);
+
 export const incidentActionsOfReplication = (studyKey: string, scope: ReadScope) =>
   ofReplication("incidentActions", "group", studyKey, scope);
 
@@ -67,6 +69,21 @@ export function decisionsOfReplication(studyKey: string): LiveQuery<"decisions">
 export function protocolsOfReplication(studyKey: string): LiveQuery<"replicationProtocols"> {
   return { collection: "replicationProtocols", within: [studyKey], limit: 100 };
 }
+
+/**
+ * The hypotheses and the protocols of every replication, which every member reads, offered as the
+ * records a task may link to. A select draws them, never a list.
+ */
+export const ALL_HYPOTHESES: LiveQuery<"replicationHypotheses"> = {
+  collection: "replicationHypotheses",
+  within: "group",
+  limit: 200,
+};
+export const ALL_PROTOCOLS: LiveQuery<"replicationProtocols"> = {
+  collection: "replicationProtocols",
+  within: "group",
+  limit: 200,
+};
 
 /** The versions of the protocols of a replication, which every member reads. */
 export function protocolVersionsOfReplication(studyKey: string): LiveQuery<"replicationProtocolVersions"> {

@@ -14,6 +14,7 @@ import {
   eventFailureId,
   generatedDocumentId,
   getDemographicAggregatesContract,
+  laboratoryScopeKey,
   MEMBERS_SCOPE_KEY,
   mailDocSchema,
   notificationId,
@@ -25,6 +26,7 @@ import {
   publicationFileDocSchema,
   refreshPublicationContract,
   replicationScopeKey,
+  roleAssignmentId,
   runAutomationRuleContract,
   saveAutomationRuleContract,
   searchWorkspaceContract,
@@ -62,9 +64,11 @@ import {
   laboratory,
   notificationsOf,
   person,
+  rebuild,
   refusal,
   replication,
   resetWorld,
+  SEED_ACTOR,
   standard,
   withoutTriggers,
 } from "./support";
@@ -306,6 +310,11 @@ describe("publishing to the public website", () => {
 describe("the mail outbox and digests", () => {
   async function notifiedMember(preferences: Record<string, unknown>) {
     await account("uid-mail", { email: "mail.member@example.org" });
+    // The member reads the task the notification is about, as a member of its laboratory.
+    await grantRole("uid-mail", "lab_member", "laboratory", LAB);
+    await adminDb
+      .doc(COLLECTIONS.tasks.docPath("task-mail"))
+      .set({ ...standard(), scopeKeys: [laboratoryScopeKey(LAB)] });
     await adminDb.doc(COLLECTIONS.userPreferences.docPath("uid-mail")).set({ ...standard(), ...preferences });
     const id = notificationId("assignment", "event-mail-1");
     await adminDb.doc(COLLECTIONS.userNotifications.docPath("uid-mail", id)).set({
@@ -391,6 +400,35 @@ describe("the mail outbox and digests", () => {
     );
     expect(message?.templateKey).toBe("digestWeekly");
     expect(message?.textBody).toContain("A synthetic task");
+  });
+
+  it("leaves out the title of a record the member can no longer read, in a message and in a digest", async () => {
+    const id = await notifiedMember(emailOn);
+    // The member leaves the laboratory after the notification was written.
+    await adminDb
+      .doc(COLLECTIONS.roleAssignments.docPath(roleAssignmentId("uid-mail", "lab_member", "laboratory", LAB)))
+      .update({ status: "revoked", revokedAt: Timestamp.now(), revokedBy: SEED_ACTOR });
+    await rebuild("uid-mail");
+    const input = { uid: "uid-mail", notificationId: id, portalUrl: "https://portal.example.org/", secret: SECRET };
+    const mailId = (await queueNotificationMail(adminDb, input, new Date())) ?? "";
+    const single = mailDocSchema.parse(await dataOf(COLLECTIONS.mail.docPath(mailId)));
+    expect(single.textBody).not.toContain("A synthetic task");
+    expect(single.textBody).toContain("Work was assigned to you");
+
+    await adminDb.doc(COLLECTIONS.userNotifications.docPath("uid-mail", id)).update({ emailedAt: null });
+    await adminDb.doc(COLLECTIONS.mail.docPath(mailId)).delete();
+    await adminDb.doc(COLLECTIONS.userPreferences.docPath("uid-mail")).update({ digestFrequency: "weekly" });
+    const monday = new Date();
+    monday.setUTCDate(monday.getUTCDate() + ((8 - monday.getUTCDay()) % 7 || 7));
+    monday.setUTCHours(9, 0, 0, 0);
+    await adminDb
+      .doc(COLLECTIONS.userNotifications.docPath("uid-mail", id))
+      .update({ createdAt: Timestamp.fromMillis(monday.getTime() - 86_400_000) });
+    expect(await queueDueDigests(adminDb, monday, "https://portal.example.org/", SECRET)).toBe(1);
+    const digest = (await adminDb.collection(COLLECTIONS.mail.collectionPath()).get()).docs
+      .map((document) => mailDocSchema.parse(document.data()))
+      .find((message) => message.templateKey === "digestWeekly");
+    expect(digest?.textBody).not.toContain("A synthetic task");
   });
 });
 
@@ -535,6 +573,7 @@ describe("demographic aggregates", () => {
         { category: "Other or suppressed", count: null },
       ],
       total: null,
+      overlapWithheld: false,
     });
     const [entry] = await auditOf("demographics.aggregateRead", STUDY);
     expect(entry?.changes).toEqual([{ field: "genderCategory", withheld: true }]);

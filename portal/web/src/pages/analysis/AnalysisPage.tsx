@@ -360,7 +360,11 @@ function DemographicResult({ result, title }: { result: Aggregates; title: strin
       <div className="grid gap-2" data-testid="demographic-result">
         <EmptyState
           title="No counts can be shown"
-          description={`Fewer than ${result.threshold} people are in this scope, so any count could point at someone.`}
+          description={
+            result.overlapWithheld
+              ? `This scope differs from an overlapping laboratory, replication or the programme by fewer than ${result.threshold} people, so comparing the two could point at someone.`
+              : `Fewer than ${result.threshold} people are in this scope, so any count could point at someone.`
+          }
         />
       </div>
     );

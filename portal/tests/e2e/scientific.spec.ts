@@ -3,7 +3,8 @@
 // lead prepares the authorship list of a report and a contributor confirms her own entry; a
 // Stage 1 Registered Report is followed to its Stage 2 report through an OSF page, events and a
 // milestone; an analysis run is recorded against a dataset of the registry and its provenance is
-// exported; and an incident is reported and given a corrective action. Each new page is checked
+// exported; an incident is reported and given a corrective action; and a risk is entered in the
+// register, rated, given an owner and closed. Each new page is checked
 // for accessibility at every width the portal supports. Everything here is invented, on the
 // example.org domain.
 import { readFile } from "node:fs/promises";
@@ -352,6 +353,53 @@ test("an incident is reported and given a corrective action, and its record neve
     await expect(incident).toContainText("Resolved", { timeout: 20_000 });
     await expect(incident).toContainText("Two synthetic sessions lost their reference channel.");
     await reviewPage(page, "incidents");
+  } finally {
+    await lead.context.close();
+  }
+});
+
+test("a lead enters a risk in the register of a replication, rates it, names its owner and closes it", async ({
+  browser,
+  baseURL,
+}) => {
+  test.setTimeout(180_000);
+  const lead = await leadBrowser(browser, baseURL as string);
+  const page = lead.page;
+  try {
+    await openTab(page, "Risks");
+    await expect(page.getByText("No risks in the register")).toBeVisible();
+    await page.getByRole("button", { name: "Add a risk" }).click();
+    const dialog = page.getByRole("dialog", { name: "Add a risk" });
+    await dialog.getByLabel("Title").fill("Too few EEG caps for the autumn sessions (synthetic)");
+    await dialog.getByLabel("Likelihood").selectOption("high");
+    await dialog.getByLabel("Impact").selectOption("medium");
+    await dialog.getByLabel("Mitigation").fill("Order two synthetic cap sets in July.");
+    await dialog.getByLabel("Owner").selectOption({ label: IVY.name });
+    await dialog.getByLabel("Next review").fill("2027-01-15");
+    await reviewPage(page, "risk-dialog");
+    await dialog.getByRole("button", { name: "Add the risk" }).click();
+    await expect(dialog).toBeHidden({ timeout: 20_000 });
+
+    const risk = page
+      .getByTestId("risks")
+      .getByRole("listitem")
+      .filter({ hasText: "Too few EEG caps for the autumn sessions (synthetic)" });
+    await expect(risk).toContainText("Likelihood: high", { timeout: 20_000 });
+    await expect(risk).toContainText("Impact: medium");
+    await expect(risk).toContainText(`Owner: ${IVY.name}`);
+    await expect(risk).toContainText("Next review on 15 January 2027");
+    await reviewPage(page, "risks");
+
+    // Closing the risk records when; it stays in the register, last.
+    await risk
+      .getByRole("button", { name: "Change the risk Too few EEG caps for the autumn sessions (synthetic)" })
+      .click();
+    const change = page.getByRole("dialog", { name: "Change a risk" });
+    await expect(change.getByLabel("Mitigation")).toHaveValue("Order two synthetic cap sets in July.");
+    await change.getByLabel("Status").selectOption("closed");
+    await change.getByRole("button", { name: "Save the risk" }).click();
+    await expect(change).toBeHidden({ timeout: 20_000 });
+    await expect(risk).toContainText("Closed on", { timeout: 20_000 });
   } finally {
     await lead.context.close();
   }

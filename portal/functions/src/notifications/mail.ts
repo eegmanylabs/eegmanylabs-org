@@ -16,6 +16,8 @@ import {
   type DigestItem,
   dueDigestPeriod,
   emailDecision,
+  entityPath,
+  entityRefId,
   JOB_BACKOFF,
   mailDocSchema,
   mailId,
@@ -61,14 +63,54 @@ function linkOf(
   }
 }
 
-/** A notification as a line of a message: its type and the title it names, never anything else of its payload. */
-function itemOf(portalUrl: string, notification: UserNotificationDoc): DigestItem {
+/**
+ * A notification as a line of a message: its type and the title it names, never anything else of
+ * its payload. A line about a record the member can no longer read keeps its type alone, with no
+ * title and a link to the portal's home, as a search result would be dropped.
+ */
+function itemOf(portalUrl: string, notification: UserNotificationDoc, readable: boolean): DigestItem {
   const title = notification.payload.title;
+  if (!readable)
+    return { type: notification.type, title: null, link: portalUrl.endsWith("/") ? portalUrl : `${portalUrl}/` };
   return {
     type: notification.type,
     title: typeof title === "string" && title !== "" ? title.slice(0, 200) : null,
     link: linkOf(portalUrl, notification),
   };
+}
+
+const strings = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((element): element is string => typeof element === "string") : [];
+
+/**
+ * Whether the member may still read the record a notification is about, by the access document
+ * as it stands now rather than when the notification was written: a role revoked, a laboratory
+ * left or a page made restricted since then removes the title from the message. A record with
+ * scope keys is readable through one of the member's keys, a grant of that record or a
+ * programme role; a record without them is readable by any member, and a notification about the
+ * member's own account by the member.
+ */
+async function readableNow(db: Firestore, uid: string, notification: UserNotificationDoc): Promise<boolean> {
+  if (notification.entityType === "user") return notification.entityId === uid;
+  const access = await db.doc(COLLECTIONS.access.docPath(uid)).get();
+  if (!access.exists || access.get("suspended") === true || access.get("member") !== true) return false;
+  let path: string;
+  try {
+    path = entityPath(notification.entityType, notification.entityId);
+  } catch {
+    return false;
+  }
+  const record = await db.doc(path).get();
+  if (!record.exists) return false;
+  const scopeKeys: unknown = record.get("scopeKeys");
+  if (!Array.isArray(scopeKeys)) return true;
+  if (strings(access.get("programmeRoles")).length > 0) return true;
+  const held = new Set(strings(access.get("scopeKeys")));
+  const shared = new Set(strings(access.get("sharedRecordKeys")));
+  return (
+    strings(scopeKeys).some((key) => held.has(key)) ||
+    shared.has(entityRefId(notification.entityType, notification.entityId))
+  );
 }
 
 async function addressOf(db: Firestore, uid: string): Promise<string | null> {
@@ -108,7 +150,8 @@ export async function queueNotificationMail(
     `${input.uid}:${input.notificationId}`,
     input.secret,
   );
-  const content = buildNotificationMail(itemOf(input.portalUrl, notification.data), input.portalUrl);
+  const readable = await readableNow(db, input.uid, notification.data);
+  const content = buildNotificationMail(itemOf(input.portalUrl, notification.data, readable), input.portalUrl);
   try {
     await db.doc(COLLECTIONS.mail.docPath(id)).create(
       mailDocSchema.parse({
@@ -248,12 +291,9 @@ export async function queueDueDigests(db: Firestore, at: Date, portalUrl: string
         : [];
     });
     if (due.length === 0) continue;
-    const content = buildDigest({
-      period,
-      frequency,
-      items: due.map((entry) => itemOf(portalUrl, entry.data)),
-      portalUrl,
-    });
+    const items: DigestItem[] = [];
+    for (const entry of due) items.push(itemOf(portalUrl, entry.data, await readableNow(db, uid, entry.data)));
+    const content = buildDigest({ period, frequency, items, portalUrl });
     const created = await db.runTransaction(async (transaction) => {
       if ((await transaction.get(reference)).exists) return false;
       transaction.create(

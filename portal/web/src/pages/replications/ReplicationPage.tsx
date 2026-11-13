@@ -31,6 +31,7 @@ import { IncidentsTab } from "@/pages/science/IncidentsTab";
 import type { OutputContext } from "@/pages/science/OutputCard";
 import { OutputsTab, ReportsTab } from "@/pages/science/OutputsTabs";
 import { ProtocolTab } from "@/pages/science/ProtocolTab";
+import { RisksTab } from "@/pages/science/RisksTab";
 import { EntityTasksTab } from "@/pages/tasks/EntityTasksTab";
 import { UpdatesTab } from "@/pages/tasks/UpdatesTab";
 import { NotesTab } from "@/pages/workspace/NotesTab";
@@ -68,6 +69,7 @@ import {
   protocolsOfReplication,
   protocolVersionsOfReplication,
   type ReadScope,
+  risksOfReplication,
   taskListsOfReplication,
   teamMembersOfReplication,
 } from "@/registry/scientific-queries";
@@ -98,6 +100,7 @@ const TAB_IDS = [
   "outputs",
   "decisions",
   "incidents",
+  "risks",
   "contributors",
   "documents",
   "activity",
@@ -121,6 +124,7 @@ const TAB_LABELS: Readonly<Record<TabId, string>> = {
   outputs: "Outputs",
   decisions: "Decisions",
   incidents: "Incidents",
+  risks: "Risks",
   contributors: "Contributors",
   documents: "Documents",
   activity: "Activity",
@@ -204,6 +208,7 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
   const runs = orEmpty(useLiveQuery(scoped(analysisRunsOfReplication)));
   const incidents = orEmpty(useLiveQuery(scoped(incidentsOfReplication)));
   const incidentActions = orEmpty(useLiveQuery(scoped(incidentActionsOfReplication)));
+  const risks = orEmpty(useLiveQuery(scoped(risksOfReplication)));
   const authorshipLists = orEmpty(useLiveQuery(scoped(authorshipListsOfReplication)));
   const teamMembers = orEmpty(useLiveQuery(scoped(teamMembersOfReplication)));
   const acknowledgements = orEmpty(useLiveQuery(scoped(acknowledgementsOfReplication)));
@@ -456,6 +461,11 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
           deviations={ready(deviations)}
         />
       ),
+    },
+    {
+      id: "risks",
+      live: combineLive([risks] as const, () => true),
+      render: () => <RisksTab studyKey={studyKey} viewer={viewer} risks={ready(risks)} persons={ready(persons)} />,
     },
     {
       id: "contributors",

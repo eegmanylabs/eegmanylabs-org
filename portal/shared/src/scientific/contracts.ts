@@ -46,6 +46,7 @@ import {
   manuscriptStatusSchema,
   OUTPUT_LINKS_MAX,
   riskLevelSchema,
+  riskStatusSchema,
 } from "../schemas/outputs";
 import { analysisStatusSchema, findingSourceSchema } from "../schemas/replications";
 import { z } from "../zod";
@@ -188,6 +189,33 @@ export const reportIncidentContract = {
     deviations: z.array(deviationRefSchema).max(DEVIATION_REFS_MAX),
   }),
   output: z.strictObject({ incidentId: idSchema }),
+} as const satisfies CallableContract;
+
+/**
+ * | Function   | Capability                                                                              |
+ * |------------|-----------------------------------------------------------------------------------------|
+ * | `saveRisk` | `participations.manage` for the replication, the laboratory or the programme of the risk |
+ *
+ * Enters a risk in the register of a replication, a laboratory or the programme (R7.8), or
+ * changes one. A risk stays in the scope it was entered in; one that is closed records when, and
+ * one that is opened again clears that date. The owner named is a person of the directory.
+ */
+export const saveRiskContract = {
+  name: "saveRisk",
+  input: z.strictObject({
+    riskId: idSchema.nullable(),
+    scopeType: governanceScopeTypeSchema,
+    scopeId: idSchema,
+    title: titleSchema,
+    description: optionalText,
+    likelihood: riskLevelSchema,
+    impact: riskLevelSchema,
+    mitigation: optionalText,
+    ownerPersonId: idSchema.nullable(),
+    status: riskStatusSchema,
+    reviewAt: isoDateSchema.nullable(),
+  }),
+  output: z.strictObject({ riskId: idSchema }),
 } as const satisfies CallableContract;
 
 /**

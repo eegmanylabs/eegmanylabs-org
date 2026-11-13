@@ -313,15 +313,28 @@ export function filterOptions(rows: readonly ReplicationRow[]) {
     statuses: [...statuses.entries()]
       .sort(([, a], [, b]) => a.position - b.position || byText(a.label, b.label))
       .map(([key, { label }]) => ({ key, label })),
-    stages: [...stages.entries()].sort(([a], [b]) => a - b).map(([number, name]) => ({ number, name })),
+    stages: [...stages.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([number, name]) => ({ number, name: name === null ? name : stageLabel(name) })),
     themes: [...themes].sort(byText),
     hasNoStatus: rows.some((row) => row.statusKey === null),
     hasNoStage: rows.some((row) => row.stageNumber === null),
   };
 }
 
+/**
+ * The name of a stage as a reader sees it. A source that stores a machine value, such as
+ * `data_collection`, reads as "Data collection"; a name written for people stays as it is.
+ */
+export function stageLabel(name: string): string {
+  if (!/^[a-z0-9]+(?:_[a-z0-9]+)+$/.test(name)) return name;
+  const words = name.replaceAll("_", " ");
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
+}
+
 /** How the stage reads, for example "3. Data collection". */
 export function stageText(row: Pick<ReplicationRow, "stageNumber" | "stageName">): string | null {
-  if (row.stageNumber === null) return row.stageName;
-  return row.stageName === null ? `Stage ${row.stageNumber}` : `${row.stageNumber}. ${row.stageName}`;
+  const name = row.stageName === null ? null : stageLabel(row.stageName);
+  if (row.stageNumber === null) return name;
+  return name === null ? `Stage ${row.stageNumber}` : `${row.stageNumber}. ${name}`;
 }

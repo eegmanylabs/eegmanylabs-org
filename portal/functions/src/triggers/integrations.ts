@@ -15,6 +15,7 @@
 import {
   COLLECTIONS,
   FUNCTIONS_REGION,
+  FUNCTIONS_SERVICE_ACCOUNT,
   parseStoredDocument,
   type SyncTargetKey,
   syncMappingDocSchema,
@@ -106,7 +107,13 @@ export const syncOnEquipmentWritten = onDocumentWritten(
 );
 
 export const integrationsSweep = onSchedule(
-  { schedule: "every 10 minutes", timeZone: "Europe/London", region: FUNCTIONS_REGION, retryCount: 1 },
+  {
+    schedule: "every 10 minutes",
+    timeZone: "Europe/London",
+    region: FUNCTIONS_REGION,
+    serviceAccount: FUNCTIONS_SERVICE_ACCOUNT,
+    retryCount: 1,
+  },
   async () => {
     const runtime = workspaceRuntime();
     const summary = await sweepIntegrations(liveDependencies(runtime), runtime, { receiverUrl: receiverUrl() });
@@ -120,7 +127,7 @@ function header(value: string | string[] | undefined): string | undefined {
 }
 
 export const driveNotifications = onRequest(
-  { region: FUNCTIONS_REGION, invoker: "public", maxInstances: 5 },
+  { region: FUNCTIONS_REGION, serviceAccount: FUNCTIONS_SERVICE_ACCOUNT, invoker: "public", maxInstances: 5 },
   async (request, response) => {
     if (request.method !== "POST") {
       response.status(405).end();

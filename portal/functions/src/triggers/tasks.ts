@@ -12,6 +12,7 @@ import {
   COLLECTIONS,
   entityRefId,
   FUNCTIONS_REGION,
+  FUNCTIONS_SERVICE_ACCOUNT,
   parseStoredDocument,
   taskDocSchema,
   taskPageAudience,
@@ -89,7 +90,13 @@ export const tasksOnTaskWritten = onDocumentWritten(documentTrigger(COLLECTIONS.
 
 /** Runs every five minutes, so an in-app reminder arrives at most five minutes after its time. */
 export const remindersSweep = onSchedule(
-  { schedule: "every 5 minutes", timeZone: "Europe/London", region: FUNCTIONS_REGION, retryCount: 3 },
+  {
+    schedule: "every 5 minutes",
+    timeZone: "Europe/London",
+    region: FUNCTIONS_REGION,
+    serviceAccount: FUNCTIONS_SERVICE_ACCOUNT,
+    retryCount: 3,
+  },
   async (event) => {
     const summary = await sendDueReminders(firestore(), new Date(event.scheduleTime));
     logger.info("reminders sweep finished", { ...summary });

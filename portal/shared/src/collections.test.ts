@@ -158,13 +158,12 @@ describe("the enforcement of an entry", () => {
         // Attachments. Pages and their threads are built (D-010), and so are databases, custom
         // properties, views and dashboards (D-011).
         "attachments",
-        // Governance records beside the decision log and the incident registry of phase 8.
-        "risks",
+        // Governance records beside the decision log, the incident registry and the risk register.
         "meetings",
         "progressReports",
       ].sort(),
     );
-    expect(COLLECTION_ENTRIES.filter((entry) => entry.enforcement === "enforced")).toHaveLength(150);
+    expect(COLLECTION_ENTRIES.filter((entry) => entry.enforcement === "enforced")).toHaveLength(151);
   });
 
   it("never opens a document beneath a parent that is still closed", () => {
@@ -407,6 +406,7 @@ describe("the access rules of an entry", () => {
       "decisions",
       "incidents",
       "incidentActions",
+      "risks",
       "authorshipLists",
       "authorshipEntries",
       "sources",

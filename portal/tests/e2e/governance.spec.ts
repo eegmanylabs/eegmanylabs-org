@@ -28,8 +28,21 @@ test("an administrator uses the four parts of governance", async ({ browser, bas
       "persons/demo-person-kit/private/contact",
     );
 
-    // Erasure: the request waits, and the administrator who made it cannot decide it.
+    // Erasure of a person linked to an account: the form says so before anything is sent, offers
+    // to unlink the account, and holds the request back until then.
     await page.getByRole("tab", { name: "Erasure" }).click();
+    await page.getByLabel("Find the person in the directory").fill("Ivy");
+    await page.getByRole("radio", { name: /Ivy Pretend/ }).check();
+    await expect(page.getByTestId("erasure-linked")).toContainText("This person is linked to an account");
+    await page.getByLabel("Reason").fill("A synthetic request made by a test.");
+    await expect(page.getByRole("button", { name: "Request the erasure" })).toBeDisabled();
+    await page.getByRole("button", { name: "Unlink the account" }).click();
+    const unlink = page.getByRole("dialog", { name: "Unlink the account" });
+    await expect(unlink).toBeVisible();
+    await unlink.getByRole("button", { name: "Cancel" }).click();
+    await page.getByLabel("Reason").fill("");
+
+    // Erasure: the request waits, and the administrator who made it cannot decide it.
     await page.getByLabel("Find the person in the directory").fill("Kit");
     await page.getByRole("radio", { name: /Kit Sampleton/ }).check();
     await page.getByLabel("Reason").fill("A synthetic request made by a test.");
@@ -46,6 +59,7 @@ test("an administrator uses the four parts of governance", async ({ browser, bas
     // Access review: the listing, and an attestation of it.
     await page.getByRole("tab", { name: "Access review" }).click();
     await expect(page.getByTestId("access-review-account").first()).toBeVisible();
+    await expect(page.getByText(/Programme administrator.*appointed by/).first()).toBeVisible();
     await reviewPage(page, "admin-governance-review");
     await page.getByRole("button", { name: "I have reviewed this listing" }).click();
     await expect(page.getByTestId("access-review-attestation")).toHaveCount(1);

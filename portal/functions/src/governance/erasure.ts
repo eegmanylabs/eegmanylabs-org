@@ -6,7 +6,16 @@
 // become tombstones, so that a later import neither recreates the person nor restores what was
 // erased, and the person's values in source records, batch changes and audit entries become a
 // marker. Every step can run again: an interrupted erasure is completed by running it again.
-import { COLLECTIONS, shortHash } from "@eegml/shared";
+//
+// | Record that names the person          | What erasure does |
+// |---------------------------------------|-------------------|
+// | Contributor rows                      | The link to the person goes (`personId` null). Names, ORCID iD and affiliations become the marker, unless the row belongs to a published manuscript, whose author list is the published record and stays without the link |
+// | Authorship entries                    | The entry is keyed by the person and cannot lose the link, so its name becomes "Erased person" and its affiliations and ORCID iD go |
+// | Audit entries about the person, a former account, a contributor row or an authorship entry | Values withheld, fields kept |
+// | Accounts that were once linked to the person and are linked to nobody else | The Authentication account, the profile with its notifications and preferences, the access document and the claim with its review are deleted. An account that now belongs to another person, or that holds a programme role, is kept and counted |
+// | The public website                    | Nothing is published from here. When the person was publicly listed, `publicListingRemoved` is counted, and the console asks for a publication and for the website's history to be rewritten by hand |
+import { COLLECTIONS, isProgrammeRole, parseStoredDocument, roleAssignmentDocSchema, shortHash } from "@eegml/shared";
+import type { Auth } from "firebase-admin/auth";
 import {
   type DocumentData,
   type DocumentReference,
@@ -15,7 +24,8 @@ import {
   type QueryDocumentSnapshot,
   Timestamp,
 } from "firebase-admin/firestore";
-import { touchedFields, type WriteStamp } from "../framework";
+import { touchedFields, type WriteStamp } from "../framework/documents";
+import { inForce } from "../roles/assignments";
 
 /** What stands in place of an erased value. */
 export const ERASED_MARKER = "[erased]";
@@ -49,6 +59,7 @@ const markValues = (state: unknown): Record<string, string> | null =>
 /** Erases one person and returns, for each kind of document, how many were removed or marked. */
 export async function applyErasure(
   db: Firestore,
+  auth: Auth,
   personId: string,
   stamp: WriteStamp,
 ): Promise<Record<string, number>> {
@@ -95,6 +106,10 @@ export async function applyErasure(
       importedValues: FieldValue.delete(),
       sourceAuthor: FieldValue.delete(),
       custom: {},
+      // Normally null already, since a linked person is refused. A replay after a restore can
+      // meet a link that the restore brought back, and the account goes below.
+      userId: null,
+      claimedAt: null,
       publicListing: "none",
       archivedAt: person.get("archivedAt") ?? Timestamp.fromDate(stamp.at),
     },
@@ -128,13 +143,53 @@ export async function applyErasure(
     .collection(COLLECTIONS.contributors.collectionPath())
     .where("personId", "==", personId)
     .get();
+  // Paths of the rows that named the person, whose audit entries lose their values below.
+  const linkedPaths: string[] = [];
   for (const contributor of contributors.docs) {
     const contributorContact = await db.doc(COLLECTIONS.contributorContact.docPath(contributor.id)).get();
     if (contributorContact.exists) {
       writes.push({ kind: "delete", reference: contributorContact.ref });
       count("contributorContacts", 1);
     }
+    const manuscriptId: unknown = contributor.get("manuscriptId");
+    const published =
+      typeof manuscriptId === "string" &&
+      (await db.doc(COLLECTIONS.manuscripts.docPath(manuscriptId)).get()).get("status") === "published";
+    const named: DocumentData = {};
+    if (!published) {
+      for (const field of ["firstNameSource", "middleNameSource", "surnameSource", "affiliationSource", "orcid"]) {
+        if (contributor.get(field) !== undefined) named[field] = ERASED_MARKER;
+      }
+      const slots: unknown = contributor.get("affiliationSlotsSource");
+      if (slots !== undefined) named.affiliationSlotsSource = markValues(slots) ?? {};
+    }
+    writes.push({
+      kind: "update",
+      reference: contributor.ref,
+      data: { ...touchedFields(stamp), personId: null, ...named },
+    });
+    linkedPaths.push(contributor.ref.path);
+    count(published ? "contributorRowsUnlinked" : "contributorRowsMarked", 1);
   }
+
+  const authorship = await db
+    .collectionGroup(COLLECTIONS.authorshipEntries.collectionId)
+    .where("personId", "==", personId)
+    .get();
+  for (const entry of authorship.docs) {
+    writes.push({
+      kind: "update",
+      reference: entry.ref,
+      data: {
+        ...touchedFields(stamp),
+        displayName: ERASED_DISPLAY_NAME,
+        affiliations: [],
+        orcid: FieldValue.delete(),
+      },
+    });
+    linkedPaths.push(entry.ref.path);
+  }
+  count("authorshipEntriesAnonymised", authorship.size);
 
   const keys = await db
     .collection(COLLECTIONS.identityKeys.collectionPath())
@@ -195,7 +250,72 @@ export async function applyErasure(
   // The audit trail keeps every entry: who did what and when stays readable, and the values
   // that an entry about the person carried become withheld.
   const audit = await db.collection(COLLECTIONS.auditEvents.collectionPath()).where("entityId", "==", personId).get();
+
+  // The accounts that were ever linked to the person, from the claims and from the entries of
+  // linking and unlinking, which name the account in the field `userId`.
+  const formerUids = new Set<string>();
+  const claims = await db
+    .collection(COLLECTIONS.accountClaims.collectionPath())
+    .where("personId", "==", personId)
+    .get();
+  for (const claim of claims.docs) formerUids.add(claim.id);
   for (const entry of audit.docs) {
+    const entryChanges: unknown = entry.get("changes");
+    for (const change of Array.isArray(entryChanges) ? entryChanges : []) {
+      const { field, before, after } = change as { field?: unknown; before?: unknown; after?: unknown };
+      if (field !== "userId") continue;
+      for (const value of [before, after]) if (typeof value === "string" && value !== "") formerUids.add(value);
+    }
+  }
+  const accountEntries: QueryDocumentSnapshot[] = [];
+  for (const uid of formerUids) {
+    const user = await db.doc(COLLECTIONS.users.docPath(uid)).get();
+    const linkedElsewhere =
+      user.exists && typeof user.get("personId") === "string" && user.get("personId") !== personId;
+    const roles = await db.collection(COLLECTIONS.roleAssignments.collectionPath()).where("uid", "==", uid).get();
+    const staff = roles.docs.some((document) => {
+      const role = parseStoredDocument(roleAssignmentDocSchema, document.data());
+      return role.success && isProgrammeRole(role.data.role) && inForce(role.data, stamp.at);
+    });
+    if (linkedElsewhere || staff) {
+      count("accountsKept", 1);
+      continue;
+    }
+    // The profile and the claim go with their subcollections: notifications, preferences and
+    // the review of the claim. They go before the audit values are withheld, so that an
+    // interrupted erasure still finds the account when it runs again.
+    for (const reference of [
+      db.doc(COLLECTIONS.users.docPath(uid)),
+      db.doc(COLLECTIONS.access.docPath(uid)),
+      db.doc(COLLECTIONS.accountClaims.docPath(uid)),
+    ]) {
+      await db.recursiveDelete(reference);
+    }
+    try {
+      await auth.deleteUser(uid);
+    } catch (error) {
+      if ((error as { code?: unknown }).code !== "auth/user-not-found") throw error;
+    }
+    accountEntries.push(
+      ...(await db.collection(COLLECTIONS.auditEvents.collectionPath()).where("entityId", "==", uid).get()).docs,
+    );
+    count("accountsDeleted", 1);
+  }
+  for (let start = 0; start < linkedPaths.length; start += ANY_OF_MAX) {
+    const page = await db
+      .collection(COLLECTIONS.auditEvents.collectionPath())
+      .where("documentPath", "in", linkedPaths.slice(start, start + ANY_OF_MAX))
+      .get();
+    accountEntries.push(...page.docs);
+  }
+  if (person.get("publicListing") !== undefined && person.get("publicListing") !== "none") {
+    count("publicListingRemoved", 1);
+  }
+
+  const withheld = new Set<string>();
+  for (const entry of [...audit.docs, ...accountEntries]) {
+    if (withheld.has(entry.ref.path)) continue;
+    withheld.add(entry.ref.path);
     const entryChanges: unknown = entry.get("changes");
     if (!Array.isArray(entryChanges) || entryChanges.length === 0) continue;
     writes.push({

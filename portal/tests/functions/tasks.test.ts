@@ -10,6 +10,7 @@ import {
   createTaskListContract,
   dateOnlyInstant,
   moveTaskContract,
+  nestedEntityId,
   postProgressUpdateContract,
   REMINDERS_PER_USER_MAX,
   setReminderContract,
@@ -310,6 +311,40 @@ describe("a task", () => {
       ),
     ).toBe("invalid-argument");
     expect((await taskOf(a)).dependsOn).toEqual({});
+  });
+
+  it("links to a hypothesis, a protocol and a manuscript, which every member reads, and to none that is missing", async () => {
+    const lead = await leadOf("StudyA2001", "uid-lead");
+    const listId = await projectList(lead);
+    // Only the existence of these records matters to a link: every member reads them.
+    await adminDb
+      .doc(COLLECTIONS.replicationHypotheses.docPath("StudyA2001", "h1"))
+      .set({ replicationId: "StudyA2001" });
+    await adminDb
+      .doc(COLLECTIONS.replicationProtocols.docPath("StudyA2001", "p1"))
+      .set({ replicationId: "StudyA2001" });
+    await adminDb.doc(COLLECTIONS.manuscripts.docPath("m1")).set({ replicationId: "StudyA2001" });
+    const links = [
+      { entityType: "hypothesis", entityId: nestedEntityId("StudyA2001", "h1") },
+      { entityType: "protocol", entityId: nestedEntityId("StudyA2001", "p1") },
+      { entityType: "manuscript", entityId: "m1" },
+    ] as const;
+    const { taskId } = await call(lead, createTaskContract, {
+      listId,
+      parentId: null,
+      fields: { title: "Check the analysis plan", links: [...links] },
+    });
+    expect((await taskOf(taskId)).links).toEqual(links);
+    for (const missing of [
+      { entityType: "hypothesis", entityId: nestedEntityId("StudyA2001", "h-none") },
+      { entityType: "protocol", entityId: "not-nested" },
+      { entityType: "manuscript", entityId: "m-none" },
+    ] as const) {
+      expect(
+        await codeOf(call(lead, updateTasksContract, { changes: [{ taskId, patch: { links: [...links, missing] } }] })),
+      ).toBe("invalid-argument");
+    }
+    expect((await taskOf(taskId)).links).toEqual(links);
   });
 
   it("is changed in every field by a manager, in some by its participants, and followed by any reader", async () => {
