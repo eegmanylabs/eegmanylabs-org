@@ -116,6 +116,66 @@ describe("databases", () => {
     );
   });
 
+  it("are made from a template with its properties, rows and shared views, which the template keeps", async () => {
+    const owner = await member("uid-owner");
+    const reader = await member("uid-reader");
+    const { pageId, databaseId: templateId } = await databaseOf(owner);
+    const collectionKey = `db:${templateId}`;
+    const { propertyId: target } = await call(owner, savePropertyContract, {
+      collectionKey,
+      name: "Target",
+      type: "number",
+      config: {},
+    });
+    await call(owner, saveRecordsContract, {
+      collectionKey,
+      changes: [
+        { title: "Book the EEG room", values: { [target]: 1, status: "notStarted" } },
+        { title: "Order caps", values: { status: "notStarted" } },
+      ],
+    });
+    const view = {
+      collectionKey,
+      name: "Checklist board",
+      type: "board",
+      config: { boardProperty: "status" },
+      scope: null,
+      pageId: null,
+    } as const;
+    await call(owner, saveViewContract, { ...view, isShared: true });
+    await call(owner, saveViewContract, { ...view, name: "Mine alone", isShared: false });
+
+    // A database that is not marked as a template is not copied.
+    const input = { parentPageId: pageId, name: "Site checklist", templateDatabaseId: templateId };
+    expect(await codeOf(call(owner, createDatabaseContract, input))).toBe("failed-precondition");
+    await adminDb.doc(COLLECTIONS.databases.docPath(templateId)).update({ isTemplate: true });
+
+    const { databaseId } = await call(owner, createDatabaseContract, input);
+    const copy = databaseDocSchema.parse(await dataOf(COLLECTIONS.databases.docPath(databaseId)));
+    expect(copy).toMatchObject({ isTemplate: false, templateSourceId: templateId, name: "Site checklist" });
+    expect(Object.keys(copy.properties).sort()).toEqual(["status", target].sort());
+    expect((await rowsOf(databaseId)).map((row) => [row.title, row.values]).sort()).toEqual([
+      ["Book the EEG room", { [target]: 1, status: "notStarted" }],
+      ["Order caps", { status: "notStarted" }],
+    ]);
+    const views = await adminDb.collection("views").where("collectionKey", "==", `db:${databaseId}`).get();
+    expect(views.docs.map((snapshot) => [snapshot.get("name"), snapshot.get("isShared")])).toEqual([
+      ["Checklist board", true],
+    ]);
+    expect(await rowsOf(templateId)).toHaveLength(2);
+    expect((await auditOf("database.created", databaseId))[0]?.changes).toEqual(
+      expect.arrayContaining([{ field: "templateSourceId", after: templateId }]),
+    );
+
+    // A reader of the template who may not edit the page, and a caller who may not read the template, are refused.
+    expect(await codeOf(call(reader, createDatabaseContract, input))).toBe("permission-denied");
+    const { pageId: ownPage } = await call(reader, createPageContract, { parentPageId: null, title: "Reader's page" });
+    await adminDb.doc(COLLECTIONS.databases.docPath(templateId)).update({ scopeKeys: [userScopeKey("uid-owner")] });
+    expect(await codeOf(call(reader, createDatabaseContract, { ...input, parentPageId: ownPage, name: "Taken" }))).toBe(
+      "not-found",
+    );
+  });
+
   it("follow the audience of their page when it changes", async () => {
     const owner = await member("uid-owner");
     const { pageId, databaseId } = await databaseOf(owner);

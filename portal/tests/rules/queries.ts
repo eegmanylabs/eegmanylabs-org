@@ -29,6 +29,8 @@ export interface QueryShape {
   readonly acrossParents: boolean;
   readonly where: readonly (readonly [field: string, operator: QueryOperator, value: QueryValue])[];
   readonly orderBy: readonly (readonly [field: string, direction: "asc" | "desc"])[];
+  /** The most documents the query reads. */
+  readonly limit: number;
 }
 
 export interface CataloguedQuery {
@@ -64,6 +66,7 @@ function catalogued<K extends ListableCollectionKey>(
       acrossParents: description.within === "group",
       where,
       orderBy: description.orderBy ?? [],
+      limit: description.limit,
     },
     build: (db) => queryReference(db, description) as Query<DocumentData, DocumentData>,
     buildWithoutScope: (db) => queryReference(db, unscoped) as Query<DocumentData, DocumentData>,
@@ -71,7 +74,13 @@ function catalogued<K extends ListableCollectionKey>(
 }
 
 const heldBy = (kind: CallerKind): readonly string[] => CALLERS[kind].access?.scopeKeys ?? [];
-const LIMIT = 200;
+/**
+ * The page size of the catalogue: what a list query asks for unless it says why it needs more.
+ * A query above it is read for a list that draws a page, a branch or a window of rows at a time,
+ * which tests/architecture/performance.test.ts names query by query.
+ */
+export const CATALOGUE_PAGE_SIZE = 200;
+const LIMIT = CATALOGUE_PAGE_SIZE;
 /** The page and the thread of the world (fixtures.ts). */
 const PAGE = entityRefId("replication", OWN_REPLICATION);
 const THREAD = autoId("stored thread");
@@ -457,6 +466,12 @@ export const QUERY_CATALOGUE: readonly CataloguedQuery[] = [
     orderBy: [["createdAt", "desc"]],
     limit: 50,
   }),
+  catalogued("who last changed each block of a page, latest first", "member", null, {
+    collection: "pageBlockEdits",
+    within: [PAGE],
+    orderBy: [["editedAt", "desc"]],
+    limit: 200,
+  }),
   // Databases, views and dashboards (D-011). A database copies the audience of its page.
   catalogued("the databases beneath a page that a member reads", "member", "scopeKeys", {
     collection: "databases",
@@ -472,6 +487,21 @@ export const QUERY_CATALOGUE: readonly CataloguedQuery[] = [
     within: [],
     where: [["parentPageId", "==", PAGE]],
     limit: LIMIT,
+  }),
+  catalogued("the database templates that a member reads", "member", "scopeKeys", {
+    collection: "databases",
+    within: [],
+    where: [
+      ["isTemplate", "==", true],
+      ["scopeKeys", "array-contains-any", heldBy("member")],
+    ],
+    limit: 50,
+  }),
+  catalogued("the database templates, for the programme", "admin", null, {
+    collection: "databases",
+    within: [],
+    where: [["isTemplate", "==", true]],
+    limit: 50,
   }),
   catalogued("every database that a member reads", "member", "scopeKeys", {
     collection: "databases",

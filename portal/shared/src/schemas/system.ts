@@ -136,6 +136,7 @@ export const AUDIT_ACTIONS = [
   "account.created",
   "account.secondFactorChanged",
   "account.suspended",
+  "account.recovered",
   "account.reinstated",
   "account.sessionsEnded",
   "admin.bootstrapped",
@@ -261,6 +262,14 @@ export const AUDIT_ACTIONS = [
   "automationRule.run",
   "automation.acted",
   "scheduledReport.saved",
+  "backup.rehearsalMarked",
+  "person.dataExported",
+  "erasure.requested",
+  "erasure.approved",
+  "erasure.rejected",
+  "accessReview.attested",
+  "retention.settingsChanged",
+  "retention.swept",
 ] as const;
 export const auditActionSchema = z.enum(AUDIT_ACTIONS);
 export type AuditAction = z.output<typeof auditActionSchema>;
@@ -615,3 +624,79 @@ export const systemSettingsDocSchema = documentBaseSchema.extend({
   recruitmentInactivityDays: z.number().int().min(7).max(365).exactOptional(),
 });
 export type SystemSettingsDoc = z.output<typeof systemSettingsDocSchema>;
+
+// Governance (docs/SECURITY.md, section 6): the mechanisms the portal provides for the decisions
+// that stay with the programme. Every document here is written by a callable function or a
+// scheduled function and read by no client.
+
+export const erasureRequestStatusSchema = z.enum(["pendingApproval", "approved", "applied", "rejected"]);
+export type ErasureRequestStatus = z.output<typeof erasureRequestStatusSchema>;
+
+/**
+ * `erasureRequests/{id}`: a request to erase the personal data of one person, which a second
+ * programme administrator approves. Its counts name kinds of document and never a value.
+ */
+export const erasureRequestDocSchema = documentBaseSchema.extend({
+  personId: idSchema,
+  reason: z.string().trim().min(1).max(2_000),
+  status: erasureRequestStatusSchema,
+  requestedBy: uidSchema,
+  requestedAt: timestampSchema,
+  decidedBy: uidSchema.nullable(),
+  decidedAt: timestampSchema.nullable(),
+  decisionNote: z.string().max(2_000).nullable(),
+  appliedAt: timestampSchema.nullable(),
+  /** Kind of document to the number erased or replaced by a marker. */
+  appliedCounts: countMapSchema,
+});
+export type ErasureRequestDoc = z.output<typeof erasureRequestDocSchema>;
+
+/** A quarter of a year, the period of an access review: `2026-Q4`. */
+export const reviewPeriodSchema = z
+  .string()
+  .max(7)
+  .regex(/^\d{4}-Q[1-4]$/);
+
+/**
+ * `accessReviewAttestations/{period__uid}`: one reviewer's statement that they reviewed who held
+ * which roles and grants in a period, bound to the hash of the listing they saw.
+ */
+export const accessReviewAttestationDocSchema = documentBaseSchema.extend({
+  period: reviewPeriodSchema,
+  reviewerUid: uidSchema,
+  attestedAt: timestampSchema,
+  listingSha256: z
+    .string()
+    .max(64)
+    .regex(/^[0-9a-f]{64}$/),
+  accountCount: z.number().int().min(0),
+  grantCount: z.number().int().min(0),
+  expiringCount: z.number().int().min(0),
+  note: z.string().max(2_000).nullable(),
+});
+export type AccessReviewAttestationDoc = z.output<typeof accessReviewAttestationDocSchema>;
+
+/** The most outcomes one sweep records: one for each target, with room to grow. */
+export const RETENTION_OUTCOMES_MAX = 20;
+
+/** What one retention sweep did with one kind of document. */
+export const retentionOutcomeSchema = z.strictObject({
+  target: keySchema,
+  /** The configured period in days, or null when none is configured and nothing was deleted. */
+  periodDays: z.number().int().min(1).nullable(),
+  /** Documents older than the period, which a sweep that is no dry run deletes. */
+  eligible: z.number().int().min(0),
+  deleted: z.number().int().min(0),
+  note: z.string().max(500),
+});
+export type RetentionOutcome = z.output<typeof retentionOutcomeSchema>;
+
+/** `retentionRuns/{id}`: one retention sweep, scheduled or asked for, with what it did. */
+export const retentionRunDocSchema = documentBaseSchema.extend({
+  trigger: z.enum(["schedule", "manual"]),
+  dryRun: z.boolean(),
+  startedAt: timestampSchema,
+  finishedAt: timestampSchema,
+  outcomes: z.array(retentionOutcomeSchema).max(RETENTION_OUTCOMES_MAX),
+});
+export type RetentionRunDoc = z.output<typeof retentionRunDocSchema>;

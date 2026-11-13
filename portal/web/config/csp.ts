@@ -30,6 +30,14 @@ export function buildContentSecurityPolicy(config: PortalBuildConfig): string {
     image.push("https://www.google.com/images/cleardot.gif");
   }
 
+  if (config.appCheck) {
+    // App Check with reCAPTCHA Enterprise: Google's script and its frame, and the exchange of
+    // the attestation for an App Check token.
+    script.push("https://www.google.com/recaptcha/", "https://www.gstatic.com/recaptcha/");
+    frame.push("https://www.google.com/recaptcha/", "https://recaptcha.google.com/recaptcha/");
+    connect.push("https://content-firebaseappcheck.googleapis.com", "https://www.google.com/recaptcha/");
+  }
+
   if (config.googleSignIn) {
     // signInWithPopup loads Google's helper script and talks to a hidden frame on the
     // authentication domain. The pop-up itself is a top-level window and is not governed here.

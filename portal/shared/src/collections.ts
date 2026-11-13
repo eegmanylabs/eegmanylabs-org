@@ -1428,6 +1428,16 @@ const DEFINITIONS = {
     dataClass: "member",
     enforcement: ENFORCED,
   }),
+  pageBlockEdits: define({
+    path: "pages/{pageId}/blockEdits/{blockId}",
+    schema: workspace.pageBlockEditDocSchema,
+    id: key("block identifier", "blockId"),
+    read: read(["SCOPED"], ["parent.scopeKeys"]),
+    write: FUNCTION_ONLY,
+    dataClass: "member",
+    flags: { audited: false },
+    enforcement: ENFORCED,
+  }),
   pagePresence: define({
     path: "pages/{pageId}/presence/{uid__tab}",
     schema: workspace.pagePresenceDocSchema,
@@ -1507,16 +1517,16 @@ const DEFINITIONS = {
     read: read(["SCOPED"], ["scopeKeys"], "As the parent page, whose audience the database copies."),
     // A database is created and its properties are defined through callable functions, which copy
     // the audience of its parent page and validate each definition. Its editors rename it,
-    // describe it, give it an icon and archive it.
+    // describe it, give it an icon, mark it as a template and archive it.
     write: client(
       [
         grant(["editor"], ["update"], {
-          onlyFields: ["name", "description", "icon", "archivedAt"],
+          onlyFields: ["name", "description", "icon", "isTemplate", "archivedAt"],
           condition: "The level is decided on the parent page.",
         }),
       ],
       ["parentPageId"],
-      ["parentPageId", "isTemplate", "templateSourceId", "properties", "scopeKeys", "levelKeys"],
+      ["parentPageId", "templateSourceId", "properties", "scopeKeys", "levelKeys"],
     ),
     dataClass: "member",
     flags: { searchable: true },
@@ -2257,6 +2267,35 @@ const DEFINITIONS = {
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     flags: { appendOnly: true, audited: false },
+    enforcement: ENFORCED,
+  }),
+  // Governance (docs/SECURITY.md, section 6). Callable and scheduled functions write these and
+  // serve them to programme administrators, so no client reads them directly.
+  erasureRequests: define({
+    path: "erasureRequests/{id}",
+    schema: system.erasureRequestDocSchema,
+    id: auto,
+    read: read(["FUNCTION"]),
+    write: FUNCTION_ONLY,
+    dataClass: "restricted",
+    enforcement: ENFORCED,
+  }),
+  accessReviewAttestations: define({
+    path: "accessReviewAttestations/{period__uid}",
+    schema: system.accessReviewAttestationDocSchema,
+    id: key("Review period and reviewer uid, joined by two underscores"),
+    read: read(["FUNCTION"]),
+    write: FUNCTION_ONLY,
+    dataClass: "restricted",
+    enforcement: ENFORCED,
+  }),
+  retentionRuns: define({
+    path: "retentionRuns/{id}",
+    schema: system.retentionRunDocSchema,
+    id: auto,
+    read: read(["FUNCTION"]),
+    write: FUNCTION_ONLY,
+    dataClass: "restricted",
     enforcement: ENFORCED,
   }),
   systemSettings: define({

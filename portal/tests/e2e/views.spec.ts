@@ -314,3 +314,70 @@ test("an option property takes its options with Enter, and every kind of view fi
     expect(await page.evaluate(() => document.documentElement.scrollWidth), type).toBeLessThanOrEqual(390);
   }
 });
+
+test("columns are sized and reordered by pointer and keyboard, and a database made a template starts another", async ({
+  page,
+}) => {
+  await signInAsIvy(page);
+  await databaseOnGammaNotes(page, "Synthetic visit plan");
+  await addRow(page, "Book the EEG room");
+  await addRow(page, "Order caps");
+  await page.getByRole("button", { name: "Properties" }).click();
+  await page.getByRole("button", { name: "Add a property" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add a property" });
+  await dialog.getByLabel("Name").fill("Room");
+  await dialog.getByLabel("Type").selectOption({ label: "Text" });
+  await dialog.getByRole("button", { name: "Save the property" }).click();
+  await expect(dialog).toBeHidden();
+  await page.keyboard.press("Escape");
+
+  // The handle of a column widens it with the arrow keys and with the pointer.
+  const table = page.getByTestId("view-table");
+  const handle = table.getByRole("separator").first();
+  const widthOf = async () => Number(await handle.getAttribute("aria-valuenow"));
+  const before = await widthOf();
+  await handle.focus();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(widthOf).toBe(before + 20);
+  const box = await handle.boundingBox();
+  if (box === null) throw new Error("The handle of the column has no box.");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(widthOf).toBe(before + 80);
+  const header = table.getByRole("columnheader").nth(1);
+  // The header is drawn at that width, give or take its border.
+  expect(Math.abs(Math.round((await header.boundingBox())?.width ?? 0) - (before + 80))).toBeLessThanOrEqual(2);
+
+  // A column moves right from its menu, and back by dragging its header.
+  const names = async () =>
+    (await table.getByRole("columnheader").allInnerTexts()).map((text) => text.trim()).filter((text) => text !== "");
+  const order = await names();
+  const second = order[1] ?? "";
+  const third = order[2] ?? "";
+  await page.getByRole("button", { name: `Column ${second}` }).click();
+  await page.getByRole("menuitem", { name: "Move right" }).click();
+  await expect.poll(async () => (await names()).slice(1, 3)).toEqual([third, second]);
+  await table
+    .getByRole("columnheader")
+    .filter({ hasText: second })
+    .dragTo(table.getByRole("columnheader").filter({ hasText: third }));
+  await expect.poll(async () => (await names()).slice(1, 3)).toEqual([second, third]);
+
+  // The database becomes a template, which a new database beneath any page the member edits starts from.
+  await page.getByRole("button", { name: "Use as a template" }).click();
+  await expect(page.getByTestId("database-template")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("button", { name: "Use as a template" })).toHaveAttribute("aria-pressed", "true");
+  await page.goto(`./#/replications/${GAMMA}?tab=notes`);
+  await page.getByRole("button", { name: "Add a database" }).click();
+  await page.getByLabel("Name of the new database").fill("Visit plan, second site");
+  await page.getByLabel("Start from").selectOption({ label: "Template: Synthetic visit plan" });
+  await page.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Visit plan, second site" })).toBeVisible();
+  await expect(page.getByText("Made from the template")).toBeVisible();
+  await expect(page.getByTestId("view-table").getByRole("row").filter({ hasText: "Book the EEG room" })).toHaveCount(1);
+  await expect(page.getByTestId("view-table").getByRole("row").filter({ hasText: "Order caps" })).toHaveCount(1);
+  await reviewPage(page, "database-from-template");
+});

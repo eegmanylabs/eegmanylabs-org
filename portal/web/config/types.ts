@@ -34,6 +34,11 @@ export interface PortalBuildConfig {
   /** Present only in emulator mode. */
   readonly emulators: EmulatorAddresses | null;
   readonly functionsRegion: string;
+  /**
+   * App Check with reCAPTCHA Enterprise: the public site key, which a production build must
+   * carry. Absent in emulator mode, where App Check has no emulator.
+   */
+  readonly appCheck: { readonly siteKey: string } | null;
   /** Whether the "Continue with Google" button is built in. */
   readonly googleSignIn: boolean;
   /** How a page shows who else has it open. */

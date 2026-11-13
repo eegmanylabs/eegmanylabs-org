@@ -56,3 +56,8 @@ export function activityOfPage(viewer: Viewer, pageId: string): LiveQuery<"activ
     limit: 50,
   };
 }
+
+/** Who last changed each block of a page, latest first. The page decides who reads them. */
+export function blockEditsOfPage(pageId: string): LiveQuery<"pageBlockEdits"> {
+  return { collection: "pageBlockEdits", within: [pageId], orderBy: [["editedAt", "desc"]], limit: 200 };
+}

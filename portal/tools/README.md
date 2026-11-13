@@ -14,6 +14,14 @@ Run every command from the `portal` directory, through its npm script or as `npm
 
 `admin:bootstrap` and `access:rebuild` write to the emulators unless `--production --project <identifier>` and credentials are given together, under the rules of `import run` below. For a real project `admin:bootstrap` reads the key of the hash from the private configuration, which must be the key that the functions of that project read from the secret `IDENTITY_HASH_KEY`. For the emulators it uses the public demonstration key, as the functions emulator does, unless `IDENTITY_HASH_KEY` is set in the environment.
 
+## Backups and restore rehearsal
+
+| Command | What it does |
+|---|---|
+| `npm run restore:rehearse` | The rehearsal on the emulators, in two sessions (`scripts/restore-rehearsal.mjs`). `restore:capture` seeds the demonstration world, writes an audit entry and a synthetic object in Storage, and writes the manifest; the emulators export when it ends. `restore:verify` runs in fresh emulators started from that export: it compares every document, account and object with the manifest, reads the audit trail back through its schema, asks the rules as a browser would whether an allowed read is still allowed and denied reads still denied, then changes one document, removes another and removes the object, and checks that the comparison names exactly those three. The dated report goes to `.run/<port base>/restore-rehearsal/<time>/report.md`. Exit status 3 when a check fails |
+| `backup:manifest --out <file> [--database <id>] [--bucket <name>\|default] [--accounts]` | Writes a manifest: every document path with a SHA-256 of its fields, and optionally every account and every object. A manifest holds paths and hashes and never a value. It only reads, and reaches a real project only with `--production --project <identifier>` and credentials, as an import does |
+| `backup:compare <backup> <restore>` | Lists what is missing, changed or unexpected in a restore. Needs no database. Exit status 3 when the two differ |
+
 ## Importing a source
 
 ```bash

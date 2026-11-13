@@ -4,9 +4,11 @@
 import {
   accountClaimDocSchema,
   accountClaimReviewDocSchema,
+  COLLECTIONS,
   claimProfileContract,
   listAccountClaimsContract,
   publicErrorReason,
+  recoverAccountContract,
   requestAccessContract,
   reviewAccountClaimContract,
   roleAssignmentDocSchema,
@@ -14,7 +16,7 @@ import {
 } from "@eegml/shared";
 import type { Timestamp } from "firebase-admin/firestore";
 import { beforeEach, describe, expect, it } from "vitest";
-import { adminDb } from "../support/admin";
+import { adminAuth, adminDb } from "../support/admin";
 import {
   accessOf,
   account,
@@ -37,6 +39,7 @@ import {
   refusal,
   replication,
   resetWorld,
+  standard,
   withoutTriggers,
 } from "./support";
 
@@ -208,6 +211,70 @@ describe("claimProfile", () => {
 
     expect(await call(caller, claimProfileContract, {})).toEqual({ status: "linked", personId: "person-1" });
     expect((await reviewOf("uid-secondary")).matchBasis).toBe("secondaryEmail");
+  });
+
+  it("links a member with several affiliations once, keeps every affiliation and opens each confirmed laboratory", async () => {
+    await Promise.all([laboratory("lab-a"), laboratory("lab-b"), laboratory("lab-c")]);
+    await person(
+      "person-multi",
+      [{ email: "multi.primary@example.org" }, { email: "multi.visiting@example.org", kind: "secondary" }],
+      { laboratoryIds: ["lab-a", "lab-b", "lab-c"], affiliationSummary: "Three synthetic institutions" },
+    );
+    const affiliations = [
+      {
+        id: "aff-a",
+        institutionId: "inst-a",
+        laboratoryId: "lab-a",
+        isPrimary: true,
+        roleTitle: "Postdoctoral fellow",
+      },
+      {
+        id: "aff-b",
+        institutionId: "inst-b",
+        laboratoryId: "lab-b",
+        isPrimary: false,
+        roleTitle: "Visiting researcher",
+      },
+      { id: "aff-c", institutionId: "inst-c", laboratoryId: "lab-c", isPrimary: false, endDate: "2024-12-31" },
+    ];
+    for (const { id, ...fields } of affiliations) {
+      await adminDb
+        .doc(COLLECTIONS.personAffiliations.docPath("person-multi", id))
+        .set({ ...standard(), personId: "person-multi", ...fields });
+    }
+    // Two of the laboratories confirm the person; the third, an affiliation that has ended, does not.
+    await memberEntry("lab-a", "person-multi", { status: "confirmed" });
+    await memberEntry("lab-b", "person-multi", { status: "confirmed" });
+    const before = await adminDb.collection(COLLECTIONS.personAffiliations.collectionPath("person-multi")).get();
+
+    // The member signs in with the address of the visiting position.
+    const caller = await account("uid-multi", { email: "multi.visiting@example.org" });
+    expect(await call(caller, claimProfileContract, {})).toEqual({ status: "linked", personId: "person-multi" });
+    expect((await reviewOf("uid-multi")).matchBasis).toBe("secondaryEmail");
+
+    const access = await accessOf("uid-multi");
+    expect(access).toMatchObject({ member: true, personId: "person-multi", memberLaboratoryIds: ["lab-a", "lab-b"] });
+    expect(access.scopeKeys).toEqual(expect.arrayContaining(["lab:lab-a", "lab:lab-b"]));
+    expect(access.scopeKeys).not.toContain("lab:lab-c");
+    expect((await adminDb.collection("roleAssignments").where("uid", "==", "uid-multi").get()).size).toBe(2);
+
+    // Every affiliation is kept as it was: the claim links the account and rewrites none of them.
+    const after = await adminDb.collection(COLLECTIONS.personAffiliations.collectionPath("person-multi")).get();
+    expect(after.docs.map((entry) => [entry.id, entry.data()])).toEqual(
+      before.docs.map((entry) => [entry.id, entry.data()]),
+    );
+    expect(after.docs.filter((entry) => entry.get("isPrimary") === true).map((entry) => entry.id)).toEqual(["aff-a"]);
+    expect(await dataOf("persons/person-multi")).toMatchObject({
+      userId: "uid-multi",
+      laboratoryIds: ["lab-a", "lab-b", "lab-c"],
+      affiliationSummary: "Three synthetic institutions",
+    });
+
+    // The address of the other position reaches the same member, and links nothing a second time.
+    const second = await account("uid-multi-primary", { email: "multi.primary@example.org" });
+    const answer = await call(second, claimProfileContract, {});
+    expect(answer.status).not.toBe("linked");
+    expect((await dataOf("persons/person-multi"))?.userId).toBe("uid-multi");
   });
 
   it("sends several candidates to review, tells the caller nothing more and changes nothing else", async () => {
@@ -766,5 +833,104 @@ describe("unlinkAccountClaim", () => {
     // There is nothing left to unlink.
     expect(await codeOf(call(admin, unlinkAccountClaimContract, unlinking))).toBe("failed-precondition");
     expect(await codeOf(callRaw(admin, "unlinkAccountClaim", { uid: "uid-claimant" }))).toBe("invalid-argument");
+  });
+});
+
+describe("recoverAccount", () => {
+  const VERIFICATION = "Synthetic: identity confirmed on a video call with the principal investigator of lab-a.";
+
+  /** A member linked through the address they have since lost, and the account they hold now, which asks for access. */
+  async function lostAddressWorld() {
+    await laboratory("lab-a");
+    await person("person-lost", [{ email: "lost.address@example.org" }], { laboratoryIds: ["lab-a"] });
+    await memberEntry("lab-a", "person-lost", { status: "confirmed", role: "coordinator" });
+    await adminAuth.createUser({ uid: "uid-old", email: "lost.address@example.org", emailVerified: true });
+    const old = await account("uid-old", { email: "lost.address@example.org" });
+    expect(await call(old, claimProfileContract, {})).toMatchObject({ status: "linked", personId: "person-lost" });
+    const fresh = await account("uid-new", { email: "new.address@example.org" });
+    expect(await call(fresh, claimProfileContract, {})).toMatchObject({ status: "noMatch" });
+    await call(fresh, requestAccessContract, {
+      statedName: "Synthetic Lost",
+      affiliation: "Synthetic laboratory A",
+      message: "I lost access to my old institutional address.",
+    });
+    return { old, fresh };
+  }
+
+  it("moves the member to the new account, suspends the old one and stops the lost address from claiming", async () => {
+    const admin = await administrator("uid-admin");
+    const { old } = await lostAddressWorld();
+
+    expect(
+      await call(admin, recoverAccountContract, {
+        uid: "uid-new",
+        personId: "person-lost",
+        verification: VERIFICATION,
+      }),
+    ).toEqual({ personId: "person-lost", previousUid: "uid-old", revokedRoleAssignments: 2 });
+
+    expect(await dataOf("persons/person-lost")).toMatchObject({ userId: "uid-new" });
+    expect(await dataOf("users/uid-new")).toMatchObject({ personId: "person-lost" });
+    expect(await dataOf("users/uid-old")).toMatchObject({ personId: null, status: "suspended" });
+    expect(await accessOf("uid-new")).toMatchObject({
+      member: true,
+      personId: "person-lost",
+      memberLaboratoryIds: ["lab-a"],
+    });
+    expect(await accessOf("uid-old")).toMatchObject({ personId: null, memberLaboratoryIds: [] });
+    expect(await claimOf("uid-new")).toMatchObject({ status: "approved", personId: "person-lost" });
+    expect((await reviewOf("uid-new")).evidence).toMatchObject({ recoveredFrom: "uid-old" });
+    expect(await claimOf("uid-old")).toMatchObject({ status: "rejected", personId: null });
+    expect((await adminAuth.getUser("uid-old")).disabled).toBe(true);
+
+    // The lost address is kept as history and can no longer be claimed with; the new one is primary.
+    expect((await dataOf("persons/person-lost/private/contact"))?.emails).toEqual([
+      expect.objectContaining({ email: "new.address@example.org", kind: "primary", claimEligible: true }),
+      expect.objectContaining({ email: "lost.address@example.org", kind: "historical", claimEligible: false }),
+    ]);
+    expect((await dataOf(emailIndexPath("lost.address@example.org")))?.claimEligiblePersonIds).toEqual([]);
+    expect((await dataOf(emailIndexPath("new.address@example.org")))?.claimEligiblePersonIds).toEqual(["person-lost"]);
+
+    // The audit entry names both accounts and how the identity was verified.
+    const [entry] = await auditOf("account.recovered", "person-lost");
+    expect(entry).toMatchObject({ actorUid: "uid-admin" });
+    expect(entry?.changes).toEqual(
+      expect.arrayContaining([
+        { field: "userId", before: "uid-old", after: "uid-new" },
+        { field: "verification", after: VERIFICATION },
+      ]),
+    );
+    expect(await auditOf("role.revoked", "uid-old")).toHaveLength(2);
+
+    // Whoever holds the lost address now cannot take the profile back.
+    expect(await codeOf(call(old, claimProfileContract, {}))).toBe("permission-denied");
+  });
+
+  it("is never self-service, needs a programme administrator with the second factor and a request waiting", async () => {
+    const admin = await administrator("uid-admin");
+    const noFactor = await administrator("uid-admin-2", { secondFactor: false });
+    const core = await coreTeamMember("uid-core");
+    await grantCapability("uid-core", "claims.review");
+    const { old, fresh } = await lostAddressWorld();
+    const input = { uid: "uid-new", personId: "person-lost", verification: VERIFICATION };
+
+    expect(await codeOf(call(null, recoverAccountContract, input))).toBe("unauthenticated");
+    expect(await codeOf(call(fresh, recoverAccountContract, input))).toBe("permission-denied");
+    expect(await codeOf(call(old, recoverAccountContract, input))).toBe("permission-denied");
+    expect(await codeOf(call(core, recoverAccountContract, input))).toBe("permission-denied");
+    expect((await refusal(call(noFactor, recoverAccountContract, input))).code).toBe("failed-precondition");
+    expect(await codeOf(call(admin, recoverAccountContract, { ...input, verification: "too short" }))).toBe(
+      "invalid-argument",
+    );
+    // An account without a request waiting, and a person whom no account holds, are refused.
+    const idle = await account("uid-idle", { email: "idle.address@example.org" });
+    expect(await codeOf(call(admin, recoverAccountContract, { ...input, uid: idle.uid }))).toBe("failed-precondition");
+    await person("person-unclaimed", [{ email: "unclaimed.address@example.org" }]);
+    expect(await codeOf(call(admin, recoverAccountContract, { ...input, personId: "person-unclaimed" }))).toBe(
+      "failed-precondition",
+    );
+    expect(await codeOf(call(admin, recoverAccountContract, { ...input, uid: admin.uid }))).toBe("permission-denied");
+    expect((await dataOf("persons/person-lost"))?.userId).toBe("uid-old");
+    expect(await auditOf("account.recovered")).toHaveLength(0);
   });
 });

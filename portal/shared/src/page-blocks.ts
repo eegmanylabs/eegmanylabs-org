@@ -51,6 +51,44 @@ export const actionItemBlockConfig = {
   content: "none",
 } as const;
 
+/**
+ * What a workflow button does when it is pressed (R3.37): add a row to a database, create a task
+ * in a task list, or create a page beneath a page, from a template or empty. Each runs the
+ * callable function that does the same from anywhere else, so the button grants nothing.
+ */
+export const WORKFLOW_ACTIONS = ["addRow", "newTask", "newPage"] as const;
+export type WorkflowAction = (typeof WORKFLOW_ACTIONS)[number];
+
+/**
+ * A workflow button: a configurable button in a page. `target` is the database, the task list or
+ * the parent page; `templateId` the page template a new page starts from, or empty; `title` the
+ * title of what it creates, in which `{date}` stands for the day it is pressed.
+ */
+export const workflowButtonBlockConfig = {
+  type: "workflowButton",
+  propSchema: {
+    label: { default: "" },
+    action: { default: "addRow", values: WORKFLOW_ACTIONS },
+    target: { default: "" },
+    templateId: { default: "" },
+    title: { default: "" },
+  },
+  content: "none",
+} as const;
+
+/** The longest title that a workflow button gives what it creates. */
+export const WORKFLOW_TITLE_MAX = 200;
+
+/**
+ * The title that a workflow button gives what it creates on a day: its title with every `{date}`
+ * replaced by the day as YYYY-MM-DD, trimmed to the longest title; the label of the button where
+ * the title is empty.
+ */
+export function workflowTitle(button: { readonly title: string; readonly label: string }, day: string): string {
+  const template = button.title.trim() === "" ? button.label : button.title;
+  return template.replaceAll("{date}", day).trim().slice(0, WORKFLOW_TITLE_MAX);
+}
+
 /** The kinds of callout. None of them is shown in green, which the visual system of the portal does not use. */
 export const CALLOUT_VARIANTS = ["info", "note", "warning", "danger"] as const;
 export type CalloutVariant = (typeof CALLOUT_VARIANTS)[number];

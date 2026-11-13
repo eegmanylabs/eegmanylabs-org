@@ -16,8 +16,8 @@ import { cn } from "@/utils/cn";
 import { Field } from "./TaskFields";
 import { addTask, messageOf, moveTask } from "./task-writes";
 
-/** The most rows the tree draws at once. A larger list is narrowed with the views. */
-const TREE_ROWS_MAX = 1_000;
+/** How many rows the tree draws at first, and how many more each Show more adds. */
+export const TREE_ROWS_PAGE = 200;
 
 export interface TaskTreeProps {
   readonly data: TaskData;
@@ -39,7 +39,9 @@ export function TaskTree({ data, listId, tasks, manages, selectedId, onOpen }: T
   const [busy, setBusy] = useState(false);
   const [title, setTitle] = useState("");
   const [childOf, setChildOf] = useState<string | null>(null);
-  const rows = useMemo(() => taskTree(tasks, collapsed).slice(0, TREE_ROWS_MAX), [tasks, collapsed]);
+  const [shown, setShown] = useState(TREE_ROWS_PAGE);
+  const allRows = useMemo(() => taskTree(tasks, collapsed), [tasks, collapsed]);
+  const rows = useMemo(() => allRows.slice(0, shown), [allRows, shown]);
   const byId = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
   const childrenOf = (parentId: string | null) =>
     tasks.filter((task) => task.parentId === parentId).sort(bySiblingOrder);
@@ -308,10 +310,15 @@ export function TaskTree({ data, listId, tasks, manages, selectedId, onOpen }: T
               );
             })}
           </div>
-          {tasks.length > TREE_ROWS_MAX ? (
-            <p className="mt-2 text-sm text-fg-muted">
-              The first {TREE_ROWS_MAX} tasks are shown. Use the views to filter the list.
-            </p>
+          {allRows.length > rows.length ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <p className="text-sm text-fg-muted" aria-live="polite">
+                {rows.length} of {allRows.length} tasks are shown.
+              </p>
+              <Button size="sm" onClick={() => setShown(shown + TREE_ROWS_PAGE)}>
+                Show {Math.min(TREE_ROWS_PAGE, allRows.length - rows.length)} more tasks
+              </Button>
+            </div>
           ) : null}
         </div>
       )}

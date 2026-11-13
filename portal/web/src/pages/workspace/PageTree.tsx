@@ -1,11 +1,12 @@
 // The pages of the workspace as a tree: the pages at its top and, beneath each, the pages inside
-// it, in their order. Which branches are folded is remembered in this browser. Where the tree
+// it, in their order, fifty to a branch at first with Show more for the rest. Which branches are folded is remembered in this browser. Where the tree
 // offers reordering, an editor of a page moves it before or after its neighbour, which writes one
 // order key (see order.ts of the shared package).
 import { orderBetween } from "@eegml/shared";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight } from "lucide-react";
 import { useCallback, useState } from "react";
 import { NavLink } from "react-router";
+import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { useToast } from "@/components/ui/toast";
 import { type RecordOf, updatePageFields } from "@/data";
@@ -17,6 +18,9 @@ import { holds, usePageLevel } from "./page-level";
 type Page = RecordOf<"pages">;
 
 const FOLDED_KEY = "portal.workspace.folded";
+
+/** How many pages of one branch the tree draws at first, and how many more each Show more adds. */
+export const BRANCH_PAGE_SIZE = 50;
 
 /** The branches of the tree that are folded, remembered in this browser. */
 export function useFoldedPages(): readonly [ReadonlySet<string>, (pageId: string) => void] {
@@ -117,9 +121,11 @@ function Branch({
   readonly onNavigate: (() => void) | undefined;
 }) {
   const pages = tree.get(parentId) ?? [];
+  const [shown, setShown] = useState(BRANCH_PAGE_SIZE);
+  const hidden = pages.length - shown;
   return (
     <ul className="grid gap-0.5">
-      {pages.map((page) => {
+      {pages.slice(0, shown).map((page) => {
         const inside = tree.get(page.id) ?? [];
         const open = !folded.has(page.id);
         return (
@@ -168,6 +174,13 @@ function Branch({
           </li>
         );
       })}
+      {hidden > 0 ? (
+        <li style={{ paddingLeft: `${depth * 0.75}rem` }}>
+          <Button size="sm" variant="ghost" onClick={() => setShown(shown + BRANCH_PAGE_SIZE)}>
+            Show {Math.min(hidden, BRANCH_PAGE_SIZE)} more of {hidden} pages
+          </Button>
+        </li>
+      ) : null}
     </ul>
   );
 }

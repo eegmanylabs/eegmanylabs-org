@@ -18,12 +18,15 @@ export function FavouriteButton({
   entityType,
   entityId,
   name,
+  variant = "outline",
 }: {
   uid: string;
   entityType: EntityType;
   entityId: string;
   /** What the record is called, for the accessible name of the button. */
   name: string;
+  /** `ghost` in a toolbar of quiet buttons, such as the actions of a page. */
+  variant?: "outline" | "ghost";
 }) {
   const favourites = useLiveQuery(favouritesOf(uid));
   const toast = useToast();
@@ -53,6 +56,7 @@ export function FavouriteButton({
   return (
     <Button
       size="sm"
+      variant={variant}
       aria-pressed={starred}
       aria-label={`Star ${name}`}
       disabled={busy || favourites.status !== "ready"}

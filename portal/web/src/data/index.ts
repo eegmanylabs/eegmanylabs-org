@@ -1,5 +1,7 @@
 // The data layer: the only part of the web application that imports the Firebase SDK.
-// Routes and components import from "@/data" and never from a file inside it.
+// Routes and components import from "@/data" and never from a file inside it. The collaborative
+// editor alone also imports "@/data/collaboration", which holds the Yjs documents, presence and
+// files of pages, so that they load with the editor and not with the application.
 export { type AccessRecord, startSession, type UserRecord, useAccessRecord, useUserRecord } from "./account";
 export {
   completeSignInLink,
@@ -15,7 +17,6 @@ export {
   signInWithGoogle,
   signOut,
 } from "./auth";
-export { namesOfOthers } from "./awareness-wire";
 export { callFunction } from "./callable";
 export { CallableError, type CallableErrorCode } from "./callable-error";
 export { DataShapeError, type RecordOf, type WithId } from "./converter";
@@ -34,9 +35,7 @@ export {
   useLiveQuery,
 } from "./live";
 export { discardLocalData } from "./local-data";
-export { PageFileError, pageFileUrl, uploadPageFile } from "./page-files";
-export { PresenceSync, type PresenceSyncMode } from "./page-presence";
-export { type CompactionResult, PageSync, type PageSyncOptions, type SaveState } from "./page-sync";
+export type { SaveState } from "./page-sync";
 export {
   addComment,
   createThread,

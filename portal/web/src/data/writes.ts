@@ -291,9 +291,11 @@ export async function updateDatabaseFields(
     readonly description?: string | null;
     readonly icon?: string | null;
     readonly archived?: boolean;
+    readonly isTemplate?: boolean;
   },
 ): Promise<void> {
   await updateDoc(doc(db, COLLECTIONS.databases.docPath(databaseId)), {
+    ...(patch.isTemplate === undefined ? {} : { isTemplate: patch.isTemplate }),
     ...(patch.name === undefined ? {} : { name: patch.name }),
     ...(patch.description === undefined ? {} : { description: patch.description ?? deleteField() }),
     ...(patch.icon === undefined ? {} : { icon: patch.icon ?? deleteField() }),

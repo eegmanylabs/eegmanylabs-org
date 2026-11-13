@@ -140,6 +140,10 @@ function ColumnHeader({
   const start = useRef<{ x: number; width: number } | null>(null);
   const sortedBy = (config.sorts ?? []).find((sort) => sort.property === property.id);
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    // The handle sits in a header that drags to reorder: holding the handle resizes instead, so
+    // neither a drag of the header nor a selection of text may begin from it.
+    event.preventDefault();
+    event.currentTarget.focus();
     start.current = { x: event.clientX, width };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
@@ -167,7 +171,9 @@ function ColumnHeader({
       onDragStart={(event) => event.dataTransfer.setData("text/x-view-column", String(index))}
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
-        const from = Number(event.dataTransfer.getData("text/x-view-column"));
+        // Only a header carries a column: anything else dropped here moves nothing.
+        const carried = event.dataTransfer.getData("text/x-view-column");
+        const from = carried === "" ? Number.NaN : Number(carried);
         if (!Number.isInteger(from) || from === index) return;
         const ids = [...(config.order ?? [])];
         const [moved] = ids.splice(from, 1);
@@ -222,12 +228,16 @@ function ColumnHeader({
         tabIndex={0}
         className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-border-strong focus-visible:bg-accent"
         onPointerDown={onPointerDown}
+        onMouseDown={(event) => event.preventDefault()}
         onPointerMove={(event) => {
           if (start.current !== null) onWidth(clamp(start.current.width + event.clientX - start.current.x), false);
         }}
         onPointerUp={(event) => {
           if (start.current === null) return;
           onWidth(clamp(start.current.width + event.clientX - start.current.x), true);
+          start.current = null;
+        }}
+        onPointerCancel={() => {
           start.current = null;
         }}
         onKeyDown={onKeyDown}

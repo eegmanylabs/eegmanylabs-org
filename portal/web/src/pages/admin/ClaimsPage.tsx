@@ -1,4 +1,9 @@
-import { type ClaimReviewReason, type ListAccountClaimsOutput, reviewAccountClaimContract } from "@eegml/shared";
+import {
+  type ClaimReviewReason,
+  type ListAccountClaimsOutput,
+  recoverAccountContract,
+  reviewAccountClaimContract,
+} from "@eegml/shared";
 import { useMemo, useState } from "react";
 import { formatDateTime } from "@/app/labels";
 import { useProgrammeAdministrator } from "@/auth/use-privilege";
@@ -13,9 +18,10 @@ import { Input } from "@/components/ui/input";
 import { Pagination } from "@/components/ui/pagination";
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
-import { callFunction, useLiveQuery } from "@/data";
+import { callFunction } from "@/data";
 import { useViewer } from "@/registry/viewer";
 import { AdminPage } from "./AdminPage";
+import { PersonSearch } from "./person-search";
 import { usePendingAccountClaims } from "./queues";
 import { ReasonDialog } from "./ReasonDialog";
 
@@ -107,60 +113,6 @@ const SPEC: TableSpec<Claim, SortKey> = {
   pageSize: 10,
 };
 
-/** Finds a person of the directory by name, for a claim whose address matched nobody. */
-function PersonSearch({
-  claimUid,
-  chosen,
-  onChoose,
-}: {
-  claimUid: string;
-  chosen: string | null;
-  onChoose: (id: string) => void;
-}) {
-  const [search, setSearch] = useState("");
-  const persons = useLiveQuery(search.trim().length < 2 ? null : { collection: "persons", within: [], limit: 1_000 });
-  const query = search.trim().toLowerCase();
-  return (
-    <div className="grid gap-2">
-      <FormField label="Find the person in the directory" hint="Type at least two letters of the name.">
-        {(control) => (
-          <Input {...control} type="search" value={search} onChange={(event) => setSearch(event.target.value)} />
-        )}
-      </FormField>
-      <LiveView live={persons} loadingLabel="Searching the directory" errorTitle="The directory could not be searched.">
-        {(list) => {
-          const matches = list.filter((person) => person.displayName.toLowerCase().includes(query)).slice(0, 8);
-          if (matches.length === 0) return <p className="text-fg-secondary">Nobody in the directory matches.</p>;
-          return (
-            <fieldset className="grid gap-1">
-              <legend className="sr-only">People who match</legend>
-              {matches.map((person) => (
-                <label
-                  key={person.id}
-                  className="flex cursor-pointer items-center gap-2 rounded-control border border-border bg-background px-3 py-2 pointer-coarse:min-h-11"
-                >
-                  <input
-                    type="radio"
-                    name={`person-${claimUid}`}
-                    value={person.id}
-                    checked={chosen === person.id}
-                    onChange={() => onChoose(person.id)}
-                  />
-                  <span className="font-medium">{person.displayName}</span>
-                  {person.affiliationSummary ? (
-                    <span className="text-fg-secondary">{person.affiliationSummary}</span>
-                  ) : null}
-                  {person.userId === null ? null : <Badge tone="neutral">Already claimed</Badge>}
-                </label>
-              ))}
-            </fieldset>
-          );
-        }}
-      </LiveView>
-    </div>
-  );
-}
-
 function ClaimCard({ claim, onDecided }: { claim: Claim; onDecided: () => void }) {
   const toast = useToast();
   const administrator = useProgrammeAdministrator();
@@ -169,6 +121,7 @@ function ClaimCard({ claim, onDecided }: { claim: Claim; onDecided: () => void }
   const [rejecting, setRejecting] = useState(false);
   const [approving, setApproving] = useState(false);
   const [admitting, setAdmitting] = useState(false);
+  const [recovering, setRecovering] = useState(false);
   const [newName, setNewName] = useState(claim.request?.statedName ?? "");
   const [newAffiliation, setNewAffiliation] = useState(claim.request?.affiliation ?? "");
   const [busy, setBusy] = useState(false);
@@ -249,7 +202,7 @@ function ClaimCard({ claim, onDecided }: { claim: Claim; onDecided: () => void }
           </div>
         </fieldset>
       ) : administrator ? (
-        <PersonSearch claimUid={claim.uid} chosen={chosen} onChoose={setChosen} />
+        <PersonSearch groupName={`person-${claim.uid}`} chosen={chosen} onChoose={setChosen} />
       ) : (
         <p className="text-fg-secondary">
           This address is on nobody's record, so only a programme administrator can link the account. You can reject the
@@ -265,10 +218,38 @@ function ClaimCard({ claim, onDecided }: { claim: Claim; onDecided: () => void }
             Approve as a new member
           </Button>
         ) : null}
+        {administrator && claim.request !== null && claim.candidates.length === 0 ? (
+          <Button disabled={chosen === null || busy} onClick={() => setRecovering(true)}>
+            Recover this member's account
+          </Button>
+        ) : null}
         <Button disabled={busy} onClick={() => setRejecting(true)}>
           Reject
         </Button>
       </div>
+      <ReasonDialog
+        open={recovering}
+        onOpenChange={setRecovering}
+        title="Recover this member's account?"
+        description="For a member who has lost access to the address of their account. The chosen person moves from their old account to this one; the old account is suspended and loses its roles, and the lost address can no longer be used to claim the profile. Verify who they are outside the portal first, for example with their principal investigator."
+        label="How you verified their identity"
+        hint="At least 20 characters. It is kept in the audit trail."
+        maxLength={2_000}
+        minLength={20}
+        confirmLabel="Recover the account"
+        canConfirm={chosen !== null}
+        onConfirm={async (verification) => {
+          if (chosen === null) return;
+          setBusy(true);
+          try {
+            await callFunction(recoverAccountContract, { uid: claim.uid, personId: chosen, verification });
+            toast.show({ title: `${name}'s profile now belongs to this account. The old account is suspended.` });
+            onDecided();
+          } finally {
+            setBusy(false);
+          }
+        }}
+      />
       <ReasonDialog
         open={admitting}
         onOpenChange={setAdmitting}

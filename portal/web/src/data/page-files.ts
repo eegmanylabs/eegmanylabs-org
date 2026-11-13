@@ -8,8 +8,15 @@ import {
   pageFilePath,
   pageFileServedType,
 } from "@eegml/shared";
-import { getBlob, ref, uploadBytes } from "firebase/storage";
-import { storage } from "./firebase";
+import { connectStorageEmulator, getBlob, getStorage, ref, uploadBytes } from "firebase/storage";
+import { config } from "@/app/config";
+import { app } from "./firebase";
+
+// Cloud Storage holds the files of pages. A file is read with the reader's own credentials each
+// time, so the storage rules decide every read. It starts here, with the first page that has an
+// editor, and not with the application.
+const storage = getStorage(app);
+if (config.emulators) connectStorageEmulator(storage, config.emulators.host, config.emulators.storage);
 
 /** Why a file was not stored, in words that can be shown as they stand. */
 export class PageFileError extends Error {

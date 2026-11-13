@@ -4,8 +4,9 @@
     "lib": ["es2023", "dom", "dom.iterable"],
     "types": ["node"],
     "allowJs": true,
-    "checkJs": true
+    "checkJs": true,
+    "allowImportingTsExtensions": true
   },
-  "include": ["tests", "scripts", "functions/bundle.mjs", "vitest.config.ts", "playwright.config.ts"],
+  "include": ["tests", "scripts", "ops", "functions/bundle.mjs", "vitest.config.ts", "playwright.config.ts"],
   "exclude": ["tests/editor"]
 }

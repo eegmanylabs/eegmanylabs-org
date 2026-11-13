@@ -1,5 +1,6 @@
 // The databases beneath a page (D-011): each a collection of rows of its own, with the audience
-// of the page, which its editors create here through the function createDatabase.
+// of the page, which its editors create here through the function createDatabase, empty or from
+// a database template that they read.
 import { createDatabaseContract } from "@eegml/shared";
 import { Database } from "lucide-react";
 import { type FormEvent, useState } from "react";
@@ -7,6 +8,7 @@ import { Link, useNavigate } from "react-router";
 import { LiveView } from "@/components/feedback/live-view";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { CallableError, callFunction, type RecordOf, retryFailedLiveData, useLiveQuery } from "@/data";
 import type { Viewer } from "@/registry/viewer";
 
@@ -21,7 +23,25 @@ export function PageDatabases({
 }) {
   const navigate = useNavigate();
   const [name, setName] = useState<string | null>(null);
+  const [template, setTemplate] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const templates = useLiveQuery(
+    editable && name !== null
+      ? {
+          collection: "databases",
+          within: [],
+          where: viewer.staff
+            ? [["isTemplate", "==", true]]
+            : [
+                ["isTemplate", "==", true],
+                ["scopeKeys", "array-contains-any", [...viewer.queryScopeKeys]],
+              ],
+          limit: 50,
+        }
+      : null,
+  );
+  const templateChoices =
+    templates.status === "ready" ? templates.data.filter((candidate) => candidate.archivedAt === null) : [];
   const databases = useLiveQuery({
     collection: "databases",
     within: [],
@@ -38,7 +58,11 @@ export function PageDatabases({
     const trimmed = name?.trim() ?? "";
     if (trimmed === "") return;
     setError(null);
-    callFunction(createDatabaseContract, { parentPageId: page.id, name: trimmed })
+    callFunction(createDatabaseContract, {
+      parentPageId: page.id,
+      name: trimmed,
+      ...(template === "" ? {} : { templateDatabaseId: template }),
+    })
       .then(({ databaseId }) => navigate(`/databases/${databaseId}`))
       .catch((failure: unknown) =>
         setError(failure instanceof CallableError ? failure.message : "The database was not created."),
@@ -51,7 +75,14 @@ export function PageDatabases({
           Databases
         </h2>
         {editable && name === null ? (
-          <Button size="sm" variant="outline" onClick={() => setName("")}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setName("");
+              setTemplate("");
+            }}
+          >
             <Database aria-hidden="true" strokeWidth={1.8} />
             Add a database
           </Button>
@@ -66,6 +97,21 @@ export function PageDatabases({
             value={name}
             onChange={(event) => setName(event.target.value)}
           />
+          {templateChoices.length === 0 ? null : (
+            <Select
+              className="w-64"
+              aria-label="Start from"
+              value={template}
+              onChange={(event) => setTemplate(event.target.value)}
+            >
+              <option value="">An empty database</option>
+              {templateChoices.map((candidate) => (
+                <option key={candidate.id} value={candidate.id}>
+                  Template: {candidate.name}
+                </option>
+              ))}
+            </Select>
+          )}
           <Button size="sm" type="submit" variant="primary" disabled={name.trim() === ""}>
             Create
           </Button>

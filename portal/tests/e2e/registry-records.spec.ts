@@ -198,6 +198,20 @@ test("a lead edits the replication in place and changes its status; the rules an
     await leadPage.getByRole("tab", { name: "Activity" }).click();
     await expect(leadPage.getByTestId("status-entry").first()).toContainText("Collecting to Analysing");
     await expect(leadPage.getByTestId("status-entry").first()).toContainText("collection has ended");
+    // The status on a chosen date is read from the same history.
+    const today = await leadPage.evaluate(() => {
+      const now = new Date();
+      const pad = (value: number) => String(value).padStart(2, "0");
+      return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    });
+    await leadPage.getByLabel("Date").fill(today);
+    await leadPage.getByRole("button", { name: "Show the status" }).click();
+    await expect(leadPage.getByTestId("status-on-date")).toContainText("the status was Analysing");
+    await leadPage.getByLabel("Date").fill("2000-01-01");
+    await leadPage.getByRole("button", { name: "Show the status" }).click();
+    await expect(leadPage.getByTestId("status-on-date")).toHaveText(
+      "No status had been recorded by the end of 1 January 2000.",
+    );
     const entries = await adminDb
       .collection("statusHistory")
       .where("entityId", "==", ALPHA)

@@ -213,7 +213,10 @@
     accent-color: var(--color-accent-strong);
   }
   /* One focus treatment for everything: an outline, never a shadow. */
-  :where(a, button, input, textarea, select, summary, [tabindex]):focus-visible {
+  :where(a, button, input, textarea, select, summary, [tabindex]):focus-visible,
+  /* A field of a date or a time keeps its outline while the focus is on its picker button, where
+     the browser counts the focus as within the field and no longer on it. */
+  :where(input[type="date"], input[type="datetime-local"], input[type="time"], input[type="month"]):focus-within {
     outline: 3px solid var(--focus-ring);
     outline-offset: 3px;
   }

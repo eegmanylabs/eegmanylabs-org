@@ -10,7 +10,7 @@ import { useCreateBlockNote } from "@blocknote/react";
 import { PAGE_FRAGMENT_NAME } from "@eegml/shared";
 import { useMemo } from "react";
 import * as Y from "yjs";
-import { pageFileUrl } from "@/data";
+import { pageFileUrl } from "@/data/collaboration";
 import { portalDictionary } from "./dictionary";
 import { pageSchema } from "./schema";
 

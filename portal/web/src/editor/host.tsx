@@ -6,7 +6,7 @@ import * as Y from "yjs";
 import { config } from "@/app/config";
 import { ErrorState } from "@/components/feedback/error-state";
 import { LoadingState } from "@/components/feedback/loading-state";
-import { namesOfOthers, PageSync, PresenceSync, type SaveState } from "@/data";
+import { namesOfOthers, PageSync, PresenceSync, type SaveState } from "@/data/collaboration";
 import { Isolated } from "./isolated";
 import { PageEditor, type PageEditorProps } from "./PageEditor";
 

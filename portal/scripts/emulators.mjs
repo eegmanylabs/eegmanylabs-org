@@ -3,10 +3,14 @@
 // Starts the Firebase Local Emulator Suite for one port base.
 //
 //   node scripts/emulators.mjs start  [--only auth,firestore]      run until interrupted
-//   node scripts/emulators.mjs exec   [--only auth,firestore] [--web] <npm script>
+//   node scripts/emulators.mjs exec   [--only auth,firestore] [--web] [--import <dir>]
+//                                     [--export-on-exit <dir>] <npm script>
 //                                                                   start, run the script, stop.
 //                                                                   --web says that the script
-//                                                                   starts the preview server
+//                                                                   starts the preview server.
+//                                                                   --import starts from an
+//                                                                   export, --export-on-exit
+//                                                                   exports when the script ends
 //   node scripts/emulators.mjs run    <command> [arguments...]     run a command with the
 //                                                                   emulator addresses in its
 //                                                                   environment, start nothing
@@ -21,6 +25,7 @@
 // the script started (see process-group.mjs).
 import { mkdirSync, rmSync } from "node:fs";
 import net from "node:net";
+import os from "node:os";
 import path from "node:path";
 import { writeFirebaseConfig } from "./firebase-config.mjs";
 import { DEMO_PROJECT_ID, PORTAL_ROOT, runDirectory, runTemporaryDirectory } from "./paths.mjs";
@@ -62,17 +67,38 @@ function portIsFree(port) {
 }
 
 /**
- * Splits "--only a,b" and "--web" off the front of the arguments.
+ * An absolute directory for --import or --export-on-exit. It must lie in a run's directory or
+ * in the temporary directory, so that an export never lands among the sources.
+ * @param {string} option
+ * @param {string | undefined} value
+ * @returns {string}
+ */
+function stateDirectory(option, value) {
+  if (!value || !path.isAbsolute(value)) fail(`${option} needs an absolute directory.`);
+  const resolved = path.resolve(value);
+  if (!resolved.split(path.sep).includes(".run") && !resolved.startsWith(path.resolve(os.tmpdir()) + path.sep)) {
+    fail(`${option} accepts a directory below a run's directory (.run) or the temporary directory only.`);
+  }
+  return resolved;
+}
+
+/**
+ * Splits "--only a,b", "--web", "--import <dir>" and "--export-on-exit <dir>" off the front of the arguments.
  * @param {string[]} args
- * @returns {{ only: EmulatorName[], web: boolean, rest: string[] }}
+ * @returns {{ only: EmulatorName[], web: boolean, state: string[], rest: string[] }}
  */
 function parseOptions(args) {
   const all = /** @type {EmulatorName[]} */ (Object.keys(EMULATOR_PORTS));
   let only = all;
   let web = false;
+  /** @type {string[]} */
+  const state = [];
   let rest = args;
   for (;;) {
-    if (rest[0] === "--web") {
+    if (rest[0] === "--import" || rest[0] === "--export-on-exit") {
+      state.push(`${rest[0]}=${stateDirectory(rest[0], rest[1])}`);
+      rest = rest.slice(2);
+    } else if (rest[0] === "--web") {
       web = true;
       rest = rest.slice(1);
     } else if (rest[0] === "--only") {
@@ -86,7 +112,7 @@ function parseOptions(args) {
       only = /** @type {EmulatorName[]} */ (names);
       rest = rest.slice(2);
     } else {
-      return { only, web, rest };
+      return { only, web, state, rest };
     }
   }
 }
@@ -163,20 +189,21 @@ async function main() {
   const [command, ...args] = process.argv.slice(2);
   switch (command) {
     case "start": {
-      const { only, web, rest } = parseOptions(args);
+      const { only, web, state, rest } = parseOptions(args);
       if (web) fail("--web belongs to exec: start runs the emulators and nothing else.");
+      if (state.length > 0) fail("--import and --export-on-exit belong to exec.");
       if (rest.length > 0) fail(`unexpected argument "${rest[0]}".`);
       await runFirebase("emulators:start", only, false, []);
       return;
     }
     case "exec": {
-      const { only, web, rest } = parseOptions(args);
+      const { only, web, state, rest } = parseOptions(args);
       const [script, ...more] = rest;
       if (!script || more.length > 0 || !/^[\w:.-]+$/.test(script)) {
         fail("exec needs exactly one npm script name, for example: exec emulated:rules");
       }
       // The emulators run the script from their log directory, so name the portal explicitly.
-      await runFirebase("emulators:exec", only, web, [`npm --prefix "${PORTAL_ROOT}" run ${script}`]);
+      await runFirebase("emulators:exec", only, web, [...state, `npm --prefix "${PORTAL_ROOT}" run ${script}`]);
       return;
     }
     case "run": {

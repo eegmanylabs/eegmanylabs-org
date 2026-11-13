@@ -181,6 +181,20 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "isTemplate",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scopeKeys",
+          "arrayConfig": "CONTAINS"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "databases",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
           "fieldPath": "parentPageId",
           "order": "ASCENDING"
         },

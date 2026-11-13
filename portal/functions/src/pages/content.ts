@@ -205,3 +205,62 @@ export function contentChunks(
     fields: { pageId, generation, index, snapshot },
   }));
 }
+
+/** The block of the editor that holds a struct of the document, by its identifier, or null. */
+function blockOf(struct: Y.AbstractStruct): string | null {
+  if (!(struct instanceof Y.Item)) return null;
+  let type: Y.AbstractType<unknown> | null =
+    struct.content instanceof Y.ContentType
+      ? struct.content.type
+      : struct.parent instanceof Y.AbstractType
+        ? struct.parent
+        : null;
+  while (type !== null) {
+    if (type instanceof Y.XmlElement && type.nodeName === "blockContainer") {
+      const id = type.getAttribute("id");
+      return typeof id === "string" && id !== "" ? id : null;
+    }
+    const parent: unknown = type._item?.parent;
+    type = parent instanceof Y.AbstractType ? parent : null;
+  }
+  return null;
+}
+
+/** The struct of a document that holds an identifier, or null where the document has none. */
+function structAt(doc: Y.Doc, id: Y.ID): Y.AbstractStruct | null {
+  try {
+    return Y.getItem(doc.store, id);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The blocks of a page that an update touched, by their identifiers in the editor: those that
+ * hold what it inserted, whose attributes it set, or from which it deleted, as they stand in the
+ * stored document that holds the update. A block that the update removed whole, whose content
+ * the document no longer keeps, is not named. Stops at `limit` blocks.
+ */
+export function blocksTouchedBy(doc: Y.Doc, update: Uint8Array, limit: number): string[] {
+  const blocks = new Set<string>();
+  const add = (struct: Y.AbstractStruct | null) => {
+    const block = struct === null ? null : blockOf(struct);
+    if (block !== null && blocks.size < limit) blocks.add(block);
+  };
+  const { structs, ds } = Y.decodeUpdate(update);
+  for (const struct of structs) {
+    if (struct instanceof Y.Item) add(structAt(doc, struct.id));
+  }
+  for (const [client, ranges] of ds.clients) {
+    for (const range of ranges) {
+      let clock = range.clock;
+      while (clock < range.clock + range.len && blocks.size < limit) {
+        const struct = structAt(doc, Y.createID(client, clock));
+        if (struct === null) break;
+        add(struct);
+        clock = struct.id.clock + struct.length;
+      }
+    }
+  }
+  return [...blocks];
+}

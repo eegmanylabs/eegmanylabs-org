@@ -1,6 +1,5 @@
 import {
   COLLECTIONS,
-  capabilityGrantDocSchema,
   capabilityGrantId,
   getDemographicAggregatesContract,
   getPersonDemographicsContract,
@@ -11,7 +10,6 @@ import {
   SMALL_CELL_THRESHOLD,
   SPECIAL_CATEGORY_FIELDS,
 } from "@eegml/shared";
-import type { DocumentSnapshot } from "firebase-admin/firestore";
 import {
   AppError,
   defineCallable,
@@ -21,17 +19,7 @@ import {
   withheldChanges,
   writeAudit,
 } from "../framework";
-
-/** Whether a named grant of `demographics.read` to the caller is in force at an instant. */
-function grantInForce(snapshot: DocumentSnapshot | undefined, at: Date): boolean {
-  const grant = snapshot?.exists ? parseStoredDocument(capabilityGrantDocSchema, snapshot.data()) : null;
-  return (
-    grant?.success === true &&
-    grant.data.revokedAt === null &&
-    grant.data.expiresAt !== null &&
-    grant.data.expiresAt.toMillis() > at.getTime()
-  );
-}
+import { grantInForce } from "../people/demographics-grant";
 
 /**
  * Serves the special-category data of one person: gender and ethnicity (decision D-006 and

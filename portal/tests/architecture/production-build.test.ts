@@ -4,7 +4,9 @@ import { type SpawnSyncReturns, spawnSync } from "node:child_process";
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { gzipSync } from "node:zlib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { checkAppCheck, checkContentSecurityPolicy, checkRegion, scanBundle } from "../../scripts/deploy-checks";
 import { PORTAL_ROOT } from "./support";
 
 // Invented values in the shape the Firebase console gives. They name no real project.
@@ -14,6 +16,7 @@ const INVENTED_CONFIGURATION = {
   VITE_FIREBASE_PROJECT_ID: "example-portal",
   VITE_FIREBASE_STORAGE_BUCKET: "example-portal.firebasestorage.app",
   VITE_FIREBASE_APP_ID: "1:000000000000:web:0000000000000000",
+  VITE_APP_CHECK_SITE_KEY: "example-recaptcha-enterprise-site-key",
   PORTAL_PUBLIC_PATH: "/example-repository/",
 };
 
@@ -43,7 +46,8 @@ beforeAll(() => {
     [path.join(PORTAL_ROOT, "node_modules", "vite", "bin", "vite.js"), "build", "--mode", "production"],
     {
       cwd: path.join(PORTAL_ROOT, "web"),
-      env: { ...process.env, ...INVENTED_CONFIGURATION, PORTAL_WEB_OUT_DIR: output },
+      // The test runner sets NODE_ENV to "test", which would give React its development build.
+      env: { ...process.env, ...INVENTED_CONFIGURATION, NODE_ENV: "production", PORTAL_WEB_OUT_DIR: output },
       encoding: "utf8",
     },
   );
@@ -102,5 +106,54 @@ describe("a production build", () => {
     expect(html).toContain('<a href="/example-repository/">');
     expect(html).toMatch(/url\("\/example-repository\/assets\/dm-sans-latin-opsz-normal-[\w-]+\.woff2"\)/);
     expect(html).not.toContain("<script");
+  });
+
+  it("passes the bundle, policy, App Check and region items of the deployment preflight", () => {
+    const html = read("index.html");
+    const results = [
+      scanBundle(output, {
+        apiKey: INVENTED_CONFIGURATION.VITE_FIREBASE_API_KEY,
+        projectId: INVENTED_CONFIGURATION.VITE_FIREBASE_PROJECT_ID,
+        appCheckSiteKey: INVENTED_CONFIGURATION.VITE_APP_CHECK_SITE_KEY,
+      }),
+      checkContentSecurityPolicy(html),
+      checkAppCheck(html, INVENTED_CONFIGURATION.VITE_APP_CHECK_SITE_KEY),
+      checkRegion(html),
+    ];
+    for (const result of results) expect(result, result.name).toMatchObject({ passed: true, details: [] });
+  });
+});
+
+/**
+ * The first load of the application (R18.13): what index.html asks for before any page has been
+ * chosen, compressed as GitHub Pages serves it. Every page but Home, the claim page and the
+ * sign-in page loads on demand, and so do the editor, Yjs and the file storage of pages, so a
+ * change that pulls one of them into the first load, or adds weight to it, fails here first.
+ */
+const FIRST_LOAD_BUDGET_KIB = 512;
+
+/** The files that index.html loads before anything else: its module script, what it preloads and its stylesheet. */
+function firstLoad(): string[] {
+  const html = read("index.html");
+  return [...html.matchAll(/<(?:script[^>]*\ssrc|link[^>]*\shref)="\.\/(assets\/[^"]+\.(?:js|css))"/g)].map(
+    (match) => match[1] ?? "",
+  );
+}
+
+describe("the first load of a production build", () => {
+  it(`stays within ${FIRST_LOAD_BUDGET_KIB} KiB compressed`, () => {
+    const files = firstLoad();
+    expect(files.length).toBeGreaterThan(1);
+    const bytes = files.reduce((total, file) => total + gzipSync(readFileSync(path.join(output, file))).length, 0);
+    expect(Math.round(bytes / 1024)).toBeLessThanOrEqual(FIRST_LOAD_BUDGET_KIB);
+  });
+
+  it("leaves the editor, Yjs and the file storage of pages to the pages that need them", () => {
+    const loaded = firstLoad();
+    const collaboration = files().filter((file) => /^assets\/collaboration-[\w-]+\.js$/.test(file));
+    expect(collaboration).toHaveLength(1);
+    expect(loaded).not.toContain(collaboration[0]);
+    // BlockNote draws its blocks with these classes, and no file of the first load mentions them.
+    expect(loaded.filter((file) => /bn-block-content|ProseMirror-/.test(read(file)))).toEqual([]);
   });
 });

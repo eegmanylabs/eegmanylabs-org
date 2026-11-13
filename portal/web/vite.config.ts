@@ -32,6 +32,24 @@ export default defineConfig(({ mode }) => {
       emptyOutDir: true,
       // Never inline fonts or images as data: addresses, so font-src can stay 'self'.
       assetsInlineLimit: 0,
+      rolldownOptions: {
+        output: {
+          // What only the editor needs, the Yjs documents, presence and the file storage of pages
+          // behind "@/data/collaboration", gets a chunk of its own, so that the modules the first
+          // page shares with the editor do not pull it into the first load.
+          // portal/tests/architecture/production-build.test.ts holds the first load to its budget.
+          codeSplitting: {
+            // A group holds the modules it names and not what they import, which stays shared.
+            includeDependenciesRecursively: false,
+            groups: [
+              {
+                name: "collaboration",
+                test: /[\\/]node_modules[\\/](yjs|lib0|y-protocols|y-prosemirror|firebase[\\/]storage|@firebase[\\/]storage)[\\/]|[\\/]src[\\/]data[\\/](collaboration|page-files|page-presence|page-sync|awareness-wire|yjs-updates)\.ts$/,
+              },
+            ],
+          },
+        },
+      },
     },
   };
 });

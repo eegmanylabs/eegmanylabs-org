@@ -6,6 +6,7 @@ import { Link, useParams } from "react-router";
 import { formatDateTime } from "@/app/labels";
 import { LiveView } from "@/components/feedback/live-view";
 import { PageHeader } from "@/components/page-header";
+import { PagedList } from "@/components/paged-list";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
@@ -23,9 +24,15 @@ function ArchivedPages({ pages, viewer }: { readonly pages: readonly RecordOf<"p
   const toast = useToast();
   if (pages.length === 0) return <p className="text-fg-muted">No page is archived.</p>;
   return (
-    <ul className="grid max-h-96 gap-1 overflow-y-auto" aria-label="Archived pages">
-      {pages.map((page) => (
-        <li key={page.id} className="flex flex-wrap items-center justify-between gap-2 rounded-control px-2 py-1.5">
+    <PagedList
+      items={pages}
+      label="archived pages"
+      keyOf={(page) => page.id}
+      className="grid gap-1"
+      aria-label="Archived pages"
+    >
+      {(page) => (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-control px-2 py-1.5">
           <Link to={pagePath(page.id)} className="rounded-control text-fg-secondary hover:text-fg-accent">
             <span aria-hidden="true">{page.icon ?? "📄"}</span> {page.title}
             {page.archivedAt === null ? null : (
@@ -49,9 +56,9 @@ function ArchivedPages({ pages, viewer }: { readonly pages: readonly RecordOf<"p
           >
             Restore
           </Button>
-        </li>
-      ))}
-    </ul>
+        </div>
+      )}
+    </PagedList>
   );
 }
 
@@ -110,21 +117,20 @@ export function WorkspacePage() {
                     .length === 0 ? (
                   <p className="text-fg-muted">No meetings yet. Choose New meeting to start the page of one.</p>
                 ) : (
-                  <ul className="grid gap-1">
-                    {meetings.data
+                  <PagedList
+                    items={meetings.data
                       .filter((page) => page.archivedAt === null)
-                      .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
-                      .map((page) => (
-                        <li key={page.id}>
-                          <Link
-                            to={pagePath(page.id)}
-                            className="rounded-control text-fg-secondary hover:text-fg-accent"
-                          >
-                            {page.title}
-                          </Link>
-                        </li>
-                      ))}
-                  </ul>
+                      .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())}
+                    label="meetings"
+                    keyOf={(page) => page.id}
+                    className="grid gap-1"
+                  >
+                    {(page) => (
+                      <Link to={pagePath(page.id)} className="rounded-control text-fg-secondary hover:text-fg-accent">
+                        {page.title}
+                      </Link>
+                    )}
+                  </PagedList>
                 )}
               </section>
               <section aria-labelledby="workspace-templates" className="grid gap-2">
@@ -137,15 +143,13 @@ export function WorkspacePage() {
                     from a copy of it.
                   </p>
                 ) : (
-                  <ul className="grid gap-1">
-                    {templates.map((page) => (
-                      <li key={page.id}>
-                        <Link to={pagePath(page.id)} className="rounded-control text-fg-secondary hover:text-fg-accent">
-                          <span aria-hidden="true">{page.icon ?? "📄"}</span> {page.title}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
+                  <PagedList items={templates} label="templates" keyOf={(page) => page.id} className="grid gap-1">
+                    {(page) => (
+                      <Link to={pagePath(page.id)} className="rounded-control text-fg-secondary hover:text-fg-accent">
+                        <span aria-hidden="true">{page.icon ?? "📄"}</span> {page.title}
+                      </Link>
+                    )}
+                  </PagedList>
                 )}
               </section>
               <section aria-labelledby="workspace-archived" className="grid gap-2">

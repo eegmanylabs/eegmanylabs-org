@@ -15,9 +15,17 @@ export function TabsList({ className, ...props }: ComponentProps<typeof RadixTab
  * scrolled into the list's view.
  */
 export function TabsTrigger({ className, ...props }: ComponentProps<typeof RadixTabs.Trigger>) {
+  // The list is scrolled by hand rather than with scrollIntoView, which would also move the point
+  // that the Tab key starts from to this tab, past the skip link and the navigation.
   const reveal = useCallback((element: HTMLButtonElement | null) => {
-    if (element?.getAttribute("data-state") === "active" && typeof element.scrollIntoView === "function") {
-      element.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const list = element?.parentElement;
+    if (element === null || list === null || list === undefined || element.getAttribute("data-state") !== "active") {
+      return;
+    }
+    const offset = element.getBoundingClientRect().left - list.getBoundingClientRect().left;
+    if (offset < 0) list.scrollLeft += offset;
+    else if (offset + element.offsetWidth > list.clientWidth) {
+      list.scrollLeft += offset + element.offsetWidth - list.clientWidth;
     }
   }, []);
   return (

@@ -290,6 +290,29 @@ export const unlinkAccountClaimContract = {
 } as const satisfies CallableContract;
 
 /**
+ * Recovers the profile of a member who has lost access to the address of their account
+ * (docs/SECURITY.md, section 4). There is no self-service route: the member signs in with an
+ * address they hold now and sends a request for access, and a programme administrator who holds
+ * `claims.review` and has presented the second factor in this session, after verifying the
+ * member's identity outside the portal, moves the person's link from the old account to the new
+ * one. The old account is suspended and loses the roles its claim gave it, the lost address stops
+ * being one that a claim can use, and the statement of how the identity was verified is audited.
+ */
+export const recoverAccountContract = {
+  name: "recoverAccount",
+  input: z.strictObject({
+    uid: uidSchema,
+    personId: idSchema,
+    verification: z.string().trim().min(20).max(2_000),
+  }),
+  output: z.strictObject({
+    personId: idSchema,
+    previousUid: uidSchema,
+    revokedRoleAssignments: z.number().int().min(0),
+  }),
+} as const satisfies CallableContract;
+
+/**
  * Grants, approves or revokes a role assignment. Capability: `roles.manage`.
  *
  * | Action    | Effect                                                                           |
@@ -1140,13 +1163,24 @@ export type WorkspaceSearchResult = CallableOutput<typeof searchWorkspaceContrac
 // property definition, a value of a property and a widget may each be a list or a map, which no
 // security rule can check element by element, so these functions validate and write them.
 
+/** The most rows, and the most shared views, that a database made from a template copies. */
+export const DATABASE_TEMPLATE_ROWS_MAX = 100;
+export const DATABASE_TEMPLATE_VIEWS_MAX = 20;
+
 /**
  * Creates a database beneath a page on which the caller holds `edit`. It copies the audience of
- * the page and starts with a status property, so that a board can be drawn at once.
+ * the page. An empty database starts with a status property, so that a board can be drawn at
+ * once; one made from a template (a database marked as one, which the caller reads) copies its
+ * properties, rows and shared views.
  */
 export const createDatabaseContract = {
   name: "createDatabase",
-  input: z.strictObject({ parentPageId: idSchema, name: pageTitleSchema, icon: pageIconSchema.optional() }),
+  input: z.strictObject({
+    parentPageId: idSchema,
+    name: pageTitleSchema,
+    icon: pageIconSchema.optional(),
+    templateDatabaseId: idSchema.optional(),
+  }),
   output: z.strictObject({ databaseId: idSchema }),
 } as const satisfies CallableContract;
 

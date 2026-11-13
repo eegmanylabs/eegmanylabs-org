@@ -184,7 +184,7 @@ function UserList() {
                   </li>
                 ))}
               </ul>
-              <div className="hidden sm:block">
+              <div className="hidden min-w-0 sm:block">
                 <Table caption="Accounts">
                   <TableHead>
                     <TableRow>

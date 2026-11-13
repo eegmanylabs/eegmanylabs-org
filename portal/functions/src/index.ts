@@ -3,9 +3,10 @@
 // | Kind                | Functions                                                                  |
 // |---------------------|----------------------------------------------------------------------------|
 // | Sessions            | `sessionStart`, `endAllSessions`                                           |
-// | Account claims      | `claimProfile`, `requestAccess`, `listAccountClaims`, `reviewAccountClaim`, `unlinkAccountClaim` |
+// | Account claims      | `claimProfile`, `requestAccess`, `listAccountClaims`, `reviewAccountClaim`, `unlinkAccountClaim`, `recoverAccount` |
 // | Roles and accounts  | `setRoleAssignment`, `setCapabilityGrant`, `setRoleCapabilityOverride`, `setUserStatus`, `listUsers` |
 // | Audit trail         | `listAuditEvents`                                                          |
+// | Governance          | `exportPersonData`, `requestErasure`, `decideErasure`, `listErasureRequests`, `getAccessReview`, `attestAccessReview`, `getRetention`, `setRetentionPeriod`, `runRetentionSweep`, and the scheduled `retentionSweep` |
 // | Laboratories        | `requestLabClaim`, `withdrawLabClaim`, `reviewLabClaim`, `createLaboratory`, `saveEquipmentConfiguration` |
 // | Participations      | `createParticipation`, `setParticipationStatus`                            |
 // | Imports             | `resolveReconciliationItem`, `rollbackImportBatch`                         |
@@ -48,6 +49,7 @@ import { setGlobalOptions } from "firebase-functions";
 // themselves (see `documentTrigger`), because their modules are loaded before this line runs.
 setGlobalOptions({ region: FUNCTIONS_REGION, maxInstances: 10, memory: "256MiB" });
 
+export { attestAccessReview, getAccessReview } from "./callables/accessReview";
 export { addStorageRef } from "./callables/addStorageRef";
 export { advanceTransfer } from "./callables/advanceTransfer";
 export { approvePublication } from "./callables/approvePublication";
@@ -70,6 +72,8 @@ export { createTask } from "./callables/createTask";
 export { createTaskList } from "./callables/createTaskList";
 export { editReplicationCitation } from "./callables/editReplicationCitation";
 export { endAllSessions } from "./callables/endAllSessions";
+export { decideErasure, listErasureRequests, requestErasure } from "./callables/erasure";
+export { exportPersonData } from "./callables/exportPersonData";
 export { fileRecruitmentReports } from "./callables/fileRecruitmentReports";
 export { generateDocument } from "./callables/generateDocument";
 export { generateForecast } from "./callables/generateForecast";
@@ -99,6 +103,7 @@ export { recordIncidentAction } from "./callables/recordIncidentAction";
 export { recordManifest } from "./callables/recordManifest";
 export { recordManuscriptEvent } from "./callables/recordManuscriptEvent";
 export { recordQcAssessment } from "./callables/recordQcAssessment";
+export { recoverAccount } from "./callables/recoverAccount";
 export { refreshPublication } from "./callables/refreshPublication";
 export { registerDataset } from "./callables/registerDataset";
 export { reportIncident } from "./callables/reportIncident";
@@ -111,6 +116,7 @@ export { resolveReconciliationItem } from "./callables/resolveReconciliationItem
 export { resolveSyncConflict } from "./callables/resolveSyncConflict";
 export { resolveSyncReviewItem } from "./callables/resolveSyncReviewItem";
 export { respondToAuthorshipEntry } from "./callables/respondToAuthorshipEntry";
+export { getRetention, runRetentionSweep, setRetentionPeriod } from "./callables/retention";
 export { reviewAccountClaim } from "./callables/reviewAccountClaim";
 export { reviewLabClaim } from "./callables/reviewLabClaim";
 export { rollbackImportBatch } from "./callables/rollbackImportBatch";
@@ -186,6 +192,7 @@ export {
   personUnitsOnReplicationMembershipWritten,
 } from "./triggers/person-units";
 export { publicationsSweep } from "./triggers/publishing";
+export { retentionSweep } from "./triggers/retention";
 export {
   followersOnActivityCreated,
   notifyOnManuscriptWritten,

@@ -62,9 +62,13 @@ describe("the public repository", () => {
     expect(found).toEqual([]);
   });
 
-  it("names no Firebase project other than the demonstration project", () => {
+  it("names no Firebase project other than the demonstration project and placeholders", () => {
     const firebaserc = sourceFiles().find((file) => file.path === ".firebaserc");
-    expect(JSON.parse(firebaserc?.text ?? "{}")).toEqual({ projects: { default: "demo-eegml" } });
+    const { projects } = JSON.parse(firebaserc?.text ?? "{}") as { projects: Record<string, string> };
+    expect(projects.default).toBe("demo-eegml");
+    for (const [alias, project] of Object.entries(projects)) {
+      if (alias !== "default") expect(project).toMatch(/PLACEHOLDER/);
+    }
   });
 
   it("holds no spreadsheet or tabular export, whose content would be a source rather than code", () => {

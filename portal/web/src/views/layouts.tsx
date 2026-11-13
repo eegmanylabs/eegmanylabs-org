@@ -17,11 +17,23 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Pagination } from "@/components/ui/pagination";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/utils/cn";
 import { CellValue } from "./cells";
 import { type RecordEditing, titleOf } from "./RecordDialog";
 import { todayIso, type ViewData } from "./use-view-data";
+
+/** How many records the list and the gallery draw on one page (R18.13). */
+export const LIST_PAGE = 100;
+export const GALLERY_PAGE = 60;
+/** How many cards a column of a board draws at first, and how many more each Show more adds. */
+export const BOARD_PAGE = 50;
+
+/** The first record of the last page of a list, so that a list that shrank shows its last page. */
+export function lastPageStart(total: number, pageSize: number): number {
+  return total === 0 ? 0 : Math.floor((total - 1) / pageSize) * pageSize;
+}
 
 export interface LayoutProps {
   readonly data: ViewData;
@@ -115,54 +127,60 @@ export function ListView({ data, records, properties, config, onOpen, caption }:
     (property) => property.id === config.parentProperty && property.type === "relation",
   );
   const rows = nestedRecords(records, parent?.id);
+  const [offset, setOffset] = useState(0);
+  const start = Math.min(offset, lastPageStart(rows.length, LIST_PAGE));
   return (
-    <ul aria-label={caption} className="divide-y divide-border rounded-tile border border-border bg-surface">
-      {rows.slice(0, 500).map(({ record, depth }) => (
-        <li
-          key={record.id}
-          className="grid gap-2 p-3 sm:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]"
-          style={depth === 0 ? undefined : { paddingLeft: `${0.75 + Math.min(depth, 10) * 1.25}rem` }}
-          data-depth={depth}
-        >
-          <button
-            type="button"
-            className="truncate text-left font-medium text-fg hover:underline"
-            onClick={() => onOpen(record)}
+    <div className="grid gap-1">
+      <ul aria-label={caption} className="divide-y divide-border rounded-tile border border-border bg-surface">
+        {rows.slice(start, start + LIST_PAGE).map(({ record, depth }) => (
+          <li
+            key={record.id}
+            className="grid gap-2 p-3 sm:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]"
+            style={depth === 0 ? undefined : { paddingLeft: `${0.75 + Math.min(depth, 10) * 1.25}rem` }}
+            data-depth={depth}
           >
-            {depth === 0 ? null : <span className="sr-only">Beneath the record above, level {depth + 1}: </span>}
-            {titleOf(data, record)}
-          </button>
-          <Facts data={data} record={record} properties={properties.filter((property) => property.id !== parent?.id)} />
-        </li>
-      ))}
-      {records.length > 500 ? (
-        <li className="p-3 text-fg-muted">
-          The first 500 of {records.length} records are listed. Narrow the view with a filter or the search.
-        </li>
-      ) : null}
-    </ul>
+            <button
+              type="button"
+              className="truncate text-left font-medium text-fg hover:underline"
+              onClick={() => onOpen(record)}
+            >
+              {depth === 0 ? null : <span className="sr-only">Beneath the record above, level {depth + 1}: </span>}
+              {titleOf(data, record)}
+            </button>
+            <Facts
+              data={data}
+              record={record}
+              properties={properties.filter((property) => property.id !== parent?.id)}
+            />
+          </li>
+        ))}
+      </ul>
+      <Pagination offset={start} pageSize={LIST_PAGE} total={rows.length} label="records" onChange={setOffset} />
+    </div>
   );
 }
 
 export function GalleryView({ data, records, properties, onOpen, caption }: LayoutProps) {
+  const [offset, setOffset] = useState(0);
+  const start = Math.min(offset, lastPageStart(records.length, GALLERY_PAGE));
   return (
-    <ul aria-label={caption} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {records.slice(0, 300).map((record) => (
-        <li key={record.id} className="grid gap-2 rounded-tile border border-border bg-surface p-3">
-          <button
-            type="button"
-            className="truncate text-left font-medium hover:underline"
-            onClick={() => onOpen(record)}
-          >
-            {titleOf(data, record)}
-          </button>
-          <Facts data={data} record={record} properties={properties} />
-        </li>
-      ))}
-      {records.length > 300 ? (
-        <li className="text-fg-muted">The first 300 of {records.length} records are shown.</li>
-      ) : null}
-    </ul>
+    <div className="grid gap-1">
+      <ul aria-label={caption} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {records.slice(start, start + GALLERY_PAGE).map((record) => (
+          <li key={record.id} className="grid gap-2 rounded-tile border border-border bg-surface p-3">
+            <button
+              type="button"
+              className="truncate text-left font-medium hover:underline"
+              onClick={() => onOpen(record)}
+            >
+              {titleOf(data, record)}
+            </button>
+            <Facts data={data} record={record} properties={properties} />
+          </li>
+        ))}
+      </ul>
+      <Pagination offset={start} pageSize={GALLERY_PAGE} total={records.length} label="records" onChange={setOffset} />
+    </div>
   );
 }
 
@@ -175,6 +193,7 @@ export function BoardView({ data, records, properties, config, onConfig, editing
   const property = candidates.find((candidate) => candidate.id === config.boardProperty) ?? candidates[0];
   const [error, setError] = useState<string | null>(null);
   const [dragged, setDragged] = useState<string | null>(null);
+  const [shown, setShown] = useState<Readonly<Record<string, number>>>({});
   if (property === undefined) {
     return <EmptyState title="Nothing to draw a board by" description="A board needs a status or a select property." />;
   }
@@ -186,6 +205,7 @@ export function BoardView({ data, records, properties, config, onConfig, editing
       .save(record, property, value)
       .catch((failure: unknown) => setError(failure instanceof Error ? failure.message : "The record was not moved."));
   };
+  const shownIn = (key: string) => shown[key] ?? BOARD_PAGE;
   return (
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
       <div className="flex items-center gap-2 text-sm">
@@ -233,7 +253,7 @@ export function BoardView({ data, records, properties, config, onConfig, editing
               {column.label}
               <span className="text-fg-muted">{column.records.length}</span>
             </h3>
-            {column.records.slice(0, 200).map((record) => {
+            {column.records.slice(0, shownIn(column.key)).map((record) => {
               const editable = data.canEdit(record, property);
               return (
                 <article
@@ -279,6 +299,15 @@ export function BoardView({ data, records, properties, config, onConfig, editing
                 </article>
               );
             })}
+            {column.records.length > shownIn(column.key) ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setShown({ ...shown, [column.key]: shownIn(column.key) + BOARD_PAGE })}
+              >
+                Show {Math.min(BOARD_PAGE, column.records.length - shownIn(column.key))} more in {column.label}
+              </Button>
+            ) : null}
           </li>
         ))}
       </ul>

@@ -6,8 +6,13 @@
 // | `staging`    | The staging project               | VITE_ variables (see web/.env.example) |
 // | `production` | The production project            | VITE_ variables (see web/.env.example) |
 //
+// The environments are kept apart here (D-017, ops/environments.mjs): a staging or production
+// build refuses an emulator setting, a demonstration project and the project of the other
+// environment, and a production build refuses to start without App Check.
+//
 // The result is compiled into the bundle as `__PORTAL_BUILD_CONFIG__` and read through
 // src/app/config.ts.
+import { ENVIRONMENTS, projectRefusal } from "../../ops/environments.mjs";
 import { PREVIEW_MOUNT } from "../../scripts/paths.mjs";
 import { LOCAL_HOST, type PortalPorts } from "../../scripts/ports.mjs";
 // Relative imports with file extensions on purpose: Vite loads its configuration with Node,
@@ -93,9 +98,20 @@ export function resolveBuildConfig(mode: string, env: Environment, ports: Portal
         storage: ports.storage,
       },
       functionsRegion: FUNCTIONS_REGION,
+      appCheck: null,
       googleSignIn,
       presence,
     };
+  }
+
+  const emulatorSettings = Object.keys(env).filter(
+    (name) => /EMULATOR/i.test(name) && (env[name]?.trim() ?? "") !== "",
+  );
+  if (emulatorSettings.length > 0) {
+    throw new Error(
+      `Cannot build the portal in "${mode}" mode while ${emulatorSettings.join(", ")} ${emulatorSettings.length === 1 ? "is" : "are"} set: ` +
+        "emulator settings belong to the emulator mode alone.",
+    );
   }
 
   const value = (name: string) => env[name]?.trim() ?? "";
@@ -114,6 +130,26 @@ export function resolveBuildConfig(mode: string, env: Environment, ports: Portal
         `with "${DEMO_PROJECT_PREFIX}" only exist in the emulators. Use the emulator mode for those.`,
     );
   }
+  const environment = mode as "staging" | "production";
+  const refusal = projectRefusal(environment, projectId);
+  if (refusal !== null) throw new Error(`Cannot build the portal in "${mode}" mode: ${refusal}`);
+  for (const other of Object.values(ENVIRONMENTS).filter((candidate) => candidate.name !== environment)) {
+    for (const name of ["VITE_FIREBASE_AUTH_DOMAIN", "VITE_FIREBASE_STORAGE_BUCKET"]) {
+      if (value(name).toLowerCase().includes(other.projectId.toLowerCase())) {
+        throw new Error(`Cannot build the portal in "${mode}" mode: ${name} names the project of ${other.name}.`);
+      }
+    }
+  }
+  const siteKey = value("VITE_APP_CHECK_SITE_KEY");
+  if (mode === "production" && siteKey === "") {
+    throw new Error(
+      'Cannot build the portal in "production" mode: VITE_APP_CHECK_SITE_KEY is not set. ' +
+        "A production build carries App Check with the reCAPTCHA Enterprise site key of the project.",
+    );
+  }
+  if (siteKey !== "" && !/^[\w-]{20,100}$/.test(siteKey)) {
+    throw new Error("VITE_APP_CHECK_SITE_KEY must be the public site key of reCAPTCHA Enterprise.");
+  }
   const messagingSenderId = value("VITE_FIREBASE_MESSAGING_SENDER_ID");
   return {
     mode: mode as PortalMode,
@@ -127,6 +163,7 @@ export function resolveBuildConfig(mode: string, env: Environment, ports: Portal
     },
     emulators: null,
     functionsRegion: FUNCTIONS_REGION,
+    appCheck: siteKey === "" ? null : { siteKey },
     googleSignIn,
     presence,
   };

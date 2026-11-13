@@ -9,6 +9,8 @@ import {
   pageFileContentType,
   pageFilePath,
   pageFileServedType,
+  WORKFLOW_TITLE_MAX,
+  workflowTitle,
 } from "./page-blocks";
 
 describe("a comment body", () => {
@@ -59,5 +61,19 @@ describe("the type of a file of a page", () => {
     expect(pageFileServedType("image/webp")).toBe("image/webp");
     expect(pageFileServedType("application/pdf")).toBe("application/octet-stream");
     expect(pageFileServedType("text/html")).toBe("application/octet-stream");
+  });
+});
+
+describe("the title a workflow button gives", () => {
+  it("puts the day in place of {date}, and falls back on the label", () => {
+    expect(workflowTitle({ title: "Weekly check {date}", label: "Add a check" }, "2026-11-13")).toBe(
+      "Weekly check 2026-11-13",
+    );
+    expect(workflowTitle({ title: "  ", label: "Report an issue" }, "2026-11-13")).toBe("Report an issue");
+    expect(workflowTitle({ title: "{date} and {date}", label: "x" }, "2026-01-02")).toBe("2026-01-02 and 2026-01-02");
+  });
+
+  it("never exceeds the longest title", () => {
+    expect(workflowTitle({ title: "x".repeat(500), label: "" }, "2026-11-13")).toHaveLength(WORKFLOW_TITLE_MAX);
   });
 });

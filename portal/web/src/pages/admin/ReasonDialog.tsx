@@ -17,6 +17,8 @@ export interface ReasonDialogProps {
   /** Whether the text may be left empty. */
   optional?: boolean;
   maxLength?: number;
+  /** The fewest characters the text holds, where it is not optional. */
+  minLength?: number;
   confirmLabel: string;
   /** Controls shown above the text field, such as a choice of outcome. */
   children?: ReactNode;
@@ -39,6 +41,7 @@ export function ReasonDialog({
   hint,
   optional = false,
   maxLength = 2_000,
+  minLength = 1,
   confirmLabel,
   children,
   canConfirm = true,
@@ -62,8 +65,12 @@ export function ReasonDialog({
     event.preventDefault();
     const trimmed = text.trim();
     if (!canConfirm) return;
-    if ((!optional && trimmed === "") || trimmed.length > maxLength) {
-      setError(`Enter a ${label.toLowerCase()}, up to ${maxLength.toLocaleString("en-GB")} characters.`);
+    if ((!optional && trimmed.length < minLength) || trimmed.length > maxLength) {
+      setError(
+        minLength > 1
+          ? `Enter ${minLength} to ${maxLength.toLocaleString("en-GB")} characters.`
+          : `Enter a ${label.toLowerCase()}, up to ${maxLength.toLocaleString("en-GB")} characters.`,
+      );
       return;
     }
     setBusy(true);

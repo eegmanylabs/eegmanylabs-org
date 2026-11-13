@@ -53,13 +53,28 @@ describe("the web application", () => {
 
   it("reaches the data layer through its index, never through one of its files", () => {
     const deepImport = (specifier: string) => /^@\/data\/.+/.test(specifier) || /(^|\/)data\/[^/]+$/.test(specifier);
+    const collaboration = (specifier: string) => specifier === "@/data/collaboration";
     expect(
       offenders(
         "web/src",
         (path) => path.startsWith("web/src/data/"),
-        (specifier) => deepImport(specifier),
+        (specifier) => deepImport(specifier) && !collaboration(specifier),
       ),
     ).toEqual([]);
+  });
+
+  it("opens the collaboration door of the data layer to the editor alone, which loads on demand", () => {
+    expect(
+      offenders(
+        "web/src",
+        (path) => path.startsWith("web/src/data/") || path.startsWith("web/src/editor/"),
+        (specifier) => specifier === "@/data/collaboration",
+      ),
+    ).toEqual([]);
+    const editorFiles = sourceFiles("web/src/editor").filter((file) =>
+      importsOf(file).includes("@/data/collaboration"),
+    );
+    expect(editorFiles.length).toBeGreaterThan(0);
   });
 
   it("never imports server-side packages or the other workspaces' source", () => {

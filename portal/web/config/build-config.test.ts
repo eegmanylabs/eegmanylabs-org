@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ENVIRONMENTS } from "../../ops/environments.mjs";
 import { portsFor } from "../../scripts/ports.mjs";
 import { REQUIRED_VARIABLES, resolveBuildConfig, resolvePublicPath } from "./build-config.ts";
 import { buildContentSecurityPolicy } from "./csp.ts";
@@ -12,7 +13,53 @@ const realEnvironment = {
   VITE_FIREBASE_PROJECT_ID: "example-portal",
   VITE_FIREBASE_STORAGE_BUCKET: "example-portal.firebasestorage.app",
   VITE_FIREBASE_APP_ID: "1:000000000000:web:0000000000000000",
+  VITE_APP_CHECK_SITE_KEY: "example-recaptcha-enterprise-site-key",
 };
+
+describe("the separation of the environments", () => {
+  it("refuses a production build without App Check and carries the site key with it", () => {
+    const { VITE_APP_CHECK_SITE_KEY: _key, ...withoutKey } = realEnvironment;
+    expect(() => resolveBuildConfig("production", withoutKey, ports)).toThrow(/VITE_APP_CHECK_SITE_KEY is not set/);
+    expect(resolveBuildConfig("staging", withoutKey, ports).appCheck).toBeNull();
+    expect(resolveBuildConfig("production", realEnvironment, ports).appCheck).toEqual({
+      siteKey: "example-recaptcha-enterprise-site-key",
+    });
+    expect(resolveBuildConfig("emulator", realEnvironment, ports).appCheck).toBeNull();
+  });
+
+  it("refuses an emulator setting in a staging or production build", () => {
+    for (const mode of ["staging", "production"]) {
+      expect(() =>
+        resolveBuildConfig(mode, { ...realEnvironment, VITE_FIRESTORE_EMULATOR_HOST: "127.0.0.1:9180" }, ports),
+      ).toThrow(/emulator settings belong to the emulator mode/);
+    }
+  });
+
+  it("never points a production build at staging, nor a staging build at production", () => {
+    const staging = { ...realEnvironment, VITE_FIREBASE_PROJECT_ID: ENVIRONMENTS.staging.projectId };
+    const production = { ...realEnvironment, VITE_FIREBASE_PROJECT_ID: ENVIRONMENTS.production.projectId };
+    expect(() => resolveBuildConfig("production", staging, ports)).toThrow(/project of staging/);
+    expect(() => resolveBuildConfig("staging", production, ports)).toThrow(/project of production/);
+    expect(() =>
+      resolveBuildConfig("production", { ...realEnvironment, VITE_FIREBASE_PROJECT_ID: "eegml-staging" }, ports),
+    ).toThrow(/staging/);
+    expect(() =>
+      resolveBuildConfig(
+        "staging",
+        { ...realEnvironment, VITE_FIREBASE_AUTH_DOMAIN: `${ENVIRONMENTS.production.projectId}.firebaseapp.com` },
+        ports,
+      ),
+    ).toThrow(/names the project of production/);
+  });
+
+  it("widens the policy for App Check only where it is configured", () => {
+    const production = buildContentSecurityPolicy(resolveBuildConfig("production", realEnvironment, ports));
+    expect(production).toContain("https://content-firebaseappcheck.googleapis.com");
+    expect(production).toMatch(/script-src 'self' https:\/\/www\.google\.com\/recaptcha\//);
+    const emulator = buildContentSecurityPolicy(resolveBuildConfig("emulator", {}, ports));
+    expect(emulator).not.toContain("recaptcha");
+  });
+});
 
 describe("resolveBuildConfig", () => {
   it("needs no variables in emulator mode and takes the emulator ports from the port base", () => {
@@ -151,10 +198,16 @@ describe("buildContentSecurityPolicy", () => {
       "https://firestore.googleapis.com",
       "https://europe-west2-example-portal.cloudfunctions.net",
       "https://firebasestorage.googleapis.com",
+      "https://content-firebaseappcheck.googleapis.com",
+      "https://www.google.com/recaptcha/",
     ]);
     // The image Firestore loads to tell "network down" from "server down".
     expect(directive(policy, "img-src")).toContain("https://www.google.com/images/cleardot.gif");
-    expect(directive(policy, "script-src")).toEqual(["'self'"]);
+    expect(directive(policy, "script-src")).toEqual([
+      "'self'",
+      "https://www.google.com/recaptcha/",
+      "https://www.gstatic.com/recaptcha/",
+    ]);
     expect(policy).toContain("upgrade-insecure-requests");
     expect(policy).not.toContain("127.0.0.1");
   });
@@ -162,7 +215,16 @@ describe("buildContentSecurityPolicy", () => {
   it("adds Google's helper script and frame only when Google sign-in is built in", () => {
     const env = { ...realEnvironment, VITE_ENABLE_GOOGLE_SIGN_IN: "true" };
     const policy = buildContentSecurityPolicy(resolveBuildConfig("production", env, ports));
-    expect(directive(policy, "script-src")).toEqual(["'self'", "https://apis.google.com"]);
-    expect(directive(policy, "frame-src")).toEqual(["https://example-portal.firebaseapp.com"]);
+    expect(directive(policy, "script-src")).toEqual([
+      "'self'",
+      "https://www.google.com/recaptcha/",
+      "https://www.gstatic.com/recaptcha/",
+      "https://apis.google.com",
+    ]);
+    expect(directive(policy, "frame-src")).toEqual([
+      "https://www.google.com/recaptcha/",
+      "https://recaptcha.google.com/recaptcha/",
+      "https://example-portal.firebaseapp.com",
+    ]);
   });
 });

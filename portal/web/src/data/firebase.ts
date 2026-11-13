@@ -1,5 +1,6 @@
 // Firebase initialisation. Nothing outside src/data imports this file or the Firebase SDK.
 import { initializeApp } from "firebase/app";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 import {
   browserLocalPersistence,
   browserPopupRedirectResolver,
@@ -14,10 +15,19 @@ import {
   persistentMultipleTabManager,
 } from "firebase/firestore";
 import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
-import { connectStorageEmulator, getStorage } from "firebase/storage";
 import { config } from "@/app/config";
 
 export const app = initializeApp(config.firebase);
+
+// App Check attests that requests come from the genuine site (docs/SECURITY.md, section 8). It
+// starts before any other service so that their first requests carry a token. A production build
+// always has a site key; the emulator mode has none, since App Check has no emulator.
+if (config.appCheck) {
+  initializeAppCheck(app, {
+    provider: new ReCaptchaEnterpriseProvider(config.appCheck.siteKey),
+    isTokenAutoRefreshEnabled: true,
+  });
+}
 
 // initializeAuth instead of getAuth keeps the pop-up machinery, and with it Google's helper
 // script, out of the page unless Google sign-in is built in.
@@ -33,14 +43,11 @@ export const db = initializeFirestore(app, {
 
 export const functions = getFunctions(app, config.functionsRegion);
 
-// Cloud Storage holds the files of pages. A file is read with the reader's own credentials each
-// time (see page-files.ts), so the storage rules decide every read.
-export const storage = getStorage(app);
-
 if (config.emulators) {
-  const { host, auth: authPort, firestore, functions: functionsPort, storage: storagePort } = config.emulators;
+  const { host, auth: authPort, firestore, functions: functionsPort } = config.emulators;
   connectAuthEmulator(auth, `http://${host}:${authPort}`, { disableWarnings: true });
   connectFirestoreEmulator(db, host, firestore);
   connectFunctionsEmulator(functions, host, functionsPort);
-  connectStorageEmulator(storage, host, storagePort);
 }
+// Cloud Storage, which holds the files of pages, starts in page-files.ts, which only the editor
+// loads, so that its SDK stays out of the first load of the application.

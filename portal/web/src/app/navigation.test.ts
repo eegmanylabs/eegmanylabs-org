@@ -66,6 +66,7 @@ describe("the navigation registry", () => {
     const administration = NAVIGATION.filter((item) => item.group === "administration");
     expect(Object.fromEntries(administration.map((item) => [item.to, item.requires]))).toEqual({
       "/admin/claims": "claims.review",
+      "/admin/governance": "people.manage",
       "/admin/lab-claims": "labs.claims.review",
       "/admin/corrections": "reconciliation.resolve",
       "/admin/memberships": "reconciliation.resolve",

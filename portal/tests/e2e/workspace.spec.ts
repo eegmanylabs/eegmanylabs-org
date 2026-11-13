@@ -1,6 +1,8 @@
 // The workspace in the browser (D-010), against the synthetic world of `seed:demo`: acceptance
 // scenario AS-7 on the notes of a replication, the convergence of two editors, edits made
-// offline, the keyboard access of the editor, and the accessibility of the page view. Everyone
+// offline, the keyboard access of the editor, undo and redo, a block dragged by the pointer, a
+// starred page, the attribution of blocks, a workflow button, and the accessibility of the page
+// view. Everyone
 // here is invented, and every address uses the example.org domain.
 import { systemWriteContext } from "@eegml/shared";
 import type { Page } from "@playwright/test";
@@ -394,4 +396,108 @@ test("the editor is set in DM Sans, in the portal's words, and fits a narrow scr
   await page.getByRole("button", { name: "History" }).click();
   await expect(page.getByRole("complementary", { name: "Beside the page" })).toBeFocused();
   await expect(page.getByRole("heading", { name: "Version history" })).toBeInViewport();
+});
+
+test("undo and redo, a block dragged by the pointer, a starred page and who changed each block", async ({ page }) => {
+  await signInAsIvy(page);
+  await newWorkspacePage(page, "Editing checks");
+  await editorOf(page).click();
+  await page.keyboard.type("First line");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("Second line");
+  await saved(page);
+
+  // Undo takes back the member's own last change and redo brings it back.
+  await page.keyboard.type(" with more");
+  await expect(editorOf(page)).toContainText("Second line with more");
+  await page.keyboard.press("Control+z");
+  await expect(editorOf(page)).not.toContainText("with more");
+  await expect(editorOf(page)).toContainText("Second line");
+  await page.keyboard.press("Control+Shift+z");
+  await expect(editorOf(page)).toContainText("Second line with more");
+  await saved(page);
+
+  // The handle beside a block drags it above the first one.
+  const blocks = editorOf(page).locator(".bn-block-content");
+  await blocks.filter({ hasText: "Second line" }).hover();
+  const handle = page.locator(".bn-side-menu [draggable='true']");
+  await expect(handle).toBeVisible();
+  const from = await handle.boundingBox();
+  const to = await blocks.first().boundingBox();
+  if (from === null || to === null) throw new Error("The handle or the first block has no box.");
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + 20, to.y + 4, { steps: 12 });
+  await page.mouse.move(to.x + 24, to.y + 2, { steps: 4 });
+  await page.mouse.up();
+  await expect(blocks.first()).toHaveText("Second line with more");
+  await expect(blocks.nth(1)).toHaveText("First line");
+  await saved(page);
+
+  // A star puts the page among the starred records of the sidebar.
+  const star = page.getByRole("button", { name: "Star Editing checks" });
+  await star.click();
+  await expect(star).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page
+      .getByTestId("sidebar-shortcuts")
+      .getByRole("list", { name: "Starred" })
+      .getByRole("link", { name: "Editing checks" }),
+  ).toBeVisible();
+
+  // Who last changed each block, and the block at the cursor.
+  await page.getByRole("button", { name: "Activity" }).click();
+  const blockEdits = page.getByTestId("block-edit");
+  await expect(blockEdits.filter({ hasText: "“First line”" })).toContainText(IVY.name, { timeout: 60_000 });
+  await expect(blockEdits.filter({ hasText: "“Second line with more”" })).toContainText(IVY.name, {
+    timeout: 60_000,
+  });
+  await editorOf(page).getByText("First line").click();
+  await page.getByRole("button", { name: "Who changed the block at the cursor" }).click();
+  await expect(page.getByTestId("block-at-cursor")).toContainText(`${IVY.name} last changed this block`);
+  expect(await seriousFindings(page)).toEqual([]);
+});
+
+test("a workflow button set up in a page creates a page from it each time it is pressed", async ({ page }) => {
+  await signInAsIvy(page);
+  await newWorkspacePage(page, "Weekly pilot log");
+  await editorOf(page).click();
+  await page.keyboard.type("/button");
+  await expect(page.getByRole("option", { name: /Button/ })).toBeVisible();
+  await page.keyboard.press("Enter");
+  const setup = page.getByTestId("workflow-button-setup");
+  await expect(setup).toBeVisible();
+  // The button cannot be saved without a label.
+  await setup.getByRole("button", { name: "Save the button" }).click();
+  await expect(setup.getByRole("alert")).toHaveText("Give the button a label.");
+  await setup.getByLabel("Label").fill("Add this week's entry");
+  await setup.getByLabel("When pressed").selectOption({ label: "Create a page inside this page" });
+  await setup.getByLabel("Title of what it creates").fill("Pilot entry {date}");
+  expect(await seriousFindings(page)).toEqual([]);
+  await setup.getByRole("button", { name: "Save the button" }).click();
+
+  const button = page.getByTestId("workflow-button");
+  await button.getByRole("button", { name: "Add this week's entry", exact: true }).click();
+  const day = await page.evaluate(() => {
+    const now = new Date();
+    const pad = (value: number) => String(value).padStart(2, "0");
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  });
+  await expect(button.getByRole("status")).toContainText(`Created the page “Pilot entry ${day}”.`, {
+    timeout: 20_000,
+  });
+  await saved(page);
+  await button.getByRole("link", { name: "Open it" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: `Pilot entry ${day}` })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Page path" })).toContainText("Weekly pilot log");
+
+  // The button travels with the page: it is there for the next visit, set up as it was.
+  await page.goBack();
+  await expect(
+    page.getByTestId("workflow-button").getByRole("button", { name: "Add this week's entry", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Change the button Add this week's entry" }).click();
+  await expect(page.getByTestId("workflow-button-setup").getByLabel("Title of what it creates")).toHaveValue(
+    "Pilot entry {date}",
+  );
 });

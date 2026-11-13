@@ -12,11 +12,13 @@ import {
   calloutBlockConfig,
   linkedViewBlockConfig,
   mentionInlineConfig,
+  workflowButtonBlockConfig,
 } from "@eegml/shared";
 import { CircleAlert, Info, NotebookPen, OctagonAlert } from "lucide-react";
 import { ActionItemBlock } from "./action-item";
 import { withControlLabels } from "./control-labels";
 import { LinkedViewBlock } from "./linked-view";
+import { WorkflowButtonBlock } from "./workflow-button";
 
 const CALLOUT_LABELS: Readonly<Record<CalloutVariant, string>> = {
   info: "Information",
@@ -83,6 +85,20 @@ const actionItem = createReactBlockSpec(actionItemBlockConfig, {
   toExternalHTML: ({ block }) => <p data-action-item={block.props.taskId}>{block.props.title}</p>,
 });
 
+/** A workflow button (R3.37): a configured action that runs a callable function when pressed. */
+const workflowButton = createReactBlockSpec(workflowButtonBlockConfig, {
+  render: ({ block, editor }) => (
+    <div contentEditable={false} className="w-full">
+      <WorkflowButtonBlock
+        props={block.props}
+        editable={editor.isEditable}
+        onChange={(next) => editor.updateBlock(block, { props: next })}
+      />
+    </div>
+  ),
+  toExternalHTML: ({ block }) => <p data-workflow-button={block.props.action}>{block.props.label}</p>,
+});
+
 /** A mention of a member. The uid is what counts. The name is the one the member had when mentioned. */
 const mention = createReactInlineContentSpec(mentionInlineConfig, {
   render: ({ inlineContent }) => (
@@ -104,6 +120,7 @@ export const pageSchema = BlockNoteSchema.create().extend({
     callout: callout(),
     linkedView: linkedView(),
     actionItem: actionItem(),
+    workflowButton: workflowButton(),
   },
   inlineContentSpecs: { mention },
 });

@@ -26,6 +26,7 @@ import { formatDateTime } from "@/app/labels";
 import { ErrorState } from "@/components/feedback/error-state";
 import { LiveView } from "@/components/feedback/live-view";
 import { LoadingState } from "@/components/feedback/loading-state";
+import { FavouriteButton } from "@/components/registry/favourite-button";
 import { FollowButton } from "@/components/registry/follow-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -461,6 +462,9 @@ function PageBody({
           {viewer.access.member ? (
             <FollowButton uid={viewer.uid} entityType="page" entityId={page.id} label="Follow" />
           ) : null}
+          {viewer.access.member ? (
+            <FavouriteButton uid={viewer.uid} entityType="page" entityId={page.id} name={page.title} variant="ghost" />
+          ) : null}
           <Button size="sm" variant="ghost" aria-pressed={panel === "activity"} onClick={() => togglePanel("activity")}>
             <ListTree aria-hidden="true" strokeWidth={1.8} />
             Activity
@@ -690,7 +694,7 @@ function PageBody({
                 onPreview={(version) => void openVersion(version)}
               />
             ) : (
-              <ActivityPanel pageId={page.id} viewer={viewer} members={members} />
+              <ActivityPanel pageId={page.id} viewer={viewer} members={members} editor={editorApi} />
             )}
           </aside>
         )}

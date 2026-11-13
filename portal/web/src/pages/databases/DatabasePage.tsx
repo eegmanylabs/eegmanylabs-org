@@ -54,6 +54,21 @@ function DatabaseContent({ host }: { readonly host: ViewHost }) {
                 </Button>
               }
             />
+            {stored.isTemplate ? (
+              <p className="text-sm text-fg-secondary" data-testid="database-template">
+                This database is a template. A new database beneath any page can start from it, with its properties,
+                rows and shared views.
+              </p>
+            ) : null}
+            {stored.templateSourceId === undefined ? null : (
+              <p className="text-sm text-fg-secondary">
+                Made from the template{" "}
+                <Link className="text-fg-accent underline" to={`/databases/${stored.templateSourceId}`}>
+                  it was copied from
+                </Link>
+                .
+              </p>
+            )}
             {stored.archivedAt !== null ? <p className="text-fg-muted">This database is archived.</p> : null}
             {editor ? (
               <div className="flex flex-wrap items-center gap-2">
@@ -85,6 +100,18 @@ function DatabaseContent({ host }: { readonly host: ViewHost }) {
                     </Button>
                   </form>
                 )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  aria-pressed={stored.isTemplate}
+                  onClick={() =>
+                    updateDatabaseFields(host.viewer.uid, databaseId, { isTemplate: !stored.isTemplate }).catch(() =>
+                      setError("The database was not changed."),
+                    )
+                  }
+                >
+                  Use as a template
+                </Button>
                 <Button
                   size="sm"
                   variant="ghost"

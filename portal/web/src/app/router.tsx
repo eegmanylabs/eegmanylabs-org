@@ -397,6 +397,11 @@ export function portalRoutes(signInLink: string | null): RouteObject[] {
                   ...titled("Automations"),
                 },
                 {
+                  path: "/admin/governance",
+                  ...lazyPage(async () => (await import("@/pages/admin/GovernancePage")).GovernancePage),
+                  ...titled("Governance"),
+                },
+                {
                   path: "/admin/integrity",
                   ...lazyPage(async () => (await import("@/pages/admin/IntegrityPage")).IntegrityPage),
                   ...titled("Integrity"),

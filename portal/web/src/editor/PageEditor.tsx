@@ -29,11 +29,11 @@ import {
   useCreateBlockNote,
 } from "@blocknote/react";
 import { PAGE_FRAGMENT_NAME } from "@eegml/shared";
-import { ListTodo, MessageSquarePlus, StickyNote, Table2 } from "lucide-react";
+import { ListTodo, MessageSquarePlus, MousePointerClick, StickyNote, Table2 } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
 import { yXmlFragmentToProseMirrorRootNode } from "y-prosemirror";
 import * as Y from "yjs";
-import { type PageSync, pageFileUrl, uploadPageFile } from "@/data";
+import { type PageSync, pageFileUrl, uploadPageFile } from "@/data/collaboration";
 import { type ViewHost, ViewHostContext } from "@/views/host";
 import { type Anchor, type AnchorStore, anchorOfSelection, CommentAnchors } from "./comment-anchors";
 import { TextboxAttributes } from "./control-labels";
@@ -41,6 +41,7 @@ import { portalDictionary, shortcutText } from "./dictionary";
 import { CodeLanguageGuard, PositionMappingGuard } from "./guards";
 import { KeyboardAccess } from "./keyboard";
 import { type PageEditorInstance, pageSchema } from "./schema";
+import { EditorPageContext } from "./workflow-button";
 
 /** A member who may be mentioned: the account and the name the directory shows. */
 export interface MentionCandidate {
@@ -63,6 +64,10 @@ export interface PageEditorApi {
   makeActionItem(blockId: string, taskId: string, title: string): void;
   /** Whether the page holds nothing yet. */
   isEmpty(): boolean;
+  /** The text of a block, empty for a block without text, or null where the page no longer holds it. */
+  blockText(blockId: string): string | null;
+  /** The identifier of the block the cursor is in. */
+  cursorBlockId(): string | null;
   /** Writes the sections of a meeting into an empty page: its date, attendees, agenda, notes, decisions and action items. */
   insertMeetingSections(meeting: { readonly date: string; readonly attendees: readonly MentionCandidate[] }): void;
 }
@@ -117,6 +122,14 @@ function slashItems(editor: PageEditorInstance, onActionItem: (() => void) | nul
       group: "Portal",
       icon: <StickyNote aria-hidden="true" size={18} strokeWidth={1.8} />,
       onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: "callout", props: { variant: "info" } }),
+    },
+    {
+      title: "Button",
+      subtext: "A button that adds a row, creates a task or creates a page when pressed",
+      aliases: ["button", "workflow", "action", "automate"],
+      group: "Portal",
+      icon: <MousePointerClick aria-hidden="true" size={18} strokeWidth={1.8} />,
+      onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: "workflowButton", props: {} }),
     },
     {
       title: "Linked view",
@@ -240,6 +253,13 @@ export function PageEditor(props: PageEditorProps) {
       makeActionItem(blockId, taskId, title) {
         editor.replaceBlocks([blockId], [{ type: "actionItem", props: { taskId, title } }]);
       },
+      blockText(blockId) {
+        const block = editor.getBlock(blockId);
+        return block === undefined ? null : plainTextOf(block.content);
+      },
+      cursorBlockId() {
+        return editor.getTextCursorPosition().block.id;
+      },
       isEmpty() {
         const blocks = editor.document;
         return blocks.length === 0 || (blocks.length === 1 && plainTextOf(blocks[0]?.content) === "");
@@ -283,58 +303,60 @@ export function PageEditor(props: PageEditorProps) {
   const members = props.members;
   return (
     <ViewHostContext.Provider value={props.viewHost}>
-      <BlockNoteView
-        editor={editor}
-        editable={props.editable}
-        theme="light"
-        slashMenu={false}
-        formattingToolbar={false}
-        sideMenu={false}
-        className="portal-editor"
-        data-testid="page-editor"
-      >
-        <FormattingToolbarController formattingToolbar={formattingToolbar} />
-        <SideMenuController sideMenu={PortalSideMenu} />
-        <SuggestionMenuController
-          triggerCharacter="/"
-          getItems={async (query) =>
-            filterSuggestionItems(
-              slashItems(
-                editor,
-                onActionItem === undefined
-                  ? null
-                  : () => {
-                      const line = currentLine();
-                      if (line !== null) onActionItem(line);
-                    },
-              ),
-              query,
-            )
-          }
-        />
-        <SuggestionMenuController
-          triggerCharacter="@"
-          getItems={async (query) => {
-            const typed = query.trim().toLowerCase();
-            return members
-              .filter((member) =>
-                member.name
-                  .toLowerCase()
-                  .split(/\s+/)
-                  .some((part) => part.startsWith(typed)),
+      <EditorPageContext.Provider value={props.pageId}>
+        <BlockNoteView
+          editor={editor}
+          editable={props.editable}
+          theme="light"
+          slashMenu={false}
+          formattingToolbar={false}
+          sideMenu={false}
+          className="portal-editor"
+          data-testid="page-editor"
+        >
+          <FormattingToolbarController formattingToolbar={formattingToolbar} />
+          <SideMenuController sideMenu={PortalSideMenu} />
+          <SuggestionMenuController
+            triggerCharacter="/"
+            getItems={async (query) =>
+              filterSuggestionItems(
+                slashItems(
+                  editor,
+                  onActionItem === undefined
+                    ? null
+                    : () => {
+                        const line = currentLine();
+                        if (line !== null) onActionItem(line);
+                      },
+                ),
+                query,
               )
-              .slice(0, 8)
-              .map((member) => ({
-                title: member.name,
-                onItemClick: () =>
-                  editor.insertInlineContent([
-                    { type: "mention", props: { userId: member.uid, label: member.name } },
-                    " ",
-                  ]),
-              }));
-          }}
-        />
-      </BlockNoteView>
+            }
+          />
+          <SuggestionMenuController
+            triggerCharacter="@"
+            getItems={async (query) => {
+              const typed = query.trim().toLowerCase();
+              return members
+                .filter((member) =>
+                  member.name
+                    .toLowerCase()
+                    .split(/\s+/)
+                    .some((part) => part.startsWith(typed)),
+                )
+                .slice(0, 8)
+                .map((member) => ({
+                  title: member.name,
+                  onItemClick: () =>
+                    editor.insertInlineContent([
+                      { type: "mention", props: { userId: member.uid, label: member.name } },
+                      " ",
+                    ]),
+                }));
+            }}
+          />
+        </BlockNoteView>
+      </EditorPageContext.Provider>
     </ViewHostContext.Provider>
   );
 }

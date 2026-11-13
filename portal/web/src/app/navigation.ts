@@ -314,6 +314,15 @@ export const NAVIGATION: readonly NavigationEntry[] = [
     group: "administration",
   },
   {
+    id: "admin-governance",
+    label: "Governance",
+    to: "/admin/governance",
+    icon: ShieldCheck,
+    requires: "people.manage",
+    order: 1_075,
+    group: "administration",
+  },
+  {
     id: "admin-integrity",
     label: "Integrity",
     to: "/admin/integrity",

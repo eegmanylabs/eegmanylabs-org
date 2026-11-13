@@ -2,7 +2,7 @@
 //
 // | Trigger                     | Fires on                       | Does                                                        |
 // |-----------------------------|--------------------------------|-------------------------------------------------------------|
-// | `pagesOnUpdateCreated`      | An editor's update of a page   | Notifies newly mentioned members, refreshes the search index and records a spell of editing |
+// | `pagesOnUpdateCreated`      | An editor's update of a page   | Notifies newly mentioned members, refreshes the search index, records a spell of editing and who last changed each block it touched |
 // | `pagesOnPageWritten`        | A page created or changed      | Refreshes the search index and the audience that threads, comments and databases copy |
 // | `threadsOnCommentWritten`   | A comment created or edited    | Notifies newly mentioned members and, for a new comment, those who took part in the thread |
 //
@@ -17,6 +17,7 @@ import {
   commentMentionUids,
   type EntityType,
   type FirestoreBytes,
+  pageBlockEditDocSchema,
   pageDocSchema,
   pageLevelFor,
   parseStoredDocument,
@@ -28,10 +29,18 @@ import { logger } from "firebase-functions";
 import { onDocumentCreated, onDocumentWritten } from "firebase-functions/firestore";
 import { firestore } from "../framework/admin";
 import { writeAudit } from "../framework/audit";
-import { reactionStamp, touchedFields, type WriteStamp } from "../framework/documents";
+import { createdFields, reactionStamp, touchedFields, type WriteStamp } from "../framework/documents";
 import { documentTrigger } from "../framework/trigger";
 import { notifyAll } from "../notifications/notify";
-import { bytesOf, decodesAsUpdate, extractPageText, loadPageDocument, mentionedUids } from "../pages/content";
+import {
+  blocksTouchedBy,
+  bytesOf,
+  concatenate,
+  decodesAsUpdate,
+  extractPageText,
+  loadPageDocument,
+  mentionedUids,
+} from "../pages/content";
 import { indexPage, removePageIndex } from "../pages/search-index";
 
 /** How long one spell of editing lasts: an edit within this time of the last one adds no activity. */
@@ -159,6 +168,75 @@ async function recordEditingSpell(
   });
 }
 
+/** The most blocks of one update whose attribution is recorded: a paste of a long text touches many. */
+export const BLOCK_EDITS_PER_UPDATE = 200;
+/** A block whose last edit by the same author is this recent is not written again. */
+const BLOCK_EDIT_REFRESH_MS = 60 * 1000;
+
+/**
+ * Records who last changed each block that an update touched (R3.23). The bytes of the update
+ * are read from its parts once all of them have arrived; the blocks are resolved in the stored
+ * document, which holds the update whether or not it has been compacted since. A block whose
+ * last edit is the author's own and recent is left as it is, so typing writes little.
+ */
+export async function recordBlockEdits(
+  db: Firestore,
+  edit: Cause & {
+    readonly pageId: string;
+    readonly authorUid: string;
+    readonly updateId: string;
+    readonly count: number;
+    readonly bytes: Uint8Array | null;
+  },
+): Promise<string[]> {
+  let bytes = edit.bytes;
+  if (edit.count !== 1 || bytes === null) {
+    const parts = await db
+      .collection(COLLECTIONS.pageUpdates.collectionPath(edit.pageId))
+      .where("updateId", "==", edit.updateId)
+      .limit(edit.count)
+      .get();
+    if (parts.size !== edit.count) return [];
+    const ordered = parts.docs.map((part) => part.data()).sort((a, b) => (a.index as number) - (b.index as number));
+    bytes = concatenate(ordered.map((part) => bytesOf(part.update as FirestoreBytes)));
+  }
+  if (!decodesAsUpdate(bytes)) return [];
+  const snapshot = await db.doc(COLLECTIONS.pages.docPath(edit.pageId)).get();
+  const parsed = parseStoredDocument(pageDocSchema, snapshot.data());
+  if (!snapshot.exists || !parsed.success) return [];
+  const blocks = blocksTouchedBy(await loadPageDocument(db, edit.pageId, parsed.data), bytes, BLOCK_EDITS_PER_UPDATE);
+  if (blocks.length === 0) return [];
+  const references = blocks.map((blockId) => db.doc(COLLECTIONS.pageBlockEdits.docPath(edit.pageId, blockId)));
+  const existing = await db.getAll(...references);
+  const stamp = reactionStamp("pageBlockEdit", edit.at, edit.eventId);
+  const batch = db.batch();
+  const written: string[] = [];
+  existing.forEach((stored, index) => {
+    const blockId = blocks[index];
+    const reference = references[index];
+    if (blockId === undefined || reference === undefined) return;
+    const editedAt = stored.get("editedAt") as Timestamp | undefined;
+    const recent =
+      stored.get("editorUid") === edit.authorUid &&
+      editedAt !== undefined &&
+      Math.abs(edit.at.getTime() - editedAt.toMillis()) < BLOCK_EDIT_REFRESH_MS;
+    if (recent) return;
+    batch.set(
+      reference,
+      pageBlockEditDocSchema.parse({
+        ...createdFields("pageBlockEdits", stamp),
+        pageId: edit.pageId,
+        blockId,
+        editorUid: edit.authorUid,
+        editedAt: Timestamp.fromDate(edit.at),
+      }),
+    );
+    written.push(blockId);
+  });
+  if (written.length > 0) await batch.commit();
+  return written;
+}
+
 /**
  * Removes an update of one part that does not decode as a Yjs update, with an audit entry that
  * names its author. The rules cannot check the bytes, and every reader skips such an update, so
@@ -207,6 +285,18 @@ export const pagesOnUpdateCreated = onDocumentCreated(documentTrigger(COLLECTION
     return;
   }
   await recordPageEdit(firestore(), { ...cause, pageId: event.params.pageId, authorUid });
+  const update = event.data?.get("update") as FirestoreBytes | undefined;
+  const updateId = event.data?.get("updateId");
+  const count = event.data?.get("count");
+  if (typeof updateId !== "string" || typeof count !== "number") return;
+  await recordBlockEdits(firestore(), {
+    ...cause,
+    pageId: event.params.pageId,
+    authorUid,
+    updateId,
+    count,
+    bytes: count === 1 && update !== undefined ? bytesOf(update) : null,
+  });
 });
 
 /** The fields of a page whose change reaches its index entries or the copies of its audience. */

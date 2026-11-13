@@ -148,15 +148,23 @@ describe("a database and its rows", () => {
     });
   });
 
-  it("is renamed and archived by an editor of the parent page, and by nobody below that level", async () => {
+  it("is renamed, made a template and archived by an editor of the parent page, and by nobody below that level", async () => {
     await expectOutcomes({
       "an editor renames it": ["allowed", update("ownTeam", DATABASE, { name: "Synthetic sites, renamed" })],
+      "an editor makes it a template": ["allowed", update("ownTeam", DATABASE, { isTemplate: true })],
       "an editor archives it": ["allowed", update("ownLead", DATABASE, { archivedAt: serverTimestamp() })],
     });
     await seedWorld(environment);
     await expectOutcomes({
       "a commenter renames it": ["denied", update("ownLabMember", DATABASE, { name: "Renamed by a commenter" })],
       "a reader renames it": ["denied", update("member", DATABASE, { name: "Renamed by a reader" })],
+      "a reader makes it a template": ["denied", update("member", DATABASE, { isTemplate: true })],
+      "a commenter makes it a template": ["denied", update("ownLabMember", DATABASE, { isTemplate: true })],
+      "an editor marks it a template with a text": ["denied", update("ownTeam", DATABASE, { isTemplate: "yes" })],
+      "an editor names a template it came from": [
+        "denied",
+        update("ownTeam", DATABASE, { templateSourceId: "another-database" }),
+      ],
       "an editor changes its properties": [
         "denied",
         update("ownTeam", DATABASE, { "properties.status.name": "Phase" }),

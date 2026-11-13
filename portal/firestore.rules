@@ -2662,6 +2662,13 @@ service cloud.firestore {
         || (holdsScopeOf(thread) && (thread.targetType != 'page' || readsPageAt(thread.targetId)));
     }
 
+    // Who last changed each block of a page (R3.23), which the trigger of an editor's update
+    // writes. It holds no content and is read as the page.
+    // Reads: 2 (access, the page).
+    match /pages/{pageId}/blockEdits/{blockId} {
+      allow read: if isMember() && readsPageAt(pageId) && boundedRead();
+    }
+
     // Who has a page open (D-010): one document for each open tab of a reader of the page, under
     // the identifier `uid__tab`, which that tab writes in its own name and removes. Its fields are
     // the awareness state of the tab, as JSON, and the counter and client of y-protocols.
@@ -2855,7 +2862,7 @@ service cloud.firestore {
     // it, give it an icon and archive it. It is created and given properties by functions.
     // Reads: 2 (access, and the parent page for an update).
     match /databases/{databaseId} {
-      function databasesEditableByEditor() { return ['name', 'description', 'icon', 'archivedAt']; }
+      function databasesEditableByEditor() { return ['name', 'description', 'icon', 'isTemplate', 'archivedAt']; }
 
       allow read: if isMember() && readsPage(resource.data, access()) && boundedRead();
       allow update: if isMember()
@@ -2863,7 +2870,8 @@ service cloud.firestore {
         && updatedNow(incoming(), stampFields().concat(databasesEditableByEditor()), ['name'])
         && shortText(incoming().name)
         && (!('description' in incoming()) || (incoming().description is string && longText(incoming().description)))
-        && (!('icon' in incoming()) || (incoming().icon is string && incoming().icon.matches('(?s)^.{1,16}$')));
+        && (!('icon' in incoming()) || (incoming().icon is string && incoming().icon.matches('(?s)^.{1,16}$')))
+        && incoming().isTemplate is bool;
     }
 
     // The rows of a database, read as the database. A callable function writes them for its

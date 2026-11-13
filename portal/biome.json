@@ -95,8 +95,8 @@
                     "message": "Only web/src/data may import the Firebase SDK. Import what you need from \"@/data\"."
                   },
                   {
-                    "group": ["@/data/*"],
-                    "message": "Import from \"@/data\", the public surface of the data layer."
+                    "group": ["@/data/*", "!@/data/collaboration"],
+                    "message": "Import from \"@/data\", the public surface of the data layer. The editor alone also imports \"@/data/collaboration\"."
                   }
                 ]
               }
@@ -106,7 +106,7 @@
       }
     },
     {
-      "includes": ["scripts/**", "tools/src/**", "functions/bundle.mjs"],
+      "includes": ["scripts/**", "ops/**", "tools/src/**", "functions/bundle.mjs"],
       "linter": {
         "rules": {
           "suspicious": {

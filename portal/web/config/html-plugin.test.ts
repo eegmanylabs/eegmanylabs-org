@@ -23,6 +23,7 @@ const realEnvironment = {
   VITE_FIREBASE_PROJECT_ID: "example-portal",
   VITE_FIREBASE_STORAGE_BUCKET: "example-portal.firebasestorage.app",
   VITE_FIREBASE_APP_ID: "1:000000000000:web:0000000000000000",
+  VITE_APP_CHECK_SITE_KEY: "example-recaptcha-enterprise-site-key",
 };
 
 const emulator = resolveBuildConfig("emulator", {}, ports);

@@ -173,6 +173,21 @@ export const pagePresenceDocSchema = documentBaseSchema.extend({
 export type PagePresenceDoc = z.output<typeof pagePresenceDocSchema>;
 
 /**
+ * `pages/{pageId}/blockEdits/{blockId}`: who last changed one block of a page, and when (R3.23).
+ * The trigger of an editor's update resolves the blocks that the update touched in the stored
+ * document and writes one of these for each, so that the attribution survives compaction. It
+ * holds no content.
+ */
+export const pageBlockEditDocSchema = documentBaseSchema.extend({
+  pageId: idSchema,
+  /** The identifier of the block, as the editor gives it. */
+  blockId: idSchema,
+  editorUid: uidSchema,
+  editedAt: timestampSchema,
+});
+export type PageBlockEditDoc = z.output<typeof pageBlockEditDocSchema>;
+
+/**
  * `threads/{id}`: a thread of comments on any record. It carries the audience of its target as
  * scope fields, and one marked `restricted` takes the audience of the target's restricted document.
  */

@@ -1,8 +1,7 @@
-import { COLLECTIONS, setUserStatusContract, type UserStatus } from "@eegml/shared";
+import { COLLECTIONS, setUserStatusContract } from "@eegml/shared";
 import { commitAccess, draftAccess } from "../access/maintain";
 import {
   AppError,
-  authentication,
   callerStamp,
   defineCallable,
   readAccessDocument,
@@ -12,6 +11,7 @@ import {
   withheldChanges,
   writeAudit,
 } from "../framework";
+import { applyAccountStatus } from "../people/account-status";
 import {
   holdsProgrammeRole,
   LAST_ADMINISTRATOR_MESSAGE,
@@ -19,23 +19,6 @@ import {
   PROGRAMME_STAFF_ACCOUNT_MESSAGE,
 } from "../roles/administrators";
 import { inForce } from "../roles/assignments";
-
-/**
- * Brings the Authentication account in line with a status. A suspended account is disabled,
- * so it can neither sign in nor refresh its session, and its refresh tokens are revoked. An
- * account that does not exist in Authentication any more has nothing left to disable.
- */
-async function applyToAccount(uid: string, status: UserStatus): Promise<"applied" | "noAccount"> {
-  const auth = authentication();
-  try {
-    await auth.updateUser(uid, { disabled: status === "suspended" });
-    if (status === "suspended") await auth.revokeRefreshTokens(uid);
-    return "applied";
-  } catch (error) {
-    if ((error as { code?: unknown }).code === "auth/user-not-found") return "noAccount";
-    throw error;
-  }
-}
 
 /**
  * Suspends an account or lifts its suspension (docs/SECURITY.md, section 3). Capability:
@@ -106,7 +89,7 @@ export const setUserStatus = defineCallable(setUserStatusContract, {
       commitAccess(db, transaction, draft, stamp);
     });
 
-    const outcome = await applyToAccount(input.uid, input.status);
+    const outcome = await applyAccountStatus(input.uid, input.status);
     if (outcome === "noAccount") {
       context.logger.warn("the status of an account without an Authentication record was changed", { uid: input.uid });
     }

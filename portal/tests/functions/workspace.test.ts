@@ -455,6 +455,39 @@ describe("the trigger of an editor's update", () => {
   });
 });
 
+describe("the attribution of blocks", () => {
+  it("names who last changed each block an update touched, without its content", async () => {
+    const ada = await member("uid-ada", "Ada Example");
+    const ben = await member("uid-ben", "Ben Sample");
+    const { pageId } = await call(ada, createPageContract, { parentPageId: null, title: "Pilot plan" });
+    const doc = new Y.Doc();
+    const first = blocksUpdate(
+      [
+        { id: "block-room", text: "Book the EEG room" },
+        { id: "block-caps", text: "Order caps" },
+      ],
+      doc,
+    );
+    await appendUpdate(pageId, ada.uid, first);
+    const editOf = async (blockId: string) =>
+      (await adminDb.doc(COLLECTIONS.pageBlockEdits.docPath(pageId, blockId)).get()).data();
+    await eventually(
+      async () => (await editOf("block-caps"))?.editorUid === ada.uid,
+      "the attribution of the blocks of the first update",
+    );
+    expect(await editOf("block-room")).toMatchObject({ pageId, blockId: "block-room", editorUid: ada.uid });
+
+    // Ben changes the text of one block: that block, and only that one, becomes his.
+    const before = Y.encodeStateVector(doc);
+    const group = doc.getXmlFragment(PAGE_FRAGMENT_NAME).get(0) as Y.XmlElement;
+    (((group.get(1) as Y.XmlElement).get(0) as Y.XmlElement).get(0) as Y.XmlText).insert(0, "Now: ");
+    await appendUpdate(pageId, ben.uid, Y.encodeStateAsUpdate(doc, before));
+    await eventually(async () => (await editOf("block-caps"))?.editorUid === ben.uid, "the block Ben changed");
+    expect((await editOf("block-room"))?.editorUid).toBe(ada.uid);
+    expect(Object.keys((await editOf("block-caps")) ?? {})).not.toContain("text");
+  });
+});
+
 describe("an update that is no Yjs update", () => {
   it("is skipped by every reader of the page and removed with an audit entry", async () => {
     const ada = await member("uid-ada", "Ada Example");

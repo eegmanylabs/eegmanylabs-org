@@ -67,7 +67,7 @@ const parameterNames = (path: string) => [...path.matchAll(/\{([^{}]+)\}/g)].map
 
 describe("the registry", () => {
   it("has one entry for every collection, subcollection and fixed-name document of the data model", () => {
-    expect(COLLECTION_KEYS).toHaveLength(154);
+    expect(COLLECTION_KEYS).toHaveLength(158);
     expect(COLLECTION_ENTRIES.map((entry) => entry.key)).toEqual(COLLECTION_KEYS);
   });
 
@@ -164,7 +164,7 @@ describe("the enforcement of an entry", () => {
         "progressReports",
       ].sort(),
     );
-    expect(COLLECTION_ENTRIES.filter((entry) => entry.enforcement === "enforced")).toHaveLength(146);
+    expect(COLLECTION_ENTRIES.filter((entry) => entry.enforcement === "enforced")).toHaveLength(150);
   });
 
   it("never opens a document beneath a parent that is still closed", () => {
@@ -443,6 +443,10 @@ describe("the access rules of an entry", () => {
       "searchIndex",
       "integrityReports",
       "integrityReportFindings",
+      "erasureRequests",
+      "accessReviewAttestations",
+      "retentionRuns",
+      "pageBlockEdits",
       "scheduledReports",
       "systemSettings",
     ];
@@ -711,6 +715,7 @@ describe("the flags of an entry", () => {
         "pageContent",
         "pageUpdates",
         "pagePresence",
+        "pageBlockEdits",
         "pageVersionChunks",
         "datasetManifestFileChunks",
         "publicationFiles",
