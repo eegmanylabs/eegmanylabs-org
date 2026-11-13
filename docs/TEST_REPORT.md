@@ -201,7 +201,29 @@ GitHub and the mail sender were reached only through their in-memory fakes. The 
 
 Run on 13 November 2026 by the engineer with port base 9200. Type checking, lint (1,044 files) and the build passed, as did the unit (2,338), rules and tools (4,234) and functions (416) suites. `npm test` exited 1: the kernel killed the Firestore emulator late in the browser tests, 120 passed, 11 in `tasks.spec.ts` and `views.spec.ts` failed after that point, and the workspace files did not run. Those files then passed on their own except the table-performance test. The independent run at the start of this section, after the harness changes, supersedes this one.
 
-## 9. Public-site entry
+## 9. Recovery, governance and deployment readiness (phase 10)
+
+Run on 13 November 2026 by the orchestrating session, independently of the engineers, from `portal/` with port base 9300 on the tree committed as "Phase 10: recovery, environments, governance, deployment preflight and review fixes", with no change to it. `npm run typecheck` and `npm run lint` exited 0, with 1,112 files checked and no findings, and `npm test` exited 0 in one uninterrupted run, which the engineers had not achieved: they had passed every part in separate runs.
+
+| Suite | Files | Tests passed | Tests failed |
+|---|---|---|---|
+| Unit and component tests | 166 | 2,454 | 0 |
+| Emulator-backed rules and tools tests | 66 | 4,311 | 0 |
+| Emulator-backed functions tests, in two batches | 42 (21 and 21) | 452 (240 and 212) | 0 |
+| Browser tests (Playwright, Chromium), in three batches | | 148 (54, 54 and 40) | 0 |
+| Restore rehearsal (`npm run restore:rehearse`) | | 10 checks | 0 |
+
+The functions suite now runs in two batches with freshly started emulators, for the same reason as the browser tests in section 8: run whole, it exhausted the 16 GB of the machine in an engineer's run. In this run memory in use peaked at 10.6 GB, against 12.9 GB in section 8.
+
+The restore rehearsal seeded the demonstration world on fresh emulators, took a manifest of 320 documents, 3 accounts and 1 Storage object, exported the emulators, started fresh ones from the export and found every document, account and object present and identical. It confirmed that the audit trail reads back through its schema, that the security rules still allow and refuse the same reads, and that a deliberately corrupted restore (one changed document, one removed document and one removed object) is detected with exactly those differences. It also replays the governance ledger, so that an erasure or a revocation recorded after the moment a backup was taken is applied again to the restored data. The report stays in `portal/.run/`, outside the repository. This proves the procedure on the emulators. The production procedures in `portal/ops/` print their commands and have never been run, so a restore of a real Firestore database has not been rehearsed.
+
+The deployment preflight was then run for both environments with `npm run deploy:check:staging` and `npm run deploy:check:production`, after `npm run functions:package`, as `docs/DEPLOYMENT.md` prescribes. It contacts no project; it compiles the rules on the local emulators. Each run reported 8 of 11 items passing and exited 1. The rules compile, the indexes cover the 130 catalogued queries, every secret is declared, every endpoint is HTTPS, the deployment configuration is complete, the functions package installs without workspace packages, every function runs as its own least-privilege account and the region is europe-west2 throughout. The three failures are expected and need the administrators: the project, bucket and scratch-project identifiers in `portal/ops/environments.mjs` are placeholders, the functions parameter file for the project does not exist, and the web build has no configuration because no Firebase project exists.
+
+Two independent reviews examined phase 10 before this run, a security red team and a deployment-readiness review, and reported 27 findings (3 critical, 6 high, 10 medium and 8 low). All were fixed with tests or, for procedures that can only run against a real project, with checks added to the preflight. The critical findings were all deployment blockers: the staging preflight could not start, the planned `firebase deploy` had no configuration file to use, and the deployed functions package depended on a private workspace package that Cloud Build cannot install. The most serious security findings were that a restore to an earlier moment would silently undo later erasures and revocations, now closed by the governance ledger; that one programme administrator could appoint a second and so satisfy the two-person rule alone, now closed by a check of recent appointment chains; that the restore procedure wrote to production; and that differencing two overlapping demographic scopes could recover one person's value without an audit entry.
+
+No Firebase or Google Cloud project was contacted, no `gcloud` command or deploying `firebase` command was run, and `.github/workflows/deploy.yml` was not touched.
+
+## 10. Public-site entry
 
 The gated Members' portal entry was verified by building the public site in scratch copies, never inside the repository.
 
@@ -215,7 +237,7 @@ The gated Members' portal entry was verified by building the public site in scra
 
 The comparison with `main` was run twice by the orchestrating session, before the first commit of the entry and again after the review fixes, and independently by the reviewer.
 
-## 10. Architecture spikes
+## 11. Architecture spikes
 
 Two throwaway spikes were run before the build to prove the architecture. Their code is not in the repository. Their results are summarised in `docs/ARCHITECTURE.md` section 10 and `docs/DECISIONS.md` D-010.
 
@@ -224,7 +246,7 @@ Two throwaway spikes were run before the build to prove the architecture. Their 
 | Application stack | 177 emulator-backed tests and 15 browser tests passed |
 | Collaborative editor on Firestore | All suites passed: security rules 28, provider 15, two-browser collaboration 10, editor features 18, versions 9, comments 11, presence 7 |
 
-## 11. Not yet verified
+## 12. Not yet verified
 
 | Item | Why it is unverified | What will verify it |
 |---|---|---|
