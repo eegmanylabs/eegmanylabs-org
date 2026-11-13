@@ -32,6 +32,7 @@ import {
   checkFunctionsPackage,
   checkFunctionsParameters,
   checkIndexes,
+  checkMailDelivery,
   checkRegion,
   checkRulesCompile,
   checkSecretsDeclared,
@@ -101,6 +102,7 @@ async function main(): Promise<number> {
     checkFunctionsPackage(),
     checkServiceAccount(),
     checkFunctionsParameters(name),
+    checkMailDelivery(name),
   );
 
   // The build's configuration, as the build itself will resolve it. Emulator variables of this

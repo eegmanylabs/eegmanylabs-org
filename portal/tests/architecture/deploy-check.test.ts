@@ -17,6 +17,7 @@ import {
   checkFunctionsPackage,
   checkFunctionsParameters,
   checkIndexes,
+  checkMailDelivery,
   checkRegion,
   checkSecretsDeclared,
   checkServiceAccount,
@@ -254,5 +255,31 @@ describe("the deployment of the functions", () => {
       ).details.join(),
     ).toMatch(/not HTTPS/);
     expect(checkFunctionsParameters("staging", root({})).details.join()).toMatch(/is missing/);
+  });
+
+  it("accepts mail disabled with no mail secret on staging and production, as the programme decided", () => {
+    for (const name of ["staging", "production"] as const) {
+      expect(ENVIRONMENTS[name].mail).toBe("disabled");
+      const { projectId } = ENVIRONMENTS[name];
+      // Absent, empty or disabled, the parameter agrees, and no mail secret or provider is asked for.
+      for (const text of ["", "MAIL_DELIVERY=\n", "MAIL_DELIVERY=disabled\n"]) {
+        const checked = checkMailDelivery(name, root({ [`functions/.env.${projectId}`]: text }), []);
+        expect(checked).toMatchObject({ passed: true, details: [] });
+        expect(checked.notes?.join()).toMatch(/stay in the portal, no mail provider or mail secret is needed/);
+        expect(checked.notes?.join()).toContain("decision 7");
+      }
+      expect(checkMailDelivery(name, root({}), []).passed).toBe(true);
+      // A project whose parameters switch mail on, against the decision, is refused, and so is a value that means nothing.
+      const enabled = checkMailDelivery(name, root({ [`functions/.env.${projectId}`]: "MAIL_DELIVERY=enabled\n" }), []);
+      expect(enabled.passed).toBe(false);
+      expect(enabled.details.join()).toMatch(/says enabled, and ops\/environments\.mjs says disabled/);
+      expect(
+        checkMailDelivery(
+          name,
+          root({ [`functions/.env.${projectId}`]: "MAIL_DELIVERY=sometimes\n" }),
+          [],
+        ).details.join(),
+      ).toMatch(/neither disabled nor enabled/);
+    }
   });
 });

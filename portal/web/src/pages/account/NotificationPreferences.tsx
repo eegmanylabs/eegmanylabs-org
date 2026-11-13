@@ -5,6 +5,7 @@
 // the security rules, and the functions read it to decide what goes to the mail outbox.
 import { NOTIFICATION_EMAIL_TEXT, type NotificationType, notificationTypeSchema } from "@eegml/shared";
 import { type FormEvent, useState } from "react";
+import { config } from "@/app/config";
 import { ErrorState } from "@/components/feedback/error-state";
 import { LiveView } from "@/components/feedback/live-view";
 import { Button } from "@/components/ui/button";
@@ -23,14 +24,14 @@ const DEFAULTS: PreferencesInput = {
 const ownTimeZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London";
 
 /**
- * Whether email is delivered. No mail provider is chosen yet (decision 7 in docs/DECISIONS.md),
- * so the functions keep every message in the outbox and send nothing; in an emulator build the
- * outbox is served by the fake sender. The page says so beside the choices it keeps.
+ * The account page shows this panel only in a build whose mail is enabled (ops/environments.mjs).
+ * The programme decided that no notification email is sent for now, so staging and production
+ * builds leave it out; the emulator build keeps it against a fake outbox, and says so.
  */
 const MAIL_DELIVERY_NOTE =
-  import.meta.env.MODE === "emulator"
+  config.mode === "emulator"
     ? "Email delivery is not connected: in this emulator build messages go to a fake outbox and are never sent. Your choices are kept."
-    : "Email delivery is not connected yet: your choices are kept and take effect once it is.";
+    : null;
 
 function PreferencesForm({ uid, stored }: { uid: string; stored: RecordOf<"userPreferences"> | null }) {
   const initial: PreferencesInput = stored ?? DEFAULTS;
@@ -68,9 +69,11 @@ function PreferencesForm({ uid, stored }: { uid: string; stored: RecordOf<"userP
         Notifications always appear in the portal. Here you choose whether they also reach you by email. A message
         carries a title, a short text and a link back to the portal, never restricted detail.
       </p>
-      <p className="text-sm" data-testid="mail-delivery">
-        {MAIL_DELIVERY_NOTE}
-      </p>
+      {MAIL_DELIVERY_NOTE === null ? null : (
+        <p className="text-sm" data-testid="mail-delivery">
+          {MAIL_DELIVERY_NOTE}
+        </p>
+      )}
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={email} onChange={(event) => setEmail(event.target.checked)} />
         Send notifications to me by email

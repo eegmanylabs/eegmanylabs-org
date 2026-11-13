@@ -3,6 +3,7 @@ import {
   COLLECTIONS,
   capabilityGrantDocSchema,
   capabilityGrantId,
+  grantCanConfer,
   LIMITS,
   parseStoredDocument,
   SENSITIVE_CAPABILITIES,
@@ -25,6 +26,8 @@ import { recordGovernance } from "../governance/ledger";
 import { writeNotification } from "../notifications/notify";
 import { APPOINTED_BY_REQUESTER_MESSAGE, tiedByAppointment } from "../roles/appointments";
 
+const ADMINISTRATOR_ONLY_MESSAGE =
+  "This capability belongs to programme administrators alone, by a decision of the programme, and no named grant confers it.";
 const OWN_GRANT_MESSAGE = "You cannot grant a capability to your own account. Ask a programme administrator.";
 const SENSITIVE_GRANT_MESSAGE =
   "Only a programme administrator can grant or revoke role management, suspension, special-category data, import rollback, integration credentials or publishing approval.";
@@ -81,6 +84,7 @@ export const setCapabilityGrant = defineCallable(setCapabilityGrantContract, {
     const requested = input.action === "grant" ? (input.expiresAt ?? null) : null;
     const expiresAt = requested === null ? null : Timestamp.fromDate(new Date(requested));
     if (input.action === "grant") {
+      if (!grantCanConfer(input.capability)) throw new AppError("invalid-argument", ADMINISTRATOR_ONLY_MESSAGE);
       if (expiresAt !== null && expiresAt.toMillis() <= at.getTime()) {
         throw new AppError("invalid-argument", "The expiry time has passed already. Choose a later one.");
       }

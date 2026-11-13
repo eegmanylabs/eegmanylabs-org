@@ -435,6 +435,20 @@
       ]
     },
     {
+      "collectionGroup": "reconciliationItems",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sealed",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "reminders",
       "queryScope": "COLLECTION",
       "fields": [

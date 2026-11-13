@@ -1,6 +1,7 @@
 // Events, audit, automation, notifications and search (docs/DATA_MODEL.md, section 13): the
 // audit trail (D-007), activity entries, automation, the outbound mail outbox, the search index,
 // integrity reports and the settings of the portal.
+import { programmeDecisionSchema } from "../programme-answers";
 import { timestampSchema } from "../timestamp";
 import { z } from "../zod";
 import {
@@ -51,6 +52,9 @@ import {
  * | `correction.resolved`           | A correction request is accepted or rejected                       |
  * | `demographics.read`             | Special-category data of a person is served to a caller            |
  * | `demographics.aggregateRead`    | Counts of a special-category field for a scope are served, with small cells suppressed |
+ * | `demographics.consentGiven`     | A person gives consent to the portal holding their gender and ethnicity |
+ * | `demographics.consentWithdrawn` | A person withdraws that consent, and their values are deleted      |
+ * | `demographics.ownSaved`         | A person enters or confirms their own values, while their consent is in force |
  * | `person.orcidChanged`           | The ORCID iD of a person is set, changed or removed                |
  * | `laboratoryMember.confirmed`    | A member entry of a laboratory is confirmed                        |
  * | `replicationMembership.confirmed` | A membership of a replication is confirmed                       |
@@ -160,6 +164,9 @@ export const AUDIT_ACTIONS = [
   "demographics.read",
   "demographics.aggregateRead",
   "demographics.aggregateIncluded",
+  "demographics.consentGiven",
+  "demographics.consentWithdrawn",
+  "demographics.ownSaved",
   "person.orcidChanged",
   "laboratoryMember.confirmed",
   "replicationMembership.confirmed",
@@ -272,6 +279,7 @@ export const AUDIT_ACTIONS = [
   "accessReview.attested",
   "retention.settingsChanged",
   "retention.swept",
+  "migration.verified",
 ] as const;
 export const auditActionSchema = z.enum(AUDIT_ACTIONS);
 export type AuditAction = z.output<typeof auditActionSchema>;
@@ -624,6 +632,13 @@ export const systemSettingsDocSchema = documentBaseSchema.extend({
    * given a follow-up task. Absent means 30.
    */
   recruitmentInactivityDays: z.number().int().min(7).max(365).exactOptional(),
+  /**
+   * When a programme administrator marked the migration verified, through `markMigrationVerified`
+   * with the second factor, and who did. Raw source material is kept until then and for a year
+   * after (docs/MIGRATION_PLAN.md, section 11, question 20). Absent while it is unverified.
+   */
+  migrationVerifiedAt: timestampSchema.exactOptional(),
+  migrationVerifiedBy: uidSchema.exactOptional(),
 });
 export type SystemSettingsDoc = z.output<typeof systemSettingsDocSchema>;
 
@@ -690,6 +705,8 @@ export const retentionOutcomeSchema = z.strictObject({
   eligible: z.number().int().min(0),
   deleted: z.number().int().min(0),
   note: z.string().max(500),
+  /** The decision of the programme that a target follows instead of a configured period, where one does. */
+  decision: programmeDecisionSchema.exactOptional(),
 });
 export type RetentionOutcome = z.output<typeof retentionOutcomeSchema>;
 

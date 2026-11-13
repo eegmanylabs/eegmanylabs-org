@@ -21,6 +21,7 @@ import {
 import { Timestamp } from "firebase-admin/firestore";
 import { beforeEach, describe, expect, it } from "vitest";
 import { adminAuth, adminDb } from "../support/admin";
+import { recordConsent } from "../support/consent";
 import {
   account,
   administrator,
@@ -141,6 +142,7 @@ describe("the demographic aggregates", () => {
       await adminDb
         .doc(COLLECTIONS.personDemographics.docPath(id))
         .set({ ...standard(), genderCategory: category, recordedAt: Timestamp.now() });
+      await recordConsent(id);
     };
     for (let index = 0; index < 5; index += 1) {
       await seed(`person-trail-a-${index}`, "syntheticCategoryA");

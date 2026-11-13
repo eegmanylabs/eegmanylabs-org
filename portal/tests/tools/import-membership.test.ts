@@ -6,6 +6,7 @@ import { writeFileSync } from "node:fs";
 import path from "node:path";
 import {
   COLLECTION_ENTRIES,
+  COLLECTIONS,
   contributorId,
   contributorNameHash,
   contributorSheetSourceKey,
@@ -16,7 +17,7 @@ import {
   personEvidenceKey,
   sourceTabKey,
 } from "@eegml/shared";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { ALPHA_BETA_SHEET, contributorWorkbook } from "../../tools/src/import/fixtures/contributor-sheets";
 import {
@@ -38,8 +39,9 @@ import { rollbackBatch } from "../../tools/src/import/rollback";
 import { importer as contributorSheets } from "../../tools/src/import/sources/contributor-sheets";
 import { importer as membership } from "../../tools/src/import/sources/membership-workbook";
 import { importer as website } from "../../tools/src/import/sources/website-data";
-import { DEFAULT_TARGET, WITHHELD_OUTPUT_KEYS } from "../../tools/src/import/withheld";
+import { DEFAULT_TARGET, writesWithheld } from "../../tools/src/import/withheld";
 import { adminDb } from "../support/admin";
+import { recordConsent, recordConsents } from "../support/consent";
 import { importCli } from "./cli-support";
 import {
   allDocuments,
@@ -115,6 +117,11 @@ const holding = (documents: ReadonlyMap<string, StoredDocument>, values: readonl
 const items = itemBuilders(TEST_HASH_KEY);
 
 beforeEach(freshDatabase);
+// The four people of the workbook have given consent in the portal to holding their gender and ethnicity, which the
+// programme requires before an import stores either (docs/MIGRATION_PLAN.md, section 11, question 20). The tests of
+// people without consent remove it or name other people.
+const CONSENTING = () => [ADA, UMA, WES, ZED];
+beforeEach(() => recordConsents(CONSENTING()));
 afterAll(removeTemporaryDirectories);
 
 describe("the membership workbook importer", () => {
@@ -255,17 +262,19 @@ describe("the membership workbook importer", () => {
     }
     expect(await data(`persons/${ZED}/special/demographics`)).not.toHaveProperty("genderSource");
 
-    // A special-category value is found in three kinds of document only, each of which no client can read:
-    // the demographics of a person, the cells beside a source record, and the states beside a change-log entry.
+    // A special-category value is found in two kinds of document only, each of which no client can read: the
+    // demographics of a consenting person and the states beside a change-log entry. The cells of the three rows that
+    // wait in the queue are discarded, and the run counts them without naming anyone.
     const documents = await allDocuments();
     const withTerms = holding(documents, TERMS);
     expect(withTerms.length).toBeGreaterThan(0);
     for (const documentPath of withTerms) {
       expect(classOf(documentPath), documentPath).toBe("special");
       expect(documentPath).toMatch(
-        /^(persons\/[^/]+\/special\/demographics|sourceRecords\/[^/]+\/special\/raw|importBatches\/[^/]+\/changes\/\d+\/special\/state)$/,
+        /^(persons\/[^/]+\/special\/demographics|importBatches\/[^/]+\/changes\/\d+\/special\/state)$/,
       );
     }
+    expect(report.specialCategoryDiscarded).toBe(3);
     // The source record of a member row holds a marker in the place of each cell, and its special cells apart.
     const records = await adminDb.collection("sourceRecords").where("tabKey", "==", MEMBERS).get();
     const adaRecord = records.docs.find((doc) => doc.id === ada?.sourceRecordId);
@@ -297,9 +306,9 @@ describe("the membership workbook importer", () => {
     expect((await data(`importBatches/${report.batchId}`))?.stats).toMatchObject({ "created:personDemographics": 4 });
   });
 
-  it("keeps the cells of a row that creates no person where no client can read them, and queues the row", async () => {
+  it("discards the cells of a row that creates no person without storing them, and queues the row", async () => {
     await applyWebsite();
-    await runMembership(await workbookFile(), "apply");
+    const report = await runMembership(await workbookFile(), "apply");
     const queued = await openItems("duplicatePerson");
     // The row with a name alone, the two rows of one address, and the person whose name another source knows.
     expect(queued).toHaveLength(3);
@@ -308,12 +317,13 @@ describe("the membership workbook importer", () => {
       twins?.candidates.map((candidate: { sourceRecordId: string }) => candidate.sourceRecordId) ?? [];
     expect(twinRecords).toHaveLength(2);
     for (const recordId of twinRecords) {
-      // The special-category cells of a held row are beside its source record, and in no demographics document.
-      expect((await data(`sourceRecords/${recordId}/special/raw`))?.raw).toHaveProperty("H");
+      // The special-category cells of a held row are stored nowhere: its person is not known, so nobody has consented.
+      expect(await data(`sourceRecords/${recordId}/special/raw`)).toBeUndefined();
     }
-    // Only the three rows that wait have such a copy: the two rows of one address and the row with a name alone.
+    // The three rows that wait, the two rows of one address and the row with a name alone, are counted and named nowhere.
     const copies = [...(await allDocuments()).keys()].filter((key) => /^sourceRecords\/[^/]+\/special\/raw$/.test(key));
-    expect(copies).toHaveLength(3);
+    expect(copies).toEqual([]);
+    expect(report.specialCategoryDiscarded).toBe(3);
     const demographics = [...(await allDocuments()).keys()].filter((key) =>
       /^persons\/[^/]+\/special\/demographics$/.test(key),
     );
@@ -532,13 +542,13 @@ describe("a rollback of the membership workbook", () => {
     ]) {
       expect(afterRollback.has(documentPath), documentPath).toBe(false);
     }
-    // A source record states what the workbook said, so it stays. The special-category cells that the batch had
-    // stored beside the records of waiting rows go with the batch, and so do the states that its change log kept:
-    // after the rollback no special-category value of the workbook is left anywhere.
+    // A source record states what the workbook said, so it stays. No special-category cell was stored beside a
+    // record, and the states that the change log kept go with the batch: after the rollback no special-category value
+    // of the workbook is left anywhere.
     const raw = [...afterApply.keys()].filter((key) => key.startsWith("sourceRecords/"));
     const general = raw.filter((key) => !key.includes("/special/"));
     expect(general.length).toBeGreaterThan(0);
-    expect(raw.length - general.length).toBe(3);
+    expect(raw.length - general.length).toBe(0);
     for (const documentPath of general) expect(afterRollback.has(documentPath), documentPath).toBe(true);
     expect([...afterRollback.keys()].filter((key) => key.includes("/special/"))).toEqual([]);
     expect(holding(afterRollback, TERMS)).toEqual([]);
@@ -571,49 +581,97 @@ describe("special-category cells before and after a person exists", () => {
     ).toHaveLength(7);
     // What an apply would write is counted, special-category documents included.
     expect(preview.collections.personDemographics).toMatchObject({ created: 4 });
-    expect(preview.collections.sourceRecordSpecial).toMatchObject({ created: 3 });
+    expect(preview.collections.sourceRecordSpecial).toBeUndefined();
+    expect(preview.specialCategoryDiscarded).toBe(3);
   });
 
-  it("refuses the apply where the run does not rehearse the withheld output, and previews all the same", async () => {
+  it("applies on every target since the programme decided, and stores the values of consenting people alone", async () => {
     await applyWebsite();
     const file = await workbookFile();
-    for (const target of [DEFAULT_TARGET, { production: true, rehearse: WITHHELD_OUTPUT_KEYS }]) {
-      await expect(runMembership(file, "apply", { target })).rejects.toThrow(/question 20/);
+    // The answer to question 20 released the apply: values are held with consent, which the portal records.
+    for (const target of [DEFAULT_TARGET, { production: true, rehearse: [] }]) {
+      expect(writesWithheld(target, "demographics")).toBe(true);
     }
-    // A refused apply reads nothing: the website data wrote the only source records.
-    expect([...(await documentsOf("sourceRecords")).values()].filter((record) => record.sourceKey === "g")).toEqual([]);
-    expect((await runMembership(file, "preview", { target: DEFAULT_TARGET })).status).toBe("previewed");
-    expect(holding(await allDocuments(), TERMS)).toEqual([]);
+    await adminDb.doc(`persons/${UMA}/private/demographicsConsent`).delete();
+    const report = await runMembership(file, "apply", { target: DEFAULT_TARGET });
+    expect(report.status).toBe("applied");
+    expect(report.collections.personDemographics).toMatchObject({ created: 3 });
+    // Uma has not consented: her terms are discarded with those of the three waiting rows, and stored nowhere.
+    expect(report.specialCategoryDiscarded).toBe(4);
+    expect(await data(`persons/${UMA}/special/demographics`)).toBeUndefined();
+    expect(await data(`persons/${UMA}`)).toBeDefined();
+    expect(holding(await allDocuments(), [GENDER_TERM_TWO])).toEqual([]);
+    for (const value of ["Uma", UMA, ...TERMS]) expect(JSON.stringify(report), value).not.toContain(value);
+
+    // Uma gives her consent in the portal. The next apply of the same file picks her terms up.
+    await recordConsent(UMA);
+    const later = await runMembership(file, "apply", { target: DEFAULT_TARGET });
+    expect(later.collections.personDemographics).toMatchObject({ created: 1 });
+    expect(later.specialCategoryDiscarded).toBe(3);
+    expect((await data(`persons/${UMA}/special/demographics`))?.genderSource).toBe(GENDER_TERM_TWO);
   });
 
-  it("moves the cells of a waiting row into the demographics document once its person exists, in one batch that a rollback reverses", async () => {
+  it("stores the terms of a waiting row once its person exists and has consented, in a batch that a rollback reverses", async () => {
     await applyWebsite();
     await runMembership(await workbookFile(), "apply");
-    const before = await specialCopies();
-    expect(before).toHaveLength(3);
+    expect(await specialCopies()).toEqual([]);
     // The second of the two rows with one address is taken out of the workbook, so the first names one person.
     const without = await workbookFile({ members: MEMBER_ROWS.filter((_row, index) => index !== 5) });
-    const report = await runMembership(without, "apply");
     const yan = personOf("yan.twin@example.org");
+    const resolved = await runMembership(without, "apply");
+    // Yan now exists and has not consented, so his terms are still discarded.
+    expect(await data(`persons/${yan}`)).toBeDefined();
+    expect(await data(`persons/${yan}/special/demographics`)).toBeUndefined();
+    expect(resolved.specialCategoryDiscarded).toBe(2);
+    await recordConsent(yan);
+    const report = await runMembership(without, "apply");
     expect((await data(`persons/${yan}/special/demographics`))?.genderSource).toBe(GENDER_TERM_ONE);
-    expect(report.collections.sourceRecordSpecial).toMatchObject({ created: 0, removed: 1 });
-    const after = await specialCopies();
-    expect(after).toHaveLength(2);
-    const [moved] = before.filter((documentPath) => !after.includes(documentPath));
-    expect((await data(`persons/${yan}/special/demographics`))?.sourceRecordId).toBe(moved?.split("/")[1]);
-    // The removal is a change with a log entry, which names the collection and no record.
-    const changes = await adminDb.collection(`importBatches/${report.batchId}/changes`).get();
-    const removal = changes.docs.find((doc) => doc.get("operation") === "delete");
-    expect(removal?.data()).toMatchObject({
-      documentPath: "sourceRecords/{id}/special/raw",
-      before: { specialCategory: true },
-      after: null,
-    });
-    // A rollback of that batch takes the person away again and puts the cells back beside the record.
+    expect(report.collections.personDemographics).toMatchObject({ created: 1 });
+    expect(report.collections.sourceRecordSpecial).toBeUndefined();
+    const recordId = (await data(`persons/${yan}/special/demographics`))?.sourceRecordId;
+    expect((await data(`sourceRecords/${recordId}`))?.tabKey).toBe(MEMBERS);
+    expect(await specialCopies()).toEqual([]);
+    // A rollback of that batch takes the values away again, and leaves no copy of them.
     expect(await rollbackBatch(adminDb, report.batchId)).toMatchObject({ status: "rolledBack" });
     expect(await data(`persons/${yan}/special/demographics`)).toBeUndefined();
-    expect(await specialCopies()).toEqual(before);
-    expect((await data(moved ?? ""))?.raw).toHaveProperty("H");
+    expect(holding(await allDocuments(), [GENDER_TERM_ONE]).filter((key) => key.includes(yan))).toEqual([]);
+  });
+
+  it("removes a copy that an apply kept beside a source record before consent was required", async () => {
+    await applyWebsite();
+    const file = await workbookFile();
+    await runMembership(file, "apply");
+    const records = await adminDb.collection("sourceRecords").where("tabKey", "==", MEMBERS).get();
+    const record = records.docs.find((doc) => doc.get("raw")?.H?.t === "specialCategory");
+    const copy = `sourceRecords/${record?.id}/special/raw`;
+    const now = Timestamp.now();
+    await adminDb.doc(copy).set({
+      schemaVersion: 1,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: "system:import",
+      updatedBy: "system:import",
+      archivedAt: null,
+      writeContext: { origin: "import", depth: 0, correlationId: null, causationId: null, auditEventId: null },
+      sourceRecordId: record?.id,
+      raw: { H: { t: "s", v: GENDER_TERM_ONE } },
+    });
+    const report = await runMembership(file, "apply");
+    expect(report.collections.sourceRecordSpecial).toMatchObject({ removed: 1 });
+    expect(await data(copy)).toBeUndefined();
+    // The removal is for good: its entry keeps no state of the cells, and says so.
+    const entries = await adminDb.collection(`importBatches/${report.batchId}/changes`).get();
+    const removal = entries.docs.find((entry) => entry.get("operation") === "delete");
+    expect(removal?.data()).toMatchObject({ irreversible: true, before: { specialCategory: true }, after: null });
+    expect(
+      (await adminDb.doc(`importBatches/${report.batchId}/changes/${removal?.id}/special/state`).get()).exists,
+    ).toBe(false);
+    expect(holding(await allDocuments(), [GENDER_TERM_ONE]).filter((key) => key.includes(record?.id ?? ""))).toEqual(
+      [],
+    );
+    // A rollback of the batch leaves the cells removed.
+    expect(await rollbackBatch(adminDb, report.batchId)).toMatchObject({ status: "rolledBack", discarded: 1 });
+    expect(await data(copy)).toBeUndefined();
   });
 
   it("gives two people with one term different keys in the queue, so that nobody can sort people by an equal value", async () => {
@@ -626,9 +684,10 @@ describe("special-category cells before and after a person exists", () => {
         ethnicity: "an invented term",
       },
     }));
+    const people = three.map((member) => personOf(String(member.cells.email)));
+    await recordConsents(people);
     await runMembership(await workbookFile({ members: three }), "apply");
     // A function records another term for each of the three. The workbook then states one new term for all of them.
-    const people = three.map((member) => personOf(String(member.cells.email)));
     for (const id of people) {
       await adminDb
         .doc(`persons/${id}/special/demographics`)
@@ -671,8 +730,8 @@ describe("special-category cells before and after a person exists", () => {
     await applyWebsite();
     const applied = await runMembership(await workbookFile(), "apply");
     const result = await purgeSpecial(adminDb, { sourceKey: "g" });
-    // The cells of the three waiting rows, and the states of the four demographics documents and of those three copies.
-    expect(result).toEqual({ cellsRemoved: 3, statesRemoved: 7 });
+    // No cell was kept beside a record. The states of the four demographics documents go.
+    expect(result).toEqual({ cellsRemoved: 0, statesRemoved: 4 });
     const documents = await allDocuments();
     for (const documentPath of holding(documents, TERMS)) {
       expect(documentPath).toMatch(/^persons\/[^/]+\/special\/demographics$/);
@@ -682,6 +741,20 @@ describe("special-category cells before and after a person exists", () => {
     const refused = await rollbackBatch(adminDb, applied.batchId);
     expect(refused.status).toBe("refused");
     expect((await data(`persons/${ADA}/special/demographics`))?.genderSource).toBe(GENDER_TERM_ONE);
+  });
+
+  it("removes, across every batch, the kept states of people whose consent is no longer in force, and no others", async () => {
+    await applyWebsite();
+    await runMembership(await workbookFile(), "apply");
+    // Ada withdraws. The withdrawal itself removes her copies in the portal; here her record of consent alone goes,
+    // as after a restore of a backup taken before the withdrawal, so that her kept state is still there.
+    await adminDb.doc(COLLECTIONS.personDemographicsConsent.docPath(ADA)).delete();
+    const result = await purgeSpecial(adminDb, { withoutConsent: true });
+    expect(result).toEqual({ cellsRemoved: 0, statesRemoved: 1 });
+    const kept = holding(await allDocuments(), TERMS).filter((documentPath) => documentPath.includes("/special/state"));
+    expect(kept).toHaveLength(3);
+    // A second pass finds nothing more.
+    expect(await purgeSpecial(adminDb, { withoutConsent: true })).toEqual({ cellsRemoved: 0, statesRemoved: 0 });
   });
 });
 
@@ -697,8 +770,9 @@ describe("a member row and the person it names", () => {
         gender: "an invented term",
       },
     };
-    await runMembership(await workbookFile({ members: [known] }), "apply");
     const nell = personOf("nell.namesake@example.org");
+    await recordConsent(nell);
+    await runMembership(await workbookFile({ members: [known] }), "apply");
     const before = await allDocuments();
     // A second row of the same name and affiliation, without an address, with another term and another address elsewhere.
     const nameOnly: MemberRow = {
@@ -731,9 +805,11 @@ describe("a member row and the person it names", () => {
       `g/${MEMBERS}`,
       "basis/nameAffiliation",
     ]);
-    // Its special-category cell is kept beside its source record, where no client reads it.
+    // Its special-category cell is discarded: a row that names nobody for certain stores no term anywhere.
     const waiting = ((item?.candidates ?? []) as { sourceRecordId?: string }[])[0]?.sourceRecordId;
-    expect((await data(`sourceRecords/${waiting}/special/raw`))?.raw).toHaveProperty("H");
+    expect(await data(`sourceRecords/${waiting}/special/raw`)).toBeUndefined();
+    expect(holding(await allDocuments(), ["another invented term"])).toEqual([]);
+    expect(report.specialCategoryDiscarded).toBe(1);
   });
 
   it("imports neither of two rows that name one person through different addresses, and fails on neither", async () => {
@@ -875,23 +951,18 @@ describe("the command line with the membership workbook", () => {
     writeFileSync(config, JSON.stringify({ hashKey: TEST_HASH_KEY, sources: LOCATIONS }));
     const file = await workbookFile();
     const common = ["run", "g", "--input", file, "--observed-on", OBSERVED_ON, "--config", config, "--mode"];
-    // No demographic value is imported before the lawful basis for holding it is recorded: the apply is withheld.
-    const withheld = importCli([...common, "apply"]);
-    expect(withheld.status).toBe(2);
-    expect(withheld.stderr).toContain("the member rows with their special-category data are withheld");
-    expect(withheld.stderr).toContain("question 20");
-    // A preview is possible, and it stores no special-category value anywhere.
+    // A preview stores no special-category value anywhere.
     const previewed = importCli([...common, "preview"]);
     expect(previewed.status).toBe(0);
     expect(holding(await allDocuments(), TERMS)).toEqual([]);
-    // This emulator rehearses the withheld output, as its private configuration says.
-    writeFileSync(config, JSON.stringify({ hashKey: TEST_HASH_KEY, sources: LOCATIONS, rehearse: ["demographics"] }));
+    // The apply is released by the answer to question 20, with no rehearsal named: values are stored with consent.
     const applied = importCli([...common, "apply"]);
     expect(applied.stderr).toBe("");
     expect(applied.status).toBe(0);
     expect(applied.stdout).toContain("import apply of source g");
     expect(applied.stdout).toContain("Data rows: 4 imported, 3 held in the queue");
     expect(applied.stdout).toContain("personDemographics: 4 created");
+    expect(applied.stdout).toContain("3 rows had gender or ethnicity that was discarded without storing it");
     for (const value of [...TERMS, ...ADDRESS_PARTS, "Ada", "Synthetic", "Nowhere", "ExampleAmp", "spreadsheets"]) {
       expect(applied.output, value).not.toContain(value);
     }

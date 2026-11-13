@@ -483,6 +483,8 @@ export function quireReport(input: ImportInput): { readonly data: unknown; reado
 
 export const importer: ImporterDefinition = {
   key: "quire",
+  // An exported file that an administrator supplies, read from outside the repository alone (decision 7).
+  localExport: true,
   sourceKey: SOURCE_KEY,
   summary: "Quire: projects, nested tasks, assignees, dates, statuses, tags and comments",
   inputDescription: "the JSON dump of a read-only pull through the Quire interface",

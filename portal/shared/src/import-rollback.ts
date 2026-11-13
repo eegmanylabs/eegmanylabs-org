@@ -11,11 +11,48 @@
 // since is left as it is. A document already in its earlier state counts as reversed, so a
 // rollback that stopped part-way is carried on by planning it again.
 
+/**
+ * The markers that stand in the change log for the states of a document that no reader of the
+ * log may see: a special-category document, and a document that a decision of the programme
+ * seals. The two states are kept beside the entry, where no client reads them, and a rollback
+ * restores them from there.
+ */
+export const WITHHELD_STATE_MARKERS = ["specialCategory", "sealed"] as const;
+export type WithheldStateMarker = (typeof WITHHELD_STATE_MARKERS)[number];
+
+/** Whether a state of the change log is a marker in place of the real state. */
+export function isWithheldState(state: unknown): boolean {
+  if (typeof state !== "object" || state === null) return false;
+  return WITHHELD_STATE_MARKERS.some((marker) => (state as Record<string, unknown>)[marker] === true);
+}
+
 /** One entry of the change log: the document and its imported fields before and after the batch. */
 export interface ChangeState {
   readonly path: string;
   readonly before: Readonly<Record<string, unknown>> | null;
   readonly after: Readonly<Record<string, unknown>> | null;
+  /** A removal that no rollback undoes, whose entry keeps no state. */
+  readonly irreversible?: boolean;
+}
+
+/**
+ * Whose gender and ethnicity a document of the change log holds, where it holds them: the values
+ * of a person, or the special-category cells kept beneath a source record. Since the programme
+ * decided that the values are held only with consent (question 20), cells live in a person's
+ * values document alone: a rollback never writes a copy beneath a source record back, and writes
+ * a person's values back only while their consent is in force, which each executor reads first.
+ */
+export function specialSubjectOf(
+  path: string,
+):
+  | { readonly kind: "person"; readonly personId: string }
+  | { readonly kind: "sourceRecord"; readonly recordId: string }
+  | null {
+  const person = /^persons\/([^/]+)\/special\/demographics$/.exec(path);
+  if (person?.[1] !== undefined) return { kind: "person", personId: person[1] };
+  const record = /^sourceRecords\/([^/]+)\/special\/raw$/.exec(path);
+  if (record?.[1] !== undefined) return { kind: "sourceRecord", recordId: record[1] };
+  return null;
 }
 
 /**
@@ -27,6 +64,7 @@ export interface ChangeState {
  * | `restoreItem` | Writes the earlier state of a reconciliation item over it                    |
  * | `withdraw`    | Closes a reconciliation item that the batch raised as withdrawn              |
  * | `keep`        | Nothing: a reviewer has decided the item since, and the decision stands      |
+ * | `discard`     | Nothing: the batch removed special-category values for good, or the step would write gender or ethnicity back for a person whose consent is not in force |
  * | `skip`        | Nothing: an earlier attempt has reversed the document already, or the batch matched it and changed nothing |
  */
 export type RollbackStep =
@@ -41,6 +79,7 @@ export type RollbackStep =
   | { readonly kind: "restoreItem"; readonly path: string; readonly data: Readonly<Record<string, unknown>> }
   | { readonly kind: "withdraw"; readonly path: string }
   | { readonly kind: "keep"; readonly path: string }
+  | { readonly kind: "discard"; readonly path: string }
   | { readonly kind: "skip"; readonly path: string };
 
 export interface RollbackCounts {
@@ -48,6 +87,8 @@ export interface RollbackCounts {
   readonly removed: number;
   readonly itemsWithdrawn: number;
   readonly itemsLeft: number;
+  /** Special-category documents that are not written back: removed for good, or of a person without consent. */
+  readonly discarded: number;
 }
 
 export type RollbackPlan =
@@ -63,9 +104,17 @@ export interface RollbackPlanInput {
   readonly equal: (a: unknown, b: unknown) => boolean;
   /** The path prefix of the reconciliation items, which are withdrawn instead of restored. */
   readonly itemsPrefix: string;
+  /** The special-category documents of the log whose person has no consent in force, which are never written back. */
+  readonly withoutConsent?: ReadonlySet<string>;
 }
 
-export function planBatchRollback({ states, current, equal, itemsPrefix }: RollbackPlanInput): RollbackPlan {
+export function planBatchRollback({
+  states,
+  current,
+  equal,
+  itemsPrefix,
+  withoutConsent = new Set(),
+}: RollbackPlanInput): RollbackPlan {
   const isItem = (path: string) => path.startsWith(itemsPrefix);
   const stored = (path: string) => current.get(path) ?? null;
   const holds = (state: ChangeState, wanted: Readonly<Record<string, unknown>> | null) =>
@@ -76,15 +125,21 @@ export function planBatchRollback({ states, current, equal, itemsPrefix }: Rollb
     (holds(state, state.before) ||
       (isItem(state.path) && state.before === null && stored(state.path)?.status === "withdrawn"));
 
+  // Gender and ethnicity go back only where they may be held: never after a removal for good, and never for a person
+  // without consent, whatever the document holds now.
+  const discarded = (state: ChangeState) =>
+    state.irreversible === true || (withoutConsent.has(state.path) && state.before !== null);
   const changedDocuments = states
-    .filter((state) => !isItem(state.path) && !unchangedSince(state) && !reversed(state))
+    .filter((state) => !isItem(state.path) && !discarded(state) && !unchangedSince(state) && !reversed(state))
     .map((state) => state.path);
   if (changedDocuments.length > 0) return { status: "refused", changedDocuments: [...changedDocuments].sort() };
 
   const steps: RollbackStep[] = [];
   for (const state of states) {
     const { path } = state;
-    if (reversed(state)) {
+    if (discarded(state)) {
+      steps.push({ kind: "discard", path });
+    } else if (reversed(state)) {
       steps.push({ kind: "skip", path });
     } else if (isItem(path)) {
       if (stored(path) === null) steps.push({ kind: "skip", path });
@@ -116,6 +171,7 @@ export function planBatchRollback({ states, current, equal, itemsPrefix }: Rollb
       removed: count("remove"),
       itemsWithdrawn: count("withdraw"),
       itemsLeft: count("keep"),
+      discarded: count("discard"),
     },
   };
 }

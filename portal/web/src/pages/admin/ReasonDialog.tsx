@@ -20,6 +20,8 @@ export interface ReasonDialogProps {
   /** The fewest characters the text holds, where it is not optional. */
   minLength?: number;
   confirmLabel: string;
+  /** What the field says when its text is missing or too long, where the default sentence would not read well. */
+  lengthMessage?: string;
   /** Controls shown above the text field, such as a choice of outcome. */
   children?: ReactNode;
   /** False while those controls hold a value that cannot be sent; they say why themselves. */
@@ -43,6 +45,7 @@ export function ReasonDialog({
   maxLength = 2_000,
   minLength = 1,
   confirmLabel,
+  lengthMessage,
   children,
   canConfirm = true,
   onConfirm,
@@ -67,9 +70,10 @@ export function ReasonDialog({
     if (!canConfirm) return;
     if ((!optional && trimmed.length < minLength) || trimmed.length > maxLength) {
       setError(
-        minLength > 1
-          ? `Enter ${minLength} to ${maxLength.toLocaleString("en-GB")} characters.`
-          : `Enter a ${label.toLowerCase()}, up to ${maxLength.toLocaleString("en-GB")} characters.`,
+        lengthMessage ??
+          (minLength > 1
+            ? `Enter ${minLength} to ${maxLength.toLocaleString("en-GB")} characters.`
+            : `Enter a ${label.toLowerCase()}, up to ${maxLength.toLocaleString("en-GB")} characters.`),
       );
       return;
     }

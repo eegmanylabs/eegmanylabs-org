@@ -13,6 +13,7 @@
 // below is run by the importer's own code, exactly as an import of the membership workbook would
 // run it. That seeding is the only use of the Admin SDK here: every read of the attack goes
 // through the client SDK and the rules.
+import { CURRENT_DEMOGRAPHICS_CONSENT, DEMOGRAPHICS_CONSENT_DECISION } from "@eegml/shared";
 import type { RulesTestEnvironment } from "@firebase/rules-unit-testing";
 import { collectionGroup, doc, getDoc, getDocs, limit, query, type Timestamp, where } from "firebase/firestore";
 import { deleteApp, initializeApp } from "firebase-admin/app";
@@ -76,9 +77,22 @@ beforeAll(async () => {
     [`importBatches/${BATCH}`]: { ...FIXTURES.importBatches?.seed, sourceKey: "g", status: "running", stats: {} },
   });
 
-  // The import itself: preview and apply, by the code that every importer runs.
+  // The import itself: preview and apply, by the code that every importer runs. The person has consented, without
+  // which the apply writes no value at all (question 20).
   const now = AdminTimestamp.fromMillis(Date.now());
   const context: RunContext = { db: getFirestore(adminApp), sourceKey: "g", batchId: BATCH, now };
+  await context.db.doc(`persons/${PERSON}/private/demographicsConsent`).set({
+    ...createdFields(now),
+    schemaVersion: 1,
+    personId: PERSON,
+    uid: "uid-synthetic-demographics",
+    status: "given",
+    wordingVersion: CURRENT_DEMOGRAPHICS_CONSENT.version,
+    givenAt: now,
+    withdrawnAt: null,
+    history: [],
+    basis: DEMOGRAPHICS_CONSENT_DECISION,
+  });
   const diff = await comparePlan(context, plannedDemographics(TRUE_GENDER, TRUE_ETHNICITY, now), {
     ownRecordIds: new Set([SOURCE_RECORD]),
     items: itemBuilders(HASH_KEY),
@@ -132,14 +146,25 @@ describe("the change log of an import that wrote a demographics document", () =>
 
   it("does not let a reader who lacks demographics.read confirm a guess of the values", async () => {
     const db = firestoreOf(environment, CALLERS.coreTeam);
-    // The change log is searched by the path of the document, as the data model describes. The
-    // entry of a special-category document does not name the person: it names the collection.
+    // The change log is searched by the path of the document, as the data model describes, among the
+    // entries that are not sealed, which is what the core team may list. The entry of a
+    // special-category document does not name the person: it names the collection.
     const byPerson = await getDocs(
-      query(collectionGroup(db, "changes"), where("documentPath", "==", DEMOGRAPHICS), limit(5)),
+      query(
+        collectionGroup(db, "changes"),
+        where("documentPath", "==", DEMOGRAPHICS),
+        where("sealed", "==", false),
+        limit(5),
+      ),
     );
     expect(byPerson.empty).toBe(true);
     const found = await getDocs(
-      query(collectionGroup(db, "changes"), where("documentPath", "==", DEMOGRAPHICS_COLLECTION), limit(5)),
+      query(
+        collectionGroup(db, "changes"),
+        where("documentPath", "==", DEMOGRAPHICS_COLLECTION),
+        where("sealed", "==", false),
+        limit(5),
+      ),
     );
     const entry = found.docs[0]?.data() as
       | { createdAt: Timestamp; after: { specialCategory?: boolean; sha256: string } }

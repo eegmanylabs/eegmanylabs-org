@@ -1030,12 +1030,8 @@ describe("the command line with a contributor sheet", () => {
     expect(unregistered.status).toBe(2);
     expect(unregistered.stderr).toContain("registers no contributor sheet");
 
-    // Every member could read an applied list, so the apply is withheld. A preview is possible.
-    const withheld = importCli([...base, "--sheet", "alpha-beta"]);
-    expect(withheld.status).toBe(2);
-    expect(withheld.stderr).toContain("the contributor lists, which every member could read, are withheld");
-    expect(withheld.stderr).toContain("question 10");
-    expect((await documentsOf("contributors")).size).toBe(0);
+    // The programme decided that the team of the replication reads the lists (question 10), so the apply is
+    // released on every target and needs no rehearsal. A preview writes nothing.
     const previewed = importCli([
       ...base.map((argument) => (argument === "apply" ? "preview" : argument)),
       "--sheet",
@@ -1045,8 +1041,6 @@ describe("the command line with a contributor sheet", () => {
     expect(previewed.stdout).toContain("contributors: 6 to create");
     expect((await documentsOf("contributors")).size).toBe(0);
 
-    // This emulator rehearses the withheld output, as its private configuration says.
-    writeFileSync(config, JSON.stringify({ ...configWith(), rehearse: ["contributorLists"] }));
     const applied = importCli([...base, "--sheet", "alpha-beta"]);
     expect(applied.stderr).toBe("");
     expect(applied.status).toBe(0);
@@ -1090,7 +1084,6 @@ describe("the command line with a contributor sheet", () => {
       config,
       JSON.stringify({
         ...configWith(),
-        rehearse: ["contributorLists"],
         contributorSheets: { ...sheets, "alpha-beta": { ...sheets["alpha-beta"], baseline } },
       }),
     );

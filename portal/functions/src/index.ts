@@ -6,11 +6,11 @@
 // | Account claims      | `claimProfile`, `requestAccess`, `listAccountClaims`, `reviewAccountClaim`, `unlinkAccountClaim`, `recoverAccount` |
 // | Roles and accounts  | `setRoleAssignment`, `setCapabilityGrant`, `setRoleCapabilityOverride`, `setUserStatus`, `listUsers` |
 // | Audit trail         | `listAuditEvents`                                                          |
-// | Governance          | `exportPersonData`, `requestErasure`, `decideErasure`, `listErasureRequests`, `getAccessReview`, `attestAccessReview`, `getRetention`, `setRetentionPeriod`, `runRetentionSweep`, and the scheduled `retentionSweep` |
+// | Governance          | `exportPersonData`, `requestErasure`, `decideErasure`, `listErasureRequests`, `getAccessReview`, `attestAccessReview`, `getRetention`, `setRetentionPeriod`, `runRetentionSweep`, `markMigrationVerified`, and the scheduled `retentionSweep` |
 // | Laboratories        | `requestLabClaim`, `withdrawLabClaim`, `reviewLabClaim`, `createLaboratory`, `saveEquipmentConfiguration` |
 // | Participations      | `createParticipation`, `setParticipationStatus`                            |
 // | Imports             | `resolveReconciliationItem`, `rollbackImportBatch`                         |
-// | Records of people   | `resolveCorrectionRequest`, `getPersonDemographics`, `setPersonOrcid`, `confirmLaboratoryMembership`, `confirmReplicationMembership` |
+// | Records of people   | `resolveCorrectionRequest`, `getPersonDemographics`, `setDemographicsConsent`, `saveOwnDemographics`, `setPersonOrcid`, `confirmLaboratoryMembership`, `confirmReplicationMembership` |
 // | Replications        | `setReplicationStatus`, `editReplicationCitation`                          |
 // | Workspace           | `createPage`, `openEntityPage`, `movePage`, `setPageSharing`, `getPageSharing`, `savePageVersion`, `searchWorkspace` |
 // | Databases and views | `createDatabase`, `saveProperty`, `saveRecords`, `saveView`, `openDashboard`, `saveDashboard` |
@@ -75,6 +75,7 @@ export { createPage } from "./callables/createPage";
 export { createParticipation } from "./callables/createParticipation";
 export { createTask } from "./callables/createTask";
 export { createTaskList } from "./callables/createTaskList";
+export { saveOwnDemographics, setDemographicsConsent } from "./callables/demographicsConsent";
 export { editReplicationCitation } from "./callables/editReplicationCitation";
 export { endAllSessions } from "./callables/endAllSessions";
 export { decideErasure, listErasureRequests, requestErasure } from "./callables/erasure";
@@ -121,7 +122,7 @@ export { resolveReconciliationItem } from "./callables/resolveReconciliationItem
 export { resolveSyncConflict } from "./callables/resolveSyncConflict";
 export { resolveSyncReviewItem } from "./callables/resolveSyncReviewItem";
 export { respondToAuthorshipEntry } from "./callables/respondToAuthorshipEntry";
-export { getRetention, runRetentionSweep, setRetentionPeriod } from "./callables/retention";
+export { getRetention, markMigrationVerified, runRetentionSweep, setRetentionPeriod } from "./callables/retention";
 export { reviewAccountClaim } from "./callables/reviewAccountClaim";
 export { reviewLabClaim } from "./callables/reviewLabClaim";
 export { rollbackImportBatch } from "./callables/rollbackImportBatch";

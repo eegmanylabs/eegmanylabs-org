@@ -4,16 +4,37 @@
 // operator has typed the project identifier again at an interactive terminal.
 //
 //   node ops/<procedure>.mjs --project <identifier> [other options]            print only
-//   node ops/<procedure>.mjs --project <identifier> [other options] --execute  print, confirm, run
+//   node ops/<procedure>.mjs --project <identifier> [other options] \
+//     --approver "<name>" --approve                                              the approver: print the token
+//   node ops/<procedure>.mjs --project <identifier> [other options] \
+//     --operator "<name>" --approver "<name>" [--approval-token <token>] --execute  print, confirm, run
+//
+// A plan is approved before it runs, and the operator and the approver are named on the command
+// line; the printed plan states the approval and ends with the record of it that the operator
+// keeps in the private operations log (docs/DEPLOYMENT.md). The two are normally two people. The
+// programme lead decided on 13 November 2026 to act as both for now (docs/DECISIONS.md, answers
+// of 13 November 2026, deployment roles), so a single-person approval is accepted for staging,
+// where the plan and the record say so. Production still waits for a second administrator:
+//
+// | Check on production                                                                          |
+// |----------------------------------------------------------------------------------------------|
+// | `approvers` of ops/environments.mjs, a reviewed list, names at least two people              |
+// | The operator and the approver are two different entries of that list, compared without case, accents, spaces or punctuation |
+// | The approver has run the plan with `--approve`, which prints a token bound to the plan and to their name, and the operator passes it with `--approval-token` |
+//
+// While the list names fewer than two people, every production plan is refused. A name typed on
+// the command line identifies nobody, so the token is no proof of who ran `--approve`: it binds the
+// approval to the exact plan, and the operations log records it.
 //
 // Nothing in this repository runs a procedure with --execute: the tests call the planning
 // functions alone, and no workflow file names these scripts.
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { closeSync, openSync } from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
-import { isPlaceholder } from "./environments.mjs";
+import { ENVIRONMENTS, isPlaceholder } from "./environments.mjs";
 
 /** The portal's directory, where every procedure runs its commands. */
 export const PORTAL_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -104,6 +125,171 @@ export function requireProject(options, name = "project") {
   return projectId;
 }
 
+/** The decision that lets one person operate and approve a procedure on staging. */
+export const SINGLE_PERSON_STAGING_DECISION = Object.freeze({
+  decidedBy: "programmeLead",
+  decidedOn: "2026-11-13",
+  reference: "docs/DECISIONS.md, answers of 13 November 2026, deployment roles",
+});
+
+/**
+ * Who runs a plan and who approved it. `singlePerson` is true where one person is both, which is
+ * accepted for staging alone and carries the decision that allows it. `token` is what the approver's
+ * own `--approve` run printed, which production needs.
+ * @typedef {{
+ *   environment: "staging" | "production",
+ *   operator: string,
+ *   approver: string,
+ *   singlePerson: boolean,
+ *   basis: typeof SINGLE_PERSON_STAGING_DECISION | null,
+ *   token: string | null,
+ * }} Approval
+ */
+
+/**
+ * The form of a name in which two spellings of one person are equal: decomposed, without accents,
+ * letters alone, in lower case. "Synthétic-Lead." and "synthetic lead" are one name.
+ * @param {string} name
+ */
+export function canonicalName(name) {
+  return name
+    .normalize("NFKD")
+    .replace(/\p{M}+/gu, "")
+    .replace(/[^\p{L}]+/gu, "")
+    .toLocaleLowerCase("en-GB");
+}
+
+const SECOND_APPROVER_REFUSAL =
+  "Refusing: production needs a second named approver, a person other than the operator, and both must be on the " +
+  "reviewed list of approvers in ops/environments.mjs (docs/DEPLOYMENT.md). The programme lead decided on 13 November 2026 " +
+  "that production waits for a second administrator. Nothing has been run.";
+
+/**
+ * The reviewed list of approvers of an environment.
+ * @param {"staging" | "production"} environment
+ * @returns {readonly string[]}
+ */
+export function approversOf(environment) {
+  return ENVIRONMENTS[environment].approvers;
+}
+
+/**
+ * The name of a person given with an option: letters, spaces, full stops, hyphens and
+ * apostrophes, so that an address or anything else that identifies an account never reaches the
+ * printed plan or the operations log.
+ * @param {Map<string, string>} options
+ * @param {"operator" | "approver"} name
+ */
+function personNamed(options, name) {
+  const value = (options.get(name) ?? "").trim().replace(/\s+/g, " ");
+  if (value === "") throw new ProcedureRefusal(`Refusing: --${name} "<name>" is required to run a plan.`);
+  if (value.length > 100 || !/^\p{L}[\p{L} .'-]*$/u.test(value)) {
+    throw new ProcedureRefusal(
+      `Refusing: --${name} is the name of a person, in letters, not an address or an identifier.`,
+    );
+  }
+  return value;
+}
+
+/**
+ * Refuses an approver who is not a production approver. Production needs a reviewed list of at
+ * least two people, and the name must be one of them.
+ * @param {string} name
+ * @param {readonly string[]} approvers
+ */
+function requireListed(name, approvers) {
+  const listed = new Set(approvers.map(canonicalName));
+  if (listed.size < 2 || !listed.has(canonicalName(name))) throw new ProcedureRefusal(SECOND_APPROVER_REFUSAL);
+}
+
+/**
+ * The approval of a plan. On production it is refused unless the operator and the approver are
+ * two different people of the reviewed list of approvers, which must name at least two.
+ * @param {"staging" | "production"} environment
+ * @param {Map<string, string>} options
+ * @param {readonly string[]} [approvers] The reviewed list; ops/environments.mjs by default.
+ * @returns {Approval}
+ */
+export function requireApproval(environment, options, approvers = approversOf(environment)) {
+  const operator = personNamed(options, "operator");
+  const approver = personNamed(options, "approver");
+  const singlePerson = canonicalName(operator) === canonicalName(approver);
+  if (environment === "production") {
+    if (singlePerson) throw new ProcedureRefusal(SECOND_APPROVER_REFUSAL);
+    requireListed(operator, approvers);
+    requireListed(approver, approvers);
+  }
+  const token = options.get("approval-token")?.trim() ?? "";
+  return {
+    environment,
+    operator,
+    approver,
+    singlePerson,
+    basis: singlePerson ? SINGLE_PERSON_STAGING_DECISION : null,
+    token: token === "" ? null : token,
+  };
+}
+
+/**
+ * The token of an approval: the approver's name and a digest of the exact plan. The approver
+ * prints it with `--approve`, and a production plan runs only with it.
+ * @param {string} approver
+ * @param {string} projectId
+ * @param {readonly PlannedCommand[]} commands
+ */
+export function approvalToken(approver, projectId, commands) {
+  const digest = createHash("sha256")
+    .update(JSON.stringify({ projectId, commands: commands.map(commandLine) }))
+    .digest("hex")
+    .slice(0, 20);
+  return `${canonicalName(approver)}-${digest}`;
+}
+
+/**
+ * The record of an approval that the operator keeps in the private operations log, with the
+ * printed plan. It names people and the project, never an address.
+ * @param {Approval} approval
+ * @param {string} projectId
+ * @param {readonly PlannedCommand[]} commands
+ */
+export function approvalRecord(approval, projectId, commands) {
+  return {
+    environment: approval.environment,
+    projectId,
+    operator: approval.operator,
+    approver: approval.approver,
+    singlePersonApproval: approval.singlePerson,
+    basis: approval.basis,
+    commands: commands.length,
+    ...(approval.token === null ? {} : { approvalToken: approval.token }),
+  };
+}
+
+/**
+ * What the printed plan says of its approval.
+ * @param {Approval | null} approval
+ * @param {string} projectId
+ * @param {readonly PlannedCommand[]} commands
+ * @returns {string[]}
+ */
+export function approvalLines(approval, projectId, commands) {
+  if (approval === null) {
+    return ['# Approval: not recorded. --execute needs --operator "<name>" and --approver "<name>".'];
+  }
+  const lines = [
+    `# Approval for ${approval.environment}: operated by ${approval.operator}, approved by ${approval.approver}.`,
+  ];
+  if (approval.singlePerson && approval.basis !== null) {
+    lines.push(
+      `# Single-person approval: one person operates and approves this plan, which is accepted for staging alone ` +
+        `(decided by the programme lead on ${approval.basis.decidedOn}, ${approval.basis.reference}). ` +
+        "Production still needs a second named approver.",
+    );
+  }
+  lines.push(`# Record for the operations log: ${JSON.stringify(approvalRecord(approval, projectId, commands))}`);
+  return lines;
+}
+
 /**
  * A value of the plan that must have been supplied, refused while it is a placeholder.
  * @param {string} label
@@ -178,17 +364,32 @@ function run(command) {
 }
 
 /**
- * Prints the plan, and with --execute asks for the project identifier at a terminal and runs the
- * commands one after another, stopping at the first that fails.
+ * Prints the plan with its approval, and with --execute asks for the project identifier at a
+ * terminal and runs the commands one after another, stopping at the first that fails. Nothing
+ * runs without an approval.
  * @param {string} projectId
  * @param {readonly PlannedCommand[]} commands
  * @param {Set<string>} flags
+ * @param {Approval | null} approval
  */
-export async function carryOut(projectId, commands, flags) {
+export async function carryOut(projectId, commands, flags, approval) {
   printPlan(commands);
+  for (const line of approvalLines(approval, projectId, commands)) console.log(line);
+  console.log("");
   if (!flags.has("execute")) {
     console.log("Printed only. Nothing has been run. Add --execute to run these commands after a confirmation.");
     return 0;
+  }
+  if (approval === null)
+    throw new ProcedureRefusal("Refusing: --execute needs a recorded approval. Nothing has been run.");
+  if (
+    approval.environment === "production" &&
+    approval.token !== approvalToken(approval.approver, projectId, commands)
+  ) {
+    throw new ProcedureRefusal(
+      "Refusing: production needs the token that the approver printed for this exact plan with --approve, " +
+        "given with --approval-token. Nothing has been run.",
+    );
   }
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new ProcedureRefusal("Refusing: --execute needs an interactive terminal for the confirmation.");
@@ -217,14 +418,48 @@ export async function carryOut(projectId, commands, flags) {
 }
 
 /**
+ * The approval that the options state: required to run, and printed with the plan whenever it is given.
+ * @param {"staging" | "production"} environment
+ * @param {{ options: Map<string, string>, flags: Set<string> }} parsed
+ * @returns {Approval | null}
+ */
+export function approvalOf(environment, parsed) {
+  const stated = parsed.options.has("operator") || parsed.options.has("approver");
+  return stated || parsed.flags.has("execute") ? requireApproval(environment, parsed.options) : null;
+}
+
+/**
+ * What the approver's own run with `--approve` prints: the token of the plan, for the operator to
+ * pass with `--approval-token`. It runs nothing and needs no operator.
+ * @param {"staging" | "production"} environment
+ * @param {Map<string, string>} options
+ * @param {string} projectId
+ * @param {readonly PlannedCommand[]} commands
+ */
+export function approveLines(environment, options, projectId, commands) {
+  const approver = personNamed(options, "approver");
+  if (environment === "production") requireListed(approver, approversOf(environment));
+  printPlan(commands);
+  return [
+    `# Approved by ${approver} for ${environment}. Give the operator this token for --approval-token:`,
+    approvalToken(approver, projectId, commands),
+  ];
+}
+
+/**
  * The main of a procedure script.
- * @param {(parsed: { options: Map<string, string>, flags: Set<string> }) => { projectId: string, commands: PlannedCommand[] }} plan
+ * @param {(parsed: { options: Map<string, string>, flags: Set<string> }) => { environment: "staging" | "production", projectId: string, commands: PlannedCommand[] }} plan
  */
 export async function runProcedure(plan) {
   try {
     const parsed = parseArguments(process.argv.slice(2));
-    const { projectId, commands } = plan(parsed);
-    process.exitCode = await carryOut(projectId, commands, parsed.flags);
+    const { environment, projectId, commands } = plan(parsed);
+    if (parsed.flags.has("approve")) {
+      for (const line of approveLines(environment, parsed.options, projectId, commands)) console.log(line);
+      process.exitCode = 0;
+      return;
+    }
+    process.exitCode = await carryOut(projectId, commands, parsed.flags, approvalOf(environment, parsed));
   } catch (error) {
     if (error instanceof ProcedureRefusal) {
       console.error(error.message);

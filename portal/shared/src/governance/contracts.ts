@@ -5,6 +5,7 @@
 // A time crosses the wire as ISO 8601 text with an offset, as in callables.ts.
 import type { CallableContract, CallableOutput } from "../callables";
 import { roleSchema, roleScopeTypeSchema } from "../capabilities";
+import { programmeDecisionSchema } from "../programme-answers";
 import { idSchema, uidSchema } from "../schemas/base";
 import { roleAssignmentStatusSchema } from "../schemas/identity";
 import {
@@ -14,6 +15,12 @@ import {
   reviewPeriodSchema,
 } from "../schemas/system";
 import { z } from "../zod";
+import {
+  consentWordingVersionSchema,
+  DEMOGRAPHICS_CONSENT_STATUSES,
+  demographicsConsentStatusSchema,
+  OWN_WORDS_MAX,
+} from "./demographics-consent";
 import { RETENTION_MAX_DAYS, RETENTION_MIN_DAYS, RETENTION_TARGETS } from "./retention";
 
 const instantSchema = z.iso.datetime({ offset: true });
@@ -55,6 +62,50 @@ export const exportPersonDataContract = {
   }),
 } as const satisfies CallableContract;
 export type ExportPersonDataOutput = CallableOutput<typeof exportPersonDataContract>;
+
+/**
+ * Gives or withdraws the caller's consent to the portal holding their gender and ethnicity
+ * (`./demographics-consent.ts`). For a member whose account is linked to their person. Consent
+ * is given only to the current wording, which the call names so that the record states what the
+ * person read. A withdrawal deletes the values at once, with the copies that an import keeps for
+ * a rollback, in the transaction that records it. Each act is audited without a value.
+ */
+export const setDemographicsConsentContract = {
+  name: "setDemographicsConsent",
+  input: z.strictObject({
+    status: z.enum(DEMOGRAPHICS_CONSENT_STATUSES),
+    wordingVersion: consentWordingVersionSchema,
+  }),
+  output: z.strictObject({
+    personId: idSchema,
+    status: demographicsConsentStatusSchema,
+    at: instantSchema,
+    /** For a withdrawal: whether a document of values was deleted. */
+    valuesDeleted: z.boolean(),
+  }),
+} as const satisfies CallableContract;
+
+const ownWordsSchema = z.string().trim().max(OWN_WORDS_MAX).nullable();
+
+/**
+ * Saves the caller's own gender and ethnicity in their own words, and confirms the terms that
+ * were recorded for them, while their consent is in force. A value of null or an empty text
+ * removes what the field held. Audited with the names of the fields and no value.
+ */
+export const saveOwnDemographicsContract = {
+  name: "saveOwnDemographics",
+  input: z.strictObject({
+    genderSelfDescribed: ownWordsSchema,
+    ethnicitySelfDescribed: ownWordsSchema,
+    /** True when the person confirms the recorded terms as their own. */
+    confirmRecorded: z.boolean(),
+  }),
+  output: z.strictObject({
+    personId: idSchema,
+    /** False when nothing is held any more, because every field was empty. */
+    held: z.boolean(),
+  }),
+} as const satisfies CallableContract;
 
 /** Asks for the erasure of one person. Another programme administrator decides it. */
 export const requestErasureContract = {
@@ -200,10 +251,45 @@ export type RetentionRun = z.output<typeof retentionRunSchema>;
 const periodsSchema = z.record(retentionTargetSchema, z.number().int().nullable());
 
 /** The configured periods, null where none is, and the latest sweeps. */
+/**
+ * The retention of the raw material of the migration, which the programme decided
+ * (docs/MIGRATION_PLAN.md, section 11, question 20): kept until an administrator marks the
+ * migration verified, and for one year after; then the outreach records of source F for people
+ * who never joined are deleted. What becomes of the other raw records after that year is not
+ * decided, and nothing deletes them.
+ */
+const migrationRetentionSchema = z.strictObject({
+  /** When the migration was marked verified, or null while it is not. */
+  verifiedAt: z.iso.datetime().nullable(),
+  /** The account of the administrator who marked it, or null while it is not marked. */
+  verifiedBy: uidSchema.nullable(),
+  /** The instant from which the outreach records of people who never joined may be deleted, or null while unverified. */
+  deletableFrom: z.iso.datetime().nullable(),
+  /** The decision that the retention follows. */
+  decision: programmeDecisionSchema,
+});
+export type MigrationRetention = z.output<typeof migrationRetentionSchema>;
+
 export const getRetentionContract = {
   name: "getRetention",
   input: z.strictObject({}),
-  output: z.strictObject({ periods: periodsSchema, runs: z.array(retentionRunSchema).max(20) }),
+  output: z.strictObject({
+    periods: periodsSchema,
+    runs: z.array(retentionRunSchema).max(20),
+    migration: migrationRetentionSchema,
+  }),
+} as const satisfies CallableContract;
+
+/**
+ * Marks the migration verified, which starts the year after which the outreach records of
+ * people who never joined are deleted. For a programme administrator with the second factor. A
+ * later mark, with its reason, moves the start to the moment it is made: the year can be made to
+ * start later and never earlier, so a mistaken mark only lengthens what is kept.
+ */
+export const markMigrationVerifiedContract = {
+  name: "markMigrationVerified",
+  input: z.strictObject({ note: z.string().trim().min(1).max(2_000) }),
+  output: migrationRetentionSchema,
 } as const satisfies CallableContract;
 export type RetentionOverview = CallableOutput<typeof getRetentionContract>;
 

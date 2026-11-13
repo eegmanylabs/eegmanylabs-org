@@ -25,6 +25,7 @@ import {
   Timestamp,
 } from "firebase-admin/firestore";
 import { touchedFields, type WriteStamp } from "../framework/documents";
+import { demographicCopies, directReader } from "../people/demographics-values";
 import { inForce } from "../roles/assignments";
 
 /** What stands in place of an erased value. */
@@ -120,7 +121,7 @@ export async function applyErasure(
     COLLECTIONS.personContact.docPath(personId),
     COLLECTIONS.personAddress.docPath(personId),
     COLLECTIONS.personNotes.docPath(personId),
-    COLLECTIONS.personDemographics.docPath(personId),
+    COLLECTIONS.personDemographicsConsent.docPath(personId),
   ]) {
     const snapshot = await db.doc(path).get();
     if (snapshot.exists) {
@@ -128,6 +129,15 @@ export async function applyErasure(
       count("restrictedDocuments", 1);
     }
   }
+  // The gender and ethnicity, with every copy that imports kept of them, before the source records lose their values.
+  // The cells kept beneath source records are removed with the records below; here go the states of the change log.
+  const demographics = await demographicCopies(db, directReader(db), personId);
+  const states = demographics.copies.filter((reference) => !reference.path.startsWith("sourceRecords/"));
+  for (const reference of [...(demographics.values === null ? [] : [demographics.values]), ...states]) {
+    writes.push({ kind: "delete", reference });
+  }
+  if (demographics.values !== null) count("restrictedDocuments", 1);
+  if (states.length > 0) count("specialStatesRemoved", states.length);
   const affiliations = await db.collection(COLLECTIONS.personAffiliations.collectionPath(personId)).get();
   for (const affiliation of affiliations.docs) writes.push({ kind: "delete", reference: affiliation.ref });
   count("affiliations", affiliations.size);

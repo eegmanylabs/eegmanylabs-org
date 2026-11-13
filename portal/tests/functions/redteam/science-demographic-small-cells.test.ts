@@ -11,6 +11,7 @@ import { COLLECTIONS, getDemographicAggregatesContract, SMALL_CELL_THRESHOLD } f
 import { Timestamp } from "firebase-admin/firestore";
 import { beforeEach, describe, expect, it } from "vitest";
 import { adminDb } from "../../support/admin";
+import { recordConsent } from "../../support/consent";
 import {
   account,
   administrator,
@@ -39,6 +40,7 @@ async function peopleOf(laboratoryId: string, categories: readonly string[]): Pr
       genderCategory: category,
       recordedAt: Timestamp.now(),
     });
+    await recordConsent(id);
   }
 }
 

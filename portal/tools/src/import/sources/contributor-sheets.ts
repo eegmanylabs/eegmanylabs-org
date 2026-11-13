@@ -1121,7 +1121,10 @@ const INPUT = "the Excel export of one contributor sheet";
 const PERSONAL_FIELDS = ["firstName", "middleName", "surname", "email", "orcid"] as const;
 /** The people of the website are the link targets of a contributor row (docs/MIGRATION_PLAN.md, section 5, step 7). */
 const AFTER = ["h"] as const;
-/** Every member could read an applied list, so the apply waits for the answer to question 10 of section 11. */
+/**
+ * The apply of a sheet was withheld until question 10 of section 11 was answered. The answer
+ * released it: the team of the replication reads the lists, which the rules enforce.
+ */
 const WITHHELD = "contributorLists" as const;
 
 /** The importer of one registered contributor sheet. */

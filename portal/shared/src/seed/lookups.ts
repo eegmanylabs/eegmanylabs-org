@@ -32,10 +32,13 @@ export interface StatusSeed {
 /**
  * The statuses of a replication, in order. A replication starts as `proposed`. `archived` is
  * in the category `cancelled`: it closes a replication that is no longer pursued, whereas a
- * replication that has run its course ends as `published`.
+ * replication that has run its course ends as `published`. `ongoing` is the active status that
+ * names no stage, for a replication that a decision of the programme calls ongoing without saying
+ * at which stage it stands (docs/MIGRATION_PLAN.md, section 11, question 1).
  */
 export const REPLICATION_STATUSES = [
   { key: "proposed", label: "Proposed", category: "notStarted" },
+  { key: "ongoing", label: "Ongoing", category: "active" },
   { key: "planning", label: "Planning", category: "active" },
   { key: "recruitingLabs", label: "Recruiting labs", category: "active" },
   { key: "sitePreparation", label: "Site preparation", category: "active" },

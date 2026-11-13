@@ -627,6 +627,7 @@ const optionalNoteSchema = reasonSchema.exactOptional();
  * | `keepCurrent`     | `valueConflict`         | The record keeps its value; the decision is stored          |
  * | `distinctPersons` | `duplicatePerson`       | The two records are different people; the decision is stored |
  * | `mergePersons`    | `duplicatePerson`       | Every reference to `mergePersonId` moves to `keepPersonId`, through the identity keys and the source links, and the merged record is archived |
+ * | `applyProgrammeDecision` | `statusQuestion` | The status that a decision of the programme gave the replication is set, with its history entry naming the decision, unless it holds already; the item keeps its candidates, the statuses that the sources stated |
  */
 export const resolveReconciliationItemContract = {
   name: "resolveReconciliationItem",
@@ -658,6 +659,11 @@ export const resolveReconciliationItemContract = {
       mergePersonId: idSchema,
       note: optionalNoteSchema,
     }),
+    z.strictObject({
+      fingerprint: fingerprintSchema,
+      action: z.literal("applyProgrammeDecision"),
+      note: optionalNoteSchema,
+    }),
   ]),
   output: z.strictObject({
     fingerprint: fingerprintSchema,
@@ -673,6 +679,8 @@ const rollbackCountsSchema = z.strictObject({
   itemsWithdrawn: z.number().int().min(0),
   /** Items of the queue that a reviewer has decided since. They are left as they are. */
   itemsLeft: z.number().int().min(0),
+  /** Special-category documents that are not written back: removed for good, or of a person without consent. */
+  discarded: z.number().int().min(0),
 });
 
 /**
@@ -735,7 +743,8 @@ export const resolveCorrectionRequestContract = {
 
 /**
  * Serves the special-category data of a person. For the person concerned, and for a caller who
- * holds `demographics.read`, an unexpired named grant of it and a satisfied second factor.
+ * holds `demographics.read`, an unexpired named grant of it and a satisfied second factor, who
+ * is served values only while the person's consent to holding them is in force.
  * Every call writes an audit entry that names the reader and the person and never a value.
  */
 export const getPersonDemographicsContract = {
@@ -753,6 +762,8 @@ export const getPersonDemographicsContract = {
         ethnicityCategory: z.string().exactOptional(),
         ethnicitySelfDescribed: z.string().exactOptional(),
         recordedAt: instantSchema,
+        /** When the person last confirmed the recorded terms as their own. */
+        confirmedAt: instantSchema.exactOptional(),
       })
       .nullable(),
   }),

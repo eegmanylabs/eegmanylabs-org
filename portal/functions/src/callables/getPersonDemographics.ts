@@ -1,6 +1,7 @@
 import {
   COLLECTIONS,
   capabilityGrantId,
+  consentInForce,
   getDemographicAggregatesContract,
   getPersonDemographicsContract,
   type PersonDemographics,
@@ -22,6 +23,7 @@ import {
   writeAudit,
 } from "../framework";
 import { grantInForce } from "../people/demographics-grant";
+import { consentsInForce } from "../people/demographics-values";
 
 /**
  * Serves the special-category data of one person: gender and ethnicity (decision D-006 and
@@ -33,9 +35,11 @@ import { grantInForce } from "../people/demographics-grant";
  * | The person concerned      | Their account is the one linked to the person                        |
  * | Anybody else              | The access document confers `demographics.read`, a named grant of it to the caller is neither revoked nor expired, and the second factor is satisfied |
  *
- * Every other reader needs the named grant, programme administrators included. Each call
- * writes an audit entry in the transaction that reads the data: who read whose record, and
- * which fields were served, never a value. Nothing of the data is logged.
+ * Every other reader needs the named grant, programme administrators included, and is served
+ * values only while the person's consent is in force (shared/src/governance/demographics-consent.ts):
+ * without it nothing is held, and the reader is told so. Each call writes an audit entry in the
+ * transaction that reads the data: who read whose record, and which fields were served, never a
+ * value. Nothing of the data is logged.
  */
 export const getPersonDemographics = defineCallable(getPersonDemographicsContract, {
   handler: async (input, context) => {
@@ -44,10 +48,15 @@ export const getPersonDemographics = defineCallable(getPersonDemographicsContrac
     const personReference = db.doc(COLLECTIONS.persons.docPath(input.personId));
     const demographicsReference = db.doc(COLLECTIONS.personDemographics.docPath(input.personId));
     const grantReference = db.doc(COLLECTIONS.capabilityGrants.docPath(capabilityGrantId(uid, "demographics.read")));
+    const consentReference = db.doc(COLLECTIONS.personDemographicsConsent.docPath(input.personId));
 
     return db.runTransaction(async (transaction) => {
       const access = await readAccessDocument(db, uid, transaction);
-      const [person, grantSnapshot] = await transaction.getAll(personReference, grantReference);
+      const [person, grantSnapshot, consent] = await transaction.getAll(
+        personReference,
+        grantReference,
+        consentReference,
+      );
       const own = person?.exists === true && person.get("userId") === uid && !access.suspended;
       if (!own) {
         requireCapability(context, access, "demographics.read", "programme");
@@ -56,7 +65,8 @@ export const getPersonDemographics = defineCallable(getPersonDemographicsContrac
       }
 
       const snapshot = await transaction.get(demographicsReference);
-      const stored = snapshot.exists ? parseStoredDocument(personDemographicsDocSchema, snapshot.data()) : null;
+      const served = snapshot.exists && (own || consentInForce(consent?.data()));
+      const stored = served ? parseStoredDocument(personDemographicsDocSchema, snapshot.data()) : null;
       if (stored !== null && !stored.success)
         throw new Error("A stored demographics document does not fit its schema.");
       let demographics: PersonDemographics | null = null;
@@ -66,7 +76,13 @@ export const getPersonDemographics = defineCallable(getPersonDemographicsContrac
           const value = stored.data[field];
           if (value !== undefined) values[field] = value;
         }
-        demographics = { ...values, recordedAt: stored.data.recordedAt.toDate().toISOString() };
+        demographics = {
+          ...values,
+          recordedAt: stored.data.recordedAt.toDate().toISOString(),
+          ...(stored.data.confirmedAt === undefined
+            ? {}
+            : { confirmedAt: stored.data.confirmedAt.toDate().toISOString() }),
+        };
       }
 
       writeAudit(
@@ -77,7 +93,9 @@ export const getPersonDemographics = defineCallable(getPersonDemographicsContrac
           entityType: "person",
           entityId: input.personId,
           changes: withheldChanges(
-            demographics === null ? [] : Object.keys(demographics).filter((field) => field !== "recordedAt"),
+            demographics === null
+              ? []
+              : Object.keys(demographics).filter((field) => field !== "recordedAt" && field !== "confirmedAt"),
           ),
           at,
         },
@@ -101,7 +119,8 @@ type ScopeType = "programme" | "replication" | "laboratory";
 
 /**
  * Serves counts of one special-category field for the people of a scope, for the analysis views
- * (requirement R15.10). It is the second route of this audited function and takes the same
+ * (requirement R15.10). Only the values of a person whose consent is in force are counted; anyone
+ * else counts as "Not recorded", so a withdrawal leaves every count on its next computation. It is the second route of this audited function and takes the same
  * authorisation as the reading of another person's data: `demographics.read`, a named grant of
  * it that is neither revoked nor expired, and the second factor, programme administrators
  * included. Nobody is served their own record this way. What is released follows
@@ -145,9 +164,11 @@ export const getDemographicAggregates = defineCallable(getDemographicAggregatesC
       const missing = ids.filter((id) => !categories.has(id));
       for (let start = 0; start < missing.length; start += 300) {
         const chunk = missing.slice(start, start + 300);
+        const consenting = await consentsInForce(db, chunk);
         const special = await db.getAll(...chunk.map((id) => db.doc(COLLECTIONS.personDemographics.docPath(id))));
         special.forEach((snapshot, index) => {
-          const parsed = snapshot.exists ? parseStoredDocument(personDemographicsDocSchema, snapshot.data()) : null;
+          const counted = snapshot.exists && consenting.has(chunk[index] ?? "");
+          const parsed = counted ? parseStoredDocument(personDemographicsDocSchema, snapshot.data()) : null;
           const value = parsed?.success === true ? parsed.data[input.field] : undefined;
           categories.set(chunk[index] ?? "", value === undefined || value === "" ? undefined : value.slice(0, 100));
         });

@@ -1,5 +1,6 @@
 // Programme, laboratories and equipment (docs/DATA_MODEL.md, section 4).
 import { dataOriginSchema } from "../data-origin";
+import { programmeDecisionSchema } from "../programme-answers";
 import { timestampSchema } from "../timestamp";
 import { z } from "../zod";
 import {
@@ -28,6 +29,14 @@ export const programmeDocSchema = documentBaseSchema.extend({
   description: longTextSchema.exactOptional(),
   parentId: idSchema.nullable(),
   kind: programmeKindSchema,
+  /**
+   * The slug of the related project of the public website that presents the project, and whether
+   * the project is active, where a decision of the programme names them; `decision` names it.
+   */
+  websiteSlug: keySchema.exactOptional(),
+  active: z.boolean().exactOptional(),
+  decision: programmeDecisionSchema.exactOptional(),
+  ...provenanceShape,
 });
 export type ProgrammeDoc = z.output<typeof programmeDocSchema>;
 

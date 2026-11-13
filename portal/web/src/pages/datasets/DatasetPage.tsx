@@ -16,7 +16,7 @@ import {
 } from "@eegml/shared";
 import { type ReactNode, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
-import { formatDateTime } from "@/app/labels";
+import { decisionDay, decisionReference, formatDateTime } from "@/app/labels";
 import { usePaletteActions } from "@/app/shell/palette-actions";
 import { ErrorState } from "@/components/feedback/error-state";
 import { LiveView } from "@/components/feedback/live-view";
@@ -284,6 +284,26 @@ function DatasetRecord({ dataset, viewer }: { dataset: RecordOf<"datasets">; vie
                   {dataset.replicationId}
                 </Link>
               </Detail>
+              {dataset.sharedReplicationIds === undefined || dataset.sharedReplicationIds.length === 0 ? null : (
+                <Detail term="Shared with">
+                  <span className="grid gap-1" data-testid="dataset-shared-with">
+                    {dataset.sharedReplicationIds.map((shared) => (
+                      <Link key={shared} to={replicationPath(shared)} className="text-fg-accent underline">
+                        {shared}
+                      </Link>
+                    ))}
+                    {dataset.sharingDecision === undefined ? null : (
+                      <span className="text-xs text-fg-muted">
+                        One record for both, as the programme lead decided on {decisionDay(dataset.sharingDecision)} (
+                        <span title={dataset.sharingDecision.reference}>
+                          {decisionReference(dataset.sharingDecision)}
+                        </span>
+                        ).
+                      </span>
+                    )}
+                  </span>
+                </Detail>
+              )}
               <Detail term="Laboratory">
                 {dataset.laboratoryId === null ? (
                   <Unknown>None</Unknown>

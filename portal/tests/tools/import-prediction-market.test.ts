@@ -10,7 +10,6 @@ import {
   keyedShortHash,
   predictionMarketItemId,
   reconciliationFingerprint,
-  shortHash,
   sourceTabKey,
   studyAliasId,
   vocabularyTermId,
@@ -66,7 +65,8 @@ const tabKey = (tab: keyof typeof TAB_TITLES) => sourceTabKey(TAB_TITLES[tab]);
 const replication = async (studyId: string) => (await adminDb.doc(`replications/${studyId}`).get()).data();
 const hypothesis = async (studyId: string, id: string) =>
   (await adminDb.doc(`replications/${studyId}/hypotheses/${id}`).get()).data();
-const detail = async (studyId: string) => (await adminDb.doc(`replications/${studyId}/private/detail`).get()).data();
+/** The sealed outcome labels of a replication, which programme administrators alone read (question 7). */
+const sealed = async (studyId: string) => (await adminDb.doc(`predictionMarketOutcomes/${studyId}`).get()).data();
 const link = async (studyId: string, slot: string) =>
   (await adminDb.doc(`documentLinks/${documentLinkSlotId(entityRefId("replication", studyId), slot)}`).get()).data();
 const alias = async (studyId: string, scheme: Parameters<typeof studyAliasId>[0], spelling: string) =>
@@ -208,14 +208,21 @@ describe("the prediction-market hypotheses, applied after the website data and t
     }
   });
 
-  it("stores the replicated labels verbatim in the restricted document of the replication, and leaves a blank absent", async () => {
-    expect((await detail("AlphaBeta2001"))?.replicatedSource).toEqual({ h01: "no", h02: "no" });
-    expect((await detail("EtaTheta2005"))?.replicatedSource).toEqual({ h01: "yes" });
-    expect((await detail("Kappa2006"))?.replicatedSource).toEqual({ h01: "cancelled", h02: "cancelled" });
+  it("stores the replicated labels verbatim and sealed, with the decision that seals them, and leaves a blank absent", async () => {
+    expect((await sealed("AlphaBeta2001"))?.labelsSource).toEqual({ h01: "no", h02: "no" });
+    expect((await sealed("EtaTheta2005"))?.labelsSource).toEqual({ h01: "yes" });
+    expect((await sealed("Kappa2006"))?.labelsSource).toEqual({ h01: "cancelled", h02: "cancelled" });
+    expect((await sealed("Kappa2006"))?.sealedBy).toEqual({
+      decidedBy: "programmeLead",
+      decidedOn: "2026-11-13",
+      reference: "docs/MIGRATION_PLAN.md, section 11, question 7",
+    });
     // A blank is no label: the studies without one get no entry and no document, and never the label `no`.
-    expect(await detail("Delta1999")).toBeUndefined();
-    expect(await detail("AlphaGamma2002")).toBeUndefined();
-    expect((await documentsOf("private", true)).size).toBe(3);
+    expect(await sealed("Delta1999")).toBeUndefined();
+    expect(await sealed("AlphaGamma2002")).toBeUndefined();
+    expect((await documentsOf("predictionMarketOutcomes")).size).toBe(3);
+    // The restricted document of the replication, which its team reads, holds no label.
+    expect((await documentsOf("private", true)).size).toBe(0);
     // A label is a string exactly as written. It is no boolean anywhere.
     const stored = JSON.stringify([...(await allDocuments()).values()].map((document) => document.data));
     expect(stored).not.toMatch(/"replicated(Source)?":(true|false)/);
@@ -227,20 +234,42 @@ describe("the prediction-market hypotheses, applied after the website data and t
   });
 
   it("raises every label as unverified, and the outcome on a null hypothesis as a question of its own", async () => {
-    const labels = await items("unverifiedLabel", "replicatedSource");
-    expect(labels.map((item) => `${item.entityRefs[0].entityId}=${claimValues(item)[0]}`).sort()).toEqual([
-      "AlphaBeta2001__h01=no",
-      "AlphaBeta2001__h02=no",
-      "EtaTheta2005__h01=yes",
-      "Kappa2006__h01=cancelled",
-      "Kappa2006__h02=cancelled",
+    const labels = await items("unverifiedLabel", "labelsSource");
+    expect(labels.map((item) => item.entityRefs[0].entityId).sort()).toEqual([
+      "AlphaBeta2001__h01",
+      "AlphaBeta2001__h02",
+      "EtaTheta2005__h01",
+      "Kappa2006__h01",
+      "Kappa2006__h02",
     ]);
+    // The labels are sealed: an item names the source record of a label and never shows it.
+    for (const item of labels) expect(claimValues(item)).toEqual([undefined]);
     expect(labels[0]?.entityRefs[0].entityType).toBe("hypothesis");
     const onNull = await items("unverifiedLabel", "nullSigSource");
     expect(onNull.map((item) => item.entityRefs[0].entityId)).toEqual(["AlphaBeta2001__h02"]);
     expect(claimSources(onNull[0])).toEqual(["e/hypotheses/replicated", "e/hypotheses/null-sig"]);
     // `cancelled` on a null hypothesis is no outcome, so it asks nothing more.
     expect(await items("unverifiedLabel", "nullSigSource", "Kappa2006__h02")).toEqual([]);
+  });
+
+  it("keeps the sealed labels out of every item and out of the change log, which others than administrators read", async () => {
+    const labels = ["yes", "no", "cancelled"];
+    for (const item of (await reconciliationItems()).filter((candidate) => candidate.sourceKey === "e")) {
+      for (const value of claimValues(item)) expect(labels, String(item.id)).not.toContain(value);
+    }
+    // The change log of the apply shows a marker in place of each sealed document, whose states sit where no client reads.
+    const changes = await adminDb.collectionGroup("changes").get();
+    const sealedChanges = changes.docs.filter((change) =>
+      String(change.get("documentPath")).startsWith("predictionMarketOutcomes/"),
+    );
+    expect(sealedChanges.length).toBe(3);
+    for (const change of sealedChanges) {
+      expect(change.get("after")).toEqual({ sealed: true });
+      const kept = await change.ref.collection("special").doc("state").get();
+      expect(kept.get("after")).toMatchObject({
+        sealedBy: { reference: "docs/MIGRATION_PLAN.md, section 11, question 7" },
+      });
+    }
   });
 
   it("reports an outcome label on a study that the website does not show as finished", async () => {
@@ -251,7 +280,8 @@ describe("the prediction-market hypotheses, applied after the website data and t
       "e/hypotheses/replicated",
       "e/hypotheses/replicated",
     ]);
-    expect(claimValues(stage[0])).toEqual(["stage2_prep", "no", "no"]);
+    // The stage is shown; the sealed labels are not.
+    expect(claimValues(stage[0])).toEqual(["stage2_prep", undefined, undefined]);
     // The study that is finished carries its label without contradiction.
     expect(await items("valueConflict", "publicStageName", "EtaTheta2005")).toEqual([]);
     expect((await replication("AlphaBeta2001"))?.publicStageName).toBe("stage2_prep");
@@ -436,17 +466,24 @@ describe("the prediction-market hypotheses, applied after the website data and t
   });
 
   it("gives every item the fingerprint of its kind, its subject and its candidate values", async () => {
-    const label = reconciliationFingerprint({
-      kind: "unverifiedLabel",
-      subject: "EtaTheta2005__h01#replicatedSource",
-      candidateKeys: [`e/hypotheses/replicated:${shortHash("yes")}`],
-    });
+    const label = reconciliationFingerprint(
+      {
+        kind: "unverifiedLabel",
+        subject: "EtaTheta2005__h01#labelsSource",
+        // A sealed label is hashed together with its subject, so that equal labels of two hypotheses differ.
+        candidateKeys: [
+          `e/hypotheses/replicated:${keyedShortHash("EtaTheta2005__h01#labelsSource\u0000yes", TEST_HASH_KEY)}`,
+        ],
+      },
+      TEST_HASH_KEY,
+    );
     expect((await adminDb.doc(`reconciliationItems/${label}`).get()).data()).toMatchObject({
       kind: "unverifiedLabel",
       status: "open",
       sourceKey: "e",
       batchId: report.batchId,
       entityRefs: [{ entityType: "hypothesis", entityId: "EtaTheta2005__h01" }],
+      sealed: true,
     });
     // The label that names a person is hashed with the secret key, so its fingerprint cannot be guessed from the name.
     const privacy = reconciliationFingerprint(
@@ -501,14 +538,15 @@ describe("the prediction-market hypotheses, applied after the website data and t
       const text = `${documentPath} ${JSON.stringify(data)}`;
       for (const value of PREDICTION_MARKET_RESTRICTED)
         expect(text, `${value} in ${documentPath}`).not.toContain(value);
-      expect(text, documentPath).not.toContain("replicatedSource");
+      expect(text, documentPath).not.toContain("sealedBy");
     }
     // A term of the outcome labels names the list it was read from, and never a row that carries the label.
     for (const label of ["no", "yes", "cancelled"]) {
       const term = readable.get(`vocabularyTerms/${vocabularyTermId("pmReplicated", label)}`);
       for (const id of (term?.sourceRecordIds ?? []) as string[]) expect(hypothesisRecords.has(id), label).toBe(false);
     }
-    // Where the labels are: the restricted document of a replication, the source records and the review queue.
+    // Where the labels are: the sealed documents, the source records, the states of the change log that no client
+    // reads, and the vocabulary of the list of the workbook. No item of the review queue shows one.
     const holders = [...(await allDocuments()).entries()]
       // The lookup data names a category of statuses by the same word, which is no label of a study.
       .filter(([documentPath]) => !documentPath.startsWith("statusDefinitions/"))
@@ -522,8 +560,8 @@ describe("the prediction-market hypotheses, applied after the website data and t
       );
     expect([...new Set(holders)].sort()).toEqual([
       "importBatches/changes",
-      "reconciliationItems",
-      "replications/private",
+      "importBatches/changes/special",
+      "predictionMarketOutcomes",
       "sourceRecords",
       "vocabularyTerms",
     ]);
@@ -575,6 +613,19 @@ describe("the prediction-market hypotheses over several runs", () => {
     expect((await documentsOf("replications")).size).toBe(8);
   });
 
+  it("writes no link to the market's documents and no null-significance label where the output is withheld (question 7)", async () => {
+    // A real project receives neither until the programme lead says whether they are prediction-market data.
+    await run(market, await workbookFile(), "apply", { target: { production: false, rehearse: [] } });
+    const iota = await hypothesis("Iota2004", "h01");
+    expect(iota).toBeDefined();
+    for (const field of ["nullSigSource", "studyDescriptionUrl", "infosheetUrl"])
+      expect(iota).not.toHaveProperty(field);
+    expect(await link("Iota2004", "pmInfosheet")).toBeUndefined();
+    expect(await link("Iota2004", "pmStudyDescription")).toBeUndefined();
+    // The survey and market questions are written, sealed: programme administrators alone read them.
+    expect((await documentsOf("predictionMarketItems")).size).toBeGreaterThan(0);
+  });
+
   it("follows the source where nobody has edited a field, keeps an edit of the portal, and never lowers a review status", async () => {
     await run(market, await workbookFile(), "apply");
     await adminDb.doc("replications/Delta1999/hypotheses/h01").update({ text: "A wording agreed in the portal" });
@@ -598,7 +649,7 @@ describe("the prediction-market hypotheses over several runs", () => {
 
   it("follows a label that changes or goes, and replaces the item of the old label", async () => {
     await run(market, await workbookFile(), "apply");
-    const [before] = await items("unverifiedLabel", "replicatedSource", "EtaTheta2005__h01");
+    const [before] = await items("unverifiedLabel", "labelsSource", "EtaTheta2005__h01");
     const hypotheses = HYPOTHESES.map((entry) =>
       entry.studyId === "EtaTheta2005"
         ? { ...entry, replicated: "no" }
@@ -607,11 +658,10 @@ describe("the prediction-market hypotheses over several runs", () => {
           : entry,
     );
     const second = await run(market, await workbookFile({ hypotheses }), "apply");
-    expect((await detail("EtaTheta2005"))?.replicatedSource).toEqual({ h01: "no" });
-    // The study whose labels have all gone keeps its restricted document, without the map.
-    expect(await detail("AlphaBeta2001")).toBeDefined();
-    expect(await detail("AlphaBeta2001")).not.toHaveProperty("replicatedSource");
-    const [after] = await items("unverifiedLabel", "replicatedSource", "EtaTheta2005__h01");
+    expect((await sealed("EtaTheta2005"))?.labelsSource).toEqual({ h01: "no" });
+    // The study whose labels have all gone keeps its sealed document, with an empty map.
+    expect((await sealed("AlphaBeta2001"))?.labelsSource).toEqual({});
+    const [after] = await items("unverifiedLabel", "labelsSource", "EtaTheta2005__h01");
     expect(after?.id).not.toBe(before?.id);
     expect((await adminDb.doc(`reconciliationItems/${before?.id}`).get()).get("status")).toBe("superseded");
     expect(second.items.supersede).toMatchObject({ unverifiedLabel: 1 });
@@ -699,8 +749,10 @@ describe("the prediction-market hypotheses over several runs", () => {
     ]);
     // The value is stored as it is written, whatever the list says.
     expect((await hypothesis("Delta1999", "h01"))?.nullSigSource).toBe("maybe");
+    // A footer counter counts the sealed labels, so the item names its cell and shows neither count.
     const [footer] = await items("annotationReview", "footer");
-    expect(claimValues(footer)).toEqual(["9/38", "3/12"]);
+    expect(claimValues(footer)).toEqual([undefined, undefined]);
+    expect(claimSources(footer)).toEqual(["e/hypotheses/footer", "e/hypotheses/recount"]);
   });
 });
 

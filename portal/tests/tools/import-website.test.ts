@@ -20,6 +20,7 @@ import {
 } from "@eegml/shared";
 import { Timestamp } from "firebase-admin/firestore";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { confirmAgreedLeads } from "../../tools/src/commands/confirm-agreed-leads";
 import { migrateManuscriptIds } from "../../tools/src/commands/migrate-manuscript-ids";
 import { createdFields } from "../../tools/src/import/context";
 import { type WebsiteFixture, websiteFixture, writeWebsiteFixture } from "../../tools/src/import/fixtures/website";
@@ -33,6 +34,7 @@ import {
   freshDatabase,
   itemCounts,
   reconciliationItems,
+  recordApplied,
   removeTemporaryDirectories,
   run,
   schemaProblems,
@@ -221,27 +223,65 @@ describe("the website importer on the synthetic fixture", () => {
     expect((await documentsOf("participations")).size).toBe(0);
   });
 
-  it("confirms the lead that the website names, and marks every membership of a study for review where the claims differ", async () => {
+  it("writes every lead for review, and confirms one under question 5 only once every lead-naming source is applied", async () => {
     await run(website, input(), "apply");
     const memberships = [...(await documentsOf("memberships", true))];
     expect(memberships).toHaveLength(6 + 1);
     const ada = corePerson("aexample");
-    expect(await data(`replications/AlphaBeta2001/memberships/${replicationMembershipId(ada, "lead")}`)).toMatchObject({
+    const adaLead = `replications/AlphaBeta2001/memberships/${replicationMembershipId(ada, "lead")}`;
+    // The website is imported before the other sources that name leads, so it cannot tell that they agree: every
+    // lead it names waits for review, and no basis of a confirmation is written.
+    expect(await data(adaLead)).toMatchObject({
       replicationId: "AlphaBeta2001",
       personId: ada,
       role: "lead",
       isCurrent: true,
-      reviewStatus: "confirmed",
+      reviewStatus: "needsReview",
     });
-    // The people file marks a second lead for one study. Neither is chosen: both memberships need review.
-    const delta = memberships.filter(([, membership]) => membership.replicationId === "Delta1999");
+    expect(memberships.filter(([, membership]) => membership.reviewStatus === "confirmed")).toEqual([]);
+    for (const [, membership] of memberships) expect(membership).not.toHaveProperty("confirmationBasis");
+
+    // While a lead-naming source has no applied batch, the step of question 5 confirms nothing.
+    expect(await confirmAgreedLeads(adminDb, { apply: true })).toMatchObject({
+      waitingFor: ["a", "d", "f"],
+      confirmed: [],
+    });
+    for (const sourceKey of ["a", "d", "f"]) await recordApplied(sourceKey);
+    const agreed = await confirmAgreedLeads(adminDb, { apply: true });
+    expect(agreed.confirmed).toHaveLength(5);
+    expect(await data(adaLead)).toMatchObject({
+      reviewStatus: "confirmed",
+      confirmationBasis: {
+        basis: "allSourcesAgree",
+        sources: ["a", "d", "f", "h"],
+        decision: {
+          decidedBy: "programmeLead",
+          decidedOn: "2026-11-13",
+          reference: "docs/MIGRATION_PLAN.md, section 11, question 5",
+        },
+      },
+    });
+    // The basis is the provenance of a decision: no source row is named for it, and it is no imported value.
+    const confirmed = await data(adaLead);
+    expect(confirmed?.importedValues).not.toHaveProperty("confirmationBasis");
+    expect(confirmed?.fieldSources).not.toHaveProperty("confirmationBasis");
+    expect(confirmed?.importedValues?.reviewStatus).toBe("needsReview");
+    // The people file marks a second lead for one study. Neither is chosen: both memberships need review (question 4).
+    const delta = [...(await documentsOf("memberships", true))].filter(
+      ([, membership]) => membership.replicationId === "Delta1999",
+    );
     expect(delta.map(([, membership]) => [membership.personId, membership.reviewStatus]).sort()).toEqual(
       [
         [corePerson("cinvented"), "needsReview"],
         [corePerson("dimaginary"), "needsReview"],
       ].sort(),
     );
-    expect(memberships.filter(([, membership]) => membership.reviewStatus === "confirmed")).toHaveLength(5);
+    for (const [, membership] of delta) expect(membership).not.toHaveProperty("confirmationBasis");
+    expect(agreed.questioned).toContain("Delta1999");
+    // A second run changes nothing, and a later website import leaves the confirmation as it is.
+    expect((await confirmAgreedLeads(adminDb, { apply: true })).confirmed).toEqual([]);
+    await run(website, input(), "apply");
+    expect((await data(adaLead))?.reviewStatus).toBe("confirmed");
     const [item] = (await reconciliationItems()).filter((candidate) => candidate.kind === "conflictingLead");
     expect(item).toMatchObject({ status: "open", field: "lead" });
     expect(item?.entityRefs[0]).toEqual({ entityType: "replication", entityId: "Delta1999" });
@@ -711,8 +751,16 @@ describe("the website importer when the files change", () => {
 
   it("marks the first lead for review too when a second lead appears later, and writes nothing for an identifier it cannot read", async () => {
     await run(website, input(), "apply");
+    for (const sourceKey of ["a", "d", "f"]) await recordApplied(sourceKey);
+    await confirmAgreedLeads(adminDb, { apply: true });
     const gus = replicationMembershipId(corePerson("gpretend"), "lead");
     expect((await data(`replications/Iota2004/memberships/${gus}`))?.reviewStatus).toBe("confirmed");
+    expect((await data(`replications/Iota2004/memberships/${gus}`))?.confirmationBasis?.sources).toEqual([
+      "a",
+      "d",
+      "f",
+      "h",
+    ]);
     const report = await run(
       website,
       input((fixture) => {
@@ -730,6 +778,8 @@ describe("the website importer when the files change", () => {
       "apply",
     );
     expect((await data(`replications/Iota2004/memberships/${gus}`))?.reviewStatus).toBe("needsReview");
+    // The sources no longer agree, so the basis of the confirmation goes with it.
+    expect(await data(`replications/Iota2004/memberships/${gus}`)).not.toHaveProperty("confirmationBasis");
     expect(report.items.raise).toMatchObject({ conflictingLead: 1, unparsedValue: 1 });
     expect((await documentsOf("persons")).size).toBe(15);
   });
@@ -812,14 +862,11 @@ describe("the website importer on the public files of this repository", () => {
       people.filter((entry) => entry.isCoreTeam).length,
       people.filter((entry) => !entry.isCoreTeam).length,
     ]).toEqual([46, 300]);
-    // 23 named leads and 6 further leads whom only the people file marks. For those 6 studies both memberships need review.
+    // 23 named leads and 6 further leads whom only the people file marks. Every one needs review until the other
+    // lead-naming sources have been applied, and for those 6 studies a question about the lead is raised (counted below).
     const memberships = [...(await documentsOf("memberships", true)).values()];
     expect(memberships).toHaveLength(29);
-    expect(memberships.filter((entry) => entry.reviewStatus === "needsReview")).toHaveLength(12);
-    expect(
-      new Set(memberships.filter((entry) => entry.reviewStatus === "needsReview").map((entry) => entry.replicationId))
-        .size,
-    ).toBe(6);
+    expect(memberships.filter((entry) => entry.reviewStatus === "needsReview")).toHaveLength(29);
     expect((await documentsOf("institutionCandidates")).size).toBe(203);
     expect((await documentsOf("aliases", true)).size).toBe(23 + 3);
     expect((await documentsOf("integrationMappings")).size).toBe(23 + 18);

@@ -13,6 +13,7 @@ const SOURCE_LABELS = {
   import: "Imported from a programme record",
   automation: "Changed by an automation",
   sheetSync: "Synchronised from a sheet",
+  programmeDecision: "Decided by the programme",
 } as const;
 
 /** The first moment after a calendar day in the reader's time zone. */

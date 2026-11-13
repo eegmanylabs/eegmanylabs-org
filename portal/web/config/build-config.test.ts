@@ -27,6 +27,12 @@ describe("the separation of the environments", () => {
     expect(resolveBuildConfig("emulator", realEnvironment, ports).appCheck).toBeNull();
   });
 
+  it("leaves notification email out of staging and production builds, as the programme decided, and keeps it against the fake in the emulator", () => {
+    expect(resolveBuildConfig("staging", realEnvironment, ports).mailDelivery).toBe("disabled");
+    expect(resolveBuildConfig("production", realEnvironment, ports).mailDelivery).toBe("disabled");
+    expect(resolveBuildConfig("emulator", {}, ports).mailDelivery).toBe("enabled");
+  });
+
   it("refuses an emulator setting in a staging or production build", () => {
     for (const mode of ["staging", "production"]) {
       expect(() =>

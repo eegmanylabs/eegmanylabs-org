@@ -27,6 +27,7 @@ export * from "./page-access";
 export * from "./page-blocks";
 export * from "./participation-transitions";
 export * from "./person-units";
+export * from "./programme-answers";
 export * from "./publishing";
 export * from "./recruitment-effective";
 export * from "./recruitment-forecast";

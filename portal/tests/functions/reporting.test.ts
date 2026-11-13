@@ -49,6 +49,7 @@ import { queueDueDigests, queueNotificationMail, sendQueuedMail } from "../../fu
 import { reportPeriod, runDueReports } from "../../functions/src/reports/scheduled";
 import { indexComment, indexDocumentLink } from "../../functions/src/search/entries";
 import { adminDb } from "../support/admin";
+import { recordConsent } from "../support/consent";
 import { jobDependencies } from "./integrations-world";
 import {
   account,
@@ -546,6 +547,7 @@ describe("demographic aggregates", () => {
         genderCategory: category,
         recordedAt: Timestamp.now(),
       });
+      await recordConsent(id);
     }
   }
 

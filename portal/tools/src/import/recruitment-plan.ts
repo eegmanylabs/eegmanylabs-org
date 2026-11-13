@@ -19,6 +19,8 @@
 // other place: no lead is compared with the leads of a proposed study, and nothing is written to it.
 import {
   COLLECTIONS,
+  COMBINED_AMODIO_DECISION,
+  COMBINED_AMODIO_STUDIES,
   type EntityRef,
   historicalAggregateId,
   keyedShortHash,
@@ -28,6 +30,8 @@ import {
   outreachGroupKey,
   personEmailIndexId,
   replicationMembershipId,
+  SEALED_SUMMARY_DECISION,
+  SEALED_SUMMARY_SOURCE_KEY,
   studyAliasId,
   unitScopeKeys,
 } from "@eegml/shared";
@@ -159,6 +163,19 @@ const partClaim = (studyId: string): ItemClaim => ({
   valueSource: studyId,
 });
 
+/**
+ * An item about a combined cell that names one of the two Amodio studies carries the programme's
+ * decision that the combined values cover both studies and stay attached to neither (question 2),
+ * so that the reviewer reads it beside the item. Every other combined cell is a question still.
+ */
+function withCombinedDecision(item: PlannedItem): PlannedItem {
+  const combined = item.candidates.some((candidate) => candidate.key.startsWith(COMBINED_PREFIX));
+  const amodio = item.entityRefs.some(
+    (ref) => ref.entityType === "replication" && COMBINED_AMODIO_STUDIES.includes(ref.entityId),
+  );
+  return combined && amodio ? { ...item, decision: COMBINED_AMODIO_DECISION } : item;
+}
+
 interface ContactView {
   readonly tab: TabView;
   readonly row: RecordedRow;
@@ -254,12 +271,12 @@ class RecruitmentPlan {
     for (const candidate of item.candidates) {
       if (candidate.sourceRecordId !== undefined) this.#accounted.add(candidate.sourceRecordId);
     }
-    this.#builder.item(item);
+    this.#builder.item(withCombinedDecision(item));
   }
 
   #hold(recordId: string, item: PlannedItem): void {
     this.#accounted.add(recordId);
-    this.#builder.hold(recordId, item);
+    this.#builder.hold(recordId, withCombinedDecision(item));
   }
 
   #cell(row: RecordedRow, label: string | undefined): RawCell | undefined {
@@ -515,11 +532,14 @@ class RecruitmentPlan {
           continue;
         }
         const raw = textOf(cell) ?? "";
+        // The summary figures of source F are sealed by a decision of the programme (question 14), and the project
+        // seals those of the coordination workbook alike: a claim names the source record of a figure, never shows it,
+        // and seals every item that holds it.
         const claim = {
           source: `${tab.source}/${metric}`,
           value: raw,
-          valueSource: raw.slice(0, LIMITS.shortText),
           sourceRecordId: row.recordId,
+          sealed: true as const,
         };
         const whole =
           typeof value === "number" &&
@@ -530,7 +550,13 @@ class RecruitmentPlan {
         if (!whole) {
           // Text, a fraction, a negative number or a formula is no count that the importer may read.
           this.#item(
-            items.unparsedValue({ subject, field: metric, entityRefs: view.refs, claims: [claim, ...view.parts] }),
+            items.unparsedValue({
+              subject,
+              field: metric,
+              entityRefs: view.refs,
+              personal: true,
+              claims: [claim, ...view.parts],
+            }),
           );
           this.#builder.numericCell({ ...place, state: "held" });
           continue;
@@ -557,6 +583,9 @@ class RecruitmentPlan {
               valueNumeric: value,
               sourceRecordId: row.recordId,
               dataOrigin: "importedHistorical",
+              ...(this.#definition.sourceKey === SEALED_SUMMARY_SOURCE_KEY
+                ? { sealedBy: SEALED_SUMMARY_DECISION }
+                : {}),
             },
             owned: { isCurrent: true },
             sourceRecordIds: [row.recordId],
@@ -569,6 +598,8 @@ class RecruitmentPlan {
           items.unmatchedIdentifier({
             subject: `${tab.source}/${row.rowKey}`,
             entityRefs: view.refs,
+            // The figures of the row are sealed, so the claims are keyed.
+            personal: figures.length > 0,
             claims: [
               {
                 source: `${tab.source}/${COUNT_HEADERS.study}`,
@@ -593,12 +624,14 @@ class RecruitmentPlan {
             subject,
             field,
             entityRefs: view.refs,
+            // The figures are sealed: the item names their cells and shows neither.
+            personal: true,
             claims: [
               ...[first, second].map((metric) => ({
                 source: `${tab.source}/${metric}`,
                 value: numbers.get(metric)?.raw ?? "",
-                valueSource: numbers.get(metric)?.raw ?? "",
                 sourceRecordId: row.recordId,
+                sealed: true as const,
               })),
               ...view.parts,
             ],
@@ -710,14 +743,16 @@ class RecruitmentPlan {
         const field = row.labels[index] ?? "";
         const cached = storedValue(cell);
         const report = (check: string, values: readonly [string, string][]): string => {
+          // A derived cell is computed from the sealed figures, so the item names it and shows no value.
           const item = items.annotationReview({
             subject: `${tab.source}/${row.rowKey}`,
             field,
+            personal: true,
             claims: values.map(([part, value]) => ({
               source: `${tab.source}/derived/${check}/${part}`,
               value,
-              valueSource: value.slice(0, LIMITS.shortText),
               sourceRecordId: row.recordId,
+              sealed: true as const,
             })),
           });
           this.#item(item);

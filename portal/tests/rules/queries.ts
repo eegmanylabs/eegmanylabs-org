@@ -380,6 +380,27 @@ export const QUERY_CATALOGUE: readonly CataloguedQuery[] = [
     where: [["status", "==", "open"]],
     limit: LIMIT,
   }),
+  // The core team holds no sealed.read, so it lists the items and entries that are not sealed (questions 7 and 14).
+  catalogued(
+    "the open items of the reconciliation queue that are not sealed, for the core team",
+    "coreTeam",
+    "sealed",
+    {
+      collection: "reconciliationItems",
+      within: [],
+      where: [
+        ["status", "==", "open"],
+        ["sealed", "==", false],
+      ],
+      limit: LIMIT,
+    },
+  ),
+  catalogued("the entries of a batch's change log that are not sealed, for the core team", "coreTeam", "sealed", {
+    collection: "importBatchChanges",
+    within: ["batch-synthetic"],
+    where: [["sealed", "==", false]],
+    limit: LIMIT,
+  }),
 
   // The workspace. Programme administrators and the core team read every page, so their
   // queries name no scope, and every other reader names the keys of the session.
@@ -922,7 +943,7 @@ export const QUERY_CATALOGUE: readonly CataloguedQuery[] = [
     where: [["scopeId", "==", OWN_REPLICATION]],
     limit: LIMIT,
   }),
-  catalogued("the prediction-market questions of a replication, which every member reads", "member", null, {
+  catalogued("the prediction-market questions of a replication, which are sealed", "admin", null, {
     collection: "predictionMarketItems",
     within: [],
     where: [["replicationId", "==", OWN_REPLICATION]],

@@ -25,7 +25,7 @@ describe("planBatchRollback", () => {
         { kind: "remove", path: "persons/b" },
         { kind: "recreate", path: "persons/c", data: { name: "Removed" } },
       ],
-      counts: { restored: 2, removed: 1, itemsWithdrawn: 0, itemsLeft: 0 },
+      counts: { restored: 2, removed: 1, itemsWithdrawn: 0, itemsLeft: 0, discarded: 0 },
     });
   });
 

@@ -430,7 +430,7 @@ describe("rollbackImportBatch", () => {
     const planned = await call(admin, rollbackImportBatchContract, { batchId: BATCH, confirm: false });
     expect(planned).toEqual({
       status: "planned",
-      counts: { restored: 1, removed: 1, itemsWithdrawn: 0, itemsLeft: 0 },
+      counts: { restored: 1, removed: 1, itemsWithdrawn: 0, itemsLeft: 0, discarded: 0 },
       documents: [
         { path: UPDATED, action: "restore" },
         { path: CREATED, action: "remove" },
@@ -441,7 +441,7 @@ describe("rollbackImportBatch", () => {
 
     expect(await call(admin, rollbackImportBatchContract, { batchId: BATCH, confirm: true })).toEqual({
       status: "rolledBack",
-      counts: { restored: 1, removed: 1, itemsWithdrawn: 0, itemsLeft: 0 },
+      counts: { restored: 1, removed: 1, itemsWithdrawn: 0, itemsLeft: 0, discarded: 0 },
     });
     expect((await adminDb.doc(CREATED).get()).exists).toBe(false);
     expect((await dataOf(UPDATED))?.displayName).toBe("Old Name");

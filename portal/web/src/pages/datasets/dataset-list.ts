@@ -10,6 +10,7 @@ export type DatasetSource = Pick<
   | "datasetKey"
   | "title"
   | "replicationId"
+  | "sharedReplicationIds"
   | "laboratoryId"
   | "modality"
   | "groupingLabel"
@@ -27,6 +28,8 @@ export interface DatasetRow {
   readonly datasetKey: string;
   readonly title: string;
   readonly replicationId: string;
+  /** The other replications whose data the record holds, where the programme decided that they share it. */
+  readonly sharedReplicationIds: readonly string[];
   readonly laboratoryId: string | null;
   readonly laboratory: string | null;
   readonly modality: DatasetDoc["modality"];
@@ -53,6 +56,7 @@ export function buildDatasetRows(
       datasetKey: dataset.datasetKey,
       title: dataset.title,
       replicationId: dataset.replicationId,
+      sharedReplicationIds: dataset.sharedReplicationIds ?? [],
       laboratoryId: dataset.laboratoryId,
       laboratory:
         dataset.laboratoryId === null ? null : (laboratoryNames.get(dataset.laboratoryId) ?? dataset.laboratoryId),

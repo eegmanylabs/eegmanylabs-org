@@ -4,6 +4,7 @@
 // dataset are held where no client can read them.
 import { dataOriginSchema } from "../data-origin";
 import { normaliseStoragePath } from "../datasets/paths";
+import { programmeDecisionSchema } from "../programme-answers";
 import { timestampSchema } from "../timestamp";
 import { z } from "../zod";
 import {
@@ -126,6 +127,13 @@ const countSchema = z.number().int().min(0);
 export const datasetDocSchema = documentBaseSchema.extend({
   datasetKey: keySchema,
   replicationId: idSchema,
+  /**
+   * The other replications whose data this one record holds, where a decision of the programme
+   * says that they share a dataset (docs/MIGRATION_PLAN.md, section 11, question 3). Their teams
+   * read the record as their own, and `sharingDecision` names the decision.
+   */
+  sharedReplicationIds: idListSchema.max(10).exactOptional(),
+  sharingDecision: programmeDecisionSchema.exactOptional(),
   laboratoryId: idSchema.nullable(),
   participationId: idSchema.nullable(),
   scopeKeys: scopeKeysSchema,

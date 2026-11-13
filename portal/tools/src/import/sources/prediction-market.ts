@@ -13,7 +13,7 @@
 // |----------------------------------------------------------------|----------------------------------------------------------------|
 // | Skip a hidden row                                              | Reads it as data and stores that it is hidden                  |
 // | Read the text `null` as a missing value                        | Stores `null-sig` verbatim                                     |
-// | Turn `replicated` into a boolean, a result or a status         | Keeps the label verbatim in the source record and queues it as an unverified label. The restricted document of the replication receives it only where the run rehearses that withheld output |
+// | Turn `replicated` into a boolean, a result or a status         | Keeps the label verbatim in the source record and in the sealed document of the replication, which programme administrators alone read (question 7), and queues it as an unverified label whose value the item does not show |
 // | Take the address of a link from its label                      | Reads the hyperlink target of the cell                         |
 // | Create a replication                                           | Resolves the identifier through the folded lookup, or queues the row |
 // | Parse a footer counter                                         | Recounts from the data and reports a counter that disagrees    |
@@ -32,6 +32,7 @@ import {
   PROGRAMME_SCOPE_KEY,
   predictionMarketItemId,
   replicationScopeKey,
+  SEALED_OUTCOMES_DECISION,
   shortHash,
   sourceTabKey,
 } from "@eegml/shared";
@@ -704,12 +705,15 @@ class PredictionMarketPlan {
       );
     }
 
-    // Hypotheses. The labels of `null-sig` are kept verbatim, and nothing here states a result.
-    const description = this.#address(first, "studyDescr_pdf", refs, true);
-    const infosheet = this.#address(first, "infosheet_link", refs, false);
+    // Hypotheses. The labels of `null-sig` are kept verbatim, and nothing here states a result. Whether the labels and
+    // the links to the market's own documents are prediction-market data, which no one may see (question 7), is asked
+    // of the programme lead: until the answer, a real project receives none of them, and they stay in the source rows.
+    const material = this.#context.writes("predictionMarketMaterial");
+    const description = material ? this.#address(first, "studyDescr_pdf", refs, true) : null;
+    const infosheet = material ? this.#address(first, "infosheet_link", refs, false) : null;
     for (const entry of rows) {
       const text = collapsed(this.#text(entry.row, "hypothesis_text") ?? "");
-      const nullSig = this.#text(entry.row, "null-sig");
+      const nullSig = material ? this.#text(entry.row, "null-sig") : null;
       builder.document({
         collection: "replicationHypotheses",
         ids: [replicationId, hypothesisId(entry.number)],
@@ -876,9 +880,12 @@ class PredictionMarketPlan {
   }
 
   /**
-   * Stores the labels of `replicated` verbatim in the restricted document of the replication,
-   * and raises what they ask. A label is an unverified source value: it sets no result, no
-   * review status and no status of a replication, and a blank stays absent.
+   * Stores the labels of `replicated` verbatim in the sealed document of the replication, and
+   * raises what they ask. A label is an unverified source value: it sets no result, no review
+   * status and no status of a replication, and a blank stays absent. The labels are sealed by a
+   * decision of the programme (question 7): programme administrators alone read them, so no item
+   * shows one and the key of each claim about one is a keyed hash, which nobody can confirm a
+   * guess against.
    */
   async #labels(study: Study): Promise<void> {
     const { items } = this.#context;
@@ -888,23 +895,19 @@ class PredictionMarketPlan {
     const source = this.#source;
     const labelled = rows.filter((entry) => entry.replicated !== null);
 
-    // A study whose labels have all gone from the source loses the map. One that never had a label gets no document.
-    const detailPath = COLLECTIONS.replicationDetail.docPath(replicationId);
-    const held =
-      labelled.length > 0 ||
-      (await readDocuments(this.#db, [detailPath])).get(detailPath)?.data.replicatedSource !== undefined;
-    // Who may see the labels before scientific review is an open question (docs/MIGRATION_PLAN.md, section 11,
-    // question 7). Until it is answered they stay in the source records and in the items below, and the document
-    // that the team of the replication can read is written only where the run rehearses it.
+    // A study whose labels have all gone from the source keeps a document with an empty map. One that never had a
+    // label gets no document.
+    const sealedPath = COLLECTIONS.predictionMarketOutcomes.docPath(replicationId);
+    const held = labelled.length > 0 || (await readDocuments(this.#db, [sealedPath])).get(sealedPath) !== null;
     if (held && this.#context.writes("replicatedLabels")) {
       builder.document({
-        collection: "replicationDetail",
+        collection: "predictionMarketOutcomes",
         ids: [replicationId],
+        fixed: { replicationId, sealedBy: SEALED_OUTCOMES_DECISION },
         owned: {
-          replicatedSource:
-            labelled.length === 0
-              ? undefined
-              : Object.fromEntries(labelled.map((entry) => [hypothesisId(entry.number), entry.replicated])),
+          labelsSource: Object.fromEntries(
+            labelled.map((entry) => [hypothesisId(entry.number), entry.replicated ?? ""]),
+          ),
         },
         sourceRecordIds: (labelled.length > 0 ? labelled : rows).map((entry) => entry.row.recordId),
       });
@@ -916,17 +919,19 @@ class PredictionMarketPlan {
         entityType: "hypothesis",
         entityId: nestedEntityId(replicationId, hypothesisId(entry.number)),
       };
+      // The label is sealed: the claim names its source record, its key is a keyed hash, and the item is sealed.
       const claim: ItemClaim = {
         source: `${source}/replicated`,
         value: label,
-        valueSource: label,
         sourceRecordId: entry.row.recordId,
+        sealed: true,
       };
       builder.item(
         items.unverifiedLabel({
           subject: hypothesis.entityId,
-          field: "replicatedSource",
+          field: "labelsSource",
           entityRefs: [hypothesis],
+          personal: true,
           claims: [claim],
         }),
       );
@@ -938,6 +943,7 @@ class PredictionMarketPlan {
             subject: hypothesis.entityId,
             field: "nullSigSource",
             entityRefs: [hypothesis],
+            personal: true,
             claims: [
               claim,
               {
@@ -961,6 +967,8 @@ class PredictionMarketPlan {
           subject: replicationId,
           field: "publicStageName",
           entityRefs: refs,
+          // The labels are sealed, so every claim of the item is keyed and none shows a label.
+          personal: true,
           claims: [
             {
               source: "portal/publicStageName",
@@ -971,8 +979,8 @@ class PredictionMarketPlan {
             ...outcomes.map((entry) => ({
               source: `${source}/replicated`,
               value: `${hypothesisId(entry.number)}:${entry.replicated}`,
-              valueSource: entry.replicated ?? "",
               sourceRecordId: entry.row.recordId,
+              sealed: true as const,
             })),
           ],
         }),
@@ -992,6 +1000,8 @@ class PredictionMarketPlan {
           subject: replicationId,
           field: "status",
           entityRefs: refs,
+          // A label of `replicated` is sealed, so the claims are keyed and none shows the label.
+          personal: true,
           claims: [
             ...signalling.flatMap((entry) => [
               ...(entry.hidden
@@ -1002,8 +1012,8 @@ class PredictionMarketPlan {
                     {
                       source: `${source}/replicated`,
                       value: `${hypothesisId(entry.number)}:${entry.replicated}`,
-                      valueSource: entry.replicated ?? "",
                       sourceRecordId: entry.row.recordId,
+                      sealed: true as const,
                     },
                   ]
                 : []),
@@ -1109,7 +1119,7 @@ class PredictionMarketPlan {
     for (const row of this.#stored("hypotheses")) {
       if (row.rowClass !== "annotation" || row.cellLevel === true) continue;
       const linkColumn = this.#column("infosheet_link");
-      const target = linkOf(row, linkColumn);
+      const target = this.#context.writes("predictionMarketMaterial") ? linkOf(row, linkColumn) : null;
       if (target !== null && isStorableUrl(target)) {
         const owner = { entityType: "programme", entityId: PROGRAMME_KEY } as const;
         const title = tidied(cellText(row, linkColumn) ?? "");
@@ -1137,13 +1147,15 @@ class PredictionMarketPlan {
         const recount = counter ?? (left === undefined ? undefined : remaining);
         const stated = counter === undefined ? left : text;
         if (recount === undefined || stated === undefined || stated === recount) continue;
+        // A counter counts the sealed outcome labels, so the item names the cell and shows neither count.
         this.#builder.item(
           items.annotationReview({
             subject: `${this.#source}/${row.rowKey}`,
             field: "footer",
+            personal: true,
             claims: [
-              { source: `${this.#source}/footer`, value: text, valueSource: text, sourceRecordId: row.recordId },
-              { source: `${this.#source}/recount`, value: recount, valueSource: recount },
+              { source: `${this.#source}/footer`, value: text, sourceRecordId: row.recordId, sealed: true },
+              { source: `${this.#source}/recount`, value: recount, sealed: true },
             ],
           }),
         );

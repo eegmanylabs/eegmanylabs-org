@@ -31,9 +31,22 @@ export const GOVERNANCE_LEDGER = Object.freeze({
  * @property {string} storageBucket The project's Cloud Storage for Firebase bucket, which holds the files of pages:
  *   `<project>.firebasestorage.app` for a bucket made since October 2024, `<project>.appspot.com` for an older one.
  * @property {string} scratchProjectId The project a restore is rehearsed in, never the live one.
- * @property {string} siteOrigin The origin the portal is published at. No decision fixes it yet, so both are placeholders.
+ * @property {string} siteOrigin The origin the portal is published at. The programme lead fixed the production address on
+ *   13 November 2026 (docs/DECISIONS.md, decision 4 of the answers); the staging address is still a placeholder.
  * @property {readonly string[]} forbiddenProjectWords Words that may not appear in this environment's project.
+ * @property {readonly string[]} approvers The reviewed list of the people who may operate or approve a plan for this
+ *   environment, by name. Production waits for a second programme administrator (docs/DECISIONS.md, answers of
+ *   13 November 2026, deployment roles): its list stays empty until an administrator supplies at least two names, and
+ *   while it names fewer than two every production plan is refused. Staging needs no list: the programme lead may act
+ *   there as operator and approver alike.
+ * @property {MailDelivery} mail Whether notification email is sent. The programme lead decided on 13 November 2026 that
+ *   no notification email is sent for now (docs/DECISIONS.md, decision 7 of the answers): notifications and digests stay
+ *   in the portal. Firebase's own sign-in links are not notification email and are unaffected.
  */
+
+/** Whether the functions send notification email, and whether the web build offers email preferences. */
+export const MAIL_DELIVERY_MODES = Object.freeze(/** @type {const} */ (["disabled", "enabled"]));
+/** @typedef {(typeof MAIL_DELIVERY_MODES)[number]} MailDelivery */
 
 /** @type {Readonly<Record<"staging" | "production", PortalEnvironment>>} */
 export const ENVIRONMENTS = Object.freeze({
@@ -45,6 +58,8 @@ export const ENVIRONMENTS = Object.freeze({
     scratchProjectId: "eegml-staging-restore-PLACEHOLDER",
     siteOrigin: "https://staging-PLACEHOLDER.github.io",
     forbiddenProjectWords: Object.freeze(["prod", "production"]),
+    approvers: Object.freeze([]),
+    mail: "disabled",
   }),
   production: Object.freeze({
     name: "production",
@@ -52,8 +67,10 @@ export const ENVIRONMENTS = Object.freeze({
     backupBucket: "eegml-production-backups-PLACEHOLDER",
     storageBucket: "eegml-production-PLACEHOLDER.firebasestorage.app",
     scratchProjectId: "eegml-restore-scratch-PLACEHOLDER",
-    siteOrigin: "https://portal-PLACEHOLDER.example.org",
+    siteOrigin: "https://portal.eegmanylabs.org",
     forbiddenProjectWords: Object.freeze(["staging", "stage", "test", "scratch", "restore"]),
+    approvers: Object.freeze([]),
+    mail: "disabled",
   }),
 });
 

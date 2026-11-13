@@ -14,6 +14,7 @@ import {
   capabilityField,
   effectiveRoleCapabilities,
   type GrantableCapability,
+  grantCanConfer,
   isProgrammeRole,
   type ProgrammeRole,
   type Role,
@@ -245,7 +246,10 @@ export function resolveAccess(inputs: AccessInputs): ResolvedAccess {
       hold(capability, everywhere ? PROGRAMME_SCOPE_KEY : assignmentScopeKey(assignment.scopeType, assignment.scopeId));
     }
   }
-  if (privileged) for (const candidate of grants) hold(candidate.capability, PROGRAMME_SCOPE_KEY);
+  if (privileged) {
+    for (const candidate of grants)
+      if (grantCanConfer(candidate.capability)) hold(candidate.capability, PROGRAMME_SCOPE_KEY);
+  }
 
   const capabilities: ResolvedAccess["capabilities"] = {};
   for (const [capability, scopes] of [...held].sort(([a], [b]) => (a < b ? -1 : 1))) {

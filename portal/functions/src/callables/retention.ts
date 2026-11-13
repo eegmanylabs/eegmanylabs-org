@@ -1,6 +1,10 @@
 import {
   COLLECTIONS,
   getRetentionContract,
+  MIGRATION_RETENTION_DECISION,
+  type MigrationRetention,
+  markMigrationVerifiedContract,
+  outreachRetentionCutoff,
   PROGRAMME_KEY,
   parseStoredDocument,
   RETENTION_TARGETS,
@@ -11,6 +15,7 @@ import {
   setRetentionPeriodContract,
   systemSettingsDocSchema,
 } from "@eegml/shared";
+import { Timestamp } from "firebase-admin/firestore";
 import {
   AppError,
   type AuthenticatedContext,
@@ -22,7 +27,7 @@ import {
   touchedFields,
   writeAudit,
 } from "../framework";
-import { retentionSettings, runAndRecordSweep } from "../governance/retention";
+import { type RetentionSettings, retentionSettings, runAndRecordSweep } from "../governance/retention";
 
 /** Retention is for programme administrators who hold `audit.read`, with the second factor. */
 async function requireAdministrator(context: AuthenticatedContext): Promise<void> {
@@ -38,7 +43,20 @@ function periodsOf(retention: Readonly<Record<string, number>>): Record<Retentio
   >;
 }
 
-/** The configured periods, null where none is, and the latest twenty sweeps. */
+/** What the retention of the migration stands at. */
+function migrationOf(
+  settings: Pick<RetentionSettings, "migrationVerifiedAt" | "migrationVerifiedBy">,
+): MigrationRetention {
+  const verifiedAt = settings.migrationVerifiedAt;
+  return {
+    verifiedAt: verifiedAt?.toISOString() ?? null,
+    verifiedBy: verifiedAt === null ? null : settings.migrationVerifiedBy,
+    deletableFrom: outreachRetentionCutoff(verifiedAt)?.toISOString() ?? null,
+    decision: MIGRATION_RETENTION_DECISION,
+  };
+}
+
+/** The configured periods, null where none is, the retention of the migration, and the latest twenty sweeps. */
 export const getRetention = defineCallable(getRetentionContract, {
   handler: async (_input, context) => {
     const { db } = context;
@@ -48,8 +66,10 @@ export const getRetention = defineCallable(getRetentionContract, {
       .orderBy("startedAt", "desc")
       .limit(20)
       .get();
+    const settings = await retentionSettings(db);
     return {
-      periods: periodsOf(await retentionSettings(db)),
+      periods: periodsOf(settings.retention),
+      migration: migrationOf(settings),
       runs: runs.docs.flatMap((document): RetentionRun[] => {
         const run = parseStoredDocument(retentionRunDocSchema, document.data());
         if (!run.success) return [];
@@ -109,8 +129,63 @@ export const setRetentionPeriod = defineCallable(setRetentionPeriodContract, {
   },
 });
 
-/** Runs a sweep now, or a dry run that counts and deletes nothing. */
+/**
+ * Marks the migration verified (docs/MIGRATION_PLAN.md, section 11, question 20). Raw source
+ * material is kept until then and for one year after, when the retention sweep deletes the
+ * outreach records of people who never joined. A programme administrator with the second factor
+ * marks it, with an audit entry that names the decision. A later mark, with its reason, moves the
+ * start of the year to the moment it is made: a mark made by mistake or too early can only make
+ * the programme keep the records longer, never shorter.
+ */
+export const markMigrationVerified = defineCallable(markMigrationVerifiedContract, {
+  handler: async (input, context) => {
+    const { db, uid } = context;
+    await requireAdministrator(context);
+    const at = context.clock.now();
+    const reference = db.doc(COLLECTIONS.systemSettings.docPath());
+    return db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(reference);
+      const settings = snapshot.exists ? parseStoredDocument(systemSettingsDocSchema, snapshot.data()) : null;
+      if (settings === null) {
+        throw new AppError("failed-precondition", "The settings of the portal have not been created yet.");
+      }
+      if (!settings.success) throw new Error("The stored settings do not fit their schema.");
+      const earlier = settings.data.migrationVerifiedAt?.toDate() ?? null;
+      if (earlier !== null && at.getTime() <= earlier.getTime()) {
+        throw new AppError("failed-precondition", "The mark can move later and never earlier.");
+      }
+      const auditEventId = writeAudit(
+        transaction,
+        {
+          action: "migration.verified",
+          actor: { kind: "user", uid },
+          entityType: "programme",
+          entityId: PROGRAMME_KEY,
+          changes: [
+            { field: "migrationVerifiedAt", before: earlier?.toISOString() ?? null, after: at.toISOString() },
+            { field: "note", after: input.note },
+            { field: "decision", after: MIGRATION_RETENTION_DECISION.reference },
+          ],
+          at,
+        },
+        db,
+      );
+      transaction.update(reference, {
+        ...touchedFields(callerStamp(uid, at, auditEventId)),
+        migrationVerifiedAt: Timestamp.fromDate(at),
+        migrationVerifiedBy: uid,
+      });
+      return migrationOf({ migrationVerifiedAt: at, migrationVerifiedBy: uid });
+    });
+  },
+});
+
+/**
+ * Runs a sweep now, or a dry run that counts and deletes nothing. The sweep resolves the address
+ * of an outreach contact through the keyed email index, so it needs the key.
+ */
 export const runRetentionSweep = defineCallable(runRetentionSweepContract, {
+  usesIdentityHashKey: true,
   handler: async (input, context) => {
     const { db, uid } = context;
     await requireAdministrator(context);

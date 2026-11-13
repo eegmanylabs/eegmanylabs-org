@@ -64,12 +64,13 @@ function Finding({
 export interface HypothesesTabProps {
   studyKey: string;
   hypotheses: readonly Hypothesis[];
-  /** The verbatim "replicated" labels by hypothesis, or null where the caller may not read them. */
+  /** The verbatim "replicated" labels by hypothesis, which are sealed, or null where the caller may not read them. */
   replicatedLabels: Readonly<Record<string, string>> | null;
   /** The analysis runs the reader may read. */
   runs: readonly RecordOf<"processingRuns">[];
   manuscripts: readonly RecordOf<"manuscripts">[];
-  predictionItems: readonly RecordOf<"predictionMarketItems">[];
+  /** The questions of the prediction market, which are sealed, or null where the caller may not read them. */
+  predictionItems: readonly RecordOf<"predictionMarketItems">[] | null;
   /** Whether the reader may record findings, which the function decides again. */
   canRecord: boolean;
 }
@@ -101,7 +102,7 @@ export function HypothesesTab({
           const reporting = manuscripts.filter(
             (manuscript) => manuscript.archivedAt === null && (manuscript.hypothesisIds ?? []).includes(hypothesis.id),
           );
-          const questions = predictionItems.filter((item) => item.hypothesisId === hypothesis.id);
+          const questions = predictionItems?.filter((item) => item.hypothesisId === hypothesis.id) ?? null;
           return (
             <li
               key={hypothesis.id}
@@ -170,17 +171,19 @@ export function HypothesesTab({
                     reporting.map((item) => item.title).join(", ")
                   )}
                 </Detail>
-                <Detail term="Prediction-market questions">
-                  {questions.length === 0 ? (
-                    <Unknown>None</Unknown>
-                  ) : (
-                    <ul className="grid gap-1">
-                      {questions.map((item) => (
-                        <li key={item.id}>{item.questionText}</li>
-                      ))}
-                    </ul>
-                  )}
-                </Detail>
+                {questions === null ? null : (
+                  <Detail term="Prediction-market questions">
+                    {questions.length === 0 ? (
+                      <Unknown>None</Unknown>
+                    ) : (
+                      <ul className="grid gap-1">
+                        {questions.map((item) => (
+                          <li key={item.id}>{item.questionText}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </Detail>
+                )}
                 <Detail term="Null or significant">
                   {hypothesis.nullSigSource === undefined ? (
                     <Unknown />
@@ -190,7 +193,7 @@ export function HypothesesTab({
                 </Detail>
                 <Detail term="Replicated">
                   {replicatedLabels === null ? (
-                    <Unknown>Shown to the team of the replication and to the programme only</Unknown>
+                    <Unknown>Sealed by a decision of the programme and shown to programme administrators only</Unknown>
                   ) : replicated === undefined ? (
                     <Unknown />
                   ) : (

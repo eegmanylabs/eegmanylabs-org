@@ -5,6 +5,8 @@ import {
   bootstrapAdminRecordSchema,
   COLLECTIONS,
   type CollectionKey,
+  CURRENT_DEMOGRAPHICS_CONSENT,
+  DEMOGRAPHICS_CONSENT_DECISION,
   DOCUMENT_TEMPLATES,
   distinctRoles,
   historicalAggregateId,
@@ -30,6 +32,7 @@ import {
   rolesOfMemberEntry,
   rolesOfMembership,
   rolesOfPerson,
+  SEALED_OUTCOMES_DECISION,
   sequenceId,
   sha256Hex,
   sourceTabKey,
@@ -268,7 +271,21 @@ export function demoDocuments(now: Date, hashKey: string): DemoDocument[] {
         claimEligible: entry.claimEligible,
       })),
     });
-    if (person.demographics !== undefined) {
+    // Gender and ethnicity are held only for a person who has consented (shared/src/governance/demographics-consent.ts),
+    // so a demonstration person carries them only together with a record of consent from their own account.
+    if (person.demographics !== undefined && uid !== null) {
+      add("personDemographicsConsent", COLLECTIONS.personDemographicsConsent.docPath(person.id), {
+        personId: person.id,
+        uid,
+        status: "given",
+        wordingVersion: CURRENT_DEMOGRAPHICS_CONSENT.version,
+        givenAt: timestamp,
+        withdrawnAt: null,
+        history: [
+          { status: "given", at: timestamp, wordingVersion: CURRENT_DEMOGRAPHICS_CONSENT.version, auditEventId: null },
+        ],
+        basis: DEMOGRAPHICS_CONSENT_DECISION,
+      });
       add("personDemographics", COLLECTIONS.personDemographics.docPath(person.id), {
         genderSource: person.demographics.genderSource,
         ethnicitySource: person.demographics.ethnicitySource,
@@ -347,8 +364,11 @@ export function demoDocuments(now: Date, hashKey: string): DemoDocument[] {
       ).map((hypothesis) => [hypothesisId(hypothesis.number), hypothesis.replicatedSource]),
     );
     if (Object.keys(replicated).length > 0) {
-      add("replicationDetail", COLLECTIONS.replicationDetail.docPath(replication.studyKey), {
-        replicatedSource: replicated,
+      // The outcome labels are sealed, as the programme decided for the real ones (question 7).
+      add("predictionMarketOutcomes", COLLECTIONS.predictionMarketOutcomes.docPath(replication.studyKey), {
+        replicationId: replication.studyKey,
+        labelsSource: replicated,
+        sealedBy: SEALED_OUTCOMES_DECISION,
       });
     }
   }
@@ -759,6 +779,7 @@ export function demoDocuments(now: Date, hashKey: string): DemoDocument[] {
       resolvedBy: null,
       resolvedAt: null,
       batchId,
+      sealed: false,
     });
   }
   const startedAt = Timestamp.fromDate(batchStartedAt);
@@ -779,12 +800,14 @@ export function demoDocuments(now: Date, hashKey: string): DemoDocument[] {
   );
   const contactPath = COLLECTIONS.personContact.docPath("demo-person-ben");
   const changes = [
+    // A figure of a summary tab is sealed, so its entry is read by programme administrators alone.
     {
       documentPath: aggregatePath,
       operation: "create",
       relation: "created",
       before: null,
       after: stored(aggregatePath),
+      sealed: true,
     },
     {
       documentPath: contactPath,
@@ -792,10 +815,18 @@ export function demoDocuments(now: Date, hashKey: string): DemoDocument[] {
       relation: "matched",
       before: stored(contactPath),
       after: stored(contactPath),
+      sealed: false,
     },
     ...items.map((item) => {
       const path = COLLECTIONS.reconciliationItems.docPath(item.id);
-      return { documentPath: path, operation: "create", relation: "created", before: null, after: stored(path) };
+      return {
+        documentPath: path,
+        operation: "create",
+        relation: "created",
+        before: null,
+        after: stored(path),
+        sealed: false,
+      };
     }),
   ];
   changes.forEach((change, index) => {

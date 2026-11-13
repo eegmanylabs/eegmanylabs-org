@@ -28,7 +28,9 @@ import {
   entityRefId,
   LIMITS,
   lookupFold,
+  migrationAnswer,
   PROGRAMME_KEY,
+  RELATED_PROJECT_DECISIONS,
   replicationScopeKey,
   shortHash,
   sourceTabKey,
@@ -649,6 +651,7 @@ class ListOfStudiesPlan {
     this.#stageList();
     for (const study of this.#studies) await this.#study(study);
     this.#candidates();
+    this.#relatedProject();
     this.#archivedRows();
     this.#years();
     this.#rankedVotes();
@@ -1600,6 +1603,37 @@ class ListOfStudiesPlan {
       });
       if (doi !== undefined) doiLookupDocument(this.#builder, candidate(id), doi, supplier);
     }
+  }
+
+  /**
+   * Names the related project of the website that the subproject tab holds candidates for, as the
+   * programme decided (docs/MIGRATION_PLAN.md, section 11, question 15). The project is a child of
+   * the programme, active and presented on the website under its slug, and it names the rows of
+   * its candidates as its source records. The candidates themselves stay archived in the source
+   * records (question 9): no candidate document is written for them on this account.
+   */
+  #relatedProject(): void {
+    const title = TAB_TITLES.subproject;
+    const decided = Object.hasOwn(RELATED_PROJECT_DECISIONS, title) ? RELATED_PROJECT_DECISIONS[title] : undefined;
+    const rows = this.#data("subproject");
+    if (decided === undefined || rows.length === 0) return;
+    this.#builder.document({
+      collection: "programmes",
+      ids: [decided.programmeKey],
+      // The name is the title of the tab as the workbook writes it, which an administrator may change in the portal.
+      // The slug, the state and the decision are the programme's decision (question 15) and no source value: they are
+      // written once, as fixed fields, so that no source row is named for them and none is recorded as imported.
+      fixed: {
+        key: decided.programmeKey,
+        name: title,
+        parentId: PROGRAMME_KEY,
+        kind: "subproject",
+        websiteSlug: decided.websiteSlug,
+        active: decided.active,
+        decision: migrationAnswer(15),
+      },
+      sourceRecordIds: rows.map((row) => row.recordId),
+    });
   }
 
   /** The vocabulary, the status questions and the leftovers of the rows of the archived tabs. */

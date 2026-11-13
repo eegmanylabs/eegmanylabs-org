@@ -1,7 +1,7 @@
 // What the portal holds about one person, gathered for a subject access export
 // (docs/SECURITY.md, section 6). The queries are those the merge of persons and the claim
 // functions already make, so the index file serves them as it stands.
-import { COLLECTIONS, PERSON_EXPORT_MAX_DOCUMENTS } from "@eegml/shared";
+import { COLLECTIONS, consentInForce, PERSON_EXPORT_MAX_DOCUMENTS } from "@eegml/shared";
 import type { Auth } from "firebase-admin/auth";
 import type { DocumentData, DocumentSnapshot, Firestore, Query } from "firebase-admin/firestore";
 import { jsonOf } from "../callables/listAuditEvents";
@@ -70,12 +70,18 @@ export async function gatherPersonData(
     if (paths.length > 0) for (const snapshot of await db.getAll(...paths.map((path) => db.doc(path)))) add(snapshot);
   };
 
+  // Gender and ethnicity are held only while the person's consent is in force (question 20), and are served then
+  // alone, as getPersonDemographics serves them. A value that a race left without consent is never handed out.
+  const consent = await db.doc(COLLECTIONS.personDemographicsConsent.docPath(personId)).get();
+  const servesValues = includeSpecial && consentInForce(consent.data());
   await addPaths([
     COLLECTIONS.persons.docPath(personId),
     COLLECTIONS.personContact.docPath(personId),
     COLLECTIONS.personAddress.docPath(personId),
     COLLECTIONS.personNotes.docPath(personId),
-    ...(includeSpecial ? [COLLECTIONS.personDemographics.docPath(personId)] : []),
+    // The record of consent to holding gender and ethnicity holds no value, so it is always included.
+    COLLECTIONS.personDemographicsConsent.docPath(personId),
+    ...(servesValues ? [COLLECTIONS.personDemographics.docPath(personId)] : []),
   ]);
   await addAll(db.collection(COLLECTIONS.personAffiliations.collectionPath(personId)));
   for (const entry of [

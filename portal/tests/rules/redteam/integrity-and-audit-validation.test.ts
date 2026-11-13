@@ -418,7 +418,6 @@ describe("the core team, on the lookup collections, which every member reads", (
     await assertSucceeds(update("institutions/institution-1", { city: "Example Town" })());
     await assertSucceeds(update("vocabularyTerms/term-1", { description: "A term that exists only in tests." })());
     await assertSucceeds(update("candidateStudies/candidate-1", { originalYear: 2004 })());
-    await assertSucceeds(update("predictionMarketItems/item-1", { choices: ["Yes", "No", "Unsure"] })());
     await assertSucceeds(update("checklistTemplates/onboarding", { items: [{ key: "ethics", label: "Ethics" }] })());
     await assertSucceeds(category("synthetic-category", {})());
     await assertSucceeds(definition("synthetic-status", {})());

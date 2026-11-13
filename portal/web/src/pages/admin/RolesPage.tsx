@@ -4,6 +4,7 @@ import {
   DEFAULT_ROLE_CAPABILITIES,
   GRANTABLE_CAPABILITIES,
   type GrantableCapability,
+  grantCanConfer,
   isProgrammeRole,
   type ListedUser,
   PROGRAMME_KEY,
@@ -474,7 +475,9 @@ function CapabilityGrants() {
   const toast = useToast();
   const administrator = useProgrammeAdministrator();
   const me = useSignedInUser().uid;
-  const offered = GRANTABLE_CAPABILITIES.filter((candidate) => administrator || !isSensitive(candidate));
+  const offered = GRANTABLE_CAPABILITIES.filter(
+    (candidate) => grantCanConfer(candidate) && (administrator || !isSensitive(candidate)),
+  );
   const grants = useLiveQuery({ collection: "capabilityGrants", within: [], limit: QUEUE_LIMIT });
   const nameOf = useAccountNames(grants.status === "ready" ? grants.data.map((grant) => grant.uid) : []);
   const [account, setAccount] = useState<ListedUser | null>(null);

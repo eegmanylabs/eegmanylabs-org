@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { COLLECTION_ENTRIES, COLLECTIONS, importBatchId } from "@eegml/shared";
 import { type DocumentData, Timestamp } from "firebase-admin/firestore";
+import { confirmAgreedLeads } from "../../tools/src/commands/confirm-agreed-leads";
 import { seedLookups } from "../../tools/src/commands/seed-lookups";
 import { createdFields, IMPORT_ACTOR } from "../../tools/src/import/context";
 import { type ImporterDefinition, ROW_CLASSES, type RowClass } from "../../tools/src/import/model";
@@ -116,6 +117,18 @@ export async function recordApplied(sourceKey: string): Promise<string> {
     stats: {},
   });
   return batchId;
+}
+
+/**
+ * Confirms the leads on which the lead-naming sources agree, as `leads:confirm-agreed` does after a
+ * first round of imports (question 5). The sources other than the website are recorded as applied
+ * for the moment of the step only, so that the imports a test runs next start afresh.
+ */
+export async function agreeOnLeads(): Promise<void> {
+  const stand = await Promise.all(["a", "d", "f"].map((sourceKey) => recordApplied(sourceKey)));
+  const summary = await confirmAgreedLeads(adminDb, { apply: true });
+  if (summary.waitingFor.length > 0) throw new Error(`Still waiting for ${summary.waitingFor.join(", ")}.`);
+  for (const batchId of stand) await adminDb.doc(COLLECTIONS.importBatches.docPath(batchId)).delete();
 }
 
 /** The rows of each class that a batch counted in each tab, in the form of a baseline of the private configuration. */

@@ -79,10 +79,19 @@ describe("a contributor row", () => {
           scopeKeys: [OTHER_KEY],
         }),
       ],
-      // Every member reads contributor rows, so a row that names the table is found beside the real ones.
+      // The contributor lists are read by the team of their replication (question 10 of the migration plan), so
+      // neither a member nor the lead of another replication lists the rows of the table.
       "member: lists the rows of the table of the other replication": [
-        "allowed",
+        "denied",
         list("member", "contributors", where("contributorTableId", "==", VICTIM_TABLE), limit(20)),
+      ],
+      "ownLead: lists the rows of the table of the other replication": [
+        "denied",
+        list("ownLead", "contributors", where("contributorTableId", "==", VICTIM_TABLE), limit(20)),
+      ],
+      "admin: lists the rows of the table of the other replication": [
+        "allowed",
+        list("admin", "contributors", where("contributorTableId", "==", VICTIM_TABLE), limit(20)),
       ],
     });
   });

@@ -26,6 +26,7 @@ import {
   validated,
 } from "./context";
 import { IdentityResolver } from "./identity";
+import { requireOutsideRepository } from "./local-export";
 import type {
   BlockingCheck,
   ImporterDefinition,
@@ -93,6 +94,11 @@ export interface RunReport {
   };
   /** Fields that were left alone because the live value differs from the source. */
   readonly conflicts: number;
+  /**
+   * Rows whose special-category cells were discarded without being stored, because their person
+   * has given no consent to holding them or is not known yet. A count, which names nobody.
+   */
+  readonly specialCategoryDiscarded: number;
   /** Changes written with a log entry. Always 0 for a preview that is not blocked. */
   readonly changesCommitted: number;
   /** Every document written by the run except its own batch record. */
@@ -397,6 +403,7 @@ function statsOf(report: Omit<RunReport, "status">): Record<string, number> {
     documentsWritten: report.documentsWritten,
     blocking: report.blocking.length,
     conflicts: report.conflicts,
+    specialCategoryDiscarded: report.specialCategoryDiscarded,
     "sourceRecords:created": report.sourceRecords.created,
     "sourceRecords:superseded": report.sourceRecords.superseded,
     "sourceRecords:missing": report.sourceRecords.missing,
@@ -556,6 +563,7 @@ export async function runImport(options: RunOptions): Promise<RunReport> {
     ...options.locations,
     ...(derived === undefined || importer.location === undefined ? {} : { [derived.key]: importer.location }),
   };
+  if (importer.localExport === true) requireOutsideRepository(importer.sourceKey, input.path);
   const target = options.target ?? DEFAULT_TARGET;
   if (options.order !== "notChecked") await requireOrder(db, importer);
   if (mode === "apply" && importer.withheld !== undefined) {
@@ -606,13 +614,16 @@ export async function runImport(options: RunOptions): Promise<RunReport> {
 
     const blocked = plan.blocking.length > 0;
     let changesCommitted = 0;
+    let discardedAtApply = 0;
     if (mode === "apply" && !blocked) {
       if (options.previewBatchId !== undefined)
         await requireMatchingPreview(db, options.previewBatchId, importer.sourceKey, reading, diff);
-      changesCommitted = await applyDiff(context, diff);
+      const applied = await applyDiff(context, diff);
+      changesCommitted = applied.committed;
+      discardedAtApply = applied.discarded;
     } else if (blocked) {
       // An item that explains why the batch cannot be applied is written at once, so that a reviewer can act on it.
-      changesCommitted = await applyBlockingItems(context, diff);
+      changesCommitted = (await applyBlockingItems(context, diff)).committed;
     }
     // Each change is one document with one entry in the change log.
     documentsWritten += changesCommitted * 2;
@@ -646,6 +657,8 @@ export async function runImport(options: RunOptions): Promise<RunReport> {
       },
       ...summarise(diff),
       conflicts: diff.conflicts,
+      // The values of a person whose consent ended between the plan and the write are discarded too.
+      specialCategoryDiscarded: diff.specialDiscarded + discardedAtApply,
       changesCommitted,
       documentsWritten,
       planHash: diff.planHash,

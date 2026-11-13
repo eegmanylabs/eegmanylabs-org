@@ -75,7 +75,12 @@ describe("the records of imports", () => {
     for (const [key, what] of RECORDS) {
       await expectOutcomes({
         ...forEach(WITHOUT_PROGRAMME_POWERS, "denied", `reads ${what}`, (caller) => get(caller, storedPath(key))),
-        [`coreTeam: reads ${what}`]: ["allowed", get("coreTeam", storedPath(key))],
+        // Raw rows hold what a decision of the programme seals, so programme administrators alone read them.
+        [`coreTeam: reads ${what}`]: [
+          key === "sourceRecords" || key === "sourceRecordRawChunks" ? "denied" : "allowed",
+          get("coreTeam", storedPath(key)),
+        ],
+        [`admin: reads ${what}`]: ["allowed", get("admin", storedPath(key))],
       });
     }
   });

@@ -32,6 +32,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import type { CallableRequest } from "firebase-functions/https";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { adminDb } from "../support/admin";
+import { recordConsent } from "../support/consent";
 import {
   account,
   administrator,
@@ -146,6 +147,8 @@ describe("what the functions leave behind", () => {
       genderSelfDescribed: DEMOGRAPHIC_VALUES[2],
       recordedAt: Timestamp.now(),
     });
+    // Person 1 has consented to the portal holding these values, which the programme requires.
+    await recordConsent("person-1");
     await adminDb.doc("correctionRequests/request-1").set({
       ...standard(),
       uid: "uid-claimant",

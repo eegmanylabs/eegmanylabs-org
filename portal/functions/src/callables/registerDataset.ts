@@ -2,8 +2,11 @@ import {
   COLLECTIONS,
   datasetDetailDocSchema,
   datasetDocSchema,
+  datasetSharedWith,
+  migrationAnswer,
   participationId,
   registerDatasetContract,
+  replicationScopeKey,
   unitScopeKeys,
 } from "@eegml/shared";
 import { writeStatusHistory } from "../datasets/history";
@@ -96,6 +99,32 @@ export const registerDataset = defineCallable(registerDatasetContract, {
               null,
             );
       const workflow = await readWorkflow(db, transaction, input.replicationId);
+      // Replications that share one dataset by a decision of the programme (question 3 of
+      // docs/MIGRATION_PLAN.md, section 11) have one record of it at the level of the replication,
+      // which names the other replications and which their teams read as theirs. A laboratory's own
+      // registration is no part of the decision and stays with its unit.
+      const sharedCandidates = input.laboratoryId === null ? datasetSharedWith(input.replicationId) : [];
+      const sharedSnapshots =
+        sharedCandidates.length === 0
+          ? []
+          : await transaction.getAll(...sharedCandidates.map((id) => db.doc(COLLECTIONS.replications.docPath(id))));
+      const sharedReplicationIds = sharedCandidates.filter((_id, index) => sharedSnapshots[index]?.exists === true);
+      if (sharedReplicationIds.length > 0) {
+        const group = [input.replicationId, ...sharedReplicationIds];
+        const recorded = await transaction.get(
+          db
+            .collection(COLLECTIONS.datasets.collectionPath())
+            .where("sharedReplicationIds", "array-contains-any", group)
+            .limit(5),
+        );
+        if (recorded.docs.some((doc) => doc.get("archivedAt") == null)) {
+          throw new AppError(
+            "already-exists",
+            "These replications share one dataset, as the programme lead decided on 13 Nov 2026 (programme decisions " +
+              "of 13 November 2026, migration question 3), and its record exists already. Add to that record instead.",
+          );
+        }
+      }
 
       const auditEventId = writeAudit(
         transaction,
@@ -110,6 +139,9 @@ export const registerDataset = defineCallable(registerDatasetContract, {
             { field: "title", after: input.title },
             { field: "workflowStatusKey", after: workflow.initialKey },
             { field: "storage", after: input.storage === null ? null : input.storage.endpointKey },
+            ...(sharedReplicationIds.length === 0
+              ? []
+              : [{ field: "sharedReplicationIds", after: sharedReplicationIds }]),
           ],
           at,
         },
@@ -132,7 +164,11 @@ export const registerDataset = defineCallable(registerDatasetContract, {
       const document = datasetDocSchema.parse({
         ...createdFields("datasets", stamp),
         ...data,
-        scopeKeys: unitScopeKeys(input.replicationId, input.laboratoryId),
+        scopeKeys: [
+          ...unitScopeKeys(input.replicationId, input.laboratoryId),
+          ...sharedReplicationIds.map((id) => replicationScopeKey(id)),
+        ],
+        ...(sharedReplicationIds.length === 0 ? {} : { sharedReplicationIds, sharingDecision: migrationAnswer(3) }),
         title: input.title,
         modality: input.modality,
         ...(input.groupingLabel === null ? {} : { groupingLabel: input.groupingLabel }),

@@ -21,6 +21,7 @@
 import { COLLECTIONS, type CollectionKey, type EntityType, entityPath, lookupFold } from "@eegml/shared";
 import { type Firestore, Timestamp } from "firebase-admin/firestore";
 import { chunked, entryOf, type RunContext, readDocuments, updatedFields } from "./context";
+import { requireOutsideRepository } from "./local-export";
 import type { ImporterDefinition, ImportInput, ImportPlan, RowClass } from "./model";
 import { carriesProvenance } from "./ownership";
 import { EMAIL_SHAPED } from "./privacy-guard";
@@ -276,6 +277,7 @@ async function blankAndZeroCheck(db: Firestore, plan: ImportPlan): Promise<Verif
 
 export async function verifyImport(options: VerifyOptions): Promise<VerificationCheck[]> {
   const { db, importer, input, secret } = options;
+  if (importer.localExport === true) requireOutsideRepository(importer.sourceKey, input.path);
   const checkedAt = Timestamp.fromDate(options.now ?? new Date());
   // The name sorts after every batch identifier, so the latest batch counts as the previous one.
   const context: RunContext = { db, sourceKey: importer.sourceKey, batchId: "verify", now: checkedAt };

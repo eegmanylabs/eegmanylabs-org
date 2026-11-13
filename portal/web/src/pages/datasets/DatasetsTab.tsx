@@ -58,7 +58,10 @@ export function DatasetsTab({
       {({ data, parts, servers }) => {
         const rows = data.rows.filter(
           (row) =>
-            (replicationId === undefined || row.replicationId === replicationId) &&
+            // A record that two replications share by a decision of the programme is listed for each.
+            (replicationId === undefined ||
+              row.replicationId === replicationId ||
+              row.sharedReplicationIds.includes(replicationId)) &&
             (laboratoryId === undefined || row.laboratoryId === laboratoryId),
         );
         const units = registrationUnits(viewer, parts);

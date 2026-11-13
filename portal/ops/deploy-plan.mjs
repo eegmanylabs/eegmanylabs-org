@@ -73,6 +73,6 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     if (name !== "staging" && name !== "production")
       throw new ProcedureRefusal("Refusing: --environment is staging or production.");
     const projectId = requireProject(options);
-    return { projectId, commands: deployCommands(ENVIRONMENTS[name], projectId) };
+    return { environment: name, projectId, commands: deployCommands(ENVIRONMENTS[name], projectId) };
   });
 }

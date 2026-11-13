@@ -30,6 +30,7 @@ import { importer as studies, TAB_TITLES } from "../../tools/src/import/sources/
 import { importer as website } from "../../tools/src/import/sources/website-data";
 import { adminDb } from "../support/admin";
 import {
+  agreeOnLeads,
   allDocuments,
   differences,
   documentsOf,
@@ -103,6 +104,7 @@ describe("the list of studies, applied after the website data", () => {
   beforeAll(async () => {
     await freshDatabase();
     await applyWebsite();
+    await agreeOnLeads();
     file = await workbookFile();
     report = await run(studies, file, "apply");
   });
@@ -183,6 +185,35 @@ describe("the list of studies, applied after the website data", () => {
       R: { v: "Zed Remarker thinks the sample is too small", t: "string" },
       AP: { v: "Ann Voter", t: "string" },
     });
+  });
+
+  it("names the related project that the subproject is, with the rows of its candidates, as the programme decided", async () => {
+    const project = (await adminDb.doc("programmes/asymmetry").get()).data();
+    const rows = (await adminDb.collection("sourceRecords").where("sourceKey", "==", "d").get()).docs.filter(
+      (doc) => doc.get("tabKey") === tabKey("subproject") && !/^(header|banner)\d+$/.test(String(doc.get("rowKey"))),
+    );
+    expect(project).toMatchObject({
+      key: "asymmetry",
+      name: TAB_TITLES.subproject,
+      parentId: "eegmanylabs",
+      kind: "subproject",
+      websiteSlug: "asymmetry",
+      active: true,
+      decision: {
+        decidedBy: "programmeLead",
+        decidedOn: "2026-11-13",
+        reference: "docs/MIGRATION_PLAN.md, section 11, question 15",
+      },
+    });
+    // The candidate papers stay archived source records (question 9), and each carries the link to the project.
+    expect([...(project?.sourceRecordIds ?? [])].sort()).toEqual(rows.map((doc) => doc.id).sort());
+    expect(rows).toHaveLength(3);
+    // The slug, the state and the decision are the programme's decision, which no source row stated: none of them
+    // is recorded as an imported value or attributed to a row.
+    for (const field of ["websiteSlug", "active", "decision"]) {
+      expect(project?.importedValues ?? {}, field).not.toHaveProperty(field);
+      expect(project?.fieldSources ?? {}, field).not.toHaveProperty(field);
+    }
   });
 
   it("creates the two replications that the website does not hold, and labels them as historical", async () => {
@@ -378,7 +409,7 @@ describe("the list of studies, applied after the website data", () => {
     expect(claimSources(againstPortal)).toEqual(["d/list", "portal/membership"]);
     expect(againstPortal?.entityRefs).toHaveLength(2);
     expect(againstPortal?.entityRefs[1].entityType).toBe("person");
-    // The lead that the website confirmed is in question now: the membership stays, the same person stays, and
+    // The lead confirmed on the agreement of the sources is in question now: the membership stays, the same person stays, and
     // its confirmation is lowered until a reviewer has decided. The row of the workbook is named as the reason.
     const memberships = [...(await documentsOf("memberships", true)).entries()];
     const iota = memberships.find(([documentPath]) => documentPath.startsWith("replications/Iota2004/"));
@@ -702,6 +733,7 @@ describe("the list of studies over several runs", () => {
   beforeEach(async () => {
     await freshDatabase();
     await applyWebsite();
+    await agreeOnLeads();
   });
 
   it("lowers a confirmed lead while its question is open, and never against a reviewer or a second time", async () => {

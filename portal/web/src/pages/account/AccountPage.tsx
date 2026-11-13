@@ -1,5 +1,6 @@
 import { type ReactNode, useState } from "react";
 import { Link } from "react-router";
+import { config } from "@/app/config";
 import { ROLE_LABELS } from "@/app/labels";
 import { useAuth, useSignedInUser } from "@/auth/AuthProvider";
 import { programmePowersWithheld } from "@/auth/privilege";
@@ -13,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 import { type AccessRecord, CallableError, retryFailedLiveData } from "@/data";
+import { DemographicsConsent } from "./DemographicsConsent";
 import { NotificationPreferences } from "./NotificationPreferences";
 import { SecondFactorSection } from "./SecondFactorSection";
 
@@ -218,7 +220,12 @@ export function AccountPage() {
                   <RolesList access={record} />
                 )}
               </Panel>
-              {record?.member === true ? <NotificationPreferences uid={user.uid} /> : null}
+              {record?.member === true && config.mailDelivery === "enabled" ? (
+                <NotificationPreferences uid={user.uid} />
+              ) : null}
+              {record?.member === true && record.personId !== null ? (
+                <DemographicsConsent personId={record.personId} />
+              ) : null}
               <SecondFactorSection
                 accountName={user.email ?? user.uid}
                 required={record?.secondFactorRequired === true || (record?.programmeRoles.length ?? 0) > 0}

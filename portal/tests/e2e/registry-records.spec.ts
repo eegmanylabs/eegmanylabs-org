@@ -26,7 +26,6 @@ const TABS = [
   "Decisions",
   "Incidents",
   "Risks",
-  "Contributors",
   "Documents",
   "Activity",
   "Tasks",
@@ -68,15 +67,9 @@ test("the replication page shows each section that has content, with every value
 
   await page.getByRole("tab", { name: "Laboratories" }).click();
   await expect(panel).toContainText("Demo Attention Laboratory");
-  const historical = page.getByTestId("historical-figures");
-  // The figures of the demonstration world are labelled by their own origin, never as the programme's records.
-  await expect(historical).toContainText("Demonstration data");
-  await expect(historical).not.toContainText("Imported historical");
-  await expect(historical).toContainText("No as-of date in the source");
-  await expect(historical.getByTestId("modalities")).toContainText("340");
-  await expect(historical.getByTestId("modalities")).toContainText("120");
-  await expect(historical).toContainText("never added together");
-  await expect(historical).not.toContainText("460");
+  // The summary figures of the historical workbooks are sealed: a member reads none of them.
+  await expect(page.getByTestId("historical-figures")).toHaveCount(0);
+  await expect(panel).not.toContainText("340");
   await reviewPage(page, "replication-laboratories");
 
   await page.getByRole("tab", { name: "Hypotheses" }).click();
@@ -84,19 +77,16 @@ test("the replication page shows each section that has content, with every value
   await expect(first).toContainText("sig");
   await expect(first).toContainText("Unverified source value");
   await expect(first).toContainText("Not scientifically reviewed");
-  // The historical "replicated" label is restricted to the team of the replication and the programme.
-  await expect(first).toContainText("Shown to the team of the replication and to the programme only");
+  // The historical "replicated" label is sealed: programme administrators alone read it.
+  await expect(first).toContainText("Sealed by a decision of the programme and shown to programme administrators only");
   await expect(first).not.toContainText("partially");
 
   await page.getByRole("tab", { name: "Outputs" }).click();
   await expect(panel).toContainText("In-principle acceptance");
   await expect(panel).toContainText("Journal of Examples");
   await expect(panel).toContainText("2024");
-  await page.getByRole("tab", { name: "Contributors" }).click();
-  await expect(panel).toContainText(
-    "Conceptualization, Methodology, Writing – original draft (unverified source value: x)",
-  );
-  await expect(panel).not.toContainText("@example.org");
+  // The contributor lists are read by the team of the replication, which this member is not on.
+  await expect(page.getByRole("tab", { name: "Contributors" })).toHaveCount(0);
   await page.getByRole("tab", { name: "Documents" }).click();
   await expect(panel).toContainText("Analysis plan (synthetic)");
   // A link restricted to the team is not served to a member outside it.
@@ -135,6 +125,52 @@ test("the replication page shows each section that has content, with every value
   await expect(page.getByRole("tabpanel")).toContainText("Needs review");
   await expect(page.getByRole("link", { name: "Open the memberships to review" })).toHaveCount(0);
   await reviewPage(page, "replication-leadership");
+});
+
+test("a programme administrator reads the sealed figures and outcome labels, and the team reads its contributor list", async ({
+  browser,
+  baseURL,
+}) => {
+  const admin = await administratorBrowser(browser, baseURL as string);
+  try {
+    const adminPage = admin.page;
+    await adminPage.goto(`./#/replications/${ALPHA}`);
+    await expect(adminPage.getByRole("heading", { level: 1, name: ALPHA })).toBeVisible();
+    const panel = adminPage.getByRole("tabpanel");
+    await adminPage.getByRole("tab", { name: "Laboratories" }).click();
+    const historical = adminPage.getByTestId("historical-figures");
+    // The figures of the demonstration world are labelled by their own origin, never as the programme's records.
+    await expect(historical).toContainText("Demonstration data");
+    await expect(historical).not.toContainText("Imported historical");
+    await expect(historical).toContainText("No as-of date in the source");
+    await expect(historical.getByTestId("modalities")).toContainText("340");
+    await expect(historical.getByTestId("modalities")).toContainText("120");
+    await expect(historical).toContainText("never added together");
+    await expect(historical).not.toContainText("460");
+    await adminPage.getByRole("tab", { name: "Hypotheses" }).click();
+    await expect(adminPage.getByTestId("hypothesis").filter({ hasText: "partially" })).toHaveCount(1);
+    await adminPage.getByRole("tab", { name: "Contributors" }).click();
+    await expect(panel).toContainText(
+      "Conceptualization, Methodology, Writing – original draft (unverified source value: x)",
+    );
+    await expect(panel).not.toContainText("@example.org");
+  } finally {
+    await admin.context.close();
+  }
+  const lead = await leadBrowser(browser, baseURL as string);
+  try {
+    // The lead is on the team: the contributor list is there, and the sealed values are not.
+    await lead.page.goto(`./#/replications/${ALPHA}`);
+    await expect(lead.page.getByRole("heading", { level: 1, name: ALPHA })).toBeVisible();
+    await lead.page.getByRole("tab", { name: "Contributors" }).click();
+    await expect(lead.page.getByRole("tabpanel")).toContainText("Conceptualization");
+    await lead.page.getByRole("tab", { name: "Hypotheses" }).click();
+    await expect(lead.page.getByRole("tabpanel")).not.toContainText("partially");
+    await lead.page.getByRole("tab", { name: "Laboratories" }).click();
+    await expect(lead.page.getByTestId("historical-figures")).toHaveCount(0);
+  } finally {
+    await lead.context.close();
+  }
 });
 
 test("a lead edits the replication in place and changes its status; the rules and the function refuse another member", async ({

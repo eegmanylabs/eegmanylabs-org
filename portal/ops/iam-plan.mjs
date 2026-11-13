@@ -184,6 +184,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       .map((entry) => entry.trim())
       .filter(Boolean);
     return {
+      environment: name,
       projectId,
       commands: iamCommands(ENVIRONMENTS[name], {
         projectId,

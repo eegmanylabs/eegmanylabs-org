@@ -101,6 +101,7 @@ describe("seed:lookups", () => {
         .map((status) => status.key),
     ).toEqual([
       "proposed",
+      "ongoing",
       "planning",
       "recruitingLabs",
       "sitePreparation",

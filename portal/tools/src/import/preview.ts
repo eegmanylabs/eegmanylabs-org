@@ -7,6 +7,7 @@ import {
   ENTITY_COLLECTIONS,
   type EntityRef,
   type EntityType,
+  isSealedEntry,
   nestedEntityId,
 } from "@eegml/shared";
 import type { Timestamp } from "firebase-admin/firestore";
@@ -31,6 +32,11 @@ export interface DocumentChange {
   readonly sourceRecordIds: readonly string[];
   /** When the stored document was last written, which the apply names as its precondition. */
   readonly updateTime: Timestamp | null;
+  /**
+   * True for a removal that no rollback undoes: a copy of special-category cells that is removed
+   * because the values may be held only with consent. Its log entry keeps no state.
+   */
+  readonly irreversible?: true;
 }
 
 /**
@@ -66,6 +72,11 @@ export interface PlanDiff {
   readonly itemsStanding: number;
   /** Fields that the import leaves alone because the live value differs from the source. */
   readonly conflicts: number;
+  /**
+   * Rows whose special-category cells were discarded without being stored, because their person
+   * has given no consent or is not known yet. A count, which names nobody.
+   */
+  readonly specialDiscarded: number;
   /** A hash of what would be written, by which an apply is matched to a preview. */
   readonly planHash: string;
 }
@@ -109,6 +120,8 @@ function conflictItem(
   // Only a value that every member may read is shown in the queue. A restricted or special-category value is
   // named by its field and its source record, and whoever may read the record reads it there.
   const guarded = entry.dataClass === "restricted" || entry.dataClass === "special";
+  // A value of a sealed collection is read by programme administrators alone, and so is an item about it.
+  const sealed = isSealedEntry(entry) ? ({ sealed: true } as const) : {};
   // The key of a guarded value covers the document and the field, so that two people with one value never
   // share a key and nobody can sort people by an equal value that the queue does not show.
   const keyed = (value: string) => (guarded ? `${path}\n${conflict.field}\n${value}` : value);
@@ -124,12 +137,14 @@ function conflictItem(
         value: keyed(live),
         ...(guarded ? {} : { valueSource: conflict.liveState === "differs" ? display(conflict.liveValue) : live }),
         ...(conflict.liveSourceRecordId === undefined ? {} : { sourceRecordId: conflict.liveSourceRecordId }),
+        ...sealed,
       },
       {
         source: sourceKey,
         value: keyed(canonicalJson(conflict.sourceValue)),
         ...(guarded ? {} : { valueSource: display(conflict.sourceValue) }),
         sourceRecordId: conflict.sourceRecordId,
+        ...sealed,
       },
     ],
   });
@@ -253,9 +268,12 @@ const LEAD_ROLES = new Set(["lead", "coLead"]);
 /**
  * Lowers the confirmed leads of a replication to `needsReview` while a question about its lead is
  * open (docs/MIGRATION_PLAN.md, section 4.1): when claims for one study name different people or
- * a further person, every membership concerned is marked for review. Only a membership whose
- * confirmation an import wrote is lowered. One that a person has set since, and one whose
- * question a reviewer has decided, stands. No lead is chosen and none is removed.
+ * a further person, every membership concerned is marked for review. A question that rests on a
+ * cell which names several studies, or that concerns several replications, lowers the leads of
+ * each of them, since it is a disagreement about every one. Only a confirmation that no person
+ * made is lowered: one that an import wrote, or one written under the programme's decision on
+ * agreeing sources (question 5), which holds only while the sources agree. One that a reviewer set,
+ * and one whose question a reviewer has decided, stands. No lead is chosen and none is removed.
  */
 async function lowerQuestionedLeads(
   context: RunContext,
@@ -271,15 +289,13 @@ async function lowerQuestionedLeads(
   const opened = new Set(
     itemChanges.filter((change) => change.action === "raise" || change.action === "reopen").map((c) => c.path),
   );
-  // A write to a stored membership needs a resolved identifier. A question that names its study by a proposal, that
-  // rests on a cell which names several studies, or that concerns more than one replication lowers nothing.
+  // A write to a stored membership needs a resolved identifier. A question that names its study only by a proposal
+  // lowers nothing, since the proposal may name the wrong study; every replication that a question names is lowered.
   const questions = [...plannedItems.values()].filter(
     (item) =>
       item.kind === "conflictingLead" &&
-      item.entityRefs.filter((ref) => ref.entityType === "replication").length === 1 &&
-      !item.candidates.some(
-        (candidate) => candidate.key.startsWith(PROPOSAL_PREFIX) || candidate.key.startsWith(COMBINED_PREFIX),
-      ),
+      item.entityRefs.some((ref) => ref.entityType === "replication") &&
+      !item.candidates.some((candidate) => candidate.key.startsWith(PROPOSAL_PREFIX)),
   );
   const standing = await readDocuments(
     db,
@@ -302,13 +318,16 @@ async function lowerQuestionedLeads(
   /** The state of a membership with its confirmation lowered, or null where it is not one that an import confirmed. */
   const lower = (path: string, data: Record<string, unknown>, supplier: string): Record<string, unknown> | null => {
     const imported = (data.importedValues as Record<string, unknown> | undefined)?.reviewStatus;
-    if (!LEAD_ROLES.has(String(data.role)) || data.reviewStatus !== "confirmed" || imported !== "confirmed")
-      return null;
+    const unreviewed = imported === "confirmed" || data.confirmationBasis !== undefined;
+    if (!LEAD_ROLES.has(String(data.role)) || data.reviewStatus !== "confirmed" || !unreviewed) return null;
+    // The agreement on which the lead was confirmed no longer holds, so its basis goes with the confirmation. The
+    // record behind the question is named for the status, so that the source that wrote the lead leaves it as it is.
+    const { confirmationBasis: _basis, ...kept } = data;
     return validated(entry, path, {
-      ...data,
+      ...kept,
       reviewStatus: "needsReview",
       importedValues: { ...(data.importedValues as Record<string, unknown>), reviewStatus: "needsReview" },
-      // The record behind the question is named for this one field. The membership itself comes from other rows.
+      // The membership itself comes from other rows.
       fieldSources: { ...(data.fieldSources as Record<string, string> | undefined), reviewStatus: supplier },
       ...updatedFields(now),
     });
@@ -326,7 +345,13 @@ async function lowerQuestionedLeads(
           ...change,
           relation: "updated",
           after,
-          changedFields: [...new Set([...change.changedFields, "reviewStatus"])],
+          changedFields: [
+            ...new Set([
+              ...change.changedFields,
+              "reviewStatus",
+              ...(change.after?.confirmationBasis === undefined ? [] : ["confirmationBasis"]),
+            ]),
+          ],
         };
         continue;
       }
@@ -339,7 +364,8 @@ async function lowerQuestionedLeads(
         relation: "updated",
         before: doc.data(),
         after,
-        changedFields: ["reviewStatus"],
+        changedFields:
+          doc.get("confirmationBasis") === undefined ? ["reviewStatus"] : ["reviewStatus", "confirmationBasis"],
         // No row of the source stands behind the membership, so no row that goes takes the membership with it.
         sourceRecordIds: [],
         updateTime: doc.updateTime ?? null,
@@ -358,18 +384,20 @@ export interface DiffOptions {
 }
 
 /**
- * The changes to the special-category cells of rows (docs/MIGRATION_PLAN.md, section 10). The
- * cells of a row are kept beneath its source record, where no client reads them, only while the
- * row has no special-category document of its own: a row that waits in the queue. Once the plan
- * states such a document from the row, the cells stand there and the copy beneath the record is
- * removed in the same batch. Both are changes with a log entry, so a rollback reverses them, and
- * a preview writes neither.
+ * What becomes of the special-category cells of rows (docs/MIGRATION_PLAN.md, section 10). The
+ * programme decided on 13 November 2026 that gender and ethnicity are held only for a person who
+ * has given explicit consent (question 20). The cells of a row therefore reach one place alone:
+ * the demographics document of a consenting person, which the plan states. The cells of every
+ * other row, whether its person has not consented or it names no person yet, are discarded and
+ * counted, and nothing of them is stored. A later run after more consents reads them from the
+ * input again. A copy beneath a source record that an apply made before that decision is
+ * removed, as a change with a log entry; a preview writes nothing.
  */
 async function specialCellChanges(
   context: RunContext,
   plan: ImportPlan,
   rows: readonly RecordedRow[],
-): Promise<DocumentChange[]> {
+): Promise<{ readonly changes: DocumentChange[]; readonly discarded: number }> {
   const entry = entryOf("sourceRecordSpecial");
   const placed = new Set(
     plan.documents
@@ -384,39 +412,22 @@ async function specialCellChanges(
   for (const row of [...rows].sort((a, b) => (a.recordId < b.recordId ? -1 : 1))) {
     const path = entry.docPath(row.recordId);
     const current = stored.get(path) ?? null;
-    const base = {
+    if (current === null) continue;
+    changes.push({
       path,
-      collection: "sourceRecordSpecial" as const,
+      collection: "sourceRecordSpecial",
       changedFields: [],
       sourceRecordIds: [row.recordId],
-    };
-    if (placed.has(row.recordId)) {
-      if (current === null) continue;
-      changes.push({
-        ...base,
-        operation: "delete",
-        relation: "updated",
-        before: current.data,
-        after: null,
-        updateTime: current.updateTime,
-      });
-    } else if (current === null) {
-      changes.push({
-        ...base,
-        operation: "create",
-        relation: "created",
-        before: null,
-        after: validated(entry, path, {
-          ...createdFields(context.now),
-          schemaVersion: entry.schemaVersion,
-          sourceRecordId: row.recordId,
-          raw: { ...row.special },
-        }),
-        updateTime: null,
-      });
-    }
+      operation: "delete",
+      relation: "updated",
+      before: current.data,
+      after: null,
+      updateTime: current.updateTime,
+      // The cells may be held only with consent, so no copy of them is kept for a rollback to write back.
+      irreversible: true,
+    });
   }
-  return changes;
+  return { changes, discarded: rows.filter((row) => !placed.has(row.recordId)).length };
 }
 
 export async function comparePlan(context: RunContext, plan: ImportPlan, options: DiffOptions): Promise<PlanDiff> {
@@ -430,6 +441,7 @@ export async function comparePlan(context: RunContext, plan: ImportPlan, options
   const unchanged = new Map<CollectionKey, number>();
   const plannedItems = new Map(plan.items.map((item) => [item.fingerprint, item]));
   let conflicts = 0;
+  let specialDiscarded = 0;
 
   for (const document of plan.documents) {
     const entry = entryOf(document.collection);
@@ -508,6 +520,8 @@ export async function comparePlan(context: RunContext, plan: ImportPlan, options
         resolvedAt: null,
         batchId,
         ...(item.subjectKey === undefined ? {} : { subjectKey: item.subjectKey }),
+        sealed: item.sealed,
+        ...(item.decision === undefined ? {} : { decision: item.decision }),
       });
       itemChanges.push({
         path,
@@ -527,6 +541,8 @@ export async function comparePlan(context: RunContext, plan: ImportPlan, options
         resolvedBy: null,
         resolvedAt: null,
         batchId,
+        sealed: item.sealed,
+        ...(item.decision === undefined ? {} : { decision: item.decision }),
         ...updatedFields(now),
       });
       itemChanges.push({
@@ -586,14 +602,16 @@ export async function comparePlan(context: RunContext, plan: ImportPlan, options
   if (options.complete) {
     for (const change of await containedStatements(context, plannedItems, itemChanges)) itemChanges.push(change);
     await lowerQuestionedLeads(context, plannedItems, itemChanges, changes, options.ownRecordIds);
-    changes.push(...(await specialCellChanges(context, plan, options.specialRows ?? [])));
+    const special = await specialCellChanges(context, plan, options.specialRows ?? []);
+    changes.push(...special.changes);
+    specialDiscarded = special.discarded;
   }
 
   const planHash = contentHash({
     documents: changes.map((change) => [change.path, change.operation, [...change.changedFields].sort()]),
     items: itemChanges.map((change) => [change.fingerprint, change.action]),
   });
-  return { changes, unchanged, itemChanges, itemsStanding, conflicts, planHash };
+  return { changes, unchanged, itemChanges, itemsStanding, conflicts, specialDiscarded, planHash };
 }
 
 /** The top-level fields that differ between two states of a document, with null for a field that is removed. */

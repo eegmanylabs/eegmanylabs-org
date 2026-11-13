@@ -286,6 +286,13 @@ const adminRead = (capability: GrantableCapability): ReadRule => read(["ADMIN"],
 
 const FUNCTION_ONLY: WriteRule = { mode: "function" };
 
+/**
+ * The condition of a review item or a change-log entry: one about a value that a decision of the
+ * programme seals is read with `sealed.read` alone, and one without the flag counts as sealed.
+ */
+const SEALED_CONDITION =
+  "One marked sealed, or written before the seal without the flag, is read with sealed.read alone.";
+
 const grant = (
   writers: readonly Writer[],
   operations: readonly WriteOperation[],
@@ -631,6 +638,17 @@ const DEFINITIONS = {
     flags: { importable: true },
     enforcement: ENFORCED,
   }),
+  personDemographicsConsent: define({
+    path: "persons/{personId}/private/demographicsConsent",
+    schema: identity.personDemographicsConsentDocSchema,
+    id: fixed("demographicsConsent"),
+    // The person alone reads the record of their consent. It holds no special-category value, and
+    // the functions that hold the values read it before they write or serve one.
+    read: read(["SELF"], ["parent.userId"]),
+    write: FUNCTION_ONLY,
+    dataClass: "restricted",
+    enforcement: ENFORCED,
+  }),
   personAffiliations: define({
     path: "persons/{personId}/affiliations/{id}",
     schema: identity.personAffiliationDocSchema,
@@ -719,8 +737,10 @@ const DEFINITIONS = {
     schema: programme.programmeDocSchema,
     id: key("programme key", "key"),
     read: read(["MEMBER"]),
-    write: client([grant(STAFF, WRITE, { capability: "lookups.manage" })]),
+    // What a decision of the programme says of a project is written by trusted code alone.
+    write: client([grant(STAFF, WRITE, { capability: "lookups.manage" })], [], ["websiteSlug", "active", "decision"]),
     dataClass: "public",
+    flags: { importable: true },
     enforcement: ENFORCED,
   }),
   laboratories: define({
@@ -831,7 +851,7 @@ const DEFINITIONS = {
     write: client(
       [grant(LEADS, WRITE, { capability: "replications.manage", onlyFields: ["internalNotes"] })],
       ["{studyKey}"],
-      ["notesSource", "replicatedSource"],
+      ["notesSource"],
     ),
     dataClass: "restricted",
     flags: { importable: true },
@@ -866,8 +886,8 @@ const DEFINITIONS = {
         }),
       ],
       ["{studyKey}"],
-      // Trusted code moves a period that has ended into the earlier periods.
-      ["earlierPeriods"],
+      // Trusted code moves a period that has ended into the earlier periods, and an import states why it confirmed.
+      ["earlierPeriods", "confirmationBasis"],
     ),
     dataClass: "member",
     flags: { importable: true },
@@ -986,9 +1006,22 @@ const DEFINITIONS = {
     path: "historicalAggregates/{metricKey__sourceRecordId}",
     schema: replications.historicalAggregateDocSchema,
     id: built("historicalAggregateId", ["metricKey", "sourceRecordId"]),
-    read: read(["MEMBER"]),
+    // The summary figures of source F are sealed by a decision of the programme (question 14). The project seals the
+    // figures of the coordination workbook A alike, as a safeguard of its own, until the programme lead says otherwise.
+    read: adminRead("sealed.read"),
     write: FUNCTION_ONLY,
-    dataClass: "member",
+    dataClass: "restricted",
+    flags: { importable: true },
+    enforcement: ENFORCED,
+  }),
+  predictionMarketOutcomes: define({
+    path: "predictionMarketOutcomes/{studyKey}",
+    schema: replications.predictionMarketOutcomeDocSchema,
+    id: key("study identifier", "replicationId"),
+    // The outcome labels are sealed by a decision of the programme (question 7).
+    read: adminRead("sealed.read"),
+    write: FUNCTION_ONLY,
+    dataClass: "restricted",
     flags: { importable: true },
     enforcement: ENFORCED,
   }),
@@ -1047,14 +1080,11 @@ const DEFINITIONS = {
     path: "predictionMarketItems/{id}",
     schema: replications.predictionMarketItemDocSchema,
     id: auto,
-    read: read(["MEMBER"]),
-    write: client([
-      grant(STAFF, WRITE, {
-        capability: "replications.manage",
-        condition: "A hypothesis is named together with its replication, and both exist.",
-      }),
-    ]),
-    dataClass: "member",
+    // The survey and market questions are prediction-market data, which no one may see (question 7): programme
+    // administrators alone read them, and only the importer writes them.
+    read: adminRead("sealed.read"),
+    write: FUNCTION_ONLY,
+    dataClass: "restricted",
     flags: { importable: true },
     enforcement: ENFORCED,
   }),
@@ -1802,7 +1832,9 @@ const DEFINITIONS = {
     path: "contributors/{id}",
     schema: outputs.contributorDocSchema,
     id: auto,
-    read: read(["MEMBER"]),
+    // The team of the replication reads its contributor lists, by a decision of the programme (question 10). Programme
+    // staff read them as they read every scoped record, which is the portal's model and an open question, not the decision.
+    read: read(["SCOPED"], ["scopeKeys"]),
     write: client(
       [
         grant(LEADS, WRITE, {
@@ -1964,7 +1996,7 @@ const DEFINITIONS = {
     path: "importBatches/{batchId}/changes/{n}",
     schema: provenance.importBatchChangeDocSchema,
     id: built("sequenceId"),
-    read: adminRead("imports.run"),
+    read: read(["ADMIN"], [], SEALED_CONDITION, "imports.run"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     flags: { appendOnly: true, audited: false },
@@ -2004,7 +2036,10 @@ const DEFINITIONS = {
     path: "sourceRecords/{id}",
     schema: provenance.sourceRecordDocSchema,
     id: built("sourceRecordId", ["sourceKey", "tabKey", "rowKey", "rawHash"]),
-    read: adminRead("imports.run"),
+    // The raw rows of sources E and F hold the values that the programme sealed (questions 7 and 14). The project
+    // seals the raw rows of every source alike, as a safeguard of its own: one rule leaves no row that holds a sealed
+    // value readable by a mistake in its source key. Whether the programme wants the wider seal is an open question.
+    read: adminRead("sealed.read"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     flags: { audited: false },
@@ -2024,7 +2059,7 @@ const DEFINITIONS = {
     path: "sourceRecords/{id}/rawChunks/{n}",
     schema: provenance.sourceRecordRawChunkDocSchema,
     id: built("sequenceId", ["index"]),
-    read: adminRead("imports.run"),
+    read: adminRead("sealed.read"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     flags: { appendOnly: true, audited: false },
@@ -2034,7 +2069,7 @@ const DEFINITIONS = {
     path: "reconciliationItems/{fingerprint}",
     schema: provenance.reconciliationItemDocSchema,
     id: built("reconciliationFingerprint"),
-    read: adminRead("reconciliation.resolve"),
+    read: read(["ADMIN"], [], SEALED_CONDITION, "reconciliation.resolve"),
     write: FUNCTION_ONLY,
     dataClass: "restricted",
     enforcement: ENFORCED,
@@ -2372,6 +2407,15 @@ export type ListableCollectionKey = {
 export type DocPathIds<K extends CollectionKey> = Parameters<Registry[K]["docPath"]>;
 /** The identifiers that the collection path of an entry takes: those of its ancestors. */
 export type CollectionPathIds<K extends CollectionKey> = Parameters<Registry[K]["collectionPath"]>;
+
+/**
+ * Whether the documents of an entry hold what a decision of the programme seals (the capability
+ * `sealed.read`): read by programme administrators alone, and kept out of every derived channel.
+ * The change log of an import shows a marker in place of the states of such a document.
+ */
+export function isSealedEntry(entry: Pick<CollectionEntry, "read">): boolean {
+  return entry.read.capability === "sealed.read";
+}
 
 /**
  * The fields that no direct client write may change (docs/DATA_MODEL.md, section 14): the

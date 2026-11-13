@@ -9,7 +9,13 @@ import {
 } from "../capabilities";
 import { dataOriginSchema } from "../data-origin";
 import { entityTypeSchema } from "../entities";
+import {
+  CONSENT_HISTORY_MAX,
+  consentWordingVersionSchema,
+  demographicsConsentStatusSchema,
+} from "../governance/demographics-consent";
 import { DISPLAY_NAME_MAX_LENGTH, normaliseEmail } from "../identifiers";
+import { programmeDecisionSchema } from "../programme-answers";
 import { timestampSchema } from "../timestamp";
 import { z } from "../zod";
 import {
@@ -619,7 +625,10 @@ export type PersonNotesDoc = z.output<typeof personNotesDocSchema>;
 /**
  * `persons/{personId}/special/demographics`: special-category data. No client can read this
  * document. A callable function serves it after checking the caller's grant and second factor.
- * Source terms are verbatim and the standardised categories are optional.
+ * Source terms are verbatim and the standardised categories are optional. The document exists
+ * only while the person's consent is in force (`personDemographicsConsent`): a withdrawal
+ * deletes it, and an import writes it for a person with consent alone. The person writes the
+ * fields `...SelfDescribed` in their own words and confirms the recorded terms with `confirmedAt`.
  */
 export const personDemographicsDocSchema = documentBaseSchema.extend({
   genderSource: verbatimSchema.exactOptional(),
@@ -630,9 +639,45 @@ export const personDemographicsDocSchema = documentBaseSchema.extend({
   ethnicitySelfDescribed: verbatimSchema.exactOptional(),
   sourceRecordId: idSchema.exactOptional(),
   recordedAt: timestampSchema,
+  /** When the person last confirmed the recorded terms as their own. */
+  confirmedAt: timestampSchema.exactOptional(),
   ...provenanceShape,
 });
 export type PersonDemographicsDoc = z.output<typeof personDemographicsDocSchema>;
+
+/** One act of giving or withdrawing consent, with the wording the person read. */
+export const demographicsConsentEventSchema = z.strictObject({
+  status: demographicsConsentStatusSchema,
+  at: timestampSchema,
+  wordingVersion: consentWordingVersionSchema,
+  /**
+   * The audit entry written with the act. Null for a withdrawal that `governance:replay` applied
+   * again after a restore, whose own entry the restore took back; the governance ledger holds it.
+   */
+  auditEventId: idSchema.nullable(),
+});
+
+/**
+ * `persons/{personId}/private/demographicsConsent`: whether the person consents to the portal
+ * holding their gender and ethnicity (docs/DATA_MODEL.md, section 3). The person reads it, and
+ * `setDemographicsConsent` alone writes it. `basis` names the decision of the programme under
+ * which the values are held only with consent. A withdrawal keeps the record, so that the person,
+ * a subject access export and the importer all see when consent was given and withdrawn.
+ */
+export const personDemographicsConsentDocSchema = documentBaseSchema.extend({
+  personId: idSchema,
+  /** The account that gave or withdrew consent last. */
+  uid: uidSchema,
+  status: demographicsConsentStatusSchema,
+  /** The wording of the last act. */
+  wordingVersion: consentWordingVersionSchema,
+  givenAt: timestampSchema.nullable(),
+  withdrawnAt: timestampSchema.nullable(),
+  /** The latest acts, oldest first. The audit trail keeps every one. */
+  history: z.array(demographicsConsentEventSchema).min(1).max(CONSENT_HISTORY_MAX),
+  basis: programmeDecisionSchema,
+});
+export type PersonDemographicsConsentDoc = z.output<typeof personDemographicsConsentDocSchema>;
 
 /** `persons/{personId}/affiliations/{id}`: an affiliation of a person, who may hold several. */
 export const personAffiliationDocSchema = documentBaseSchema.extend({

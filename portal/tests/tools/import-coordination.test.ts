@@ -173,9 +173,15 @@ describe("the coordination workbook importer", () => {
     const combined = unmatched.find((item) => item.entityRefs.length === 2);
     // The numbers of the combined row are never apportioned between its two studies.
     expect(combined?.entityRefs.map((ref: { entityId: string }) => ref.entityId)).toEqual(["EtaTheta2005", "Iota2004"]);
+    // The figures are sealed (question 14): the item shows the cell that names the studies and no figure.
     expect(combined?.candidates.map((candidate: { valueSource?: string }) => candidate.valueSource)).toEqual(
-      expect.arrayContaining(["Iota2004 + EtaTheta2005", "7", "210", "2", "40", "20"]),
+      expect.arrayContaining(["Iota2004 + EtaTheta2005"]),
     );
+    for (const figure of ["7", "210", "40"]) {
+      expect(combined?.candidates.map((candidate: { valueSource?: string }) => candidate.valueSource)).not.toContain(
+        figure,
+      );
+    }
     expect(unmatched.some((item) => item.candidates[0]?.valueSource === "NoSuchStudy1999")).toBe(true);
     // The title of the outreach tab is a label. No reviewer has said which study it belongs to.
     expect(unmatched.some((item) => item.candidates[0]?.valueSource === "Invented outreach")).toBe(true);
@@ -264,14 +270,15 @@ describe("the coordination workbook importer", () => {
     // Both values are kept with the record of each. Neither is chosen.
     expect(compared[0]?.candidates).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ valueSource: "150", sourceRecordId: delta }),
-        expect.objectContaining({ valueSource: "175", sourceRecordId: otherRecord }),
+        expect.objectContaining({ sourceRecordId: delta }),
+        expect.objectContaining({ sourceRecordId: otherRecord }),
       ]),
     );
     expect(compared[0]?.id).toBe(
       items.valueConflict({
         subject: "Delta1999",
         field: "totalNToBeRun",
+        personal: true,
         claims: [
           { source: "a", value: "150" },
           { source: "f", value: "175" },

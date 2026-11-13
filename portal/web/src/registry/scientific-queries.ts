@@ -90,7 +90,7 @@ export function protocolVersionsOfReplication(studyKey: string): LiveQuery<"repl
   return { collection: "replicationProtocolVersions", within: [studyKey], limit: SCIENTIFIC_LIMIT };
 }
 
-/** The prediction-market and survey questions of a replication, which every member reads. */
+/** The prediction-market and survey questions of a replication, which are sealed: programme administrators alone read them. */
 export function predictionItemsOfReplication(studyKey: string): LiveQuery<"predictionMarketItems"> {
   return {
     collection: "predictionMarketItems",

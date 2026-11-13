@@ -15,7 +15,7 @@
 // |                     | `affiliation`               | An affiliation of the person, verbatim, and an institution candidate |
 // |                     | `country`                   | The directory document, as written                               |
 // |                     | `EEG_system`                | The source record only: equipment belongs to a laboratory, and no importer creates one |
-// |                     | `gender`, `ethnicity`       | The special-category demographics document, verbatim, and nowhere else |
+// |                     | `gender`, `ethnicity`       | The special-category demographics document, verbatim, and nowhere else, for a person whose consent is in force; discarded for everyone else |
 // |                     | `whichReplication (Tags)`   | Membership candidates in the queue. No membership is written     |
 // |                     | `isCoauthor`                | The source record only: the model has no field for it            |
 // | `contibutor_tables` | `ReplicationID`, `TableLink` | The contributor table of the sheet that the link names          |
@@ -32,10 +32,14 @@
 //
 // A member row creates a person only where it carries an address that is exactly one address.
 // Gender and ethnicity are stored as the workbook writes them, without any standardisation or
-// inference. In the source record of a row a marker with a keyed hash stands in their place, and
-// the cells themselves sit beneath the record where no client can read them.
+// inference, and only for a person who has given explicit consent in the portal when the apply
+// runs, as the programme decided on 13 November 2026 (docs/MIGRATION_PLAN.md, section 11,
+// question 20). The cells of every other row are discarded without being stored, and the run
+// counts them without naming anyone; a later apply after more consents picks them up. In the
+// source record of a row a marker with a keyed hash stands in their place.
 import {
   COLLECTIONS,
+  consentInForce,
   contributorSheetSourceKey,
   contributorTableId,
   type EntityRef,
@@ -782,13 +786,18 @@ class MembershipPlan {
       });
     }
 
-    // Gender and ethnicity: the terms of the workbook, verbatim, in the document that no client can read.
+    // Gender and ethnicity: the terms of the workbook, verbatim, in the document that no client can read, for a person
+    // whose consent is in force at this run. For anyone else the framework discards the cells and counts the row.
     const term = (field: (typeof SPECIAL_FIELDS)[number]): string | undefined => {
       const text = verbatimText(storedValue(row.special?.[columns.get(field) ?? ""]));
       return text === null || text.trim() === "" || text.length > LIMITS.longText ? undefined : text;
     };
     const [genderSource, ethnicitySource] = [term("gender"), term("ethnicity")];
-    if (genderSource !== undefined || ethnicitySource !== undefined) {
+    const consentPath = COLLECTIONS.personDemographicsConsent.docPath(personId);
+    const consenting =
+      (genderSource !== undefined || ethnicitySource !== undefined) &&
+      consentInForce((await readDocuments(db, [consentPath])).get(consentPath)?.data);
+    if (consenting) {
       this.#builder.document({
         collection: "personDemographics",
         ids: [personId],
@@ -1029,13 +1038,16 @@ class MembershipPlan {
 
 export const importer: ImporterDefinition = {
   key: "membershipWorkbook",
+  // An exported file that an administrator supplies, read from outside the repository alone (decision 7).
+  localExport: true,
   sourceKey: SOURCE_KEY,
   summary:
     "Membership and contributor workbook, built against synthetic fixtures only: members with their restricted and special-category data, and the registry of contributor tables.",
   inputDescription: "the Excel export of the workbook",
   // The people of the website are the baseline against which members are compared (section 5, step 8).
   after: ["h"],
-  // No demographic value is imported before the lawful basis for holding it is recorded (section 11, question 20).
+  // Demographic values are held only with consent (section 11, question 20). The answer released the apply, and the
+  // plan stores the values of consenting people alone.
   withheld: "demographics",
   read,
   plan: (context) => new MembershipPlan(context).run(),

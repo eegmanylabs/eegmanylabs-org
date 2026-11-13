@@ -132,6 +132,9 @@ function RollbackDialog({ batchId }: { batchId: string }) {
                 {plan.counts.restored} documents would be restored, {plan.counts.removed} removed and{" "}
                 {plan.counts.itemsWithdrawn} items of the review queue withdrawn. {plan.counts.itemsLeft} decided items
                 would stay as they are.
+                {plan.counts.discarded === 0
+                  ? null
+                  : ` ${plan.counts.discarded} gender and ethnicity records would not be written back, because they were removed for good or the person has not consented.`}
               </p>
               <ul className="grid max-h-60 gap-1 overflow-y-auto break-all text-fg-secondary">
                 {plan.documents.map((document) => (
@@ -224,7 +227,13 @@ function ChangeList({ changes }: { changes: readonly Change[] }) {
 function BatchRecord({ batchId }: { batchId: string }) {
   const viewer = useViewer();
   const batch = useLiveDocument("importBatches", [batchId]);
-  const changes = useLiveQuery({ collection: "importBatchChanges", within: [batchId], limit: 1_000 });
+  // An entry about a sealed value is read by holders of `sealed.read` alone, so everybody else lists the others.
+  const changes = useLiveQuery({
+    collection: "importBatchChanges",
+    within: [batchId],
+    ...(viewer?.can("sealed.read", "programme") === true ? {} : { where: [["sealed", "==", false]] }),
+    limit: 1_000,
+  });
   const log = useLiveQuery({ collection: "importBatchLog", within: [batchId], limit: 1_000 });
   const rollsBack = viewer?.can("imports.rollback", "programme") === true;
   return (

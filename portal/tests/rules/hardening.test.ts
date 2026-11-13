@@ -840,12 +840,13 @@ describe("the largest write of a collection", () => {
     await expectSchemaAccepts("checklistTemplates", path);
   });
 
-  it("fits for a question of the prediction market, a vocabulary term and an external account", async () => {
+  it("fits for a vocabulary term and an external account, and refuses a question of the sealed prediction market", async () => {
     const question = `predictionMarketItems/${autoId("questionFull")}`;
     const account = `externalAccounts/${autoId("accountFull")}`;
     await expectOutcomes({
+      // The questions are sealed under question 7 since 13 November 2026, and only the importer writes them.
       "a new question with fifty choices, by the core team": [
-        "allowed",
+        "denied",
         create("coreTeam", question, {
           replicationId: OWN_REPLICATION,
           hypothesisId: "h01",
@@ -882,7 +883,6 @@ describe("the largest write of a collection", () => {
         }),
       ],
     });
-    await expectSchemaAccepts("predictionMarketItems", question);
     await expectSchemaAccepts("vocabularyTerms", "vocabularyTerms/term-1");
     await expectSchemaAccepts("externalAccounts", account);
   });

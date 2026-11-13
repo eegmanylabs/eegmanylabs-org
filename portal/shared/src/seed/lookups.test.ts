@@ -40,9 +40,10 @@ describe("the programme", () => {
 });
 
 describe("the statuses", () => {
-  it("of a replication are the thirteen of the data model, in order", () => {
+  it("of a replication are the fourteen of the data model, in order", () => {
     expect(REPLICATION_STATUSES.map((status) => [status.key, status.label, status.category])).toEqual([
       ["proposed", "Proposed", "notStarted"],
+      ["ongoing", "Ongoing", "active"],
       ["planning", "Planning", "active"],
       ["recruitingLabs", "Recruiting labs", "active"],
       ["sitePreparation", "Site preparation", "active"],
@@ -84,7 +85,7 @@ describe("the statuses", () => {
 
   it("have one default for each kind of record: the first, which has not started", () => {
     const statuses = lookupSeedDocuments().filter((document) => document.collection === "statusDefinitions");
-    expect(statuses).toHaveLength(27);
+    expect(statuses).toHaveLength(28);
     for (const entityType of ["replication", "dataset", "task"]) {
       const ofType = statuses.filter((document) => document.data.entityType === entityType);
       expect(ofType.map((document) => document.data.position)).toEqual(ofType.map((_document, index) => index));
@@ -212,8 +213,8 @@ describe("the reasons for exclusion", () => {
 describe("the documents of the lookup data", () => {
   const documents = lookupSeedDocuments();
 
-  it("are 61, each with a path of its own", () => {
-    expect(documents).toHaveLength(1 + 27 + 11 + 1 + 14 + 7);
+  it("are 62, each with a path of its own", () => {
+    expect(documents).toHaveLength(1 + 28 + 11 + 1 + 14 + 7);
     const paths = documents.map((document) => COLLECTIONS[document.collection].docPath(document.id));
     expect(new Set(paths).size).toBe(documents.length);
     expect(paths).toContain("programmes/eegmanylabs");

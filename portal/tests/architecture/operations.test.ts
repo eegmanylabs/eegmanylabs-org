@@ -17,12 +17,21 @@ import {
 } from "../../ops/environments.mjs";
 import { iamCommands } from "../../ops/iam-plan.mjs";
 import {
+  approvalLines,
+  approvalOf,
+  approvalRecord,
+  approvalToken,
+  approversOf,
+  canonicalName,
+  carryOut,
   commandLine,
   type PlannedCommand,
   PROGRAMS,
   ProcedureRefusal,
   parseArguments,
+  requireApproval,
   requireProject,
+  SINGLE_PERSON_STAGING_DECISION,
 } from "../../ops/procedure.mjs";
 import { restoreLiveCommands } from "../../ops/restore-live.mjs";
 import { restoreScratchCommands } from "../../ops/restore-scratch.mjs";
@@ -45,9 +54,13 @@ describe("the environments", () => {
       expect(isPlaceholder(environment.backupBucket)).toBe(true);
       expect(isPlaceholder(environment.scratchProjectId)).toBe(true);
       expect(isPlaceholder(environment.storageBucket)).toBe(true);
-      // No decision fixes the address of the portal yet.
-      expect(isPlaceholder(environment.siteOrigin)).toBe(true);
     }
+  });
+
+  it("publish production at the address that the programme lead fixed, and keep staging a placeholder", () => {
+    // docs/DECISIONS.md, answers of 13 November 2026, decision 4. The project identifiers stay placeholders.
+    expect(ENVIRONMENTS.production.siteOrigin).toBe("https://portal.eegmanylabs.org");
+    expect(isPlaceholder(ENVIRONMENTS.staging.siteOrigin)).toBe(true);
   });
 
   it("refuse a project of the other environment, a demonstration project and a misnamed one", () => {
@@ -96,6 +109,119 @@ describe("a procedure", () => {
         /node\s+ops\/(backup-setup|restore-scratch|restore-live|iam-plan|deploy-plan)/.test(file.text),
     );
     expect(runners.map((file) => file.path)).toEqual([]);
+  });
+});
+
+describe("the approval of a plan", () => {
+  // Invented names of people. They name nobody.
+  const options = (...argv: string[]) => parseArguments(argv).options;
+  const commands = deployCommands(INVENTED, "eegml-portal-live");
+
+  it("accepts one person as operator and approver on staging, as the programme lead decided, and says so in the plan and the record", () => {
+    const approval = requireApproval("staging", options("--operator", "Pat Example", "--approver", "pat example"));
+    expect(approval).toMatchObject({ singlePerson: true, basis: SINGLE_PERSON_STAGING_DECISION });
+    expect(SINGLE_PERSON_STAGING_DECISION).toEqual({
+      decidedBy: "programmeLead",
+      decidedOn: "2026-11-13",
+      reference: "docs/DECISIONS.md, answers of 13 November 2026, deployment roles",
+    });
+    const lines = approvalLines(approval, "eegml-staging-live", commands).join("\n");
+    expect(lines).toContain("Single-person approval");
+    expect(lines).toContain("accepted for staging alone");
+    expect(lines).toContain("Production still needs a second named approver");
+    const record = approvalRecord(approval, "eegml-staging-live", commands);
+    expect(record).toEqual({
+      environment: "staging",
+      projectId: "eegml-staging-live",
+      operator: "Pat Example",
+      approver: "pat example",
+      singlePersonApproval: true,
+      basis: SINGLE_PERSON_STAGING_DECISION,
+      commands: commands.length,
+    });
+    expect(lines).toContain(`Record for the operations log: ${JSON.stringify(record)}`);
+  });
+
+  it("keeps refusing a single-person approval for production, which needs a second named approver", () => {
+    const reviewed = ["Pat Example", "Sam Sample"];
+    expect(() =>
+      requireApproval("production", options("--operator", "Pat Example", "--approver", "Pat  Example"), reviewed),
+    ).toThrow(/production needs a second named approver/);
+    const approval = requireApproval(
+      "production",
+      options("--operator", "Pat Example", "--approver", "Sam Sample"),
+      reviewed,
+    );
+    expect(approval).toMatchObject({ singlePerson: false, basis: null, token: null });
+    const lines = approvalLines(approval, "eegml-portal-live", commands).join("\n");
+    expect(lines).not.toContain("Single-person");
+    expect(approvalRecord(approval, "eegml-portal-live", commands)).toMatchObject({ singlePersonApproval: false });
+  });
+
+  it("refuses every production plan while the reviewed list of approvers names fewer than two people", () => {
+    expect(approversOf("production")).toEqual([]);
+    expect(() =>
+      requireApproval("production", options("--operator", "Pat Example", "--approver", "Sam Sample")),
+    ).toThrow(/second named approver/);
+    // A name that is not on the list is refused, however different from the operator's it is.
+    expect(() =>
+      requireApproval("production", options("--operator", "Pat Example", "--approver", "Lee Other"), [
+        "Pat Example",
+        "Sam Sample",
+      ]),
+    ).toThrow(/second named approver/);
+    // Accents, case, spaces and punctuation make no second person.
+    expect(canonicalName("Pát-Example.")).toBe(canonicalName("pat example"));
+  });
+
+  it("runs a production plan only with the token that the approver printed for that exact plan", async () => {
+    const reviewed = ["Pat Example", "Sam Sample"];
+    const token = approvalToken("Sam Sample", "eegml-portal-live", commands);
+    expect(token).toMatch(/^samsample-[0-9a-f]{20}$/);
+    // Another plan, or another approver, gives another token.
+    expect(approvalToken("Sam Sample", "eegml-portal-other", commands)).not.toBe(token);
+    expect(approvalToken("Pat Example", "eegml-portal-live", commands)).not.toBe(token);
+    const without = requireApproval(
+      "production",
+      options("--operator", "Pat Example", "--approver", "Sam Sample"),
+      reviewed,
+    );
+    await expect(carryOut("eegml-portal-live", commands, new Set(["execute"]), without)).rejects.toThrow(
+      /--approval-token/,
+    );
+    const wrong = requireApproval(
+      "production",
+      options("--operator", "Pat Example", "--approver", "Sam Sample", "--approval-token", "samsample-0000"),
+      reviewed,
+    );
+    await expect(carryOut("eegml-portal-live", commands, new Set(["execute"]), wrong)).rejects.toThrow(
+      /--approval-token/,
+    );
+    const given = requireApproval(
+      "production",
+      options("--operator", "Pat Example", "--approver", "Sam Sample", "--approval-token", token),
+      reviewed,
+    );
+    expect(approvalRecord(given, "eegml-portal-live", commands)).toMatchObject({ approvalToken: token });
+  });
+
+  it("needs both names to run, refuses an address in their place, and prints a plan without them as unapproved", async () => {
+    expect(() => requireApproval("staging", options("--operator", "Pat Example"))).toThrow(/--approver/);
+    expect(() =>
+      requireApproval("staging", options("--operator", "pat@example.org", "--approver", "pat@example.org")),
+    ).toThrow(/name of a person/);
+    // Printing alone needs no approval; --execute does, and refuses before it asks for anything.
+    expect(approvalOf("staging", parseArguments([]))).toBeNull();
+    expect(() => approvalOf("production", parseArguments(["--execute"]))).toThrow(/--operator/);
+    expect(approvalLines(null, "eegml-portal-live", commands).join()).toMatch(/not recorded/);
+    // The plan is printed with the approval it lacks before anything else happens, and nothing is asked or run.
+    await expect(carryOut("eegml-portal-live", commands, new Set(["execute"]), null)).rejects.toThrow(
+      /needs a recorded approval/,
+    );
+    const text = readFileSync(path.join(PORTAL_ROOT, "ops", "procedure.mjs"), "utf8");
+    expect(text.indexOf("approvalLines(approval, projectId, commands)")).toBeLessThan(
+      text.indexOf("process.stdin.isTTY || !process.stdout.isTTY"),
+    );
   });
 });
 

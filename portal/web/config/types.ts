@@ -11,6 +11,15 @@ export type PortalMode = (typeof PORTAL_MODES)[number];
 export const PRESENCE_MODES = ["cursor", "presence", "off"] as const;
 export type PresenceMode = (typeof PRESENCE_MODES)[number];
 
+/**
+ * Whether notification email is sent, from ops/environments.mjs. The programme decided on 13
+ * November 2026 that none is sent for now, so a staging or production build offers no email
+ * preferences and says nothing about email being sent. The emulator build keeps them, against a
+ * fake outbox that delivers nothing, so that the browser tests still exercise them.
+ */
+export const MAIL_DELIVERY_MODES = ["disabled", "enabled"] as const;
+export type MailDelivery = (typeof MAIL_DELIVERY_MODES)[number];
+
 export interface FirebaseWebConfig {
   readonly apiKey: string;
   readonly projectId: string;
@@ -43,4 +52,6 @@ export interface PortalBuildConfig {
   readonly googleSignIn: boolean;
   /** How a page shows who else has it open. */
   readonly presence: PresenceMode;
+  /** Whether the account page offers email preferences. */
+  readonly mailDelivery: MailDelivery;
 }

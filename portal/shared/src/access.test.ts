@@ -21,9 +21,11 @@ import {
   effectiveRoleCapabilities,
   GRANTABLE_CAPABILITIES,
   type GrantableCapability,
+  grantCanConfer,
   ROLES,
   type Role,
   type RoleScopeType,
+  roleCanHold,
   SENSITIVE_CAPABILITIES,
 } from "./capabilities";
 import { systemWriteContext } from "./schemas/base";
@@ -73,7 +75,11 @@ const NAMED: readonly GrantableCapability[] = [
   "audit.read",
   "automations.manage",
   "outreach.read",
+  "sealed.read",
 ];
+
+/** What programme administrators alone hold: no override and no named grant gives it to anyone else. */
+const ADMINISTRATOR_ONLY: readonly GrantableCapability[] = ["sealed.read"];
 
 const SENSITIVE: readonly GrantableCapability[] = [
   "roles.manage",
@@ -97,7 +103,9 @@ const everywhere = (capabilities: readonly GrantableCapability[]) =>
  */
 const EXPECTED: { readonly [R in Role]: Partial<Record<GrantableCapability, Reach>> } = {
   programme_admin: everywhere(NAMED),
-  core_team: everywhere(NAMED.filter((capability) => !SENSITIVE.includes(capability))),
+  core_team: everywhere(
+    NAMED.filter((capability) => !SENSITIVE.includes(capability) && !ADMINISTRATOR_ONLY.includes(capability)),
+  ),
   replication_lead: {
     "directory.read": "programme",
     "people.contact.read": "scope",
@@ -194,7 +202,7 @@ describe("the registry of capabilities", () => {
   it("holds exactly the named capabilities, and portal.use for every signed-in account", () => {
     expect(CAPABILITIES).toEqual(["portal.use", ...NAMED]);
     expect(GRANTABLE_CAPABILITIES).toEqual(NAMED);
-    expect(NAMED).toHaveLength(28);
+    expect(NAMED).toHaveLength(29);
   });
 
   it("names the six sensitive capabilities that the core team does not hold by default", () => {
@@ -228,8 +236,9 @@ describe("the default capability matrix", () => {
   });
 
   it("gives the programme administrator every capability and the core team all but the sensitive ones", () => {
-    expect(DEFAULT_ROLE_CAPABILITIES.programme_admin).toHaveLength(28);
+    expect(DEFAULT_ROLE_CAPABILITIES.programme_admin).toHaveLength(29);
     expect(DEFAULT_ROLE_CAPABILITIES.core_team).toHaveLength(22);
+    expect(DEFAULT_ROLE_CAPABILITIES.core_team).not.toContain("sealed.read");
     for (const capability of SENSITIVE) expect(DEFAULT_ROLE_CAPABILITIES.core_team).not.toContain(capability);
   });
 
@@ -304,7 +313,7 @@ describe("what the interface may show", () => {
   it("is every capability the account holds in at least one scope", () => {
     const shown = capabilitiesOf({ signedIn: true, access: resolveRole("lab_member") });
     expect([...shown].sort()).toEqual(["directory.read", "portal.use", "recruitment.report"]);
-    expect(capabilitiesOf({ signedIn: true, access: resolveRole("programme_admin") }).size).toBe(29);
+    expect(capabilitiesOf({ signedIn: true, access: resolveRole("programme_admin") }).size).toBe(30);
     expect(capabilitiesOf({ signedIn: false, access: resolveRole("programme_admin") }).size).toBe(0);
   });
 });
@@ -374,6 +383,7 @@ describe("overrides of the matrix", () => {
         "publishing.approve",
         "audit.read",
         "automations.manage",
+        "sealed.read",
       ];
       for (const capability of programmeOnly) expect(can(access, capability, "anywhere")).toBe(false);
       for (const capability of NAMED.filter((candidate) => !programmeOnly.includes(candidate))) {
@@ -716,6 +726,32 @@ describe("named capability grants", () => {
     );
     expect(can(access, "demographics.read", "anywhere")).toBe(false);
     expect(access.secondFactorRequired).toBe(true);
+  });
+});
+
+describe("what a decision of the programme seals (sealed.read)", () => {
+  it("is held by programme administrators alone, whatever the overrides of the core team say", () => {
+    expect(can(resolveRole("programme_admin"), "sealed.read", "programme")).toBe(true);
+    expect(can(resolveRole("core_team"), "sealed.read", "anywhere")).toBe(false);
+    expect(can(resolveRole("core_team", { sealedRead: true }), "sealed.read", "anywhere")).toBe(false);
+    expect(effectiveRoleCapabilities("core_team", { sealedRead: true })).not.toContain("sealed.read");
+    for (const role of ROLES.filter((candidate) => candidate !== "programme_admin")) {
+      expect(roleCanHold(role, "sealed.read")).toBe(false);
+      expect(can(resolveRole(role, { sealedRead: true }), "sealed.read", INSIDE)).toBe(false);
+    }
+  });
+
+  it("is conferred by no named grant", () => {
+    expect(grantCanConfer("sealed.read")).toBe(false);
+    expect(grantCanConfer("demographics.read")).toBe(true);
+    const access = resolveAccess(
+      inputs({
+        roleAssignments: [assignment("core_team")],
+        capabilityGrants: [{ uid: UID, capability: "sealed.read", expiresAt: null, revokedAt: null }],
+      }),
+    );
+    expect(can(access, "sealed.read", "anywhere")).toBe(false);
+    expect(access.capabilities.sealedRead).toBeUndefined();
   });
 });
 

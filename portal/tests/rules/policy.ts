@@ -47,7 +47,15 @@ export interface Known {
   readonly page?: PageAccessFacts;
   /** The account that wrote the record: the writer `author`. */
   readonly authorUid?: string;
+  /**
+   * Whether the record is known to be marked as about no sealed value, for an entry whose records
+   * carry the flag `sealed`: the others are read with `sealed.read` alone (questions 7 and 14).
+   */
+  readonly unsealed?: boolean;
 }
+
+/** Whether the records of an entry carry the flag `sealed`, which narrows its read. */
+const carriesSealedFlag = (entry: CollectionEntry): boolean => "sealed" in entry.schema.shape;
 
 /** Whether the account may act at all: signed in and not suspended. */
 export function isActive(caller: CallerProfile): boolean {
@@ -122,7 +130,11 @@ function satisfiesTier(entry: CollectionEntry, tier: AccessTier, caller: CallerP
         isMember(caller) && ((!tiers.includes("SCOPED") && !tiers.includes("SELF")) || known.memberVisible === true)
       );
     case "ADMIN":
-      return capability !== null && holds(caller, capability, {});
+      return (
+        capability !== null &&
+        holds(caller, capability, {}) &&
+        (!carriesSealedFlag(entry) || known.unsealed === true || holds(caller, "sealed.read", {}))
+      );
     case "SCOPED":
       return capability !== null ? holds(caller, capability, known) : isStaff(caller) || holdsScope(caller, known);
   }

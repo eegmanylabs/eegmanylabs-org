@@ -27,6 +27,14 @@ export const RETENTION_TARGET_LABELS: Readonly<Record<RetentionTarget, string>> 
   eventFailures: "Resolved event failures",
 };
 
+/**
+ * The target of the retention that the programme decided for the raw material of the migration
+ * (question 20 of docs/MIGRATION_PLAN.md, section 11): the outreach records of source F for
+ * people who never joined. Its period is a decision and no setting, it counts from the day the
+ * migration was marked verified, and before that day nothing of it is deleted.
+ */
+export const OUTREACH_RETENTION_TARGET = "outreachNeverJoined";
+
 /** The longest period a setting may state: about ten years. */
 export const RETENTION_MAX_DAYS = 3_650;
 /** The shortest period: a sweep never removes what is younger than a week. */

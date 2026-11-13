@@ -221,7 +221,9 @@ describe("the imports console and the integrity report", () => {
     const reports = COLLECTIONS.integrityReports.collectionPath();
     await expectOutcomes({
       "an administrator lists the review queue": ["allowed", list("admin", items, limit(50))],
-      "the core team lists it": ["allowed", list("coreTeam", items, limit(50))],
+      // The core team holds no sealed.read, so it lists the items that are not sealed (questions 7 and 14).
+      "the core team lists it": ["allowed", list("coreTeam", items, where("sealed", "==", false), limit(50))],
+      "the core team lists it without the clause": ["denied", list("coreTeam", items, limit(50))],
       "a lead is refused the review queue": ["denied", list("ownLead", items, limit(50))],
       "an administrator without the second factor is refused it": [
         "denied",

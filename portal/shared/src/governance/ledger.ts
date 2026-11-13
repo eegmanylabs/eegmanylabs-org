@@ -1,6 +1,6 @@
 // The governance ledger (docs/SECURITY.md, section 10). A restore to an earlier moment brings
-// back whatever the database held then, so an erasure, a revocation or the end of a member's
-// sessions made after that moment would be undone by it. Each of those actions is therefore
+// back whatever the database held then, so an erasure, a revocation, the end of a member's
+// sessions or the withdrawal of a person's consent made after that moment would be undone by it. Each of those actions is therefore
 // also written, as one structured log entry, outside Firestore: the functions log it, a log sink
 // routes it to a locked log bucket with a long retention (ops/backup-setup.mjs), and after a
 // restore `governance:replay` applies every entry later than the restored moment again.
@@ -21,6 +21,8 @@ export const governanceLedgerEntrySchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("capabilityRevoked"), at: instantSchema, uid: uidSchema, grantId: idSchema }),
   z.strictObject({ kind: z.literal("sessionsEnded"), at: instantSchema, uid: uidSchema }),
   z.strictObject({ kind: z.literal("accountSuspended"), at: instantSchema, uid: uidSchema }),
+  // A person withdrew consent to the portal holding their gender and ethnicity, and the values were deleted.
+  z.strictObject({ kind: z.literal("demographicsWithdrawn"), at: instantSchema, personId: idSchema }),
 ]);
 export type GovernanceLedgerEntry = z.output<typeof governanceLedgerEntrySchema>;
 

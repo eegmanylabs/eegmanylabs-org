@@ -5,6 +5,7 @@
 import { MANAGED_SECTION_STATUSES } from "../docs/plan";
 import { DOCUMENT_TEMPLATE_KINDS } from "../docs/templates";
 import { entityTypeSchema } from "../entities";
+import { programmeDecisionSchema } from "../programme-answers";
 import { ROW_POLICIES, SYNC_DIRECTIONS, SYNC_ISSUE_KINDS } from "../sync/planner";
 import { timestampSchema } from "../timestamp";
 import { z } from "../zod";
@@ -157,8 +158,8 @@ const importedStateSchema = freeMapSchema.nullable();
 /**
  * `importBatches/{batchId}/changes/{n}`: one write a batch made to an entity, with the state of
  * the imported fields before and after it, which makes a batch reversible. For a
- * special-category document the two states hold a marker alone, and `documentPath` names the
- * collection and no document.
+ * special-category or sealed document the two states hold a marker alone, and `documentPath`
+ * names the collection and no document.
  */
 export const importBatchChangeDocSchema = appendOnlyBaseSchema.extend({
   batchId: idSchema,
@@ -168,6 +169,19 @@ export const importBatchChangeDocSchema = appendOnlyBaseSchema.extend({
   sourceRecordIds: z.array(idSchema).max(LIMITS.list),
   before: importedStateSchema,
   after: importedStateSchema,
+  /**
+   * True for an entry about a document or a review item that a decision of the programme seals:
+   * only holders of `sealed.read` read it, and `documentPath` names the collection and no
+   * document. Every import writes the field, false for any other entry; an entry without it,
+   * written before the seal, is read as sealed until `migrate:sealed-outcomes` sets it.
+   */
+  sealed: z.boolean().exactOptional(),
+  /**
+   * True for a removal that no rollback undoes: a copy of special-category cells that is removed
+   * because gender and ethnicity are held only with consent (question 20). The entry keeps no
+   * state, and a rollback leaves the document removed.
+   */
+  irreversible: z.literal(true).exactOptional(),
 });
 export type ImportBatchChangeDoc = z.output<typeof importBatchChangeDocSchema>;
 
@@ -325,6 +339,20 @@ export const reconciliationItemDocSchema = documentBaseSchema.extend({
    * states the question with further candidates, the earlier statements are superseded.
    */
   subjectKey: idSchema.exactOptional(),
+  /**
+   * True for an item about a value that a decision of the programme seals (questions 7 and 14):
+   * only holders of `sealed.read` read it, since even its existence and its candidate keys say
+   * something about the value. Every importer writes the field, false for any other item; an
+   * item without it, written before the seal, is read as sealed until `migrate:sealed-outcomes`
+   * sets it.
+   */
+  sealed: z.boolean().exactOptional(),
+  /**
+   * The decision of the programme that settles how the item's values are treated, where one does:
+   * for the combined row of the two Amodio studies, that its values stay attached to neither
+   * (question 2). The item stays open for a reviewer, who reads the decision beside it.
+   */
+  decision: programmeDecisionSchema.exactOptional(),
 });
 export type ReconciliationItemDoc = z.output<typeof reconciliationItemDocSchema>;
 

@@ -6,8 +6,10 @@
 // | `mailOnQueued`              | An outbox message created     | Sends it where it is due and a sender exists |
 // | `mailSweep`                 | Every fifteen minutes         | Sends the messages whose quiet hours or backoff have passed, and queues the digests that are due |
 //
-// In a real project no sender exists until a provider is chosen, so the outbox fills and nothing
-// is sent. Logs carry identifiers and counts, never an address or the text of a message.
+// Mail is disabled in every project by the programme's decision of 13 November 2026
+// (integrations/mail/adapters.ts): then no message is queued, no digest is gathered and nothing
+// is sent, and notifications stay in the portal. Logs carry identifiers and counts, never an
+// address or the text of a message.
 import { COLLECTIONS, FUNCTIONS_REGION, FUNCTIONS_SERVICE_ACCOUNT } from "@eegml/shared";
 import { logger } from "firebase-functions";
 import { onDocumentCreated } from "firebase-functions/firestore";
@@ -17,7 +19,7 @@ import { runningInEmulator } from "../framework/callable";
 import { identityHashKey, identityHashKeySecret } from "../framework/hash-key";
 import { documentTrigger } from "../framework/trigger";
 import { portalAddress } from "../integrations/jobs/live";
-import { mailSender } from "../integrations/mail/adapters";
+import { mailDelivery, mailSender } from "../integrations/mail/adapters";
 import { queueDueDigests, queueNotificationMail, sendDueMail, sendQueuedMail } from "../notifications/mail";
 
 /** The secret of the keyed hashes, which names an outbox message by its recipient. The emulator binds none. */
@@ -26,6 +28,7 @@ const secrets = () => (runningInEmulator() ? [] : [identityHashKeySecret()]);
 export const mailOnNotificationCreated = onDocumentCreated(
   { ...documentTrigger(COLLECTIONS.userNotifications.path), secrets: secrets() },
   async (event) => {
+    if (mailDelivery() === "disabled") return;
     const id = await queueNotificationMail(
       firestore(),
       {
@@ -57,6 +60,7 @@ export const mailSweep = onSchedule(
     secrets: secrets(),
   },
   async (event) => {
+    if (mailDelivery() === "disabled") return;
     const db = firestore();
     const at = new Date(event.scheduleTime);
     const digests = await queueDueDigests(db, at, portalAddress(), identityHashKey());

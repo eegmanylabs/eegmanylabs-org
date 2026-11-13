@@ -95,6 +95,6 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       options.get("work-directory") ?? path.join(os.tmpdir(), `eegml-restore-live-${snapshotTime.replace(/[:]/g, "")}`);
     const commands = restoreLiveCommands(ENVIRONMENTS[name], { projectId, snapshotTime, workDirectory });
     mkdirSync(workDirectory, { recursive: true, mode: 0o700 });
-    return { projectId, commands };
+    return { environment: name, projectId, commands };
   });
 }

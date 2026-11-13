@@ -6,7 +6,9 @@ import {
   acknowledgementId,
   automationRunId,
   type CollectionKey,
+  CURRENT_DEMOGRAPHICS_CONSENT,
   capabilityGrantId,
+  DEMOGRAPHICS_CONSENT_DECISION,
   entityRefId,
   eventFailureId,
   generatedDocumentId,
@@ -16,6 +18,7 @@ import {
   labClaimId,
   laboratoryScopeKey,
   MEMBERS_SCOPE_KEY,
+  migrationAnswer,
   type PageAccessFacts,
   pageContentChunkId,
   pagePermissionId,
@@ -613,6 +616,27 @@ export const FIXTURES: { readonly [K in CollectionKey]?: Fixture } = {
     seed: document({ genderSource: "synthetic value", ethnicitySource: "synthetic value", recordedAt: STORED_AT }),
     subject: OWNED,
   },
+  personDemographicsConsent: {
+    ids: [OWNER_PERSON],
+    seed: document({
+      personId: OWNER_PERSON,
+      uid: OWNER_UID,
+      status: "given",
+      wordingVersion: CURRENT_DEMOGRAPHICS_CONSENT.version,
+      givenAt: STORED_AT,
+      withdrawnAt: null,
+      history: [
+        {
+          status: "given",
+          at: STORED_AT,
+          wordingVersion: CURRENT_DEMOGRAPHICS_CONSENT.version,
+          auditEventId: "audit-synthetic-consent",
+        },
+      ],
+      basis: DEMOGRAPHICS_CONSENT_DECISION,
+    }),
+    subject: OWNED,
+  },
   personAffiliations: {
     ids: [OWNER_PERSON, "affiliation-1"],
     seed: document({ personId: OWNER_PERSON, affiliationSource: "Synthetic University", isPrimary: true }),
@@ -914,6 +938,16 @@ export const FIXTURES: { readonly [K in CollectionKey]?: Fixture } = {
     }),
     subject: UNSCOPED,
   },
+  predictionMarketOutcomes: {
+    ids: [OWN_REPLICATION],
+    seed: document({
+      replicationId: OWN_REPLICATION,
+      labelsSource: { h01: "synthetic label" },
+      sealedBy: migrationAnswer(7),
+      sourceRecordIds: [SOURCE_RECORD],
+    }),
+    subject: UNSCOPED,
+  },
   candidateStudies: {
     ids: ["candidate-1"],
     seed: document({
@@ -993,15 +1027,6 @@ export const FIXTURES: { readonly [K in CollectionKey]?: Fixture } = {
     ids: ["item-1"],
     seed: document({ questionText: "Will the synthetic effect replicate?", choices: ["Yes", "No"] }),
     subject: UNSCOPED,
-    create: {
-      ids: [autoId("itemNew")],
-      data: () => ({
-        replicationId: OWN_REPLICATION,
-        questionText: "Will the second synthetic effect replicate?",
-        choices: ["Yes", "No"],
-      }),
-    },
-    update: () => ({ choices: ["Yes", "No", "Unsure"] }),
   },
 
   // Participation.
@@ -1795,8 +1820,11 @@ export const FIXTURES: { readonly [K in CollectionKey]?: Fixture } = {
       sourceRecordIds: [SOURCE_RECORD],
       before: null,
       after: { displayName: "Synthetic Owner" },
+      sealed: false,
     }),
-    subject: UNSCOPED,
+    subject: { ...UNSCOPED, unsealed: true },
+    // Whoever lacks sealed.read lists the entries that are not sealed.
+    listBy: [{ where: ["sealed", "==", false], proves: { unsealed: true } }],
   },
   importBatchChangeState: {
     ids: [BATCH, sequenceId(1)],
@@ -1849,8 +1877,10 @@ export const FIXTURES: { readonly [K in CollectionKey]?: Fixture } = {
       resolvedBy: null,
       resolvedAt: null,
       batchId: BATCH,
+      sealed: false,
     }),
-    subject: UNSCOPED,
+    subject: { ...UNSCOPED, unsealed: true },
+    listBy: [{ where: ["sealed", "==", false], proves: { unsealed: true } }],
   },
   integrationMappings: {
     ids: [integrationMappingId("quire", "task", "synthetic-external-task")],

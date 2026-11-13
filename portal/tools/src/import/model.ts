@@ -5,7 +5,7 @@
 // it produces a plan: the documents it intends to write and the reconciliation items it wants
 // raised. The framework stores the rows as source records, compares the plan with the database
 // and applies it.
-import type { CollectionKey, EntityRef, ReconciliationKind } from "@eegml/shared";
+import type { CollectionKey, EntityRef, ProgrammeDecision, ReconciliationKind } from "@eegml/shared";
 import type { Firestore } from "firebase-admin/firestore";
 import type { PrivateConfig, PrivateSource } from "./config";
 import type { IdentityResolver } from "./identity";
@@ -239,6 +239,14 @@ export interface PlannedItem {
    * same question, whichever member of the family made them.
    */
   readonly subjectKey?: string;
+  /**
+   * True where a claim of the item states a value that a decision of the programme seals
+   * (questions 7 and 14). Programme administrators alone read such an item and its change-log
+   * entries.
+   */
+  readonly sealed: boolean;
+  /** The decision of the programme that settles how the item's values are treated, where one does. */
+  readonly decision?: ProgrammeDecision;
 }
 
 export interface BlockingCheck {
@@ -342,6 +350,11 @@ export interface ImporterDefinition {
    * withholds. A preview is always possible.
    */
   readonly withheld?: WithheldOutput;
+  /**
+   * Set for a source that arrives as an exported file which an administrator supplies (sources
+   * A and G and the Quire data, decision 7): its input must lie outside the repository.
+   */
+  readonly localExport?: boolean;
   /** Reads the input and classifies every row. Never contacts the database. */
   read(input: ImportInput, context: ReadContext): Promise<SourceReading>;
   /** Interprets the rows and returns the plan. */

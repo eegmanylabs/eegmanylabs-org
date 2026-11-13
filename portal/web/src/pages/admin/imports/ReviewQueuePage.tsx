@@ -1,6 +1,15 @@
-import { type CallableInput, type EntityRef, resolveReconciliationItemContract } from "@eegml/shared";
+import {
+  type CallableInput,
+  COMBINED_AMODIO_DECISION,
+  type EntityRef,
+  REPLICATION_STATUSES,
+  resolveReconciliationItemContract,
+  studyStatusDecision,
+} from "@eegml/shared";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
+import { decisionDay, decisionReference } from "@/app/labels";
+import { useProgrammeAdministrator } from "@/auth/use-privilege";
 import { LiveView } from "@/components/feedback/live-view";
 import { Unknown } from "@/components/registry/unknown";
 import { Badge } from "@/components/ui/badge";
@@ -23,17 +32,29 @@ import { ReasonDialog } from "@/pages/admin/ReasonDialog";
 import { MEMBERSHIP_ROLE_LABELS, RECONCILIATION_KIND_LABELS } from "@/registry/labels";
 import { recordPath } from "@/registry/paths";
 import { membershipsOfReplication, usePersons } from "@/registry/queries";
+import { useViewer } from "@/registry/viewer";
 import { batchPath } from "./ImportsPage";
 
 type Item = RecordOf<"reconciliationItems">;
 type Decision = CallableInput<typeof resolveReconciliationItemContract>;
 
-const OPEN_ITEMS: LiveQuery<"reconciliationItems"> = {
-  collection: "reconciliationItems",
-  within: [],
-  where: [["status", "==", "open"]],
-  limit: 1_000,
-};
+/**
+ * The open items. An item about a sealed value is read by holders of `sealed.read` alone, so
+ * everybody else asks for the unsealed ones, which is what the rules let them list.
+ */
+export function openItemsQuery(readsSealed: boolean): LiveQuery<"reconciliationItems"> {
+  return {
+    collection: "reconciliationItems",
+    within: [],
+    where: readsSealed
+      ? [["status", "==", "open"]]
+      : [
+          ["status", "==", "open"],
+          ["sealed", "==", false],
+        ],
+    limit: 1_000,
+  };
+}
 const PAGE = 10;
 
 /** Sends a decision and says what happened. A refusal is shown in the dialog that sent it. */
@@ -321,6 +342,57 @@ function DuplicateDecision({ item, persons }: { item: Item; persons: readonly Re
   );
 }
 
+/**
+ * Applies the status that the programme decided for a study (docs/MIGRATION_PLAN.md, section 11,
+ * question 1). The statuses that the sources stated stay listed on the item.
+ */
+function StatusDecision({ item, replicationId }: { item: Item; replicationId: string }) {
+  const decide = useDecide();
+  const administrator = useProgrammeAdministrator();
+  const [confirming, setConfirming] = useState(false);
+  const decided = studyStatusDecision(replicationId);
+  if (decided === null) {
+    return (
+      <p className="text-fg-secondary">
+        Correct the records concerned where they are, then dismiss the item with a note.
+      </p>
+    );
+  }
+  const label = REPLICATION_STATUSES.find((status) => status.key === decided.statusKey)?.label ?? decided.statusKey;
+  return (
+    <div className="grid gap-2" data-testid="programme-decision">
+      <p className="text-fg">
+        The programme lead decided on {decisionDay(decided.decision)} that this study is {decided.decided}. In the
+        portal that is the status {decided.decided === "cancelled" ? `${label} (cancelled)` : label}.
+      </p>
+      <p className="text-xs text-fg-muted" title={decided.decision.reference}>
+        Recorded in {decisionReference(decided.decision)}.
+      </p>
+      {administrator ? (
+        <div>
+          <Button variant="primary" size="sm" onClick={() => setConfirming(true)}>
+            Apply the decision
+          </Button>
+        </div>
+      ) : (
+        <p className="text-fg-secondary">A programme administrator applies this decision.</p>
+      )}
+      <ReasonDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title="Apply the decision of the programme?"
+        description={`The replication takes the status ${label}, with an entry of its history that names the decision. The statuses that the sources stated stay on this item.`}
+        label="Note"
+        optional
+        confirmLabel="Apply the decision"
+        onConfirm={(note) =>
+          decide({ fingerprint: item.id, action: "applyProgrammeDecision", ...(note === "" ? {} : { note }) })
+        }
+      />
+    </div>
+  );
+}
+
 function ItemCard({
   item,
   persons,
@@ -375,6 +447,16 @@ function ItemCard({
           </ul>
         </div>
       )}
+      {item.decision === undefined ? null : (
+        <p className="text-fg" data-testid="item-decision">
+          {item.decision.reference === COMBINED_AMODIO_DECISION.reference
+            ? `The programme lead decided on ${decisionDay(item.decision)} that these values cover both studies and stay attached to neither.`
+            : `The programme lead decided on ${decisionDay(item.decision)} how these values are treated.`}{" "}
+          <span className="text-xs text-fg-muted" title={item.decision.reference}>
+            Recorded in {decisionReference(item.decision)}.
+          </span>
+        </p>
+      )}
       <p className="text-xs text-fg-muted">
         Raised by{" "}
         <Link to={batchPath(item.batchId)} className="underline">
@@ -387,6 +469,8 @@ function ItemCard({
         <ValueDecision item={item} />
       ) : item.kind === "duplicatePerson" ? (
         <DuplicateDecision item={item} persons={persons} />
+      ) : item.kind === "statusQuestion" && item.field === "status" && replicationId !== null ? (
+        <StatusDecision item={item} replicationId={replicationId} />
       ) : (
         <p className="text-fg-secondary">
           Correct the records concerned where they are, then dismiss the item with a note.
@@ -406,7 +490,8 @@ function ItemCard({
 }
 
 function Queue() {
-  const items = useLiveQuery(OPEN_ITEMS);
+  const viewer = useViewer();
+  const items = useLiveQuery(openItemsQuery(viewer?.can("sealed.read", "programme") === true));
   const persons = usePersons();
   const [kind, setKind] = useState("");
   const [offset, setOffset] = useState(0);

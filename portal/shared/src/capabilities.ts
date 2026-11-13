@@ -66,8 +66,9 @@ export const SCOPE_TYPES_OF_ROLE: { readonly [R in Role]: readonly RoleScopeType
  * | `member`    | Every member role, for the programme as a whole                               |
  * | `unit`      | A programme role everywhere, and a scoped role within its replication or laboratory |
  * | `programme` | A programme role, or a named grant. A scoped role never holds it, whatever the overrides say |
+ * | `administrator` | A programme administrator alone. No override gives it to another role and no named grant confers it |
  */
-export type CapabilityLevel = "account" | "member" | "unit" | "programme";
+export type CapabilityLevel = "account" | "member" | "unit" | "programme" | "administrator";
 
 export interface CapabilityDefinition {
   readonly level: CapabilityLevel;
@@ -113,6 +114,11 @@ export const CAPABILITY_DEFINITIONS = {
   "audit.read": { level: "programme", allows: "Consulting the audit trail" },
   "automations.manage": { level: "programme", allows: "Editing automation rules and scheduled reports" },
   "outreach.read": { level: "unit", allows: "Reading the outreach correspondence of a replication" },
+  "sealed.read": {
+    level: "administrator",
+    allows:
+      "Reading what a decision of the programme seals: the outcome labels and the summary figures of the migration",
+  },
 } as const satisfies Record<string, CapabilityDefinition>;
 
 export type Capability = keyof typeof CAPABILITY_DEFINITIONS;
@@ -175,7 +181,7 @@ const UNIT_MANAGEMENT = [
  * | Role                    | Holds by default                                                    |
  * |-------------------------|---------------------------------------------------------------------|
  * | `programme_admin`       | Every capability                                                    |
- * | `core_team`             | Every capability except the sensitive ones                          |
+ * | `core_team`             | Every capability except the sensitive ones and `sealed.read`, which programme administrators alone hold |
  * | `replication_lead`      | The unit management set, `replications.manage` and `outreach.read`, within its replication |
  * | `lab_coordinator`       | The unit management set, `labs.manage` and `labs.claims.review`, within its laboratory |
  * | `lab_member`            | `directory.read`, and `recruitment.report` within its laboratory    |
@@ -188,13 +194,20 @@ const UNIT_MANAGEMENT = [
 export const DEFAULT_ROLE_CAPABILITIES: { readonly [R in Role]: readonly GrantableCapability[] } = {
   programme_admin: GRANTABLE_CAPABILITIES,
   core_team: GRANTABLE_CAPABILITIES.filter(
-    (capability) => !(SENSITIVE_CAPABILITIES as readonly GrantableCapability[]).includes(capability),
+    (capability) =>
+      !(SENSITIVE_CAPABILITIES as readonly GrantableCapability[]).includes(capability) &&
+      CAPABILITY_DEFINITIONS[capability].level !== "administrator",
   ),
   replication_lead: [...UNIT_MANAGEMENT, "replications.manage", "outreach.read"],
   lab_coordinator: [...UNIT_MANAGEMENT, "labs.manage", "labs.claims.review"],
   lab_member: ["directory.read", "recruitment.report"],
   external_collaborator: [],
 };
+
+/** Whether a named grant in `capabilityGrants` can confer a capability. One of the level `administrator` never is. */
+export function grantCanConfer(capability: GrantableCapability): boolean {
+  return CAPABILITY_DEFINITIONS[capability].level !== "administrator";
+}
 
 /** The overrides of one role, as `roleCapabilities/{role}` stores them. */
 export type CapabilityOverrides = { readonly [F in CapabilityField]?: boolean };
@@ -206,6 +219,7 @@ export type CapabilityOverrides = { readonly [F in CapabilityField]?: boolean };
  */
 export function roleCanHold(role: Role, capability: GrantableCapability): boolean {
   if (role === "external_collaborator") return false;
+  if (CAPABILITY_DEFINITIONS[capability].level === "administrator") return role === "programme_admin";
   if (isProgrammeRole(role)) return true;
   return CAPABILITY_DEFINITIONS[capability].level !== "programme";
 }

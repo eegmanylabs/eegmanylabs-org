@@ -7,6 +7,8 @@ import {
   getRetentionContract,
   type ListedErasureRequest,
   listErasureRequestsContract,
+  markMigrationVerifiedContract,
+  OUTREACH_RETENTION_TARGET,
   RETENTION_MAX_DAYS,
   RETENTION_MIN_DAYS,
   RETENTION_TARGET_LABELS,
@@ -38,6 +40,7 @@ import { CallableError, callFunction, useCallResult } from "@/data";
 import { downloadText } from "@/utils/download";
 import { AdminPage } from "./AdminPage";
 import { useAccountNames } from "./accounts";
+import { PersonOfAccount } from "./people";
 import { PersonSearch } from "./person-search";
 import { ReasonDialog } from "./ReasonDialog";
 
@@ -599,6 +602,88 @@ function PeriodRow({ target, days, onSaved }: { target: RetentionTarget; days: n
   );
 }
 
+/** The name of a target in the record of a sweep. */
+function targetLabel(target: string): string {
+  if (target === OUTREACH_RETENTION_TARGET) return "Outreach records of people who never joined";
+  return RETENTION_TARGET_LABELS[target as RetentionTarget] ?? target;
+}
+
+/**
+ * The retention of the raw material of the migration, which the programme decided
+ * (docs/MIGRATION_PLAN.md, section 11, question 20), and the mark that starts its year.
+ */
+function MigrationRetentionSection({
+  migration,
+  onChanged,
+}: {
+  migration: RetentionOverview["migration"];
+  onChanged: () => void;
+}) {
+  const toast = useToast();
+  const [confirming, setConfirming] = useState(false);
+  const marked = migration.verifiedAt !== null;
+  return (
+    <Section
+      title="Raw material of the migration"
+      description="The programme lead decided on 13 November 2026 that raw source records and exported files are kept until the migration is marked verified, and for one year after. Then the outreach records of people who never joined are deleted. What happens to the other raw records after that year has not been decided, so the portal keeps them. The audit log is never swept."
+    >
+      <div className="grid gap-2" data-testid="migration-retention">
+        {marked ? (
+          <p className="text-fg">
+            Marked verified on {formatDateTime(migration.verifiedAt ?? "")}
+            {migration.verifiedBy === null ? null : (
+              <>
+                {" "}
+                by <PersonOfAccount uid={migration.verifiedBy} />
+              </>
+            )}
+            . The outreach records of people who never joined are deleted from{" "}
+            {formatDateTime(migration.deletableFrom ?? migration.verifiedAt ?? "")}.
+          </p>
+        ) : (
+          <p className="text-fg">The migration is not marked verified, so nothing of it is deleted.</p>
+        )}
+        <p className="text-fg-secondary">
+          A contact counts as someone who never joined when it names no person, its address matches no person, and no
+          item of the review queue names its row.
+        </p>
+        {marked ? (
+          <p className="text-fg-secondary" data-testid="migration-link-sharing">
+            Decision 8: restrict link sharing on source F and the contributor sheets now, and record the date.
+          </p>
+        ) : null}
+        <div>
+          <Button size="sm" variant={marked ? "outline" : "primary"} onClick={() => setConfirming(true)}>
+            {marked ? "Move the mark later" : "Mark the migration verified"}
+          </Button>
+        </div>
+      </div>
+      <ReasonDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={marked ? "Move the mark later?" : "Mark the migration verified?"}
+        description={
+          marked
+            ? "The year of the retention starts again now. A mark moves later and never earlier, so the records are kept longer and never shorter."
+            : "The year of the retention starts now. One year later the sweep deletes the outreach records of people who never joined. A mark can later be moved to a later moment, never to an earlier one. Then restrict link sharing on source F and the contributor sheets, as decision 8 says."
+        }
+        label={marked ? "Why the mark moves" : "Note on what was verified"}
+        lengthMessage={
+          marked
+            ? "Say why the mark moves, up to 2,000 characters."
+            : "Describe what was verified, up to 2,000 characters."
+        }
+        confirmLabel={marked ? "Move the mark" : "Mark it verified"}
+        onConfirm={async (note) => {
+          await callFunction(markMigrationVerifiedContract, { note });
+          toast.show({ title: marked ? "The mark has moved." : "The migration is marked verified." });
+          onChanged();
+        }}
+      />
+    </Section>
+  );
+}
+
 function RetentionSettings({ overview, onChanged }: { overview: RetentionOverview; onChanged: () => void }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -625,7 +710,7 @@ function RetentionSettings({ overview, onChanged }: { overview: RetentionOvervie
     <div className="grid gap-6">
       <Section
         title="Retention periods"
-        description={`The periods are the programme's decision. The portal has no default: a kind of document without a period is never deleted. A period is between ${RETENTION_MIN_DAYS} and ${RETENTION_MAX_DAYS} days. The audit log and source records are never swept.`}
+        description={`The periods are the programme's decision. The portal has no default: a kind of document without a period is never deleted. A period is between ${RETENTION_MIN_DAYS} and ${RETENTION_MAX_DAYS} days. The audit log is never swept, and source records only as the migration retention below says.`}
       >
         <HorizontalScroll>
           <Table caption="Retention periods">
@@ -649,6 +734,7 @@ function RetentionSettings({ overview, onChanged }: { overview: RetentionOvervie
           </Table>
         </HorizontalScroll>
       </Section>
+      <MigrationRetentionSection migration={overview.migration} onChanged={onChanged} />
       <Section
         title="Sweeps"
         description="A sweep runs every night. A dry run counts what a sweep would delete and deletes nothing. Each sweep is recorded with what it did."
@@ -678,9 +764,7 @@ function RetentionSettings({ overview, onChanged }: { overview: RetentionOvervie
               <TableBody>
                 {latest.outcomes.map((outcome) => (
                   <TableRow key={outcome.target} data-testid="retention-outcome">
-                    <TableCell>
-                      {RETENTION_TARGET_LABELS[outcome.target as RetentionTarget] ?? outcome.target}
-                    </TableCell>
+                    <TableCell>{targetLabel(outcome.target)}</TableCell>
                     <TableCell>{outcome.eligible}</TableCell>
                     <TableCell>{outcome.deleted}</TableCell>
                     <TableCell>{outcome.note}</TableCell>

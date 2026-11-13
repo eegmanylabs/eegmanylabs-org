@@ -177,7 +177,9 @@ describe("restricted detail outside its scope", () => {
       ...forEach(callers, "denied", "lists the review queue", (caller) =>
         list(caller, "reconciliationItems", limit(10)),
       ),
-      "coreTeam: reads a source record": ["allowed", get("coreTeam", storedPath("sourceRecords"))],
+      // A raw row holds what a decision of the programme seals, so programme administrators alone read it.
+      "coreTeam: reads a source record": ["denied", get("coreTeam", storedPath("sourceRecords"))],
+      "admin: reads a source record": ["allowed", get("admin", storedPath("sourceRecords"))],
     });
   });
 

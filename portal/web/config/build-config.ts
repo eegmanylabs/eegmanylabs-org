@@ -101,6 +101,7 @@ export function resolveBuildConfig(mode: string, env: Environment, ports: Portal
       appCheck: null,
       googleSignIn,
       presence,
+      mailDelivery: "enabled",
     };
   }
 
@@ -166,5 +167,6 @@ export function resolveBuildConfig(mode: string, env: Environment, ports: Portal
     appCheck: siteKey === "" ? null : { siteKey },
     googleSignIn,
     presence,
+    mailDelivery: ENVIRONMENTS[environment].mail,
   };
 }

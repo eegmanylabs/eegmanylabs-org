@@ -67,7 +67,7 @@ const parameterNames = (path: string) => [...path.matchAll(/\{([^{}]+)\}/g)].map
 
 describe("the registry", () => {
   it("has one entry for every collection, subcollection and fixed-name document of the data model", () => {
-    expect(COLLECTION_KEYS).toHaveLength(158);
+    expect(COLLECTION_KEYS).toHaveLength(160);
     expect(COLLECTION_ENTRIES.map((entry) => entry.key)).toEqual(COLLECTION_KEYS);
   });
 
@@ -163,7 +163,7 @@ describe("the enforcement of an entry", () => {
         "progressReports",
       ].sort(),
     );
-    expect(COLLECTION_ENTRIES.filter((entry) => entry.enforcement === "enforced")).toHaveLength(151);
+    expect(COLLECTION_ENTRIES.filter((entry) => entry.enforcement === "enforced")).toHaveLength(153);
   });
 
   it("never opens a document beneath a parent that is still closed", () => {
@@ -374,6 +374,7 @@ describe("the access rules of an entry", () => {
       "labClaimReview",
       "personContact",
       "personDemographics",
+      "personDemographicsConsent",
       "personEmailIndex",
       "identityKeys",
       "institutionCandidates",
@@ -382,6 +383,8 @@ describe("the access rules of an entry", () => {
       "replicationSummaries",
       "statusHistory",
       "historicalAggregates",
+      "predictionMarketOutcomes",
+      "predictionMarketItems",
       "studyAliasIndex",
       "outreachContacts",
       "recruitmentReports",
@@ -540,7 +543,8 @@ describe("the access rules of an entry", () => {
     };
     expect(reserved("replications")).toContain("vocabulary");
     expect(reserved("laboratoryMembers")).toEqual(["earlierPeriods"]);
-    expect(reserved("replicationMemberships")).toEqual(["earlierPeriods"]);
+    // The basis on which an import confirmed a lead is a map that names its sources.
+    expect(reserved("replicationMemberships")).toEqual(["earlierPeriods", "confirmationBasis"]);
   });
 
   it("let nobody but the person concerned acknowledge a protocol version", () => {

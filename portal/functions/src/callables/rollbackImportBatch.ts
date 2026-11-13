@@ -2,10 +2,13 @@ import { isDeepStrictEqual } from "node:util";
 import {
   type ChangeState,
   COLLECTIONS,
+  consentInForce,
+  isWithheldState,
   planBatchRollback,
   type RollbackStep,
   rollbackImportBatchContract,
   sequenceId,
+  specialSubjectOf,
 } from "@eegml/shared";
 import {
   type DocumentSnapshot,
@@ -51,8 +54,29 @@ const ACTION_OF: Readonly<Record<RollbackStep["kind"], "restore" | "remove" | "w
   remove: "remove",
   withdraw: "withdraw",
   keep: "keep",
+  discard: null,
   skip: null,
 };
+
+/**
+ * The special-category documents of a log that a rollback may not write back: every copy of cells
+ * beneath a source record, and the values of a person whose consent is not in force (question 20).
+ */
+async function specialWithoutConsent(db: Firestore, states: readonly ChangeState[]): Promise<Set<string>> {
+  const refused = new Set<string>();
+  const persons = new Map<string, string>();
+  for (const state of states) {
+    const subject = specialSubjectOf(state.path);
+    if (subject?.kind === "sourceRecord") refused.add(state.path);
+    if (subject?.kind === "person")
+      persons.set(state.path, COLLECTIONS.personDemographicsConsent.docPath(subject.personId));
+  }
+  const consents = await readAll(db, [...persons.values()]);
+  for (const [path, consentPath] of persons) {
+    if (!consentInForce(consents.get(consentPath)?.data())) refused.add(path);
+  }
+  return refused;
+}
 
 /**
  * Rolls an import batch back from its change log (docs/MIGRATION_PLAN.md, section 6). Capability:
@@ -87,16 +111,17 @@ export const rollbackImportBatch = defineCallable(rollbackImportBatchContract, {
 
     const log = await db.collection(COLLECTIONS.importBatchChanges.collectionPath(input.batchId)).get();
     const entries = log.docs.sort((a, b) => (a.id < b.id ? 1 : -1));
-    const marked = (entry: (typeof entries)[number]) =>
-      [entry.get("before"), entry.get("after")].some(
-        (state) => (state as { specialCategory?: boolean } | null)?.specialCategory === true,
-      );
+    const marked = (entry: (typeof entries)[number]) => [entry.get("before"), entry.get("after")].some(isWithheldState);
     const statePath = (id: string) => COLLECTIONS.importBatchChangeState.docPath(input.batchId, id);
     const special = await readAll(
       db,
       entries.filter(marked).map((entry) => statePath(entry.id)),
     );
-    const stateless = entries.filter((entry) => marked(entry) && special.get(statePath(entry.id))?.exists !== true);
+    // A removal for good keeps no state on purpose, and stays removed.
+    const irreversible = (entry: (typeof entries)[number]) => entry.get("irreversible") === true;
+    const stateless = entries.filter(
+      (entry) => marked(entry) && !irreversible(entry) && special.get(statePath(entry.id))?.exists !== true,
+    );
     if (stateless.length > 0) {
       return {
         status: "refused" as const,
@@ -113,6 +138,7 @@ export const rollbackImportBatch = defineCallable(rollbackImportBatchContract, {
         path: (keptData?.documentPath as string | undefined) ?? (entry.get("documentPath") as string),
         before: (keptData === undefined ? entry.get("before") : keptData.before) as Record<string, unknown> | null,
         after: (keptData === undefined ? entry.get("after") : keptData.after) as Record<string, unknown> | null,
+        irreversible: irreversible(entry),
       };
     });
     const current = await readAll(
@@ -124,6 +150,7 @@ export const rollbackImportBatch = defineCallable(rollbackImportBatchContract, {
       current: new Map([...current].map(([path, snapshot]) => [path, snapshot.data() ?? null])),
       equal: isDeepStrictEqual,
       itemsPrefix: `${COLLECTIONS.reconciliationItems.collectionPath()}/`,
+      withoutConsent: await specialWithoutConsent(db, states),
     });
     if (plan.status === "refused") {
       return { status: "refused" as const, changedDocuments: plan.changedDocuments.slice(0, LISTED) };
@@ -152,6 +179,7 @@ export const rollbackImportBatch = defineCallable(rollbackImportBatchContract, {
         switch (step.kind) {
           case "skip":
           case "keep":
+          case "discard":
             break;
           case "withdraw":
             write.update(
@@ -201,6 +229,7 @@ export const rollbackImportBatch = defineCallable(rollbackImportBatchContract, {
           { field: "removed", after: plan.counts.removed },
           { field: "itemsWithdrawn", after: plan.counts.itemsWithdrawn },
           { field: "itemsLeft", after: plan.counts.itemsLeft },
+          { field: "discarded", after: plan.counts.discarded },
         ],
         at,
       },

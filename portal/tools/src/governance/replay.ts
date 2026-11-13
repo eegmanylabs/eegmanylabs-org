@@ -10,15 +10,19 @@
 // | `capabilityRevoked` | The grant revoked, where it is in force again |
 // | `accountSuspended`  | The profile suspended and the Authentication account disabled |
 // | `sessionsEnded`     | Covered by the last step, which ends every session |
+// | `demographicsWithdrawn` | The gender and ethnicity of the person deleted again with every kept copy, and the record of consent marked withdrawn where the restore holds it in force |
 //
 // Then every access document is resolved again, and every session of every account that began
 // before the replay is ended, so that no token issued before the restore outlives it. Every
 // step can run again: a second replay of the same ledger changes nothing but the session boundary.
 import {
   COLLECTIONS,
+  CONSENT_HISTORY_MAX,
   capabilityGrantDocSchema,
+  consentInForce,
   type GovernanceLedgerEntry,
   parseStoredDocument,
+  personDemographicsConsentDocSchema,
   roleAssignmentDocSchema,
   systemActor,
   systemWriteContext,
@@ -26,6 +30,7 @@ import {
 import { Timestamp } from "firebase-admin/firestore";
 import { touchedFields, type WriteStamp } from "../../../functions/src/framework/documents";
 import { applyErasure } from "../../../functions/src/governance/erasure";
+import { removeDemographicCopies } from "../../../functions/src/people/demographics-values";
 import { revokedAssignment } from "../../../functions/src/roles/assignments";
 import type { AdminHandles } from "../admin";
 import { rebuildAllAccess } from "../commands/access-rebuild";
@@ -38,6 +43,8 @@ export interface ReplaySummary {
   rolesRevoked: number;
   grantsRevoked: number;
   accountsSuspended: number;
+  /** Withdrawals of consent applied again: values deleted, or a record of consent found in force. */
+  consentsWithdrawn: number;
   /** Entries that found nothing left to do, because the restore already held their effect. */
   alreadyApplied: number;
   accessUpdated: number;
@@ -60,6 +67,7 @@ export async function replayLedger(
     rolesRevoked: 0,
     grantsRevoked: 0,
     accountsSuspended: 0,
+    consentsWithdrawn: 0,
     alreadyApplied: 0,
     accessUpdated: 0,
     sessionsEnded: 0,
@@ -114,6 +122,33 @@ export async function replayLedger(
       case "sessionsEnded":
         summary.alreadyApplied += 1;
         break;
+      case "demographicsWithdrawn": {
+        const removed = await removeDemographicCopies(db, entry.personId);
+        const reference = db.doc(COLLECTIONS.personDemographicsConsent.docPath(entry.personId));
+        const stored = parseStoredDocument(personDemographicsConsentDocSchema, (await reference.get()).data());
+        const restoredInForce = stored.success && consentInForce(stored.data);
+        if (stored.success && restoredInForce) {
+          const at = Timestamp.fromDate(new Date(entry.at));
+          await reference.set({
+            ...stored.data,
+            ...touchedFields(stamp),
+            status: "withdrawn",
+            withdrawnAt: at,
+            history: [
+              ...stored.data.history,
+              {
+                status: "withdrawn" as const,
+                at,
+                wordingVersion: stored.data.wordingVersion,
+                auditEventId: null,
+              },
+            ].slice(-CONSENT_HISTORY_MAX),
+          });
+        }
+        if (removed === 0 && !restoredInForce) summary.alreadyApplied += 1;
+        else summary.consentsWithdrawn += 1;
+        break;
+      }
     }
   }
 

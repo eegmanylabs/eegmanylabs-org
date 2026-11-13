@@ -23,6 +23,7 @@ import type { DocumentData } from "firebase-admin/firestore";
 import { Timestamp } from "firebase-admin/firestore";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { emulatorEnvironment } from "../../scripts/ports.mjs";
+import { confirmAgreedLeads } from "../../tools/src/commands/confirm-agreed-leads";
 import { createdFields } from "../../tools/src/import/context";
 import {
   LITERATURE_POINTER,
@@ -41,6 +42,7 @@ import { importer as website } from "../../tools/src/import/sources/website-data
 import { adminDb } from "../support/admin";
 import { PORTAL_ROOT, PORTS, PROJECT_ID } from "../support/emulators";
 import {
+  agreeOnLeads,
   allDocuments,
   baselineOf,
   differences,
@@ -65,7 +67,12 @@ const items = itemBuilders(TEST_HASH_KEY);
 /** The claim that marks the one known study of the combined row of the fixture as a part of that row. */
 const COMBINED_PART = { source: "combined/part", value: "AmodioJost2007" };
 
-/** Applies the synthetic website data with the studies of the workbook. Each has the invented lead `Ada Example`. */
+/**
+ * Applies the synthetic website data with the studies of the workbook, each with the invented lead
+ * `Ada Example`, and confirms the leads on which the sources agreed before this workbook changed:
+ * the other lead-naming sources are recorded as applied for the moment of the step, as after a
+ * first round of imports, and `leads:confirm-agreed` confirms each undisputed lead under question 5.
+ */
 async function applyWebsite(): Promise<void> {
   const fixture = websiteFixture();
   const [template] = fixture.replications;
@@ -73,6 +80,7 @@ async function applyWebsite(): Promise<void> {
     fixture.replications.push({ ...template, StudyId: studyId, PublicationId: "", Doi: recruitmentDoi(studyId) });
   }
   await run(website, writeWebsiteFixture(temporaryDirectory(), fixture), "apply");
+  await agreeOnLeads();
 }
 
 async function workbookFile(change: (fixture: RecruitmentFixture) => void = () => {}): Promise<string> {
@@ -519,8 +527,11 @@ describe("the summary figures", () => {
     expect(stored.filter((aggregate) => (aggregate.replicationIds as string[]).includes("AmodioJost2007"))).toEqual([]);
     expect(stored.map((aggregate) => aggregate.valueNumeric)).not.toContain(505);
     const row = await record("numberOfLabsPerReplication", "amodiojost2007amodiomaster2007");
+    // The programme decided that the combined values cover both studies and stay attached to neither (question 2),
+    // and the figures are sealed (question 14), so the claims are keyed and no figure is shown.
     const expected = items.unmatchedIdentifier({
       subject: `f/${COUNTS}/amodiojost2007amodiomaster2007`,
+      personal: true,
       claims: [
         { source: `f/${COUNTS}/StudyID`, value: "AmodioJost2007 + AmodioMaster2007" },
         { source: `f/${COUNTS}/nLabsSigned`, value: "9" },
@@ -539,11 +550,11 @@ describe("the summary figures", () => {
     });
     expect(candidatesOf(item).map((candidate) => candidate.valueSource)).toEqual([
       "AmodioJost2007 + AmodioMaster2007",
-      "9",
-      "410",
-      "12",
-      "505",
-      "505",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
       "AmodioJost2007",
     ]);
     expect(candidatesOf(item).at(-1)?.key).toMatch(/^combined\/part:/);
@@ -628,6 +639,7 @@ describe("the summary figures", () => {
         items.valueConflict({
           subject: "Hajcak2003",
           field: "nLabsFinished",
+          personal: true,
           claims: [
             { source: `f/${COUNTS}/nLabsSigned`, value: "11" },
             { source: `f/${COUNTS}/nLabsFinished`, value: "13" },
@@ -636,6 +648,7 @@ describe("the summary figures", () => {
         items.valueConflict({
           subject: "f/study/amodiojost2007amodiomaster2007",
           field: "nLabsFinished",
+          personal: true,
           claims: [
             { source: `f/${COUNTS}/nLabsSigned`, value: "9" },
             { source: `f/${COUNTS}/nLabsFinished`, value: "12" },
@@ -681,7 +694,8 @@ describe("the summary figures", () => {
     // The totals and the medians agree with their cached values. The projection adds single cells of two columns.
     const reported = await itemsOf("annotationReview", "D");
     expect(reported).toHaveLength(1);
-    expect(candidatesOf(reported[0]).map((candidate) => candidate.valueSource)).toEqual(["SUM(D3,F2,D2)"]);
+    // A derived cell is computed from sealed figures, so the item shows nothing of it.
+    expect(candidatesOf(reported[0]).map((candidate) => candidate.valueSource)).toEqual([undefined]);
     expect(candidatesOf(reported[0])[0]?.key).toContain("/derived/handBuilt/formula:");
 
     await run(
@@ -692,7 +706,7 @@ describe("the summary figures", () => {
       "apply",
     );
     const [stale] = await itemsOf("annotationReview", "C");
-    expect(candidatesOf(stale).map((candidate) => candidate.valueSource)).toEqual(["999", "59"]);
+    expect(candidatesOf(stale).map((candidate) => candidate.valueSource)).toEqual([undefined, undefined]);
     expect(await aggregates()).toHaveLength(26);
   });
 
@@ -813,10 +827,12 @@ describe("the lead claims", () => {
       expect(created.filter((documentPath) => documentPath.startsWith(collection))).toEqual([]);
     }
     expect(created.filter((documentPath) => documentPath.includes("/memberships/"))).toEqual([]);
-    // The leads that the website confirmed for the four studies in question are lowered, and nothing else of them
-    // changes. The study that the combined row names beside another keeps its lead: what that row says is given to neither.
+    // The leads confirmed on the agreement of the sources are lowered for the four studies in question, and for the
+    // study that the combined row names: a disagreement on a cell that names several studies is one about each of
+    // them. Nothing else of the memberships changes.
     const lowered = rewritten.filter((documentPath) => documentPath.includes("/memberships/"));
     expect(lowered.map((documentPath) => documentPath.split("/")[1])).toEqual([
+      "AmodioJost2007",
       "Boksem2006",
       "Carretie2004",
       "DelCul2007",
@@ -826,6 +842,9 @@ describe("the lead claims", () => {
       const was = before.get(documentPath)?.data ?? {};
       const is = after.get(documentPath)?.data ?? {};
       expect([was.reviewStatus, is.reviewStatus]).toEqual(["confirmed", "needsReview"]);
+      // The agreement on which the lead was confirmed no longer holds, so no basis stays.
+      expect(was.confirmationBasis?.decision?.reference).toBe("docs/MIGRATION_PLAN.md, section 11, question 5");
+      expect(is).not.toHaveProperty("confirmationBasis");
       expect([is.personId, is.role, is.isCurrent, is.sourceRecordIds]).toEqual([
         was.personId,
         was.role,
@@ -935,15 +954,20 @@ describe("the lead claims", () => {
     expect(membership.data()).toMatchObject({ reviewStatus: "needsReview", isCurrent: true });
     const reason = await adminDb.doc(`sourceRecords/${membership.get("fieldSources").reviewStatus}`).get();
     expect(reason.get("sourceKey")).toBe("f");
-    // A study about whose lead the workbook raises nothing keeps its confirmed lead, and so does the study that the
-    // combined row names: a question that rests on a cell which names several studies writes to none of them.
-    for (const studyId of ["Luck1996", "AmodioJost2007"]) {
-      const untouched = await adminDb
-        .doc(`replications/${studyId}/memberships/${replicationMembershipId(await websitePerson("aexample"), "lead")}`)
-        .get();
-      expect(untouched.data(), studyId).toMatchObject({ reviewStatus: "confirmed", isCurrent: true });
-      expect(untouched.get("fieldSources").reviewStatus, studyId).not.toBe(reason.id);
-    }
+    // A study about whose lead the workbook raises nothing keeps its confirmed lead.
+    const untouched = await adminDb
+      .doc(`replications/Luck1996/memberships/${replicationMembershipId(await websitePerson("aexample"), "lead")}`)
+      .get();
+    expect(untouched.data()).toMatchObject({ reviewStatus: "confirmed", isCurrent: true });
+    expect(untouched.get("fieldSources").reviewStatus).not.toBe(reason.id);
+    // The study that the combined row names is lowered too: the row's lead is given to it, which is a disagreement.
+    const amodio = await adminDb
+      .doc(
+        `replications/AmodioJost2007/memberships/${replicationMembershipId(await websitePerson("aexample"), "lead")}`,
+      )
+      .get();
+    expect(amodio.data()).toMatchObject({ reviewStatus: "needsReview", isCurrent: true });
+    expect(amodio.data()).not.toHaveProperty("confirmationBasis");
     const combined = leads.filter((item) => JSON.stringify(item.candidates).includes("combined/part:"));
     expect(combined.map((item) => item.field).sort()).toEqual(["formerLead", "lead"]);
     for (const item of combined) {
@@ -1006,12 +1030,24 @@ describe("the lead claims", () => {
         .map((item) => item.field)
         .sort(),
     ).toEqual(["formerLead", "lead"]);
-    // The leads that the website confirmed for the two studies stay confirmed: nothing is written on a proposal
-    // or on a cell that names two studies.
+    // The website wrote both leads for review, and the workbook leaves them so: nothing is written on a proposal.
+    const leadOf = async (studyId: string) =>
+      `replications/${studyId}/memberships/${replicationMembershipId(await websitePerson("aexample"), "lead")}`;
     for (const studyId of ["AmodioJost2007", "AmodioMaster2008"]) {
-      const path = `replications/${studyId}/memberships/${replicationMembershipId(await websitePerson("aexample"), "lead")}`;
+      const path = await leadOf(studyId);
       expect(after.get(path), studyId).toEqual(before.get(path));
-      expect(after.get(path), studyId).toMatchObject({ reviewStatus: "confirmed", isCurrent: true });
+      expect(after.get(path), studyId).toMatchObject({ reviewStatus: "needsReview", isCurrent: true });
+    }
+    // Once every lead-naming source has been applied, the step of question 5 confirms no Amodio lead: the combined
+    // row names another lead for both studies, and its question is open.
+    for (const sourceKey of ["a", "d"]) await recordApplied(sourceKey);
+    const agreed = await confirmAgreedLeads(adminDb, { apply: true });
+    expect(agreed.waitingFor).toEqual([]);
+    expect(agreed.questioned).toEqual(expect.arrayContaining(["AmodioJost2007", "AmodioMaster2008"]));
+    for (const studyId of ["AmodioJost2007", "AmodioMaster2008"]) {
+      const lead = await adminDb.doc(await leadOf(studyId)).get();
+      expect(lead.data(), studyId).toMatchObject({ reviewStatus: "needsReview" });
+      expect(lead.data(), studyId).not.toHaveProperty("confirmationBasis");
     }
 
     // A proposal is no match: the study gets no alias, no figure, no contact and no lead from the workbook.
@@ -2019,7 +2055,7 @@ describe("personal data of the recruitment and contact workbook", () => {
     const readable = written.filter((documentPath) =>
       membersCanRead(documentPath, (after.get(documentPath) as StoredDocument).data),
     );
-    // The figures, the aliases of the tab titles, the purposes and the membership that needs review.
+    // The aliases of the tab titles, the purposes and the membership that needs review. The figures are sealed.
     expect(
       new Set(
         readable.map((documentPath) =>
@@ -2030,15 +2066,7 @@ describe("personal data of the recruitment and contact workbook", () => {
             .join("/"),
         ),
       ),
-    ).toEqual(
-      new Set([
-        "historicalAggregates",
-        "replications/aliases",
-        "replications/memberships",
-        "studyAliasIndex",
-        "vocabularyTerms",
-      ]),
-    );
+    ).toEqual(new Set(["replications/aliases", "replications/memberships", "studyAliasIndex", "vocabularyTerms"]));
     const restricted = restrictedValues(recruitmentFixture());
     expect(restricted.length).toBeGreaterThan(120);
     expect(restricted).toContain("bea.contact@example.org");

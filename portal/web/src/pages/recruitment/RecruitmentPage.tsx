@@ -5,6 +5,7 @@
 // against actual, completion, active sites, attrition from recorded to usable, usable N, the
 // trend at the end of each month, rates and milestones. Imported historical figures stand apart
 // and are never added to live reports.
+
 import {
   attritionPercent,
   completionFigure,
@@ -33,6 +34,7 @@ import {
 } from "@eegml/shared";
 import { type ReactNode, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
+import { useNavigableCapabilities } from "@/auth/use-privilege";
 import { LiveView } from "@/components/feedback/live-view";
 import { PageHeader } from "@/components/page-header";
 import { type RecordColumn, RecordTable } from "@/components/record-table";
@@ -769,7 +771,9 @@ function LatestTotals({ settings, name }: { readonly settings: RecruitmentSettin
 
 function ProgrammeRecruitment({ viewer, world }: { readonly viewer: Viewer; readonly world: RecruitmentWorld }) {
   const [settings, change] = useRecruitmentSettings();
-  const aggregates = useLiveQuery(ALL_HISTORICAL_AGGREGATES);
+  // The summary figures of the historical workbooks are sealed: programme administrators alone read them.
+  const sealedReader = useNavigableCapabilities().has("sealed.read");
+  const aggregates = useLiveQuery(sealedReader ? ALL_HISTORICAL_AGGREGATES : null);
   const categories = currentCategories(world.data.categories, "all");
   const label = (key: string) => categories.find((category) => category.key === key)?.label ?? key;
   const name = figureName(label(settings.category), settings.modality);
@@ -834,14 +838,16 @@ function ProgrammeRecruitment({ viewer, world }: { readonly viewer: Viewer; read
           </>
         )}
       </section>
-      <LiveView
-        live={aggregatesLive}
-        loadingLabel="Loading the imported history"
-        errorTitle="The imported history could not be loaded."
-        onRetry={retryFailedLiveData}
-      >
-        {(items) => <ImportedHistory aggregates={items} replicationIds={replicationIds} />}
-      </LiveView>
+      {sealedReader ? (
+        <LiveView
+          live={aggregatesLive}
+          loadingLabel="Loading the imported history"
+          errorTitle="The imported history could not be loaded."
+          onRetry={retryFailedLiveData}
+        >
+          {(items) => <ImportedHistory aggregates={items} replicationIds={replicationIds} />}
+        </LiveView>
+      ) : null}
       <MilestonesSummary viewer={viewer} replicationIds={viewer.staff ? "all" : replicationIds} asOf={settings.asOf} />
     </div>
   );

@@ -5,13 +5,17 @@ import {
   type EntityRef,
   entityPath,
   entryOfDocumentPath,
+  MEMBERS_SCOPE_KEY,
   membershipCounts,
   parseStoredDocument,
   type ReconciliationItemDoc,
   reconciliationItemDocSchema,
   replicationMembershipId,
+  replicationScopeKey,
   resolveReconciliationItemContract,
   rolesOfMembership,
+  statusDefinitionId,
+  studyStatusDecision,
   withUnit,
 } from "@eegml/shared";
 import {
@@ -43,7 +47,13 @@ const KINDS_OF: Readonly<Record<Exclude<Action, "dismiss">, ReconciliationItemDo
   keepCurrent: "valueConflict",
   distinctPersons: "duplicatePerson",
   mergePersons: "duplicatePerson",
+  applyProgrammeDecision: "statusQuestion",
 };
+
+const NO_DECISION_MESSAGE =
+  "The programme has decided no status for the replication of this item. Decide it by changing the status, then dismiss the item.";
+const STATUS_MOVED_MESSAGE =
+  "The status of this replication was changed in the portal after the programme decided it. Look at it again and dismiss the item.";
 
 const DECIDED_MESSAGE = "This item has been decided already, and a decided item is never reopened. Reload the queue.";
 const OWN_RECORD_MESSAGE = "This decision concerns your own record, so another reviewer decides it.";
@@ -69,6 +79,7 @@ type Write = (stamp: ReturnType<typeof callerStamp>) => number;
  * | `keepCurrent`     | `valueConflict`   | The item alone: the record keeps its value                           |
  * | `distinctPersons` | `duplicatePerson` | The item alone: the records are different people                     |
  * | `mergePersons`    | `duplicatePerson` | Everything that refers to the merged record moves to the kept one (`people/merge.ts`) |
+ * | `applyProgrammeDecision` | `statusQuestion` | The replication takes the status that the programme decided (`STUDY_STATUS_DECISIONS`), with an entry of its status history whose source is `programmeDecision` and which names the decision, unless it holds that status already. Programme administrators alone apply it |
  *
  * The decision is stored on the item as its resolution, which later imports apply again. A
  * decided item never reopens: a second decision is refused, and so is a decision that does not
@@ -295,12 +306,81 @@ export const resolveReconciliationItem = defineCallable(resolveReconciliationIte
         write = (stamp) => merge.apply(stamp);
       }
 
+      if (input.action === "applyProgrammeDecision") {
+        // A decision of the programme answers a question about the status of a study. The candidates of the item,
+        // the statuses that the sources stated, stay on it beside the decision as its provenance.
+        requireProgrammeAdministrator(access);
+        const replicationId = refOf(item, "replication");
+        const decided = replicationId === null || item.field !== "status" ? null : studyStatusDecision(replicationId);
+        if (replicationId === null || decided === null) throw new AppError("failed-precondition", NO_DECISION_MESSAGE);
+        subject = { entityType: "replication", entityId: replicationId };
+        const replicationReference = db.doc(COLLECTIONS.replications.docPath(replicationId));
+        const [replication, definition] = await transaction.getAll(
+          replicationReference,
+          db.doc(COLLECTIONS.statusDefinitions.docPath(statusDefinitionId("replication", decided.statusKey))),
+        );
+        if (replication?.exists !== true)
+          throw new AppError("not-found", "The replication of this item does not exist.");
+        if (definition?.exists !== true) {
+          throw new AppError(
+            "failed-precondition",
+            "The status that the programme decided is not set up. Install the lookups.",
+          );
+        }
+        const current = (replication.get("statusKey") as string | null | undefined) ?? null;
+        // A status that someone set in the portal since is a later decision, which this one does not overturn.
+        if (current !== null && current !== decided.statusKey) {
+          throw new AppError("failed-precondition", STATUS_MOVED_MESSAGE);
+        }
+        resolution.decision = decided.decision;
+        resolution.decidedStatus = decided.decided;
+        resolution.statusKey = decided.statusKey;
+        if (current === null) {
+          const historyReference = db.collection(COLLECTIONS.statusHistory.collectionPath()).doc();
+          write = (stamp) => {
+            const now = Timestamp.fromDate(stamp.at);
+            transaction.create(
+              historyReference,
+              COLLECTIONS.statusHistory.schema.parse({
+                schemaVersion: COLLECTIONS.statusHistory.schemaVersion,
+                createdAt: now,
+                createdBy: stamp.actor,
+                writeContext: stamp.writeContext,
+                entityType: "replication",
+                entityId: replicationId,
+                fromStatusKey: null,
+                toStatusKey: decided.statusKey,
+                // The programme lead decided on the day of the answers, which is when the status holds from.
+                effectiveAt: Timestamp.fromDate(new Date(`${decided.decision.decidedOn}T00:00:00Z`)),
+                recordedAt: now,
+                changedBy: stamp.actor,
+                reason: `The programme lead decided that the study is ${decided.decided} (${decided.decision.reference}).`,
+                source: "programmeDecision",
+                decision: decided.decision,
+                replicationId,
+                laboratoryId: null,
+                scopeKeys: [replicationScopeKey(replicationId), MEMBERS_SCOPE_KEY],
+              }),
+            );
+            transaction.update(replicationReference, {
+              statusKey: decided.statusKey,
+              statusHistoryId: historyReference.id,
+              ...touchedFields(stamp),
+            });
+            return 2;
+          };
+        }
+      }
+
       const status = input.action === "dismiss" ? ("dismissed" as const) : ("resolved" as const);
       const changes: AuditChange[] = [
         { field: "reconciliationItem", after: input.fingerprint },
         { field: "kind", after: item.kind },
         { field: "status", before: "open", after: status },
         { field: "action", after: input.action },
+        ...(input.action === "applyProgrammeDecision" && typeof resolution.statusKey === "string"
+          ? [{ field: "decidedStatusKey", after: resolution.statusKey }]
+          : []),
       ];
       const auditEventId = writeAudit(
         transaction,

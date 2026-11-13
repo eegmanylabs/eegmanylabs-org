@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useMemo, useRef } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { usePaletteActions } from "@/app/shell/palette-actions";
+import { useNavigableCapabilities } from "@/auth/use-privilege";
 import { ErrorState } from "@/components/feedback/error-state";
 import { LiveView } from "@/components/feedback/live-view";
 import { LoadingState } from "@/components/feedback/loading-state";
@@ -177,13 +178,18 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
   const currentEquipment = useCurrentEquipment();
   const allRequirements = useRequirements();
   const team = viewer.readsTeamOf(studyKey);
+  // What a decision of the programme seals is read by programme administrators alone.
+  const sealedReader = useNavigableCapabilities().has("sealed.read");
   const teamMemberships = orEmpty(useLiveQuery(team ? membershipsOfReplication(studyKey) : null));
   const confirmedMemberships = orEmpty(useLiveQuery(team ? null : CONFIRMED_MEMBERSHIPS));
   const aliases = useLiveQuery(aliasesOfReplication(studyKey));
   const hypotheses = useLiveQuery(hypothesesOfReplication(studyKey));
-  const detail = useLiveDocument("replicationDetail", team ? [studyKey] : null);
-  const aggregates = useLiveQuery(historicalAggregatesOfReplication(studyKey));
-  const contributors = useLiveQuery(contributorsOfReplication(studyKey));
+  // The outcome labels are sealed by a decision of the programme: programme administrators alone read them.
+  const outcomes = useLiveDocument("predictionMarketOutcomes", sealedReader ? [studyKey] : null);
+  // The summary figures of the historical workbooks are sealed: programme administrators alone read them.
+  const aggregates = orEmpty(useLiveQuery(sealedReader ? historicalAggregatesOfReplication(studyKey) : null));
+  // The contributor lists are read by the team of the replication, by a decision of the programme.
+  const contributors = orEmpty(useLiveQuery(team ? contributorsOfReplication(studyKey) : null));
   const links = useLiveQuery(documentLinksOfReplication(studyKey, viewer.queryScopeKeys));
   const generated = orEmpty(
     useLiveQuery(
@@ -204,7 +210,8 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
   const protocols = useLiveQuery(protocolsOfReplication(studyKey));
   const protocolVersions = useLiveQuery(protocolVersionsOfReplication(studyKey));
   const decisions = useLiveQuery(decisionsOfReplication(studyKey));
-  const predictionItems = useLiveQuery(predictionItemsOfReplication(studyKey));
+  // The questions of the prediction market are sealed by a decision of the programme: programme administrators alone read them.
+  const predictionItems = orEmpty(useLiveQuery(sealedReader ? predictionItemsOfReplication(studyKey) : null));
   const runs = orEmpty(useLiveQuery(scoped(analysisRunsOfReplication)));
   const incidents = orEmpty(useLiveQuery(scoped(incidentsOfReplication)));
   const incidentActions = orEmpty(useLiveQuery(scoped(incidentActionsOfReplication)));
@@ -364,16 +371,16 @@ function ReplicationRecord({ replication, viewer }: { replication: RecordOf<"rep
     { id: "datasets", live: ALWAYS, render: () => <DatasetsTab viewer={viewer} replicationId={studyKey} /> },
     {
       id: "hypotheses",
-      // The team waits for the restricted labels too, so that none is shown as missing while it loads.
-      live: team && detail.status === "loading" ? { status: "loading" } : hasAny(hypotheses),
+      // An administrator waits for the sealed labels too, so that none is shown as missing while it loads.
+      live: sealedReader && outcomes.status === "loading" ? { status: "loading" } : hasAny(hypotheses),
       render: () => (
         <HypothesesTab
           studyKey={studyKey}
           hypotheses={ready(hypotheses)}
-          replicatedLabels={team && detail.status === "ready" ? (detail.data?.replicatedSource ?? {}) : null}
+          replicatedLabels={sealedReader && outcomes.status === "ready" ? (outcomes.data?.labelsSource ?? {}) : null}
           runs={ready(runs)}
           manuscripts={ready(manuscripts)}
-          predictionItems={ready(predictionItems)}
+          predictionItems={sealedReader ? ready(predictionItems) : null}
           canRecord={managesOutputs}
         />
       ),

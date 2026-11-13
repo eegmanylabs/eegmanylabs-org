@@ -18,6 +18,7 @@ import {
 import { Timestamp } from "firebase-admin/firestore";
 import { beforeEach, describe, expect, it } from "vitest";
 import { adminDb } from "../support/admin";
+import { recordConsent } from "../support/consent";
 import {
   accessOf,
   account,
@@ -234,6 +235,7 @@ describe("getPersonDemographics", () => {
     await adminDb
       .doc(COLLECTIONS.personDemographics.docPath(personId))
       .set({ ...standard(), ...DEMOGRAPHICS, recordedAt: Timestamp.fromMillis(1_700_000_000_000) });
+    await recordConsent(personId);
   }
   const served = { ...DEMOGRAPHICS, recordedAt: new Date(1_700_000_000_000).toISOString() };
 

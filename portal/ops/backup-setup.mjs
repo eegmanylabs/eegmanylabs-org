@@ -251,6 +251,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       throw new ProcedureRefusal("Refusing: --environment is staging or production.");
     const projectId = requireProject(options);
     return {
+      environment: name,
       projectId,
       commands: backupSetupCommands(ENVIRONMENTS[name], projectId, options.get("project-number") ?? ""),
     };

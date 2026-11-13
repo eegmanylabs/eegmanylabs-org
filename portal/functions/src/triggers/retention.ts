@@ -3,6 +3,8 @@
 import { FUNCTIONS_REGION, FUNCTIONS_SERVICE_ACCOUNT } from "@eegml/shared";
 import { onSchedule } from "firebase-functions/scheduler";
 import { firestore } from "../framework/admin";
+import { runningInEmulator } from "../framework/callable";
+import { identityHashKeySecret } from "../framework/hash-key";
 import { runAndRecordSweep } from "../governance/retention";
 
 export const retentionSweep = onSchedule(
@@ -12,6 +14,8 @@ export const retentionSweep = onSchedule(
     region: FUNCTIONS_REGION,
     serviceAccount: FUNCTIONS_SERVICE_ACCOUNT,
     retryCount: 1,
+    // The sweep resolves the address of an outreach contact through the keyed email index. The emulator binds none.
+    secrets: runningInEmulator() ? [] : [identityHashKeySecret()],
   },
   async () => {
     await runAndRecordSweep(firestore(), {

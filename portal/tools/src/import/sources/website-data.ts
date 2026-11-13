@@ -1024,21 +1024,22 @@ class WebsitePlan {
   }
 
   /**
-   * Writes the lead memberships. A lead whom the replications file names and nobody contradicts
-   * is confirmed, because the programme has itself published it. Where the claims for one study
-   * name different people, every membership concerned needs review and one item lists the claims.
+   * Writes the lead memberships, every one of them for review. The website is imported before the
+   * other sources that name leads, so it cannot tell on its own whether every source agrees: the
+   * command `leads:confirm-agreed` confirms a lead under the programme's decision (question 5) once
+   * every lead-naming source has been applied and none names anybody else. Where the claims for one
+   * study name different people, one item lists the claims, and no lead is confirmed (question 4).
    */
   #leads(): void {
     for (const [studyId, claims] of this.#leadClaims) {
       const people = new Set(claims.map((claim) => claim.personId));
-      const agreed = people.size === 1 && claims[0]?.source === `${SOURCE_KEY}/replications`;
       for (const claim of claims) {
         this.#builder.document({
           collection: "replicationMemberships",
           ids: [studyId, replicationMembershipId(claim.personId, "lead")],
           fixed: { replicationId: studyId, personId: claim.personId, role: "lead", earlierPeriods: [] },
-          owned: { isCurrent: true, reviewStatus: agreed ? "confirmed" : "needsReview" },
-          // A reviewer's confirmation is a decision, which the item below already asks for.
+          owned: { isCurrent: true, reviewStatus: "needsReview" },
+          // A confirmation is a decision, by a reviewer or under question 5, which the import leaves as it is.
           silent: ["isCurrent", "reviewStatus"],
           sourceRecordIds: [claim.row.recordId],
         });

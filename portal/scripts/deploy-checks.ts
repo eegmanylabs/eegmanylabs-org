@@ -5,7 +5,12 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { builtinModules } from "node:module";
 import path from "node:path";
-import { FUNCTIONS_REGION, FUNCTIONS_SERVICE_ACCOUNT } from "@eegml/shared";
+import {
+  DECIDED_STUDY_IDENTIFIERS,
+  FUNCTIONS_REGION,
+  FUNCTIONS_SERVICE_ACCOUNT,
+  MAIL_DISABLED_DECISION,
+} from "@eegml/shared";
 import { DEPLOY_CONFIG } from "../ops/deploy-plan.mjs";
 import { ENVIRONMENTS, isPlaceholder, REGION } from "../ops/environments.mjs";
 import { secretReferences } from "../ops/secret-references.mjs";
@@ -180,7 +185,8 @@ function importFixtureMarkers(root: string): string[] {
     const text = readFileSync(path.join(directory, file), "utf8");
     for (const match of text.matchAll(/"([a-z]+(?:-[a-z0-9]+){1,}|[A-Z][a-z]+[A-Z][a-z]+\d{4})"/g)) {
       const value = match[1] ?? "";
-      if (value.length > 8 && /-|\d{4}$/.test(value)) markers.add(value);
+      // The programme's own study identifiers that a decision names are public and belong in the build.
+      if (value.length > 8 && /-|\d{4}$/.test(value) && !DECIDED_STUDY_IDENTIFIERS.includes(value)) markers.add(value);
     }
   }
   return [...markers];
@@ -479,4 +485,45 @@ export function checkFunctionsParameters(name: DeployEnvironment, root = PORTAL_
     ...result(label, details),
     notes: [`App Check is ${enforced === "true" ? "enforced" : "not yet enforced"} on the functions of ${name}.`],
   };
+}
+
+/**
+ * Whether notification email is off or on for the environment, as ops/environments.mjs records
+ * it, and whether the functions' parameter `MAIL_DELIVERY` agrees. The programme decided that no
+ * notification email is sent for now, so `disabled` is the configured state: it needs no mail
+ * provider and no mail secret, and the absence of both passes. `enabled` passes only once the
+ * mail account of ops/service-accounts.mjs declares the secret of a provider, which no decision
+ * has chosen yet.
+ */
+export function checkMailDelivery(
+  name: DeployEnvironment,
+  root = PORTAL_ROOT,
+  mailSecrets: readonly string[] = SERVICE_ACCOUNTS.mail.secrets,
+): CheckResult {
+  const environment = ENVIRONMENTS[name];
+  const label = "Notification email is configured as decided";
+  const file = path.join(root, "functions", `.env.${environment.projectId}`);
+  const configured = existsSync(file) ? parameterValues(readFileSync(file, "utf8")).get("MAIL_DELIVERY") : undefined;
+  const parameter = configured === undefined || configured === "" ? "disabled" : configured;
+  const details: string[] = [];
+  if (parameter !== "disabled" && parameter !== "enabled")
+    details.push("MAIL_DELIVERY is neither disabled nor enabled.");
+  else if (parameter !== environment.mail) {
+    details.push(`MAIL_DELIVERY says ${parameter}, and ops/environments.mjs says ${environment.mail} for ${name}.`);
+  }
+  if (environment.mail === "disabled") {
+    return {
+      ...result(label, details),
+      notes: [
+        `Notification email is disabled for ${name} (${MAIL_DISABLED_DECISION.reference}): notifications and digests stay ` +
+          "in the portal, no mail provider or mail secret is needed, and Firebase's sign-in links are unaffected.",
+      ],
+    };
+  }
+  if (mailSecrets.length === 0) {
+    details.push(
+      `Notification email is enabled for ${name}, but no mail provider is chosen: the mail account declares no secret.`,
+    );
+  }
+  return result(label, details);
 }

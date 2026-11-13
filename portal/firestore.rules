@@ -928,6 +928,13 @@ service cloud.firestore {
       // special/demographics has no rule: special-category data is never readable or writable
       // by a client, whatever its role. A callable function serves it.
 
+      // Whether the person consents to the portal holding their gender and ethnicity. It holds
+      // no value, and the person alone reads it. `setDemographicsConsent` alone writes it.
+      // Reads: 2 (access, the person).
+      match /private/demographicsConsent {
+        allow get: if isActive() && person(personId).userId == request.auth.uid;
+      }
+
       // Where a person works, which every member reads. A laboratory on an affiliation says
       // that the person belongs to it, and a request to represent a laboratory is checked
       // against it, so a person names only a laboratory that holds a confirmed member entry
@@ -1026,7 +1033,9 @@ service cloud.firestore {
 
     // Reads: 2 (access, the parent programme).
     match /programmes/{programmeKey} {
-      function programmesFields() { return ['key', 'name', 'description', 'parentId', 'kind']; }
+      function programmesFields() {
+        return ['key', 'name', 'description', 'parentId', 'kind', 'websiteSlug', 'active', 'decision'];
+      }
       function programmesRequired() { return ['key', 'name', 'parentId', 'kind']; }
       function programmesEditable() { return ['name', 'description', 'parentId', 'kind']; }
 
@@ -1039,8 +1048,11 @@ service cloud.firestore {
       }
 
       allow read: if isMember() && boundedRead();
+      // What a decision of the programme says of a project, its page on the website and whether it is
+      // active, is written by trusted code alone.
       allow create: if isMember() && canForProgramme('lookupsManage')
         && createdNow(incoming(), programmesFields(), programmesRequired())
+        && !incoming().keys().hasAny(['websiteSlug', 'active', 'decision'])
         && incoming().key == programmeKey
         && key(programmeKey)
         && validProgramme(incoming());
@@ -1318,7 +1330,7 @@ service cloud.firestore {
         && validReplication(incoming());
 
       // Restricted notes. A client writes `internalNotes` alone: the verbatim notes of a
-      // source and the unverified outcome labels belong to the importers.
+      // source belong to the importers.
       // Reads: 2 (access, the replication).
       match /private/detail {
         function replicationDetailRequired() { return []; }
@@ -1344,11 +1356,14 @@ service cloud.firestore {
       // A lead proposes any other membership, which starts as needsReview, and ends or archives
       // one. A confirmation covers the period that was confirmed: a lead neither makes a
       // confirmed membership current again nor restores one from the archive. The earlier
-      // periods are kept by trusted code.
+      // periods, and the basis on which an import confirmed a lead, are kept by trusted code.
       // Reads: 3 (access, the replication, the person).
       match /memberships/{membershipId} {
         function replicationMembershipsFields() {
-          return ['replicationId', 'personId', 'role', 'isCurrent', 'startDate', 'endDate', 'earlierPeriods', 'reviewStatus'];
+          return [
+            'replicationId', 'personId', 'role', 'isCurrent', 'startDate', 'endDate', 'earlierPeriods', 'reviewStatus',
+            'confirmationBasis'
+          ];
         }
         function replicationMembershipsRequired() {
           return ['replicationId', 'personId', 'role', 'isCurrent', 'earlierPeriods', 'reviewStatus'];
@@ -1383,6 +1398,7 @@ service cloud.firestore {
           && incoming().replicationId == studyKey
           && membershipId == incoming().personId + '__' + incoming().role
           && incoming().earlierPeriods == []
+          && !('confirmationBasis' in incoming())
           && validMembership(incoming())
           && replicationExists(studyKey)
           && personExists(incoming().personId);
@@ -1716,9 +1732,19 @@ service cloud.firestore {
       allow read: if isMember() && (core() || holdsScopeOf(resource.data)) && boundedRead();
     }
 
+    // The summary figures of source F, sealed by a decision of the programme (docs/MIGRATION_PLAN.md,
+    // section 11, question 14), and those of the coordination workbook, which the project seals
+    // alike as a safeguard of its own: programme administrators alone read them.
     // Reads: 1 (access).
     match /historicalAggregates/{aggregateId} {
-      allow read: if isMember() && boundedRead();
+      allow read: if isMember() && canForProgramme('sealedRead') && boundedRead();
+    }
+
+    // The outcome labels of the prediction market, sealed by a decision of the programme
+    // (docs/MIGRATION_PLAN.md, section 11, question 7): programme administrators alone read them.
+    // Reads: 1 (access).
+    match /predictionMarketOutcomes/{studyKey} {
+      allow read: if isMember() && canForProgramme('sealedRead') && boundedRead();
     }
 
     // Reads: 2 (access, the programme).
@@ -1833,37 +1859,12 @@ service cloud.firestore {
         && validTerm(incoming());
     }
 
-    // Reads: 3 (access, the replication and the hypothesis of a question about one).
+    // The survey and market questions of the prediction market, sealed by a decision of the
+    // programme (question 7): no one may see prediction-market data, so programme administrators
+    // alone read them, and only the importer writes them.
+    // Reads: 1 (access).
     match /predictionMarketItems/{itemId} {
-      function predictionMarketItemsFields() { return ['replicationId', 'hypothesisId', 'questionText', 'choices']; }
-      function predictionMarketItemsRequired() { return ['questionText', 'choices']; }
-      function predictionMarketItemsEditable() { return ['hypothesisId', 'questionText', 'choices']; }
-
-      function validQuestion(d) {
-        return longText(d.questionText) && shortTexts(d.choices, 50);
-      }
-
-      // A question names a hypothesis only together with its replication, and the hypothesis
-      // is one of that replication.
-      function hypothesisNamed(d) {
-        return !('hypothesisId' in d)
-          || (docId(d.hypothesisId)
-            && docId(d.replicationId)
-            && exists(/databases/$(database)/documents/replications/$(d.replicationId)/hypotheses/$(d.hypothesisId)));
-      }
-
-      allow read: if isMember() && boundedRead();
-      allow create: if isMember() && canForProgramme('replicationsManage')
-        && autoId(itemId)
-        && createdNow(incoming(), predictionMarketItemsFields(), predictionMarketItemsRequired())
-        && validQuestion(incoming())
-        && (!('replicationId' in incoming())
-          || (docId(incoming().replicationId) && replicationExists(incoming().replicationId)))
-        && hypothesisNamed(incoming());
-      allow update: if isMember() && canForProgramme('replicationsManage')
-        && updatedNow(incoming(), stampFields().concat(predictionMarketItemsEditable()), predictionMarketItemsRequired())
-        && validQuestion(incoming())
-        && (!changed().hasAny(['hypothesisId']) || hypothesisNamed(incoming()));
+      allow read: if isMember() && canForProgramme('sealedRead') && boundedRead();
     }
 
     // ===== Participation (section 6) =====
@@ -3307,7 +3308,13 @@ service cloud.firestore {
             || (docId(d.personId) && personExists(d.personId)));
       }
 
-      allow read: if isMember() && boundedRead();
+      // The team of the replication reads its contributor lists, which the programme decided
+      // (docs/MIGRATION_PLAN.md, section 11, question 10). Programme staff read them as they read
+      // every record within a scope: that is the portal's model and no part of the decision, and
+      // whether the programme lead wants it is an open question of the same section.
+      allow read: if isMember()
+        && (core() || holdsScopeOf(resource.data) || onTeam(resource.data.replicationId))
+        && boundedRead();
       allow create: if isMember()
         && canManageOutputsOf(incoming().replicationId)
         && autoId(contributorId)
@@ -3485,9 +3492,17 @@ service cloud.firestore {
       allow read: if isMember() && canForProgramme('importsRun') && boundedRead();
     }
 
+    // Whether a review item or an entry of the change log may be read beside the capability that
+    // reads the others: one about a value that a decision of the programme seals (questions 7 and
+    // 14) is read with sealed.read alone. A document written before the seal carries no flag and
+    // counts as sealed, so a list of the others names `sealed == false`.
+    function unsealedOrHolder(d) {
+      return d.get('sealed', true) == false || canForProgramme('sealedRead');
+    }
+
     // Reads: 1 (access).
     match /{path=**}/changes/{changeId} {
-      allow read: if isMember() && canForProgramme('importsRun') && boundedRead();
+      allow read: if isMember() && canForProgramme('importsRun') && unsealedOrHolder(resource.data) && boundedRead();
     }
 
     // Reads: 1 (access).
@@ -3500,19 +3515,25 @@ service cloud.firestore {
       allow read: if isMember() && canForProgramme('importsRun') && boundedRead();
     }
 
+    // The raw rows of sources E and F hold the values that the programme sealed (questions 7 and
+    // 14). The project seals the raw rows of every source alike, as a safeguard of its own, so
+    // programme administrators alone read them.
     // Reads: 1 (access).
     match /sourceRecords/{recordId} {
-      allow read: if isMember() && canForProgramme('importsRun') && boundedRead();
+      allow read: if isMember() && canForProgramme('sealedRead') && boundedRead();
     }
 
     // Reads: 1 (access).
     match /{path=**}/rawChunks/{chunkId} {
-      allow read: if isMember() && canForProgramme('importsRun') && boundedRead();
+      allow read: if isMember() && canForProgramme('sealedRead') && boundedRead();
     }
 
     // Reads: 1 (access).
     match /reconciliationItems/{fingerprint} {
-      allow read: if isMember() && canForProgramme('reconciliationResolve') && boundedRead();
+      allow read: if isMember()
+        && canForProgramme('reconciliationResolve')
+        && unsealedOrHolder(resource.data)
+        && boundedRead();
     }
 
     // Reads: 1 (access).

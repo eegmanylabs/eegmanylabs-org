@@ -1,6 +1,7 @@
 // Replications and scientific definition (docs/DATA_MODEL.md, section 5).
 import { dataOriginSchema } from "../data-origin";
 import { entityTypeSchema } from "../entities";
+import { programmeDecisionSchema } from "../programme-answers";
 import { timestampSchema } from "../timestamp";
 import { z } from "../zod";
 import {
@@ -125,11 +126,25 @@ export const replicationDetailDocSchema = documentBaseSchema.extend({
   /** The verbatim notes of a source, which may name individuals. */
   notesSource: verbatimSchema.exactOptional(),
   internalNotes: z.string().max(LIMITS.longText).exactOptional(),
-  /** Hypothesis identifier to the verbatim `replicated` label: an unverified historical label. */
-  replicatedSource: boundedRecord(mapKeySchema, verbatimSchema).exactOptional(),
   ...provenanceShape,
 });
 export type ReplicationDetailDoc = z.output<typeof replicationDetailDocSchema>;
+
+/**
+ * `predictionMarketOutcomes/{studyKey}`: the outcome labels of the prediction market for one
+ * replication, sealed by a decision of the programme (docs/MIGRATION_PLAN.md, section 11,
+ * question 7). Programme administrators alone read them, and nothing derived from them reaches
+ * any other reader. A label is an unverified source value: it sets no result and no status.
+ */
+export const predictionMarketOutcomeDocSchema = documentBaseSchema.extend({
+  replicationId: idSchema,
+  /** Hypothesis identifier to the verbatim label of the column `replicated`. A blank cell has no entry. */
+  labelsSource: boundedRecord(mapKeySchema, verbatimSchema, 99),
+  /** The decision that seals the labels. */
+  sealedBy: programmeDecisionSchema,
+  ...provenanceShape,
+});
+export type PredictionMarketOutcomeDoc = z.output<typeof predictionMarketOutcomeDocSchema>;
 
 /**
  * | Scheme           | What it holds                                                                |
@@ -205,6 +220,19 @@ export const replicationMembershipDocSchema = documentBaseSchema.extend({
   endDate: isoDateSchema.exactOptional(),
   earlierPeriods: z.array(datePeriodSchema).max(50),
   reviewStatus: reviewStatusSchema,
+  /**
+   * Why an import confirmed the membership without review: every source that names a lead of
+   * the study names this person, which a decision of the programme allows (question 5). Absent
+   * on a membership that no import confirmed. It stays as the record of that confirmation.
+   */
+  confirmationBasis: z
+    .strictObject({
+      basis: z.literal("allSourcesAgree"),
+      /** The sources and tabs whose claims agree, such as `h/replications`. */
+      sources: z.array(z.string().min(1).max(100)).min(1).max(20),
+      decision: programmeDecisionSchema,
+    })
+    .exactOptional(),
   ...provenanceShape,
 });
 export type ReplicationMembershipDoc = z.output<typeof replicationMembershipDocSchema>;
@@ -366,7 +394,8 @@ export const statusEntityTypeSchema = entityTypeSchema.extract([
 ]);
 export type StatusEntityType = z.output<typeof statusEntityTypeSchema>;
 
-export const statusChangeSourceSchema = z.enum(["manual", "import", "automation", "sheetSync"]);
+/** `programmeDecision`: a status that a decision of the programme gave, which the entry names in `decision`. */
+export const statusChangeSourceSchema = z.enum(["manual", "import", "automation", "sheetSync", "programmeDecision"]);
 
 /**
  * `statusHistory/{id}`: one change of status of any record that has one. Written by the
@@ -383,6 +412,8 @@ export const statusHistoryDocSchema = appendOnlyBaseSchema.extend({
   changedBy: actorSchema,
   reason: longTextSchema.exactOptional(),
   source: statusChangeSourceSchema,
+  /** The decision of the programme behind a change whose source is `programmeDecision`. */
+  decision: programmeDecisionSchema.exactOptional(),
   ...scopeFieldsShape,
   ...appendOnlyProvenanceShape,
 });
@@ -405,6 +436,11 @@ export const historicalAggregateDocSchema = documentBaseSchema.extend({
   isCurrent: z.boolean(),
   /** Imported historical figures, or the invented figures of the demonstration world. */
   dataOrigin: z.enum(["importedHistorical", "demo"]),
+  /**
+   * The decision that seals the figure: the summary figures of source F (question 14). Absent on
+   * the figures of another source, which the project seals alike as a safeguard of its own.
+   */
+  sealedBy: programmeDecisionSchema.exactOptional(),
   ...provenanceShape,
 });
 export type HistoricalAggregateDoc = z.output<typeof historicalAggregateDocSchema>;

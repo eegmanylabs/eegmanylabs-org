@@ -8,7 +8,7 @@
 //   import show <batch>
 //   import rollback <batch>
 //   import verify <source> --input <path> [--sheet <name>] [--observed-on <date>] [--config <file>]
-//   import purge-special (--source <source> | --batch <batch>)
+//   import purge-special (--source <source> | --batch <batch> | --without-consent)
 //
 // `--sheet` names one member of a family of sources, such as one contributor sheet, by the name
 // under which the private configuration registers it.
@@ -41,6 +41,7 @@ import {
 } from "../import/config";
 import { discoverImporters } from "../import/discover";
 import { fetchExport } from "../import/fetch";
+import { committableAt } from "../import/local-export";
 import type { ImporterDefinition, ImportInput } from "../import/model";
 import { purgeSpecial } from "../import/purge";
 import { SOURCE_DEFINITIONS, SOURCE_FAMILIES } from "../import/registry";
@@ -61,7 +62,7 @@ const USAGE = [
   "  import show <batch>",
   "  import rollback <batch>",
   "  import verify <source> --input <path> [--sheet <name>] [--observed-on <date>] [--config <file>]",
-  "  import purge-special (--source <source> | --batch <batch>)",
+  "  import purge-special (--source <source> | --batch <batch> | --without-consent)",
 ].join("\n");
 
 const VALUE_OPTIONS = [
@@ -77,7 +78,7 @@ const VALUE_OPTIONS = [
   "--source",
   "--batch",
 ];
-const FLAGS = ["--production"];
+const FLAGS = ["--production", "--without-consent"];
 
 interface Arguments {
   readonly positional: readonly string[];
@@ -165,25 +166,8 @@ function commitOf(directory: string): string | undefined {
  * tree and git does not ignore the export or the record of the fetch there. A directory that does not exist yet is judged by its path.
  */
 function isCommittable(directory: string): boolean {
-  let existing = directory;
-  while (!existsSync(existing) && path.dirname(existing) !== existing) existing = path.dirname(existing);
-  const git = (...args: string[]) =>
-    execFileSync("git", ["-C", existing, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
-  try {
-    if (git("rev-parse", "--is-inside-work-tree") !== "true") return false;
-  } catch {
-    return false;
-  }
   // A fetch writes the export and a record of the fetch beside it. Either one that git would offer makes the place unsafe.
-  return ["export.xlsx", "export.json"].some((name) => {
-    try {
-      // `check-ignore` ends with status 0 for an ignored path and with status 1 for one that is not.
-      git("check-ignore", "--quiet", path.join(directory, name));
-      return false;
-    } catch {
-      return true;
-    }
-  });
+  return ["export.xlsx", "export.json"].some((name) => committableAt(path.join(directory, name)));
 }
 
 /** The day on which a fetched export was retrieved, from the record that `import fetch` writes beside it. */
@@ -272,6 +256,12 @@ function printReport(report: RunReport, target: string): void {
   if (report.conflicts > 0) {
     console.log(
       `${report.conflicts} fields were left alone because their live value differs from the source. Each is in the queue.`,
+    );
+  }
+  if (report.specialCategoryDiscarded > 0) {
+    console.log(
+      `${report.specialCategoryDiscarded} rows had gender or ethnicity ${would ? "that an apply would discard" : "that was discarded"} without storing it, ` +
+        "because their person has given no consent or is not known yet. A later run picks up the values of people who have consented since.",
     );
   }
   const pending =
@@ -466,7 +456,8 @@ async function rollback(given: Arguments): Promise<number | undefined> {
   }
   console.log(
     `Batch ${batchId} rolled back: ${result.restored} documents restored, ${result.removed} removed, ` +
-      `${result.itemsWithdrawn} items withdrawn. Source records were kept.`,
+      `${result.itemsWithdrawn} items withdrawn, ${result.discarded} special-category documents not written back. ` +
+      "Source records were kept.",
   );
   for (const item of result.itemsLeft) console.log(`  Left in place, because a reviewer has decided it: ${item}`);
   return undefined;
@@ -515,16 +506,23 @@ async function verify(given: Arguments): Promise<number | undefined> {
 async function purge(given: Arguments): Promise<number | undefined> {
   const sourceKey = given.values.get("--source")?.toLowerCase();
   const batchId = given.values.get("--batch");
-  if ((sourceKey === undefined) === (batchId === undefined)) {
-    throw new ToolRefusal(`purge-special names one source or one batch.\n\n${USAGE}`);
+  const withoutConsent = given.flags.has("--without-consent");
+  if ([sourceKey !== undefined, batchId !== undefined, withoutConsent].filter(Boolean).length !== 1) {
+    throw new ToolRefusal(`purge-special names one source, one batch, or --without-consent.\n\n${USAGE}`);
   }
   const { db, label } = await database(given);
   const result = await purgeSpecial(db, {
     ...(sourceKey === undefined ? {} : { sourceKey }),
     ...(batchId === undefined ? {} : { batchId }),
+    ...(withoutConsent ? { withoutConsent: true as const } : {}),
   });
+  const scope = withoutConsent
+    ? "every batch, held without consent,"
+    : sourceKey === undefined
+      ? `batch ${batchId}`
+      : `source ${sourceKey}`;
   console.log(
-    `Special-category copies of ${sourceKey === undefined ? `batch ${batchId}` : `source ${sourceKey}`} in ${label}: ` +
+    `Special-category copies of ${scope} in ${label}: ` +
       `${result.cellsRemoved} documents of cells beneath source records removed, ${result.statesRemoved} kept states of the change log removed. ` +
       "A batch whose kept states are removed can no longer be rolled back.",
   );

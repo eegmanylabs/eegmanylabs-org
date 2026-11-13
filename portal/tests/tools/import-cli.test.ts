@@ -371,7 +371,7 @@ describe("import run, show, verify and rollback", () => {
     expect(result.stderr).toBe("");
     expect(result.status).toBe(0);
     expect(result.stdout).toMatch(
-      /rolled back: 0 documents restored, \d+ removed, \d+ items withdrawn\. Source records were kept\./,
+      /rolled back: 0 documents restored, \d+ removed, \d+ items withdrawn, 0 special-category documents not written back\. Source records were kept\./,
     );
     expect((await adminDb.collection("persons").count().get()).data().count).toBe(0);
     expect((await adminDb.collection("sourceRecords").count().get()).data().count).toBe(37);

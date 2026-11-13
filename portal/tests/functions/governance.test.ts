@@ -16,6 +16,7 @@ import {
 import { Timestamp } from "firebase-admin/firestore";
 import { beforeEach, describe, expect, it } from "vitest";
 import { adminAuth, adminDb } from "../support/admin";
+import { recordConsent } from "../support/consent";
 import {
   account,
   administrator,
@@ -83,11 +84,17 @@ describe("exportPersonData", () => {
     expect(entry?.changes).toContainEqual({ field: "specialCategoryIncluded", after: false });
   });
 
-  it("includes special-category data only under the caller's own named grant", async () => {
+  it("includes special-category data only under the caller's own named grant, and only while consent is in force", async () => {
     const admin = await administrator("uid-admin");
     await person("person-ada");
     await demographics("person-ada");
     await grantCapability("uid-admin", "demographics.read");
+    // Values that a race left behind without consent are never handed out, whatever the grant.
+    const withoutConsent = await call(admin, exportPersonDataContract, { personId: "person-ada" });
+    expect(withoutConsent.documents.map((document) => document.path)).not.toContain(
+      "persons/person-ada/special/demographics",
+    );
+    await recordConsent("person-ada");
     const exported = await call(admin, exportPersonDataContract, { personId: "person-ada" });
     expect(exported.specialCategoryIncluded).toBe(true);
     expect(exported.documents.map((document) => document.path)).toContain("persons/person-ada/special/demographics");
@@ -302,8 +309,15 @@ describe("retention sweeps", () => {
     await settings();
     await oldMail("mail-old", "sent", 400);
     const run = await call(admin, runRetentionSweepContract, { dryRun: false });
-    expect(run.outcomes.every((outcome) => outcome.deleted === 0 && outcome.periodDays === null)).toBe(true);
+    // The configurable targets have no period. The raw material of the migration follows the programme's decision,
+    // which deletes nothing while the migration is not marked verified.
+    const configurable = run.outcomes.filter((outcome) => outcome.target !== "outreachNeverJoined");
+    expect(configurable.every((outcome) => outcome.deleted === 0 && outcome.periodDays === null)).toBe(true);
     expect(run.outcomes[0]?.note).toMatch(/No period is configured/);
+    expect(run.outcomes.find((outcome) => outcome.target === "outreachNeverJoined")).toMatchObject({
+      decision: { reference: "docs/MIGRATION_PLAN.md, section 11, question 20" },
+      deleted: 0,
+    });
     expect((await adminDb.doc(COLLECTIONS.mail.docPath("mail-old")).get()).exists).toBe(true);
     expect(await auditOf("retention.swept")).toHaveLength(1);
   });

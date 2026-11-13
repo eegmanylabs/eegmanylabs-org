@@ -226,18 +226,20 @@ async function comparisonItems(context: PlanContext, plan: ImportPlan): Promise<
         subject: studyId,
         field: String(metricKey),
         entityRefs: [replication(studyId)],
+        // The figures of source F are sealed by a decision of the programme (question 14), and the project seals
+        // those of this workbook alike: the item is sealed, names the two source records and shows neither figure.
         claims: [
           {
             source: SOURCE_KEY,
             value: String(valueNumeric),
-            valueSource: String(valueNumeric),
             sourceRecordId: document.sourceRecordIds[0] ?? "",
+            sealed: true,
           },
           {
             source: COMPARED_SOURCE_KEY,
             value: String(other.value),
-            valueSource: String(other.value),
             sourceRecordId: other.recordId,
+            sealed: true,
           },
         ],
       }),
@@ -276,6 +278,8 @@ async function plan(context: PlanContext, reviewedTabs: readonly ReviewedTab[]):
 export function coordinationImporter(reviewedTabs: readonly ReviewedTab[]): ImporterDefinition {
   return {
     key: "coordinationWorkbook",
+    // An exported file that an administrator supplies, read from outside the repository alone (decision 7).
+    localExport: true,
     sourceKey: SOURCE_KEY,
     summary:
       "Historical replication coordination workbook, built against synthetic fixtures only: study-level figures as a historical snapshot of its own, compared with the recruitment and contact workbook.",

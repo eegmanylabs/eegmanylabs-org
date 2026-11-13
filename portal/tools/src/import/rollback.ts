@@ -14,7 +14,15 @@
 // in its earlier state counts as reversed and is skipped. The states of special-category
 // documents, which the change log keeps where no client reads them, are removed once the batch
 // is reversed, because nothing needs them any more.
-import { COLLECTIONS, planBatchRollback, sequenceId } from "@eegml/shared";
+import {
+  type ChangeState,
+  COLLECTIONS,
+  consentInForce,
+  isWithheldState,
+  planBatchRollback,
+  sequenceId,
+  specialSubjectOf,
+} from "@eegml/shared";
 import { FieldValue, type Firestore, Timestamp } from "firebase-admin/firestore";
 import { appendOnlyFields, chunked, IMPORT_ACTOR, readDocuments, updatedFields } from "./context";
 import { sameValue } from "./values";
@@ -32,9 +40,31 @@ export type RollbackResult =
       readonly itemsWithdrawn: number;
       /** Items that a reviewer has decided since. They are left as they are. */
       readonly itemsLeft: readonly string[];
+      /** Special-category documents not written back: removed for good, or of a person without consent. */
+      readonly discarded: number;
     };
 
 const ITEMS_PREFIX = `${COLLECTIONS.reconciliationItems.collectionPath()}/`;
+
+/**
+ * The special-category documents of a log that a rollback may not write back: every copy of cells
+ * beneath a source record, and the values of a person whose consent is not in force (question 20).
+ */
+async function specialWithoutConsent(db: Firestore, states: readonly ChangeState[]): Promise<Set<string>> {
+  const refused = new Set<string>();
+  const persons = new Map<string, string>();
+  for (const state of states) {
+    const subject = specialSubjectOf(state.path);
+    if (subject?.kind === "sourceRecord") refused.add(state.path);
+    if (subject?.kind === "person")
+      persons.set(state.path, COLLECTIONS.personDemographicsConsent.docPath(subject.personId));
+  }
+  const consents = await readDocuments(db, [...persons.values()]);
+  for (const [path, consentPath] of persons) {
+    if (!consentInForce(consents.get(consentPath)?.data)) refused.add(path);
+  }
+  return refused;
+}
 
 export async function rollbackBatch(db: Firestore, batchId: string, at: Date = new Date()): Promise<RollbackResult> {
   const now = Timestamp.fromDate(at);
@@ -47,26 +77,28 @@ export async function rollbackBatch(db: Firestore, batchId: string, at: Date = n
 
   const log = await db.collection(COLLECTIONS.importBatchChanges.collectionPath(batchId)).get();
   const entries = log.docs.sort((a, b) => (a.id < b.id ? 1 : -1));
-  const marked = (entry: (typeof entries)[number]) =>
-    [entry.get("before"), entry.get("after")].some(
-      (state) => (state as { specialCategory?: boolean } | null)?.specialCategory === true,
-    );
+  const marked = (entry: (typeof entries)[number]) => [entry.get("before"), entry.get("after")].some(isWithheldState);
   const statePath = (id: string) => COLLECTIONS.importBatchChangeState.docPath(batchId, id);
   const special = await readDocuments(
     db,
     entries.filter(marked).map((entry) => statePath(entry.id)),
   );
   // Without its kept states a special-category document cannot be given back what it held. Nothing is reversed then.
-  const stateless = entries.filter((entry) => marked(entry) && !special.get(statePath(entry.id)));
+  // A removal for good keeps no state on purpose, and stays removed.
+  const irreversible = (entry: (typeof entries)[number]) => entry.get("irreversible") === true;
+  const stateless = entries.filter(
+    (entry) => marked(entry) && !irreversible(entry) && !special.get(statePath(entry.id)),
+  );
   if (stateless.length > 0) {
     return { status: "refused", changedDocuments: stateless.map((entry) => entry.ref.path).sort() };
   }
-  const states = entries.map((entry) => {
+  const states: ChangeState[] = entries.map((entry) => {
     const kept = special.get(statePath(entry.id));
     return {
       path: (kept?.data.documentPath as string | undefined) ?? (entry.get("documentPath") as string),
       before: (kept ? kept.data.before : entry.get("before")) as Record<string, unknown> | null,
       after: (kept ? kept.data.after : entry.get("after")) as Record<string, unknown> | null,
+      irreversible: irreversible(entry),
     };
   });
   const current = await readDocuments(
@@ -78,6 +110,7 @@ export async function rollbackBatch(db: Firestore, batchId: string, at: Date = n
     current: new Map([...current].map(([path, stored]) => [path, stored?.data ?? null])),
     equal: sameValue,
     itemsPrefix: ITEMS_PREFIX,
+    withoutConsent: await specialWithoutConsent(db, states),
   });
   if (plan.status === "refused") return { status: "refused", changedDocuments: plan.changedDocuments };
 
@@ -90,6 +123,7 @@ export async function rollbackBatch(db: Firestore, batchId: string, at: Date = n
       switch (step.kind) {
         case "skip":
         case "keep":
+        case "discard":
           break;
         case "withdraw":
           write.update(
@@ -122,7 +156,7 @@ export async function rollbackBatch(db: Firestore, batchId: string, at: Date = n
     }
     await write.commit();
   }
-  const { restored, removed, itemsWithdrawn } = plan.counts;
+  const { restored, removed, itemsWithdrawn, discarded } = plan.counts;
   const itemsLeft = plan.steps.filter((step) => step.kind === "keep").map((step) => step.path);
 
   const logEntries = await db.collection(COLLECTIONS.importBatchLog.collectionPath(batchId)).count().get();
@@ -134,7 +168,8 @@ export async function rollbackBatch(db: Firestore, batchId: string, at: Date = n
     level: "info",
     message:
       `Rolled back: ${restored} documents restored, ${removed} removed, ${itemsWithdrawn} items withdrawn, ` +
-      `${itemsLeft.length} decided items left in place. Source records were kept.`,
+      `${itemsLeft.length} decided items left in place, ${discarded} special-category documents not written back. ` +
+      "Source records were kept.",
   });
   await finish.commit();
   // The kept states of special-category documents have served their purpose. No copy of a value outlives the reversal.
@@ -143,5 +178,5 @@ export async function rollbackBatch(db: Firestore, batchId: string, at: Date = n
     for (const path of piece) clean.delete(db.doc(path));
     await clean.commit();
   }
-  return { status: "rolledBack", restored, removed, itemsWithdrawn, itemsLeft: itemsLeft.sort() };
+  return { status: "rolledBack", restored, removed, itemsWithdrawn, itemsLeft: itemsLeft.sort(), discarded };
 }

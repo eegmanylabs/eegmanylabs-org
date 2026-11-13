@@ -71,6 +71,32 @@ export interface ItemClaim {
   /** The value as written, for the reviewer. */
   readonly valueSource?: string;
   readonly sourceRecordId?: string;
+  /**
+   * True for a value that a decision of the programme seals: an outcome label of source E
+   * (question 7), a summary figure of source F (question 14), or what is computed from one. The
+   * item is then sealed, the claim shows no value, and its key is a keyed hash of the subject and
+   * the value together, so that two items with equal values have different keys.
+   */
+  readonly sealed?: true;
+}
+
+/** The figures of the summary tabs of sources F and A, under the names their claims carry. */
+const SUMMARY_METRICS = new Set(["nLabsSigned", "totalNToBeRun", "nLabsFinished", "totalNMainCollected", "totalNRest"]);
+
+/**
+ * Whether the source of a claim states a sealed value, whatever the call site says: an outcome
+ * label of source E or a counter computed from the labels (question 7), or a summary figure of
+ * source F (question 14) or of the coordination workbook A, which the project seals alike, or a
+ * value computed from one. The migration of items raised before the seal reads them the same way.
+ */
+export function statesSealedValue(source: string, field: string | undefined): boolean {
+  const parts = source.split("/");
+  const [sourceKey] = parts;
+  if (sourceKey === "e") return ["replicated", "footer", "recount"].includes(parts.at(-1) ?? "");
+  if (sourceKey !== "f" && sourceKey !== "a") return false;
+  // The comparison of the two workbooks names the bare source keys, and the metric as the field.
+  if (parts.length === 1) return field !== undefined && SUMMARY_METRICS.has(field);
+  return parts.includes("derived") || SUMMARY_METRICS.has(parts.at(-1) ?? "");
 }
 
 export interface ItemInput {
@@ -94,16 +120,25 @@ function buildItem(kind: ReconciliationKind, input: ItemInput, secret: string): 
   if (input.subject === "" || /[\n\r]/.test(input.subject)) {
     throw new RangeError("The subject of a reconciliation item is one line of text.");
   }
-  const personal = input.personal ?? PERSONAL_KINDS[kind];
+  const sealedClaim = (claim: ItemClaim): boolean =>
+    claim.sealed === true || statesSealedValue(claim.source, input.field);
+  const sealed = input.claims.some(sealedClaim);
+  // An item that holds a sealed value is keyed throughout, whatever its kind.
+  const personal = sealed || (input.personal ?? PERSONAL_KINDS[kind]);
+  const subject = input.field === undefined ? input.subject : `${input.subject}#${input.field}`;
+  const hashOf = (claim: ItemClaim): string => {
+    // A sealed value is hashed together with the subject, so that equal values of two subjects give different keys.
+    if (sealedClaim(claim)) return keyedShortHash(`${subject}\u0000${claim.value}`, secret);
+    return personal ? keyedShortHash(claim.value, secret) : shortHash(claim.value);
+  };
   const candidates: ItemCandidate[] = input.claims.map((claim) => ({
-    key: `${claim.source}:${personal ? keyedShortHash(claim.value, secret) : shortHash(claim.value)}`,
-    // A value longer than a verbatim field may hold stays in its source record alone.
-    ...(claim.valueSource !== undefined && claim.valueSource.length <= LIMITS.longText
+    key: `${claim.source}:${hashOf(claim)}`,
+    // A sealed value is never shown, and a value longer than a verbatim field may hold stays in its source record alone.
+    ...(!sealedClaim(claim) && claim.valueSource !== undefined && claim.valueSource.length <= LIMITS.longText
       ? { valueSource: claim.valueSource }
       : {}),
     ...(claim.sourceRecordId === undefined ? {} : { sourceRecordId: claim.sourceRecordId }),
   }));
-  const subject = input.field === undefined ? input.subject : `${input.subject}#${input.field}`;
   return {
     fingerprint: reconciliationFingerprint(
       { kind, subject, candidateKeys: candidates.map((candidate) => candidate.key) },
@@ -115,6 +150,7 @@ function buildItem(kind: ReconciliationKind, input: ItemInput, secret: string): 
     ...(input.field === undefined ? {} : { field: input.field }),
     candidates,
     blocking: input.blocking ?? false,
+    sealed,
     // The fingerprint of the question without its candidates is the same in every statement of it.
     ...(input.shared === true
       ? { subjectKey: reconciliationFingerprint({ kind, subject, candidateKeys: [] }, personal ? secret : undefined) }
