@@ -1,9 +1,0 @@
-{
-  "extends": "./tsconfig.base.json",
-  "compilerOptions": {
-    "lib": ["es2023", "dom", "dom.iterable"],
-    "types": ["node"],
-    "exactOptionalPropertyTypes": false
-  },
-  "include": ["tests/editor"]
-}

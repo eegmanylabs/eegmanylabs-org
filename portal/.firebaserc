@@ -1,7 +1,0 @@
-{
-  "projects": {
-    "default": "demo-eegml",
-    "staging": "eegml-staging-PLACEHOLDER",
-    "production": "eegml-production-PLACEHOLDER"
-  }
-}

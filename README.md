@@ -256,7 +256,7 @@ Partner names, descriptions, logos, and URLs currently live in `theme/templates/
 
 ### 5.7 Members’ portal entry
 
-The members’ portal is a separate application with an address of its own. The public site only points to it: a Members’ portal action in the desktop navigation and the mobile menu, a link in the footer base row, a card on the Sitemap page, and a small page at `/portal/` that forwards visitors to the portal’s address.
+The members’ portal is a separate application with an address of its own. Its code and design documents are in the repository `faisalmushtaq/eegmanylabs-portal`. The public site only points to it: a Members’ portal action in the desktop navigation and the mobile menu, a link in the footer base row, a card on the Sitemap page, and a small page at `/portal/` that forwards visitors to the portal’s address.
 
 The whole entry sits behind one gate, the portal’s address for each build environment in `theme/templates/settings.jinja2`. With the gate closed for both environments, the line reads:
 
