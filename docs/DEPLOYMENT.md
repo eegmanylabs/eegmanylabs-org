@@ -17,7 +17,7 @@ The public website's own deployment, `.github/workflows/deploy.yml`, is separate
 | Billing account owner | Named under decision 1 | Links the billing account and sets the budget alerts |
 | DNS account holder | The holder of the DNS account of the programme's domains | Adds the record of the portal address under decision 4 |
 
-The operator and the approver of a step are two different people. A step is approved before it is executed: the operator first prints the plan, the approver reads it, and only then does the operator run it with `--execute`.
+For production, the operator and the approver of a step are two different people, and the procedures refuse a production plan until `portal/ops/environments.mjs` lists at least two approvers. For staging, the programme lead decided on 13 November 2026 that one person may act as both until a second administrator is named; the printed plan and the operations log record that single-person approval (`docs/DECISIONS.md`, "Answers given on 13 November 2026"). A step is approved before it is executed: the operator first prints the plan, the approver reads it, and only then does the operator run it with `--execute`.
 
 ## How every procedure behaves
 
