@@ -156,3 +156,13 @@ Automations are five built-in rules defined in code (onboarding checklist, QC ta
 6. Decide whether the portal source stays in this repository or moves to one of its own.
 7. Provide read access to sources A and G through a Google service account, a Quire export or API token, and a mail provider for notification email.
 8. Restrict link sharing on source F and the contributor sheets once the import has been verified.
+
+### Answers given on 13 November 2026
+
+The programme lead answered the questions above, and those of `docs/MIGRATION_PLAN.md` section 11, on 13 November 2026. These answers authorise the work they describe. They authorise no deployment, live external write or contact with users, and each of those still needs its own approval.
+
+Decisions 1 to 5 are taken. The programme lead owns the billing account on the Blaze plan, with Identity Platform and budget alerts. London (`europe-west2`) is the permanent location. Processing of sign-in account data in the United States by Firebase Authentication is acceptable and is to be stated in the privacy notice and the impact assessment. The portal address is `portal.eegmanylabs.org`, which needs a DNS record. The security posture of GitHub Pages in D-001 is accepted. On decision 6, the portal moves to a repository of its own, with its history. On the deployment roles, the programme lead acts as both operator and approver for now, which removes the two-person check of `docs/DEPLOYMENT.md` until a second administrator is named; production still waits for that second person. The backup retention in `BACKUP_RETENTION` is agreed: daily backups 7 days, weekly backups 14 weeks, managed exports 98 days and the governance ledger 10 years.
+
+On governance, the lawful basis for members' personal data is public task. Gender and ethnicity from source G are held only for members who give explicit consent, and are left blank for everyone else. Claude drafts the data protection impact assessment and the privacy notice from `docs/SECURITY.md` for review by the University's data protection officer. Raw source records and exported files, including the outreach correspondence of source F, are kept until the migration is verified and then for one year, after which the outreach records of people who never joined are deleted.
+
+On decision 7, sources A and G and the Quire data arrive as exported files that the programme lead supplies, imported in a private local environment and never committed, so no service account is created for now. No notification email is sent for now, and notifications stay inside the portal. On decision 8, link sharing on source F and the contributor sheets is to be restricted once the import has been verified.

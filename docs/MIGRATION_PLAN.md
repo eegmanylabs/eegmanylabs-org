@@ -584,3 +584,26 @@ The outputs that section 11 holds back are listed in the importer code as withhe
 | 18 | Who provides the service account for A and G, with access to which files, and will it exist before link sharing on F and the contributor sheets is restricted? | Without it A, G and the documents behind sign-in cannot be read, and restricting sharing would end anonymous export. | A and G are built against synthetic fixtures. B to F are fetched by anonymous export, or from a file that an administrator supplies. |
 | 19 | Which plan is the Quire organisation on, and who will authorise the pull or supply the exports? | The plan decides which endpoints work and how long the activity log is kept, and the log can be saved only from inside the application before the migration. | The Quire importer is built against fixtures made from the published documentation, and nothing is assumed about the real workspace. |
 | 20 | How long are raw source records and export files kept, in particular the outreach correspondence in F, and must the lawful basis for holding the demographics of G be recorded before they are imported? | Outreach rows describe people who mostly never joined the programme, and gender and ethnicity are special-category data. | Everything is stored restricted and nothing is deleted. No demographic value can be imported yet in any case, because G is inaccessible, and the apply of G is refused until the answer is recorded. |
+
+### Answers given on 13 November 2026
+
+The programme lead answered these questions on 13 November 2026. Where the answer was "I'll check", the interim rule in the table above still applies.
+
+1. `Carretie2004` and `Frank2005` are cancelled, `DonkersvanBoxtel2004` is paused and `Hajcak2006` is ongoing.
+2. The tab `AmodioMaster20072008` and its combined numbers cover both studies, so the combined values stay attached to neither replication.
+3. The two Amodio replications share one dataset.
+4. Every disputed lead and second lead stays `needsReview`, and the programme lead confirms each in the portal.
+5. Where every source agrees on a lead, the importer may write a confirmed membership without review.
+6. The website is authoritative where it and source D differ, and every difference stays queued for review.
+7. No one may see prediction-market data. The outcome labels of source E are stored sealed, readable by programme administrators only, and never shown to members.
+8. The community vocabulary sheet stays the system of record, imported read-only.
+9. The candidate papers stay archived in the source records, and neither candidates nor interest votes become records.
+10. Contributor lists of unpublished manuscripts are visible to the replication team only.
+11 and 12. The programme lead will check the mapping of the contributor sheets and the meaning of their columns.
+13. Whether two tabs were removed from source F is unknown, so the importer keeps failing its preview if the set of tabs changes.
+14. The summary numbers of source F are visible to programme administrators only and are never published.
+15. The alpha-asymmetry subproject is active and is the related project `asymmetry` on the website, so its 6 candidate papers link to that page.
+16. The disputed publication links stay as open conflicts, which the programme lead resolves in the portal before any correction of the website is proposed.
+17. Not asked: the portal already uses a keyed hash (`IDENTITY_HASH_KEY`).
+18 and 19. Sources A and G and the Quire data arrive as exported files supplied by the programme lead.
+20. Raw source records and exported files are kept until the migration is verified and then for one year. Demographics of source G are held only with explicit consent.
