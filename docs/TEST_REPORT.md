@@ -135,7 +135,28 @@ Every Google and storage behaviour in this section was exercised against in-memo
 
 Two independent reviews examined this work and reported 24 findings, all critical, high and medium ones fixed with tests. The most serious were that a holder of a management right could make the portal's storage scanning account or its Drive account reach paths and files outside that holder's unit, that a line break in a copy's path could add a command to an SFTP listing, that the core team could move a server that names a stored secret to another host, that a transfer could be recorded as verified when no data had moved, and that every generated document was readable by all members whatever its template held.
 
-## 7a. Scientific workflows (phase 8) and the reliability of the functions suite
+## 8. Scientific workflows, publishing, reporting and automation
+
+Run on 13 November 2026 by the orchestrating session, independently of the engineers, from `portal/` with port base 9300 on the tree committed as "Build scientific workflows, publishing, reporting and automation (phases 8 and 9)", with the two test harness changes described below. `npm run typecheck` and `npm run lint` exited 0, with 1,044 files checked and no findings, and `npm test` exited 0.
+
+| Suite | Files | Tests passed | Tests failed |
+|---|---|---|---|
+| Unit and component tests | 154 | 2,338 | 0 |
+| Emulator-backed rules and tools tests | 64 | 4,234 | 0 |
+| Emulator-backed functions tests | 39 | 416 | 0 |
+| Browser tests (Playwright, Chromium), in three batches | | 138 (48, 53 and 37) | 0 |
+
+The first independent run of the committed tree passed every suite except the browser tests, where 127 passed and 11 failed late in the run, in `tasks.spec.ts`, `views.spec.ts` and the table-performance test. A browser-only run with the memory of each process sampled every 45 seconds found the cause. The functions emulator keeps one idle worker process of about 220 MB for every function it has run and never stops it (`RuntimeWorkerPool` in firebase-tools 15.35.0 keeps an idle worker per trigger), so memory in use rose from under 1 GB to 14.3 GB of the 16 GB available while the Firestore emulator stayed at about 1.2 GB, and the browser renderer crashed ("Target crashed"). The machine had no other test run in progress, so the memory exhaustion that the engineers saw is a property of a single run. The fix leaves the tests themselves unchanged: `npm test` and `npm run test:e2e` now run the browser files in three contiguous Playwright shards, each with freshly started emulators and a fresh seed. In the passing run memory in use peaked at 12.9 GB, during the functions suite, and stayed lower through each browser batch.
+
+That browser-only run also ended abnormally and left its preview server running, because Playwright starts that server in a process group of its own; the next run then refused to start on the occupied port. The preview server now takes `--stop-with-emulators` from the Playwright configuration and exits once the emulator hub has been unreachable for three checks in a row, which was checked by starting it with no emulators running (it exited after 15 seconds).
+
+`workspace.table-performance.spec.ts`, recorded as open in the engineer's run of phase 9 below, now allows the one Firestore connectivity probe to `https://www.google.com/images/cleardot.gif` that the offline test of `workspace.spec.ts` already allows, and still fails on every other policy violation, foreign host or uncaught error. It passed as the last test of the third batch.
+
+Two independent reviews examined phases 8 and 9 before this run and reported 34 findings, all fixed with tests. The most serious were that nobody could acknowledge a protocol version, because nothing could name a laboratory's protocol or record its team; that a coordinator of one laboratory could rewrite another unit's analysis run; that an exported author line ignored the ordering rule and put the lead last; that the fake GitHub adapter linked to the real public repository; that a withdrawn OSF registration kept its "checked" badge; that the small-cell suppression of demographic counts still named each category of a scope smaller than the threshold; and that a lead could write a Stage 1 acceptance date that could reach the public website.
+
+OSF, GitHub and the mail sender were reached only through their in-memory fakes. The real OSF and GitHub adapters have never been executed, and no mail provider adapter exists.
+
+### Run by the engineer after phase 8
 
 Run on 12 November 2026 by the engineer, from `portal/` with port base 9200, on the working tree of phase 8 (uncommitted). `npm run typecheck`, `npm run lint` (968 files, no findings) and `npm run build` exited 0.
 
@@ -152,7 +173,7 @@ The functions suite was run in full three times after its fix: once on its own (
 
 `tests/e2e/scientific.spec.ts` covers a lead preparing the authorship list of a report from its contributor table with a member added from the directory, the member confirming her own entry from Home and the export for the journal; a Stage 1 Registered Report linked to its OSF registration and checked through the OSF fake, followed by a Stage 2 report with a milestone in a task list, a submission, a decision of a review round and the acceptance that reaches the milestone; an analysis run recorded against a dataset of the registry with its provenance exported as JSON-LD and its bundle manifest; and an incident reported for a laboratory, given a corrective action and resolved. Each page was checked with axe and for sideways scrolling at every supported width. OSF was reached only through the in-memory fake; the real OSF adapter has never been executed.
 
-## 7b. Reporting, publishing and automation (phase 9)
+### Run by the engineer after phase 9
 
 Run on 12 November 2026 by the engineer, from `portal/` with port base 9200, on the working tree of phase 9 (uncommitted). `npm run typecheck`, `npm run lint` (1,038 files, no findings) and `npm run build` exited 0.
 
@@ -168,7 +189,7 @@ No full `npm test` run passed from start to finish. The unit, rules, tools and f
 - In the first of those runs, 133 of 137 browser tests passed. Two failures were defects of the new tests and were fixed: a locator in the drill-down test also matched the label of a region, and the automation test registered a dataset in the folder of the Munich fake that AS-8 registers next, so AS-8 was refused. The automation test now has a synthetic folder of its own. The other two failures were in `tests/e2e/views.spec.ts`, one of them "Target crashed", while the kernel was killing processes for lack of memory.
 - In the last run the kernel killed the Firestore emulator part-way through the browser tests, and the log records "Firestore Emulator has exited upon receiving signal: SIGKILL". 122 tests had passed. The 8 that failed after that point were one test of `tasks.spec.ts` and seven of `views.spec.ts`, and the seven tests of the two workspace files did not run.
 - The affected files were then run on their own: `reporting.spec.ts` and `research-data.spec.ts` (7 of 7 passed), `tasks.spec.ts` and `views.spec.ts` (12 of 12), and `workspace.spec.ts` (6 of 6).
-- `workspace.table-performance.spec.ts` passed as the last test of the first run. It failed twice when run on its own straight after the emulators started, both times on a Content-Security-Policy report: the Firestore SDK's own connectivity probe asked for `https://www.google.com/images/cleardot.gif`, and the policy blocked it. The SDK sends that probe when one of its channel requests fails. The cause on a cold emulator has not been established, and the failure is recorded as open.
+- `workspace.table-performance.spec.ts` passed as the last test of the first run. It failed twice when run on its own straight after the emulators started, both times on a Content-Security-Policy report: the Firestore SDK's own connectivity probe asked for `https://www.google.com/images/cleardot.gif`, and the policy blocked it. The SDK sends that probe when one of its channel requests fails. The cause on a cold emulator was not established in this run; the test was changed afterwards, as described at the start of this section.
 
 `tests/e2e/reporting.spec.ts` covers AS-13 against the GitHub fake: an administrator prepares an export, sees the difference, the staging build is run with Syrinx in a scratch copy through `publish:verify`, the approval with a second factor opens a pull request, and neither the files nor the body hold a planted private value. It also covers a view exported as CSV and Excel, drill-down from a dashboard figure and the programme overview with a past date, a change of digest preferences with a search and a saved search, and an automation that opens the quality-control task when data arrives, with its run logged. axe ran on each page and the absence of sideways scrolling was checked at every supported width.
 
@@ -176,7 +197,11 @@ No full `npm test` run passed from start to finish. The unit, rules, tools and f
 
 GitHub and the mail sender were reached only through their in-memory fakes. The real GitHub adapter has never been executed, and no mail provider adapter exists.
 
-## 8. Public-site entry
+### Run by the engineer after the review fixes
+
+Run on 13 November 2026 by the engineer with port base 9200. Type checking, lint (1,044 files) and the build passed, as did the unit (2,338), rules and tools (4,234) and functions (416) suites. `npm test` exited 1: the kernel killed the Firestore emulator late in the browser tests, 120 passed, 11 in `tasks.spec.ts` and `views.spec.ts` failed after that point, and the workspace files did not run. Those files then passed on their own except the table-performance test. The independent run at the start of this section, after the harness changes, supersedes this one.
+
+## 9. Public-site entry
 
 The gated Members' portal entry was verified by building the public site in scratch copies, never inside the repository.
 
@@ -190,7 +215,7 @@ The gated Members' portal entry was verified by building the public site in scra
 
 The comparison with `main` was run twice by the orchestrating session, before the first commit of the entry and again after the review fixes, and independently by the reviewer.
 
-## 9. Architecture spikes
+## 10. Architecture spikes
 
 Two throwaway spikes were run before the build to prove the architecture. Their code is not in the repository. Their results are summarised in `docs/ARCHITECTURE.md` section 10 and `docs/DECISIONS.md` D-010.
 
@@ -199,7 +224,7 @@ Two throwaway spikes were run before the build to prove the architecture. Their 
 | Application stack | 177 emulator-backed tests and 15 browser tests passed |
 | Collaborative editor on Firestore | All suites passed: security rules 28, provider 15, two-browser collaboration 10, editor features 18, versions 9, comments 11, presence 7 |
 
-## 10. Not yet verified
+## 11. Not yet verified
 
 | Item | Why it is unverified | What will verify it |
 |---|---|---|
@@ -218,6 +243,7 @@ Two throwaway spikes were run before the build to prove the architecture. Their 
 | Every call of the real Google Drive, Sheets and Docs adapters and of the real storage adapters | No service account and no server account exist, so the adapters have never run | Credentials for a staging project and a test server, with an administrator's approval |
 | The scheduled sweeps of the job queue and of storage scans firing on their schedule | The emulator suite has no Pub/Sub emulator in this configuration, so the sweeps are tested by calling them directly | The staging project |
 | Any import of sources A, G or Quire | No access | Access as described in `docs/IMPLEMENTATION_STATUS.md` |
+| Every call of the real OSF adapter | No OSF token has been issued, so the adapter has never run; `OSF_CHECKS_ENABLED` is off | A run against the staging project before the parameter is switched on |
 | Every call of the real GitHub adapter, the protection of `main`, and a real pull request redeploying the shared staging site | No repository credential exists, so the adapter has never run | A credential limited to branches and pull requests, a test repository first, and an administrator's approval of each live pull request |
 | Email delivery, digests by email and the provider's handling of rejected addresses | No mail provider has been chosen, and no provider adapter exists | A provider, its key and the DNS records of the sending domain |
 | The scheduled sweeps of publishing, mail, automations and reports firing on their schedule | Tested by calling them directly, as for the sweeps of phases 6 and 7 | The staging project |
